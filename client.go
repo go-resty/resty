@@ -8,9 +8,11 @@ package resty
 
 import (
 	"bytes"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -23,8 +25,6 @@ const (
 	HEAD    = "HEAD"
 	OPTIONS = "OPTIONS"
 )
-
-type User struct{ Username, Password string }
 
 type Client struct {
 	HostUrl  string
@@ -39,6 +39,13 @@ type Client struct {
 
 	httpClient *http.Client
 	transport  *http.Transport
+
+	onBeforeRequest []func(*Client, *Request) error
+	onAfterResponse []func(*Client, *Response) error
+}
+
+type User struct {
+	Username, Password string
 }
 
 func (c *Client) SetHeader(header, value string) *Client {
@@ -82,6 +89,77 @@ func (c *Client) SetBasicAuth(username, password string) *Client {
 
 func (c *Client) SetAuthToken(token string) *Client {
 	c.Token = token
+	return c
+}
+
+func (c *Client) R() *Request {
+	r := &Request{
+		Url:        "",
+		Method:     "",
+		Param:      url.Values{},
+		Header:     http.Header{},
+		Body:       nil,
+		Result:     nil,
+		Error:      nil,
+		RawRequest: nil,
+		client:     c,
+		bodyBuf:    nil,
+	}
+	return r
+}
+
+func (c *Client) execute(req *Request) (*Response, error) {
+	// Applying before REQUEST middleware
+	var err error
+	for _, f := range c.onBeforeRequest {
+		err = f(c, req)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	req.Time = time.Now()
+	c.httpClient.Transport = c.transport
+
+	resp, err := c.httpClient.Do(req.RawRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &Response{
+		Request:     req,
+		ReceivedAt:  time.Now(),
+		RawResponse: resp,
+	}
+
+	// Apply after RESPONSE middleware
+	for _, f := range c.onAfterResponse {
+		err = f(c, response)
+		if err != nil {
+			break
+		}
+	}
+
+	return response, err
+}
+
+func (c *Client) enableLogPrefix() {
+	c.Log.SetFlags(log.LstdFlags)
+	c.Log.SetPrefix("RESTY ")
+}
+
+func (c *Client) disableLogPrefix() {
+	c.Log.SetFlags(0)
+	c.Log.SetPrefix("")
+}
+
+func (c *Client) OnBeforeRequest(m ...func(*Client, *Request) error) *Client {
+	c.onBeforeRequest = append(c.onBeforeRequest, m...)
+	return c
+}
+
+func (c *Client) OnAfterResponse(m ...func(*Client, *Response) error) *Client {
+	c.onAfterResponse = append(c.onAfterResponse, m...)
 	return c
 }
 
@@ -190,4 +268,18 @@ func (r *Response) String() string {
 
 func (r *Response) Time() time.Duration {
 	return r.ReceivedAt.Sub(r.Request.Time)
+}
+
+//
+// Helper methods
+//
+
+func getLogger(w io.Writer) *log.Logger {
+	var l *log.Logger
+	if w == nil {
+		l = log.New(os.Stderr, "RESTY ", log.LstdFlags)
+	} else {
+		l = log.New(w, "RESTY ", log.LstdFlags)
+	}
+	return l
 }
