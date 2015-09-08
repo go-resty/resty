@@ -25,5 +25,22 @@ func New() *Client {
 		transport:  &http.Transport{},
 	}
 
+	// default before request middlewares
+	c.beforeRequest = []func(*Client, *Request) error{
+		parseRequestUrl,
+		parseRequestHeader,
+		parseRequestBody,
+		createHttpRequest,
+		addCredentials,
+		requestLogger,
+	}
+
+	// default after response middlewares
+	c.afterResponse = []func(*Client, *Response) error{
+		readResponseBody,
+		responseLogger,
+		parseResponseBody,
+	}
+
 	return c
 }

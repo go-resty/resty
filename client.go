@@ -8,6 +8,7 @@ package resty
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -37,11 +38,10 @@ type Client struct {
 	Debug    bool
 	Log      *log.Logger
 
-	httpClient *http.Client
-	transport  *http.Transport
-
-	onBeforeRequest []func(*Client, *Request) error
-	onAfterResponse []func(*Client, *Response) error
+	httpClient    *http.Client
+	transport     *http.Transport
+	beforeRequest []func(*Client, *Request) error
+	afterResponse []func(*Client, *Response) error
 }
 
 type User struct {
@@ -109,9 +109,9 @@ func (c *Client) R() *Request {
 }
 
 func (c *Client) execute(req *Request) (*Response, error) {
-	// Applying before REQUEST middleware
+	// Apply Request middleware
 	var err error
-	for _, f := range c.onBeforeRequest {
+	for _, f := range c.beforeRequest {
 		err = f(c, req)
 		if err != nil {
 			return nil, err
@@ -132,8 +132,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		RawResponse: resp,
 	}
 
-	// Apply after RESPONSE middleware
-	for _, f := range c.onAfterResponse {
+	// Apply Response middleware
+	for _, f := range c.afterResponse {
 		err = f(c, response)
 		if err != nil {
 			break
@@ -153,14 +153,47 @@ func (c *Client) disableLogPrefix() {
 	c.Log.SetPrefix("")
 }
 
-func (c *Client) OnBeforeRequest(m ...func(*Client, *Request) error) *Client {
-	c.onBeforeRequest = append(c.onBeforeRequest, m...)
+func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
+	c.beforeRequest[len(c.beforeRequest)-1] = m
+	c.beforeRequest = append(c.beforeRequest, requestLogger)
 	return c
 }
 
-func (c *Client) OnAfterResponse(m ...func(*Client, *Response) error) *Client {
-	c.onAfterResponse = append(c.onAfterResponse, m...)
+func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
+	c.afterResponse = append(c.afterResponse, m)
 	return c
+}
+
+func (c *Client) SetDebug(d bool) *Client {
+	c.Debug = d
+	return c
+}
+
+func (c *Client) SetLogger(w io.Writer) *Client {
+	c.Log = getLogger(w)
+	return c
+}
+
+func (c *Client) PrintMiddlewares() {
+	var err error
+	c.Log.Println("Request middleware")
+	for _, f := range c.beforeRequest {
+		err = f(c, nil)
+		if err != nil {
+			c.Log.Panicln(err)
+		}
+	}
+	c.Log.Println(len(c.beforeRequest))
+	c.Log.Println("")
+
+	c.Log.Println("Response middleware")
+	for _, f := range c.afterResponse {
+		err = f(c, nil)
+		if err != nil {
+			break
+		}
+	}
+	c.Log.Println(len(c.afterResponse))
 }
 
 //
@@ -268,6 +301,21 @@ func (r *Response) String() string {
 
 func (r *Response) Time() time.Duration {
 	return r.ReceivedAt.Sub(r.Request.Time)
+}
+
+//
+// Resty's handy redirect polices
+//
+
+func NoRedirectPolicy(req *http.Request, via []*http.Request) error {
+	return errors.New("Auto redirect is disbaled")
+}
+
+func Allow10RedirectPolicy(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("Stopped after 10 redirects")
+	}
+	return nil
 }
 
 //
