@@ -66,10 +66,11 @@ type Client struct {
 	Debug      bool
 	Log        *log.Logger
 
-	httpClient    *http.Client
-	transport     *http.Transport
-	beforeRequest []func(*Client, *Request) error
-	afterResponse []func(*Client, *Response) error
+	httpClient       *http.Client
+	transport        *http.Transport
+	setContentLength bool
+	beforeRequest    []func(*Client, *Request) error
+	afterResponse    []func(*Client, *Response) error
 }
 
 type User struct {
@@ -167,6 +168,11 @@ func (c *Client) SetDebug(d bool) *Client {
 
 func (c *Client) SetLogger(w io.Writer) *Client {
 	c.Log = getLogger(w)
+	return c
+}
+
+func (c *Client) SetContentLength(l bool) *Client {
+	c.setContentLength = l
 	return c
 }
 

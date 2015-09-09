@@ -164,7 +164,7 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 	}
 
 CL:
-	if r.setContentLength { // by default resty won't set content length
+	if c.setContentLength || r.setContentLength { // by default resty won't set content length
 		r.Header.Set(hdrContentLengthKey, fmt.Sprintf("%d", r.bodyBuf.Len()))
 	}
 
