@@ -9,11 +9,14 @@ package resty
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -31,9 +34,10 @@ const (
 )
 
 var (
-	hdrUserAgentKey   = http.CanonicalHeaderKey("User-Agent")
-	hdrAcceptKey      = http.CanonicalHeaderKey("Accept")
-	hdrContentTypeKey = http.CanonicalHeaderKey("Content-Type")
+	hdrUserAgentKey     = http.CanonicalHeaderKey("User-Agent")
+	hdrAcceptKey        = http.CanonicalHeaderKey("Accept")
+	hdrContentTypeKey   = http.CanonicalHeaderKey("Content-Type")
+	hdrContentLengthKey = http.CanonicalHeaderKey("Content-Length")
 
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json; charset=utf-8"
@@ -46,15 +50,16 @@ var (
 )
 
 type Client struct {
-	HostUrl  string
-	Param    url.Values
-	Header   http.Header
-	UserInfo *User
-	Token    string
-	Cookies  []*http.Cookie
-	Error    interface{}
-	Debug    bool
-	Log      *log.Logger
+	HostUrl    string
+	QueryParam url.Values
+	FormData   url.Values
+	Header     http.Header
+	UserInfo   *User
+	Token      string
+	Cookies    []*http.Cookie
+	Error      interface{}
+	Debug      bool
+	Log        *log.Logger
 
 	httpClient    *http.Client
 	transport     *http.Transport
@@ -89,14 +94,22 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 	return c
 }
 
-func (c *Client) SetParam(param, value string) *Client {
-	c.Param.Add(param, value)
+func (c *Client) SetQueryParam(param, value string) *Client {
+	c.QueryParam.Add(param, value)
 	return c
 }
 
-func (c *Client) SetParams(params map[string]string) *Client {
+func (c *Client) SetQueryParams(params map[string]string) *Client {
 	for p, v := range params {
-		c.Param.Add(p, v)
+		c.QueryParam.Add(p, v)
+	}
+
+	return c
+}
+
+func (c *Client) SetFormData(data map[string]string) *Client {
+	for k, v := range data {
+		c.FormData.Add(k, v)
 	}
 
 	return c
@@ -116,7 +129,8 @@ func (c *Client) R() *Request {
 	r := &Request{
 		Url:        "",
 		Method:     "",
-		Param:      url.Values{},
+		QueryParam: url.Values{},
+		FormData:   url.Values{},
 		Header:     http.Header{},
 		Body:       nil,
 		Result:     nil,
@@ -127,6 +141,28 @@ func (c *Client) R() *Request {
 	}
 
 	return r
+}
+
+func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
+	c.beforeRequest[len(c.beforeRequest)-1] = m
+	c.beforeRequest = append(c.beforeRequest, requestLogger)
+
+	return c
+}
+
+func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
+	c.afterResponse = append(c.afterResponse, m)
+	return c
+}
+
+func (c *Client) SetDebug(d bool) *Client {
+	c.Debug = d
+	return c
+}
+
+func (c *Client) SetLogger(w io.Writer) *Client {
+	c.Log = getLogger(w)
+	return c
 }
 
 func (c *Client) execute(req *Request) (*Response, error) {
@@ -174,28 +210,6 @@ func (c *Client) disableLogPrefix() {
 	c.Log.SetPrefix("")
 }
 
-func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
-	c.beforeRequest[len(c.beforeRequest)-1] = m
-	c.beforeRequest = append(c.beforeRequest, requestLogger)
-
-	return c
-}
-
-func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
-	c.afterResponse = append(c.afterResponse, m)
-	return c
-}
-
-func (c *Client) SetDebug(d bool) *Client {
-	c.Debug = d
-	return c
-}
-
-func (c *Client) SetLogger(w io.Writer) *Client {
-	c.Log = getLogger(w)
-	return c
-}
-
 //
 // Request
 //
@@ -204,7 +218,8 @@ func (c *Client) SetLogger(w io.Writer) *Client {
 type Request struct {
 	Url        string
 	Method     string
-	Param      url.Values
+	QueryParam url.Values
+	FormData   url.Values
 	Header     http.Header
 	Body       interface{}
 	Result     interface{}
@@ -212,18 +227,20 @@ type Request struct {
 	Time       time.Time
 	RawRequest *http.Request
 
-	client  *Client
-	bodyBuf *bytes.Buffer
+	client           *Client
+	bodyBuf          *bytes.Buffer
+	isMultiPart      bool
+	setContentLength bool
 }
 
-func (r *Request) SetParam(param, value string) *Request {
-	r.Param.Add(param, value)
+func (r *Request) SetQueryParam(param, value string) *Request {
+	r.QueryParam.Add(param, value)
 	return r
 }
 
-func (r *Request) SetParams(params map[string]string) *Request {
+func (r *Request) SetQueryParams(params map[string]string) *Request {
 	for p, v := range params {
-		r.Param.Add(p, v)
+		r.QueryParam.Add(p, v)
 	}
 
 	return r
@@ -237,6 +254,14 @@ func (r *Request) SetHeader(header, value string) *Request {
 func (r *Request) SetHeaders(headers map[string]string) *Request {
 	for h, v := range headers {
 		r.Header.Set(h, v)
+	}
+
+	return r
+}
+
+func (r *Request) SetFormData(data map[string]string) *Request {
+	for k, v := range data {
+		r.FormData.Add(k, v)
 	}
 
 	return r
@@ -257,6 +282,32 @@ func (r *Request) SetError(err interface{}) *Request {
 	return r
 }
 
+func (r *Request) SetFile(param, filePath string) *Request {
+	r.FormData.Set("@"+param, filePath)
+	r.isMultiPart = true
+
+	return r
+}
+
+func (r *Request) SetFiles(files map[string]string) *Request {
+	for f, fp := range files {
+		r.FormData.Set("@"+f, fp)
+	}
+	r.isMultiPart = true
+
+	return r
+}
+
+func (r *Request) SetContentLength(l bool) *Request {
+	r.setContentLength = true
+
+	return r
+}
+
+//
+// HTTP verb method starts here
+//
+
 func (r *Request) Get(url string) (*Response, error) {
 	return r.execute(GET, url)
 }
@@ -266,6 +317,10 @@ func (r *Request) Post(url string) (*Response, error) {
 }
 
 func (r *Request) execute(method, url string) (*Response, error) {
+	if r.isMultiPart && !(method == POST || method == PUT) {
+		return nil, fmt.Errorf("File upload is not allowed in HTTP verb [%v]", method)
+	}
+
 	r.Method = method
 	r.Url = url
 
@@ -382,4 +437,20 @@ func isJsonType(ct string) bool {
 
 func isXmlType(ct string) bool {
 	return xmlCheck.MatchString(ct)
+}
+
+func addFile(w *multipart.Writer, fieldName, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	part, err := w.CreateFormFile(fieldName, filepath.Base(path))
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, file)
+
+	return err
 }

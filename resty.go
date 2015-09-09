@@ -19,7 +19,8 @@ var (
 func New() *Client {
 	c := &Client{
 		HostUrl:    "",
-		Param:      url.Values{},
+		QueryParam: url.Values{},
+		FormData:   url.Values{},
 		Header:     http.Header{},
 		UserInfo:   nil,
 		Token:      "",

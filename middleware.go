@@ -12,6 +12,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -44,12 +45,12 @@ func parseRequestUrl(c *Client, r *Request) error {
 
 	// Adding Query Param
 	query := reqUrl.Query()
-	for k, v := range c.Param {
+	for k, v := range c.QueryParam {
 		for _, pv := range v {
 			query.Add(k, pv)
 		}
 	}
-	for k, v := range r.Param {
+	for k, v := range r.QueryParam {
 		for _, pv := range v {
 			query.Add(k, pv)
 		}
@@ -89,7 +90,28 @@ func parseRequestHeader(c *Client, r *Request) error {
 
 func parseRequestBody(c *Client, r *Request) (err error) {
 	c.Log.Println("parseRequestBody")
+	// Handling Multipart
+	if r.isMultiPart && (r.Method == POST || r.Method == PUT) { // multipart/form-data
+		r.bodyBuf = &bytes.Buffer{}
+		w := multipart.NewWriter(r.bodyBuf)
+		for p := range r.FormData {
+			if strings.HasPrefix(p, "@") { // file
+				err = addFile(w, p[1:], r.FormData.Get(p))
+				if err != nil {
+					return
+				}
+			} else { // form value
+				w.WriteField(p, r.FormData.Get(p))
+			}
+		}
 
+		r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
+		err = w.Close()
+
+		return
+	}
+
+	// Handling Request body scenario
 	if r.Body != nil && (r.Method == POST || r.Method == PUT || r.Method == PATCH) {
 		contentType := r.Header.Get(hdrContentTypeKey)
 		if isStringEmpty(contentType) {
@@ -117,6 +139,10 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 		if bodyBytes != nil {
 			r.bodyBuf = bytes.NewBuffer(bodyBytes)
 		}
+	}
+
+	if r.setContentLength { // by default resty won't set content length
+		r.Header.Set(hdrContentLengthKey, fmt.Sprintf("%d", r.bodyBuf.Len()))
 	}
 
 	return
