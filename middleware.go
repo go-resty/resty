@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -236,17 +235,6 @@ func requestLogger(c *Client, r *Request) error {
 //
 // Response Middleware(s)
 //
-
-func readResponseBody(c *Client, res *Response) (err error) {
-	defer res.RawResponse.Body.Close()
-
-	res.Body, err = ioutil.ReadAll(res.RawResponse.Body)
-	if err != nil {
-		return
-	}
-
-	return
-}
 
 func responseLogger(c *Client, res *Response) error {
 	if c.Debug {

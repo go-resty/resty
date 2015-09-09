@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -193,7 +194,6 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	req.Time = time.Now()
 	c.httpClient.Transport = c.transport
-
 	resp, err := c.httpClient.Do(req.RawRequest)
 	if err != nil {
 		return nil, err
@@ -203,6 +203,12 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		Request:     req,
 		ReceivedAt:  time.Now(),
 		RawResponse: resp,
+	}
+
+	defer resp.Body.Close()
+	response.Body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
 	// Apply Response middleware

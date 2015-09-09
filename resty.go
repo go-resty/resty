@@ -43,7 +43,6 @@ func New() *Client {
 
 	// default after response middlewares
 	c.afterResponse = []func(*Client, *Response) error{
-		readResponseBody,
 		responseLogger,
 		parseResponseBody,
 	}
