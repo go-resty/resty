@@ -182,6 +182,26 @@ func (c *Client) SetError(err interface{}) *Client {
 	return c
 }
 
+func (c *Client) SetRedirectPolicy(policy func(*http.Request, []*http.Request) error) *Client {
+	c.httpClient.CheckRedirect = policy
+	return c
+}
+
+// Method SetMode sets resty mode to given value. Default mode is RESTful
+// 		REST mode => No redirects
+// 		HTTP mode => Up to 10 redirects
+//
+// If you want more redirects, use FlexibleRedirectPolicy
+//		resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
+func (c *Client) SetMode(mode string) *Client {
+	if mode == "http" {
+		c.httpClient.CheckRedirect = FlexibleRedirectPolicy(10)
+	} else { // RESTful
+		c.httpClient.CheckRedirect = NoRedirectPolicy
+	}
+	return c
+}
+
 func (c *Client) execute(req *Request) (*Response, error) {
 	// Apply Request middleware
 	var err error
@@ -435,15 +455,18 @@ func (r *Response) Time() time.Duration {
 //
 
 func NoRedirectPolicy(req *http.Request, via []*http.Request) error {
-	return errors.New("Auto redirect is disbaled")
+	return errors.New("Auto redirect is disabled")
 }
 
-func AllowRedirectPolicy(req *http.Request, via []*http.Request) error {
-	if len(via) >= 10 {
-		return errors.New("Stopped after 10 redirects")
+func FlexibleRedirectPolicy(noOfRedirect int) func(*http.Request, []*http.Request) error {
+	fn := func(req *http.Request, via []*http.Request) error {
+		if len(via) >= noOfRedirect {
+			return fmt.Errorf("Stopped after %d redirects", noOfRedirect)
+		}
+		return nil
 	}
 
-	return nil
+	return fn
 }
 
 //
