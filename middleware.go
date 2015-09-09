@@ -23,7 +23,6 @@ import (
 //
 
 func parseRequestUrl(c *Client, r *Request) error {
-	c.Log.Println("parseRequestUrl")
 	// Parsing request URL
 	reqUrl, err := url.Parse(r.Url)
 	if err != nil {
@@ -63,8 +62,6 @@ func parseRequestUrl(c *Client, r *Request) error {
 }
 
 func parseRequestHeader(c *Client, r *Request) error {
-	c.Log.Println("parseRequestHeader")
-
 	hdr := http.Header{}
 	for k := range c.Header {
 		hdr.Set(k, c.Header.Get(k))
@@ -89,58 +86,84 @@ func parseRequestHeader(c *Client, r *Request) error {
 }
 
 func parseRequestBody(c *Client, r *Request) (err error) {
-	c.Log.Println("parseRequestBody")
-	// Handling Multipart
-	if r.isMultiPart && (r.Method == POST || r.Method == PUT) { // multipart/form-data
-		r.bodyBuf = &bytes.Buffer{}
-		w := multipart.NewWriter(r.bodyBuf)
-		for p := range r.FormData {
-			if strings.HasPrefix(p, "@") { // file
-				err = addFile(w, p[1:], r.FormData.Get(p))
-				if err != nil {
-					return
+	if r.Method == POST || r.Method == PUT || r.Method == PATCH {
+		// Handling Multipart
+		if r.isMultiPart && !(r.Method == PATCH) {
+			r.bodyBuf = &bytes.Buffer{}
+			w := multipart.NewWriter(r.bodyBuf)
+
+			for p := range c.FormData {
+				w.WriteField(p, c.FormData.Get(p))
+			}
+
+			for p := range r.FormData {
+				if strings.HasPrefix(p, "@") { // file
+					err = addFile(w, p[1:], r.FormData.Get(p))
+					if err != nil {
+						return
+					}
+				} else { // form value
+					w.WriteField(p, r.FormData.Get(p))
 				}
-			} else { // form value
-				w.WriteField(p, r.FormData.Get(p))
+			}
+
+			r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
+			err = w.Close()
+
+			goto CL
+		}
+
+		// Handling Form Data
+		if len(c.FormData) > 0 || len(r.FormData) > 0 {
+			formData := url.Values{}
+
+			for p := range c.FormData {
+				formData.Set(p, c.FormData.Get(p))
+			}
+
+			for p := range r.FormData { // takes precedence
+				formData.Set(p, r.FormData.Get(p))
+			}
+
+			r.bodyBuf = bytes.NewBuffer([]byte(formData.Encode()))
+			r.Header.Set(hdrContentTypeKey, formContentType)
+			r.isFormData = true
+
+			goto CL
+		}
+
+		// Handling Request body
+		if r.Body != nil {
+			contentType := r.Header.Get(hdrContentTypeKey)
+			if isStringEmpty(contentType) {
+				contentType = detectContentType(r.Body)
+				r.Header.Set(hdrContentTypeKey, contentType)
+			}
+
+			var bodyBytes []byte
+			isMarshal := isMarshalRequired(r.Body)
+			if isJsonType(contentType) && isMarshal {
+				bodyBytes, err = json.Marshal(&r.Body)
+			} else if isXmlType(contentType) && isMarshal {
+				bodyBytes, err = xml.Marshal(&r.Body)
+			} else if b, ok := r.Body.(string); ok {
+				bodyBytes = []byte(b)
+			} else if b, ok := r.Body.([]byte); ok {
+				bodyBytes = b
+			}
+
+			if err != nil {
+				return
+			}
+
+			// []byte into Buffer
+			if bodyBytes != nil {
+				r.bodyBuf = bytes.NewBuffer(bodyBytes)
 			}
 		}
-
-		r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
-		err = w.Close()
-
-		return
 	}
 
-	// Handling Request body scenario
-	if r.Body != nil && (r.Method == POST || r.Method == PUT || r.Method == PATCH) {
-		contentType := r.Header.Get(hdrContentTypeKey)
-		if isStringEmpty(contentType) {
-			contentType = detectContentType(r.Body)
-			r.Header.Set(hdrContentTypeKey, contentType)
-		}
-
-		var bodyBytes []byte
-		isMarshal := isMarshalRequired(r.Body)
-		if isJsonType(contentType) && isMarshal {
-			bodyBytes, err = json.Marshal(&r.Body)
-		} else if isXmlType(contentType) && isMarshal {
-			bodyBytes, err = xml.Marshal(&r.Body)
-		} else if b, ok := r.Body.(string); ok {
-			bodyBytes = []byte(b)
-		} else if b, ok := r.Body.([]byte); ok {
-			bodyBytes = b
-		}
-
-		if err != nil {
-			return
-		}
-
-		// []byte into Buffer
-		if bodyBytes != nil {
-			r.bodyBuf = bytes.NewBuffer(bodyBytes)
-		}
-	}
-
+CL:
 	if r.setContentLength { // by default resty won't set content length
 		r.Header.Set(hdrContentLengthKey, fmt.Sprintf("%d", r.bodyBuf.Len()))
 	}
@@ -149,8 +172,6 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 }
 
 func createHttpRequest(c *Client, r *Request) (err error) {
-	c.Log.Println("createHttpRequest")
-
 	if r.bodyBuf == nil {
 		r.RawRequest, err = http.NewRequest(r.Method, r.Url, nil)
 	} else {
@@ -169,7 +190,6 @@ func createHttpRequest(c *Client, r *Request) (err error) {
 }
 
 func addCredentials(c *Client, r *Request) error {
-	c.Log.Println("addCredentials")
 	var isBasicAuth bool
 	// Basic Auth
 	if r.UserInfo != nil { // takes precedence
@@ -194,7 +214,21 @@ func addCredentials(c *Client, r *Request) error {
 }
 
 func requestLogger(c *Client, r *Request) error {
-	c.Log.Println("requestLogger")
+	if c.Debug {
+		rr := r.RawRequest
+		c.Log.Println("")
+		c.disableLogPrefix()
+		c.Log.Println("---------------------- REQUEST LOG -----------------------")
+		c.Log.Printf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto)
+		c.Log.Printf("HOST   : %s", rr.URL.Host)
+		c.Log.Println("HEADERS:")
+		for h, v := range rr.Header {
+			c.Log.Printf("%25s: %v", h, strings.Join(v, ", "))
+		}
+		c.Log.Printf("BODY   :\n%v", getRequestBodyString(r))
+		c.Log.Println("----------------------------------------------------------")
+		c.enableLogPrefix()
+	}
 
 	return nil
 }
@@ -204,7 +238,6 @@ func requestLogger(c *Client, r *Request) error {
 //
 
 func readResponseBody(c *Client, res *Response) (err error) {
-	c.Log.Println("readResponseBody")
 	defer res.RawResponse.Body.Close()
 
 	res.Body, err = ioutil.ReadAll(res.RawResponse.Body)
@@ -216,7 +249,20 @@ func readResponseBody(c *Client, res *Response) (err error) {
 }
 
 func responseLogger(c *Client, res *Response) error {
-	c.Log.Println("responseLogger")
+	if c.Debug {
+		c.Log.Println("")
+		c.disableLogPrefix()
+		c.Log.Println("---------------------- RESPONSE LOG -----------------------")
+		c.Log.Printf("STATUS : %s", res.Status())
+		c.Log.Printf("TIME   : %v", res.Time())
+		c.Log.Println("HEADERS:")
+		for h, v := range res.Header() {
+			c.Log.Printf("%30s: %v", h, strings.Join(v, ", "))
+		}
+		c.Log.Printf("BODY   :\n%v", getResponseBodyString(res))
+		c.Log.Println("----------------------------------------------------------")
+		c.enableLogPrefix()
+	}
 
 	return nil
 }

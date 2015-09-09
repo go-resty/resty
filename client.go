@@ -8,6 +8,9 @@ package resty
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -42,6 +45,7 @@ var (
 
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json; charset=utf-8"
+	formContentType = "application/x-www-form-urlencoded"
 
 	plainTextCheck = regexp.MustCompile("(?i:text/plain)")
 	jsonCheck      = regexp.MustCompile("(?i:[application|text]/json)")
@@ -233,6 +237,7 @@ type Request struct {
 	client           *Client
 	bodyBuf          *bytes.Buffer
 	isMultiPart      bool
+	isFormData       bool
 	setContentLength bool
 }
 
@@ -486,4 +491,65 @@ func addFile(w *multipart.Writer, fieldName, path string) error {
 	_, err = io.Copy(part, file)
 
 	return err
+}
+
+func getRequestBodyString(r *Request) (body string) {
+	body = "***** NO CONTENT *****"
+	if r.Method == POST || r.Method == PUT || r.Method == PATCH {
+		// multipart/form-data OR form data
+		if r.isMultiPart || r.isFormData {
+			body = string(r.bodyBuf.Bytes())
+
+			return
+		}
+
+		// request body data
+		if r.Body != nil {
+			contentType := r.Header.Get(hdrContentTypeKey)
+			var prtBodyBytes []byte
+			var err error
+			isMarshal := isMarshalRequired(r.Body)
+			if isJsonType(contentType) && isMarshal {
+				prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
+			} else if isXmlType(contentType) && isMarshal {
+				prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
+			} else if b, ok := r.Body.(string); ok {
+				bodyBytes := []byte(b)
+				var out bytes.Buffer
+				if isJsonType(contentType) {
+					if err = json.Indent(&out, bodyBytes, "", "   "); err == nil {
+						prtBodyBytes = out.Bytes()
+					}
+				}
+			} else if b, ok := r.Body.([]byte); ok {
+				body = base64.StdEncoding.EncodeToString(b)
+			}
+
+			if prtBodyBytes != nil {
+				body = string(prtBodyBytes)
+			}
+		}
+
+	}
+
+	return
+}
+
+func getResponseBodyString(res *Response) string {
+	bodyStr := "***** NO CONTENT *****"
+	if res.Body != nil {
+		ct := res.Header().Get(hdrContentTypeKey)
+		if isJsonType(ct) {
+			var out bytes.Buffer
+			if err := json.Indent(&out, res.Body, "", "   "); err == nil {
+				bodyStr = string(out.Bytes())
+			}
+		} else {
+			str := res.String()
+			if !isStringEmpty(str) {
+				bodyStr = str
+			}
+		}
+	}
+	return bodyStr
 }
