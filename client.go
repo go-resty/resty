@@ -38,6 +38,7 @@ var (
 	hdrAcceptKey        = http.CanonicalHeaderKey("Accept")
 	hdrContentTypeKey   = http.CanonicalHeaderKey("Content-Type")
 	hdrContentLengthKey = http.CanonicalHeaderKey("Content-Length")
+	hdrAuthorizationKey = http.CanonicalHeaderKey("Authorization")
 
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json; charset=utf-8"
@@ -221,6 +222,8 @@ type Request struct {
 	QueryParam url.Values
 	FormData   url.Values
 	Header     http.Header
+	UserInfo   *User
+	Token      string
 	Body       interface{}
 	Result     interface{}
 	Error      interface{}
@@ -301,6 +304,16 @@ func (r *Request) SetFiles(files map[string]string) *Request {
 func (r *Request) SetContentLength(l bool) *Request {
 	r.setContentLength = true
 
+	return r
+}
+
+func (r *Request) SetBasicAuth(username, password string) *Request {
+	r.UserInfo = &User{Username: username, Password: password}
+	return r
+}
+
+func (r *Request) SetAuthToken(token string) *Request {
+	r.Token = token
 	return r
 }
 

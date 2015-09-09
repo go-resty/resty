@@ -170,6 +170,25 @@ func createHttpRequest(c *Client, r *Request) (err error) {
 
 func addCredentials(c *Client, r *Request) error {
 	c.Log.Println("addCredentials")
+	var isBasicAuth bool
+	// Basic Auth
+	if r.UserInfo != nil { // takes precedence
+		r.RawRequest.SetBasicAuth(r.UserInfo.Username, r.UserInfo.Password)
+		isBasicAuth = true
+	} else if c.UserInfo != nil {
+		r.RawRequest.SetBasicAuth(c.UserInfo.Username, c.UserInfo.Password)
+		isBasicAuth = true
+	}
+	if isBasicAuth && strings.HasPrefix(r.Url, "http") {
+		c.Log.Println("WARNING - Using Basic Auth in HTTP mode is not secure.")
+	}
+
+	// Token Auth
+	if !isStringEmpty(r.Token) { // takes precedence
+		r.RawRequest.Header.Set(hdrAuthorizationKey, "Bearer "+r.Token)
+	} else if !isStringEmpty(c.Token) {
+		r.RawRequest.Header.Set(hdrAuthorizationKey, "Bearer "+c.Token)
+	}
 
 	return nil
 }
