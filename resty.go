@@ -8,7 +8,10 @@ package resty
 
 import (
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 var (
@@ -17,6 +20,8 @@ var (
 )
 
 func New() *Client {
+	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+
 	c := &Client{
 		HostUrl:    "",
 		QueryParam: url.Values{},
@@ -27,7 +32,7 @@ func New() *Client {
 		Cookies:    make([]*http.Cookie, 0),
 		Debug:      false,
 		Log:        getLogger(nil),
-		httpClient: &http.Client{CheckRedirect: NoRedirectPolicy},
+		httpClient: &http.Client{CheckRedirect: NoRedirectPolicy, Jar: cookieJar},
 		transport:  &http.Transport{},
 	}
 
