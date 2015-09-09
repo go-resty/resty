@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	Version = "0.1"
+	Version       = "0.1"
+	DefaultClient = New()
 )
 
 func New() *Client {
@@ -47,4 +48,8 @@ func New() *Client {
 	}
 
 	return c
+}
+
+func R() *Request {
+	return DefaultClient.R()
 }

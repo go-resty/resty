@@ -110,7 +110,7 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 		}
 
 		if err != nil {
-			return err
+			return
 		}
 
 		// []byte into Buffer
@@ -119,7 +119,7 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 		}
 	}
 
-	return nil
+	return
 }
 
 func createHttpRequest(c *Client, r *Request) (err error) {
@@ -139,7 +139,7 @@ func createHttpRequest(c *Client, r *Request) (err error) {
 		r.RawRequest.AddCookie(cookie)
 	}
 
-	return err
+	return
 }
 
 func addCredentials(c *Client, r *Request) error {
@@ -164,10 +164,10 @@ func readResponseBody(c *Client, res *Response) (err error) {
 
 	res.Body, err = ioutil.ReadAll(res.RawResponse.Body)
 	if err != nil {
-		return err
+		return
 	}
 
-	return nil
+	return
 }
 
 func responseLogger(c *Client, res *Response) error {

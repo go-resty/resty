@@ -261,6 +261,10 @@ func (r *Request) Get(url string) (*Response, error) {
 	return r.execute(GET, url)
 }
 
+func (r *Request) Post(url string) (*Response, error) {
+	return r.execute(POST, url)
+}
+
 func (r *Request) execute(method, url string) (*Response, error) {
 	r.Method = method
 	r.Url = url
