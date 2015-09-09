@@ -176,6 +176,11 @@ func (c *Client) SetContentLength(l bool) *Client {
 	return c
 }
 
+func (c *Client) SetError(err interface{}) *Client {
+	c.Error = err
+	return c
+}
+
 func (c *Client) execute(req *Request) (*Response, error) {
 	// Apply Request middleware
 	var err error
@@ -439,27 +444,16 @@ func AllowRedirectPolicy(req *http.Request, via []*http.Request) error {
 // Helper methods
 //
 
-func getLogger(w io.Writer) *log.Logger {
-	var l *log.Logger
-	if w == nil {
-		l = log.New(os.Stderr, "RESTY ", log.LstdFlags)
-	} else {
-		l = log.New(w, "RESTY ", log.LstdFlags)
-	}
-
-	return l
-}
-
-func isStringEmpty(str string) bool {
+func IsStringEmpty(str string) bool {
 	return (len(strings.TrimSpace(str)) == 0)
 }
 
-func isMarshalRequired(body interface{}) bool {
+func IsMarshalRequired(body interface{}) bool {
 	kind := reflect.ValueOf(body).Kind()
 	return (kind == reflect.Struct || kind == reflect.Map)
 }
 
-func detectContentType(body interface{}) string {
+func DetectContentType(body interface{}) string {
 	contentType := plainTextType
 	kind := reflect.ValueOf(body).Kind()
 
@@ -475,12 +469,33 @@ func detectContentType(body interface{}) string {
 	return contentType
 }
 
-func isJsonType(ct string) bool {
+func IsJsonType(ct string) bool {
 	return jsonCheck.MatchString(ct)
 }
 
-func isXmlType(ct string) bool {
+func IsXmlType(ct string) bool {
 	return xmlCheck.MatchString(ct)
+}
+
+func Unmarshal(ct string, b []byte, d interface{}) (err error) {
+	if IsJsonType(ct) {
+		err = json.Unmarshal(b, d)
+	} else if IsXmlType(ct) {
+		err = xml.Unmarshal(b, d)
+	}
+
+	return
+}
+
+func getLogger(w io.Writer) *log.Logger {
+	var l *log.Logger
+	if w == nil {
+		l = log.New(os.Stderr, "RESTY ", log.LstdFlags)
+	} else {
+		l = log.New(w, "RESTY ", log.LstdFlags)
+	}
+
+	return l
 }
 
 func addFile(w *multipart.Writer, fieldName, path string) error {
@@ -514,15 +529,15 @@ func getRequestBodyString(r *Request) (body string) {
 			contentType := r.Header.Get(hdrContentTypeKey)
 			var prtBodyBytes []byte
 			var err error
-			isMarshal := isMarshalRequired(r.Body)
-			if isJsonType(contentType) && isMarshal {
+			isMarshal := IsMarshalRequired(r.Body)
+			if IsJsonType(contentType) && isMarshal {
 				prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
-			} else if isXmlType(contentType) && isMarshal {
+			} else if IsXmlType(contentType) && isMarshal {
 				prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
 			} else if b, ok := r.Body.(string); ok {
-				bodyBytes := []byte(b)
-				var out bytes.Buffer
-				if isJsonType(contentType) {
+				if IsJsonType(contentType) {
+					bodyBytes := []byte(b)
+					var out bytes.Buffer
 					if err = json.Indent(&out, bodyBytes, "", "   "); err == nil {
 						prtBodyBytes = out.Bytes()
 					}
@@ -545,14 +560,14 @@ func getResponseBodyString(res *Response) string {
 	bodyStr := "***** NO CONTENT *****"
 	if res.Body != nil {
 		ct := res.Header().Get(hdrContentTypeKey)
-		if isJsonType(ct) {
+		if IsJsonType(ct) {
 			var out bytes.Buffer
 			if err := json.Indent(&out, res.Body, "", "   "); err == nil {
 				bodyStr = string(out.Bytes())
 			}
 		} else {
 			str := res.String()
-			if !isStringEmpty(str) {
+			if !IsStringEmpty(str) {
 				bodyStr = str
 			}
 		}

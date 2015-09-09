@@ -70,13 +70,13 @@ func parseRequestHeader(c *Client, r *Request) error {
 		hdr.Set(k, r.Header.Get(k))
 	}
 
-	if isStringEmpty(hdr.Get(hdrUserAgentKey)) {
+	if IsStringEmpty(hdr.Get(hdrUserAgentKey)) {
 		hdr.Set(hdrUserAgentKey, fmt.Sprintf(hdrUserAgentValue, Version))
 	} else {
 		hdr.Set("X-"+hdrUserAgentKey, fmt.Sprintf(hdrUserAgentValue, Version))
 	}
 
-	if isStringEmpty(hdr.Get(hdrAcceptKey)) && !isStringEmpty(hdr.Get(hdrContentTypeKey)) {
+	if IsStringEmpty(hdr.Get(hdrAcceptKey)) && !IsStringEmpty(hdr.Get(hdrContentTypeKey)) {
 		hdr.Set(hdrAcceptKey, hdr.Get(hdrContentTypeKey))
 	}
 
@@ -135,16 +135,16 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 		// Handling Request body
 		if r.Body != nil {
 			contentType := r.Header.Get(hdrContentTypeKey)
-			if isStringEmpty(contentType) {
-				contentType = detectContentType(r.Body)
+			if IsStringEmpty(contentType) {
+				contentType = DetectContentType(r.Body)
 				r.Header.Set(hdrContentTypeKey, contentType)
 			}
 
 			var bodyBytes []byte
-			isMarshal := isMarshalRequired(r.Body)
-			if isJsonType(contentType) && isMarshal {
+			isMarshal := IsMarshalRequired(r.Body)
+			if IsJsonType(contentType) && isMarshal {
 				bodyBytes, err = json.Marshal(&r.Body)
-			} else if isXmlType(contentType) && isMarshal {
+			} else if IsXmlType(contentType) && isMarshal {
 				bodyBytes, err = xml.Marshal(&r.Body)
 			} else if b, ok := r.Body.(string); ok {
 				bodyBytes = []byte(b)
@@ -204,9 +204,9 @@ func addCredentials(c *Client, r *Request) error {
 	}
 
 	// Token Auth
-	if !isStringEmpty(r.Token) { // takes precedence
+	if !IsStringEmpty(r.Token) { // takes precedence
 		r.RawRequest.Header.Set(hdrAuthorizationKey, "Bearer "+r.Token)
-	} else if !isStringEmpty(c.Token) {
+	} else if !IsStringEmpty(c.Token) {
 		r.RawRequest.Header.Set(hdrAuthorizationKey, "Bearer "+c.Token)
 	}
 
@@ -267,8 +267,29 @@ func responseLogger(c *Client, res *Response) error {
 	return nil
 }
 
-func parseResponseBody(c *Client, res *Response) error {
-	c.Log.Println("parseResponseBody")
+func parseResponseBody(c *Client, res *Response) (err error) {
+	// Handles only JSON or XML content type
+	ct := res.Header().Get(hdrContentTypeKey)
+	if IsJsonType(ct) || IsXmlType(ct) {
+		// Considered as Result
+		if res.StatusCode() > 199 && res.StatusCode() < 300 {
+			if res.Request.Result != nil {
+				err = Unmarshal(ct, res.Body, res.Request.Result)
+			}
+		}
 
-	return nil
+		// Considered as Error
+		if res.StatusCode() > 399 {
+			// global error interface
+			if res.Request.Error == nil && c.Error != nil {
+				res.Request.Error = c.Error
+			}
+
+			if res.Request.Error != nil {
+				err = Unmarshal(ct, res.Body, res.Request.Error)
+			}
+		}
+	}
+
+	return
 }
