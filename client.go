@@ -316,6 +316,26 @@ func (r *Request) Post(url string) (*Response, error) {
 	return r.execute(POST, url)
 }
 
+func (r *Request) Put(url string) (*Response, error) {
+	return r.execute(PUT, url)
+}
+
+func (r *Request) Delete(url string) (*Response, error) {
+	return r.execute(DELETE, url)
+}
+
+func (r *Request) Patch(url string) (*Response, error) {
+	return r.execute(PATCH, url)
+}
+
+func (r *Request) Head(url string) (*Response, error) {
+	return r.execute(HEAD, url)
+}
+
+func (r *Request) Options(url string) (*Response, error) {
+	return r.execute(OPTIONS, url)
+}
+
 func (r *Request) execute(method, url string) (*Response, error) {
 	if r.isMultiPart && !(method == POST || method == PUT) {
 		return nil, fmt.Errorf("File upload is not allowed in HTTP verb [%v]", method)
