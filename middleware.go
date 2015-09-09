@@ -6,12 +6,57 @@ license that can be found in the LICENSE file.
 */
 package resty
 
+import (
+	"bytes"
+	"encoding/json"
+	"encoding/xml"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
+	"strings"
+)
+
 //
 // Request Middleware(s)
 //
 
 func parseRequestUrl(c *Client, r *Request) error {
 	c.Log.Println("parseRequestUrl")
+	// Parsing request URL
+	reqUrl, err := url.Parse(r.Url)
+	if err != nil {
+		return err
+	}
+
+	// If Request.Url is relative path then added c.HostUrl into
+	// the request URL otherwise Request.Url will be used as-is
+	if !reqUrl.IsAbs() {
+		if !strings.HasPrefix(r.Url, "/") {
+			r.Url = "/" + r.Url
+		}
+
+		reqUrl, err = url.Parse(c.HostUrl + r.Url)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Adding Query Param
+	query := reqUrl.Query()
+	for k, v := range c.Param {
+		for _, pv := range v {
+			query.Add(k, pv)
+		}
+	}
+	for k, v := range r.Param {
+		for _, pv := range v {
+			query.Add(k, pv)
+		}
+	}
+
+	reqUrl.RawQuery = query.Encode()
+	r.Url = reqUrl.String()
 
 	return nil
 }
@@ -19,19 +64,82 @@ func parseRequestUrl(c *Client, r *Request) error {
 func parseRequestHeader(c *Client, r *Request) error {
 	c.Log.Println("parseRequestHeader")
 
+	hdr := http.Header{}
+	for k := range c.Header {
+		hdr.Set(k, c.Header.Get(k))
+	}
+	for k := range r.Header {
+		hdr.Set(k, r.Header.Get(k))
+	}
+
+	if isStringEmpty(hdr.Get(hdrUserAgentKey)) {
+		hdr.Set(hdrUserAgentKey, fmt.Sprintf(hdrUserAgentValue, Version))
+	} else {
+		hdr.Set("X-"+hdrUserAgentKey, fmt.Sprintf(hdrUserAgentValue, Version))
+	}
+
+	if isStringEmpty(hdr.Get(hdrAcceptKey)) && !isStringEmpty(hdr.Get(hdrContentTypeKey)) {
+		hdr.Set(hdrAcceptKey, hdr.Get(hdrContentTypeKey))
+	}
+
+	r.Header = hdr
+
 	return nil
 }
 
-func parseRequestBody(c *Client, r *Request) error {
+func parseRequestBody(c *Client, r *Request) (err error) {
 	c.Log.Println("parseRequestBody")
 
+	if r.Body != nil && (r.Method == POST || r.Method == PUT || r.Method == PATCH) {
+		contentType := r.Header.Get(hdrContentTypeKey)
+		if isStringEmpty(contentType) {
+			contentType = detectContentType(r.Body)
+			r.Header.Set(hdrContentTypeKey, contentType)
+		}
+
+		var bodyBytes []byte
+		isMarshal := isMarshalRequired(r.Body)
+		if isJsonType(contentType) && isMarshal {
+			bodyBytes, err = json.Marshal(&r.Body)
+		} else if isXmlType(contentType) && isMarshal {
+			bodyBytes, err = xml.Marshal(&r.Body)
+		} else if b, ok := r.Body.(string); ok {
+			bodyBytes = []byte(b)
+		} else if b, ok := r.Body.([]byte); ok {
+			bodyBytes = b
+		}
+
+		if err != nil {
+			return err
+		}
+
+		// []byte into Buffer
+		if bodyBytes != nil {
+			r.bodyBuf = bytes.NewBuffer(bodyBytes)
+		}
+	}
+
 	return nil
 }
 
-func createHttpRequest(c *Client, r *Request) error {
+func createHttpRequest(c *Client, r *Request) (err error) {
 	c.Log.Println("createHttpRequest")
 
-	return nil
+	if r.bodyBuf == nil {
+		r.RawRequest, err = http.NewRequest(r.Method, r.Url, nil)
+	} else {
+		r.RawRequest, err = http.NewRequest(r.Method, r.Url, r.bodyBuf)
+	}
+
+	// Add headers into http request
+	r.RawRequest.Header = r.Header
+
+	// Add cookies into http request
+	for _, cookie := range c.Cookies {
+		r.RawRequest.AddCookie(cookie)
+	}
+
+	return err
 }
 
 func addCredentials(c *Client, r *Request) error {
@@ -50,8 +158,14 @@ func requestLogger(c *Client, r *Request) error {
 // Response Middleware(s)
 //
 
-func readResponseBody(c *Client, res *Response) error {
+func readResponseBody(c *Client, res *Response) (err error) {
 	c.Log.Println("readResponseBody")
+	defer res.RawResponse.Body.Close()
+
+	res.Body, err = ioutil.ReadAll(res.RawResponse.Body)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -62,7 +176,7 @@ func responseLogger(c *Client, res *Response) error {
 	return nil
 }
 
-func parseResponseBody(c *Client, resp *Response) error {
+func parseResponseBody(c *Client, res *Response) error {
 	c.Log.Println("parseResponseBody")
 
 	return nil

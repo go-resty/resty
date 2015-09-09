@@ -11,6 +11,10 @@ import (
 	"net/url"
 )
 
+var (
+	Version = "0.1"
+)
+
 func New() *Client {
 	c := &Client{
 		HostUrl:    "",
@@ -21,7 +25,7 @@ func New() *Client {
 		Cookies:    make([]*http.Cookie, 0),
 		Debug:      false,
 		Log:        getLogger(nil),
-		httpClient: &http.Client{},
+		httpClient: &http.Client{CheckRedirect: NoRedirectPolicy},
 		transport:  &http.Transport{},
 	}
 

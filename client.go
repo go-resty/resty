@@ -14,6 +14,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -25,6 +28,21 @@ const (
 	PATCH   = "PATCH"
 	HEAD    = "HEAD"
 	OPTIONS = "OPTIONS"
+)
+
+var (
+	hdrUserAgentKey   = http.CanonicalHeaderKey("User-Agent")
+	hdrAcceptKey      = http.CanonicalHeaderKey("Accept")
+	hdrContentTypeKey = http.CanonicalHeaderKey("Content-Type")
+
+	plainTextType   = "text/plain; charset=utf-8"
+	jsonContentType = "application/json; charset=utf-8"
+
+	plainTextCheck = regexp.MustCompile("(?i:text/plain)")
+	jsonCheck      = regexp.MustCompile("(?i:[application|text]/json)")
+	xmlCheck       = regexp.MustCompile("(?i:[application|text]/xml)")
+
+	hdrUserAgentValue = "resty v%s - https://github.com/go-resty/resty"
 )
 
 type Client struct {
@@ -57,6 +75,7 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 	for h, v := range headers {
 		c.Header.Set(h, v)
 	}
+
 	return c
 }
 
@@ -79,6 +98,7 @@ func (c *Client) SetParams(params map[string]string) *Client {
 	for p, v := range params {
 		c.Param.Add(p, v)
 	}
+
 	return c
 }
 
@@ -105,6 +125,7 @@ func (c *Client) R() *Request {
 		client:     c,
 		bodyBuf:    nil,
 	}
+
 	return r
 }
 
@@ -156,6 +177,7 @@ func (c *Client) disableLogPrefix() {
 func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
 	c.beforeRequest[len(c.beforeRequest)-1] = m
 	c.beforeRequest = append(c.beforeRequest, requestLogger)
+
 	return c
 }
 
@@ -172,28 +194,6 @@ func (c *Client) SetDebug(d bool) *Client {
 func (c *Client) SetLogger(w io.Writer) *Client {
 	c.Log = getLogger(w)
 	return c
-}
-
-func (c *Client) PrintMiddlewares() {
-	var err error
-	c.Log.Println("Request middleware")
-	for _, f := range c.beforeRequest {
-		err = f(c, nil)
-		if err != nil {
-			c.Log.Panicln(err)
-		}
-	}
-	c.Log.Println(len(c.beforeRequest))
-	c.Log.Println("")
-
-	c.Log.Println("Response middleware")
-	for _, f := range c.afterResponse {
-		err = f(c, nil)
-		if err != nil {
-			break
-		}
-	}
-	c.Log.Println(len(c.afterResponse))
 }
 
 //
@@ -225,6 +225,7 @@ func (r *Request) SetParams(params map[string]string) *Request {
 	for p, v := range params {
 		r.Param.Add(p, v)
 	}
+
 	return r
 }
 
@@ -237,6 +238,7 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 	for h, v := range headers {
 		r.Header.Set(h, v)
 	}
+
 	return r
 }
 
@@ -253,6 +255,17 @@ func (r *Request) SetResult(res interface{}) *Request {
 func (r *Request) SetError(err interface{}) *Request {
 	r.Error = err
 	return r
+}
+
+func (r *Request) Get(url string) (*Response, error) {
+	return r.execute(GET, url)
+}
+
+func (r *Request) execute(method, url string) (*Response, error) {
+	r.Method = method
+	r.Url = url
+
+	return r.client.execute(r)
 }
 
 //
@@ -311,10 +324,11 @@ func NoRedirectPolicy(req *http.Request, via []*http.Request) error {
 	return errors.New("Auto redirect is disbaled")
 }
 
-func Allow10RedirectPolicy(req *http.Request, via []*http.Request) error {
+func AllowRedirectPolicy(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return errors.New("Stopped after 10 redirects")
 	}
+
 	return nil
 }
 
@@ -329,5 +343,39 @@ func getLogger(w io.Writer) *log.Logger {
 	} else {
 		l = log.New(w, "RESTY ", log.LstdFlags)
 	}
+
 	return l
+}
+
+func isStringEmpty(str string) bool {
+	return (len(strings.TrimSpace(str)) == 0)
+}
+
+func isMarshalRequired(body interface{}) bool {
+	kind := reflect.ValueOf(body).Kind()
+	return (kind == reflect.Struct || kind == reflect.Map)
+}
+
+func detectContentType(body interface{}) string {
+	contentType := plainTextType
+	kind := reflect.ValueOf(body).Kind()
+
+	switch kind {
+	case reflect.Struct, reflect.Map:
+		contentType = jsonContentType
+	case reflect.String:
+		contentType = plainTextType
+	default:
+		contentType = http.DetectContentType(body.([]byte))
+	}
+
+	return contentType
+}
+
+func isJsonType(ct string) bool {
+	return jsonCheck.MatchString(ct)
+}
+
+func isXmlType(ct string) bool {
+	return xmlCheck.MatchString(ct)
 }
