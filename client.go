@@ -8,6 +8,7 @@ package resty
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -17,6 +18,7 @@ import (
 	"io/ioutil"
 	"log"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -52,9 +54,11 @@ var (
 	jsonCheck      = regexp.MustCompile("(?i:[application|text]/json)")
 	xmlCheck       = regexp.MustCompile("(?i:[application|text]/xml)")
 
-	hdrUserAgentValue = "resty v%s - https://github.com/go-resty/resty"
+	hdrUserAgentValue = "go-resty v%s - https://github.com/go-resty/resty"
 )
 
+// Type Client is used for HTTP/RESTful global values
+// for all request raised from the client
 type Client struct {
 	HostUrl    string
 	QueryParam url.Values
@@ -74,15 +78,37 @@ type Client struct {
 	afterResponse    []func(*Client, *Response) error
 }
 
+// Type User is hold a username and password information
 type User struct {
 	Username, Password string
 }
 
+// SetHeader method sets a single header field and its value in the client instance.
+// These headers will be applied to all requests raised from this client instance.
+// Also it can be overridden in the request level header option, see `resty.R().SetHeader`.
+//
+// For Example: To set `Content-Type` and `Accept` as `application/json`
+//
+// 		resty.
+//      	SetHeader("Content-Type", "application/json").
+//			SetHeader("Accept", "application/json")
+//
 func (c *Client) SetHeader(header, value string) *Client {
 	c.Header.Set(header, value)
 	return c
 }
 
+// SetHeaders method sets multiple headers field and its values at one go in the client instance.
+// These headers will be applied to all requests raised from this client instance. Also it can be
+// overridden in the request level headers option, see `resty.R().SetHeaders`.
+//
+// For Example: To set `Content-Type` and `Accept` as `application/json`
+//
+// 		resty.SetHeaders(map[string]string{
+//				"Content-Type": "application/json",
+//				"Accept": "application/json",
+//			})
+//
 func (c *Client) SetHeaders(headers map[string]string) *Client {
 	for h, v := range headers {
 		c.Header.Set(h, v)
@@ -91,21 +117,77 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 	return c
 }
 
+// SetCookie method sets a single cookie in the client instance.
+// These cookies will be added to all the request raised from this client instance.
+// 		resty.SetCookie(&http.Cookie{
+// 					Name:"go-resty",
+//					Value:"This is cookie value",
+//					Path: "/",
+// 					Domain: "sample.com",
+// 					MaxAge: 36000,
+// 					HttpOnly: true,
+//					Secure: false,  // baseds on https or http
+// 				})
+//
 func (c *Client) SetCookie(hc *http.Cookie) *Client {
 	c.Cookies = append(c.Cookies, hc)
 	return c
 }
 
+// SetCookies method sets an array of cookies in the client instance.
+// These cookies will be added to all the request raised from this client instance.
+// 		cookies := make([]*http.Cookie, 0)
+//
+//		cookies = append(cookies, &http.Cookie{
+// 					Name:"go-resty-1",
+//					Value:"This is cookie 1 value",
+//					Path: "/",
+// 					Domain: "sample.com",
+// 					MaxAge: 36000,
+// 					HttpOnly: true,
+//					Secure: false,  // baseds on https or http
+// 				})
+//
+//		cookies = append(cookies, &http.Cookie{
+// 					Name:"go-resty-2",
+//					Value:"This is cookie 2 value",
+//					Path: "/",
+// 					Domain: "sample.com",
+// 					MaxAge: 36000,
+// 					HttpOnly: true,
+//					Secure: false,  // baseds on https or http
+// 				})
+//
+// 		resty.SetCookies(cookies)
+//
 func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 	c.Cookies = append(c.Cookies, cs...)
 	return c
 }
 
+// SetQueryParam method sets single paramater and its value in the client instance.
+// It will be formed as query string for the request. For example: `search=kitchen%20papers&size=large`
+// in the URL after `?` mark. These query params will be added to all the request raised from
+// this client instance. Also it can be overridden in the request level Query Param option,
+// see `resty.R().SetQueryParam`.
+// 		resty.
+//			SetQueryParam("search", "kitchen papers").
+//			SetQueryParam("size", "large")
+//
 func (c *Client) SetQueryParam(param, value string) *Client {
 	c.QueryParam.Add(param, value)
 	return c
 }
 
+// SetQueryParams method sets multiple paramaters and its values at one go in the client instance.
+// It will be formed as query string for the request. For example: `search=kitchen%20papers` in the URL after `?` mark.
+// These query params will be added to all the request raised from this client instance.
+// Also it can be overridden in the request level Query Param option, see `resty.R().SetQueryParams`.
+// 		resty.SetQueryParams(map[string]string{
+//				"search": "kitchen papers",
+//				"size": "large",
+//			})
+//
 func (c *Client) SetQueryParams(params map[string]string) *Client {
 	for p, v := range params {
 		c.QueryParam.Add(p, v)
@@ -114,6 +196,15 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 	return c
 }
 
+// SetFormData method sets Form parameters and its values in the client instance.
+// It's applicable only HTTP method `POST` and `PUT` and requets content type would be
+// `application/x-www-form-urlencoded`. These form data will be added to all the request raised from
+// this client instance. Also it can be overridden in the request level form data, see `resty.R().SetFormData`.
+// 		resty.SetFormData(map[string]string{
+//				"access_token": "BC594900-518B-4F7E-AC75-BD37F019E08F",
+//				"user_id": "3455454545",
+//			})
+//
 func (c *Client) SetFormData(data map[string]string) *Client {
 	for k, v := range data {
 		c.FormData.Add(k, v)
@@ -122,16 +213,36 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 	return c
 }
 
+// SetBasicAuth method sets the basic authentication header in the HTTP request. For example -
+// `Authorization: Basic <base64-encoded-value>`
+//
+// For example: To set the header for username "go-resty" and password "welcome"
+// 		resty.SetBasicAuth("go-resty", "welcome")
+//
+// This basic auth information gets added to all the request rasied from this client instance.
+// Also it can be overriden or set one at the request level is supported, see `resty.R().SetBasicAuth`.
+//
 func (c *Client) SetBasicAuth(username, password string) *Client {
 	c.UserInfo = &User{Username: username, Password: password}
 	return c
 }
 
+// SetAuthToken method sets bearer auth token header in the HTTP request. For exmaple -
+// `Authorization: Bearer <auth-token-value-comes-here>`
+//
+// For example: To set auth token BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F
+//
+// 		resty.SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F")
+//
+// This bearer auth token gets added to all the request rasied from this client instance.
+// Also it can be overriden or set one at the request level is supported, see `resty.R().SetAuthToken`.
+//
 func (c *Client) SetAuthToken(token string) *Client {
 	c.Token = token
 	return c
 }
 
+// R method creates a request instance, its used for Get, Post, Put, Delete, Patch, Head and Options.
 func (c *Client) R() *Request {
 	r := &Request{
 		Url:        "",
@@ -150,6 +261,14 @@ func (c *Client) R() *Request {
 	return r
 }
 
+// OnBeforeRequest method sets request middleware into the before request chain.
+// Its gets applied after default `go-resty` request middlewares and before request
+// been sent from `go-resty` to host server.
+// 		resty.OnBeforeRequest(func(c *Client, r *Request) error {
+//				// Now you have access to Client and Request instance
+//				// manipulate it as per your need
+//			})
+//
 func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
 	c.beforeRequest[len(c.beforeRequest)-1] = m
 	c.beforeRequest = append(c.beforeRequest, requestLogger)
@@ -157,11 +276,23 @@ func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
 	return c
 }
 
+// OnAfterResponse method sets response middleware into the after response chain.
+// Once we receive response from host server, default `go-resty` response middleware
+// gets applied and then user assigened response middlewares applied.
+// 		resty.OnAfterResponse(func(c *Client, r *Response) error {
+//				// Now you have access to Client and Response instance
+//				// manipulate it as per your need
+//			})
+//
 func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
 	c.afterResponse = append(c.afterResponse, m)
 	return c
 }
 
+// SetDebug method enables the debug mode on `go-resty` client. Client logs details of every request and response.
+// For `Request` it logs information such as HTTP verb, Relative URL path, Host, Headers, Body if it has one.
+// For `Response` it logs information such as Status, Response Time, Headers, Body if it has one.
+//
 func (c *Client) SetDebug(d bool) *Client {
 	c.Debug = d
 	return c
@@ -199,6 +330,27 @@ func (c *Client) SetMode(mode string) *Client {
 	} else { // RESTful
 		c.httpClient.CheckRedirect = NoRedirectPolicy
 	}
+
+	return c
+}
+
+func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
+	c.transport.TLSClientConfig = config
+	return c
+}
+
+func (c *Client) SetTimeout(timeout time.Duration) *Client {
+	c.transport.Dial = func(network, addr string) (net.Conn, error) {
+		conn, err := net.DialTimeout(network, addr, timeout)
+		if err != nil {
+			c.Log.Printf("Error: %v", err)
+			return nil, err
+		}
+		conn.SetDeadline(time.Now().Add(timeout))
+
+		return conn, nil
+	}
+
 	return c
 }
 
