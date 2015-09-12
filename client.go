@@ -299,37 +299,63 @@ func (c *Client) SetDebug(d bool) *Client {
 	return c
 }
 
+// SetLogger method sets given writer for logging go-resty request and response details.
+// Default is os.Stderr
+// 		file, _ := os.OpenFile("/Users/jeeva/go-resty.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+//
+//		resty.SetLogger(file)
+//
 func (c *Client) SetLogger(w io.Writer) *Client {
 	c.Log = getLogger(w)
 	return c
 }
 
+// SetContentLength method enables the HTTP header `Content-Length` value for every request.
+// By default go-resty won't set `Content-Length`.
+// 		resty.SetContentLength(true)
+//
 func (c *Client) SetContentLength(l bool) *Client {
 	c.setContentLength = l
 	return c
 }
 
+// SetError method registers the global or client common `Error` object into go-resty. It is used
+// for automatic unmarshalling if response status code is greater than 399
+// 		resty.SetError(&Error{})
+//
 func (c *Client) SetError(err interface{}) *Client {
 	c.Error = err
 	return c
 }
 
+// SetRedirectPolicy method sets the client redirect poilicy. Default go-resty provides
+// `NoRedirectPolicy` and `FlexibleRedirectPolicy` for convientent use. However you can create one.
+//
+// For example:
+//		func MyCustomRedirectPolicy(req *http.Request, via []*http.Request) error {
+//			//...
+//			// Write your logic here
+//			//...
+//		}
+//
+//		resty.SetRedirectPolicy(MyCustomRedirectPolicy)
+//
 func (c *Client) SetRedirectPolicy(policy func(*http.Request, []*http.Request) error) *Client {
 	c.httpClient.CheckRedirect = policy
 	return c
 }
 
-// SetHTTPMode sets go-resty mode into HTTP
+// SetHTTPMode method sets go-resty mode into HTTP
 func (c *Client) SetHTTPMode() *Client {
 	return c.SetMode("http")
 }
 
-// SetRESTMode sets go-resty mode into RESTful
+// SetRESTMode method sets go-resty mode into RESTful
 func (c *Client) SetRESTMode() *Client {
 	return c.SetMode("rest")
 }
 
-// SetMode sets go-resty client mode to given value such as 'http' & 'rest'.
+// SetMode method sets go-resty client mode to given value such as 'http' & 'rest'.
 // 	RESTful:
 //		- No Redirect
 //		- Automatic response unmarshal if it is JSON or XML
@@ -359,11 +385,22 @@ func (c *Client) SetMode(mode string) *Client {
 	return c
 }
 
+// SetTLSClientConfig method sets TLSClientConfig for underling client Transport.
+// For example:
+// One can set custom root-certificate. Refer: http://golang.org/pkg/crypto/tls/#example_Dial
+//		resty.SetTLSClientConfig(&tls.Config{ RootCAs: roots })
+//
+// or One can disable security check (https)
+//		resty.SetTLSClientConfig(&tls.Config{ InsecureSkipVerify: true })
+//
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	c.transport.TLSClientConfig = config
 	return c
 }
 
+// SetTimeout method sets timeout for request raised from client
+//		resty.SetTimeout(time.Duration(1 * time.Minute))
+//
 func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	c.transport.Dial = func(network, addr string) (net.Conn, error) {
 		conn, err := net.DialTimeout(network, addr, timeout)
@@ -379,6 +416,7 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	return c
 }
 
+// executes the given `Request` object and returns response
 func (c *Client) execute(req *Request) (*Response, error) {
 	// Apply Request middleware
 	var err error
@@ -419,11 +457,13 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	return response, err
 }
 
+// enables a log prefix
 func (c *Client) enableLogPrefix() {
 	c.Log.SetFlags(log.LstdFlags)
 	c.Log.SetPrefix("RESTY ")
 }
 
+// disables a log prefix
 func (c *Client) disableLogPrefix() {
 	c.Log.SetFlags(0)
 	c.Log.SetPrefix("")
