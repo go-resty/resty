@@ -74,6 +74,7 @@ type Client struct {
 	httpClient       *http.Client
 	transport        *http.Transport
 	setContentLength bool
+	isHTTPMode       bool
 	beforeRequest    []func(*Client, *Request) error
 	afterResponse    []func(*Client, *Response) error
 }
@@ -318,17 +319,41 @@ func (c *Client) SetRedirectPolicy(policy func(*http.Request, []*http.Request) e
 	return c
 }
 
-// Method SetMode sets resty mode to given value. Default mode is RESTful
-// 		REST mode => No redirects
-// 		HTTP mode => Up to 10 redirects
+// SetHTTPMode sets go-resty mode into HTTP
+func (c *Client) SetHTTPMode() *Client {
+	return c.SetMode("http")
+}
+
+// SetRESTMode sets go-resty mode into RESTful
+func (c *Client) SetRESTMode() *Client {
+	return c.SetMode("rest")
+}
+
+// SetMode sets go-resty client mode to given value such as 'http' & 'rest'.
+// 	RESTful:
+//		- No Redirect
+//		- Automatic response unmarshal if it is JSON or XML
+//	HTML:
+//		- Up to 10 Redirects
+//		- No automatic unmarshall. Response will be treated as `response.String()`
 //
 // If you want more redirects, use FlexibleRedirectPolicy
 //		resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
+//
 func (c *Client) SetMode(mode string) *Client {
 	if mode == "http" {
+		c.isHTTPMode = true
 		c.httpClient.CheckRedirect = FlexibleRedirectPolicy(10)
+		c.afterResponse = []func(*Client, *Response) error{
+			responseLogger,
+		}
 	} else { // RESTful
+		c.isHTTPMode = false
 		c.httpClient.CheckRedirect = NoRedirectPolicy
+		c.afterResponse = []func(*Client, *Response) error{
+			responseLogger,
+			parseResponseBody,
+		}
 	}
 
 	return c
