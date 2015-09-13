@@ -57,7 +57,7 @@ var (
 	hdrUserAgentValue = "go-resty v%s - https://github.com/go-resty/resty"
 )
 
-// Type Client is used for HTTP/RESTful global values
+// Client type is used for HTTP/RESTful global values
 // for all request raised from the client
 type Client struct {
 	HostUrl    string
@@ -86,7 +86,8 @@ type User struct {
 
 // SetHeader method sets a single header field and its value in the client instance.
 // These headers will be applied to all requests raised from this client instance.
-// Also it can be overridden in the request level header option, see `resty.R().SetHeader`.
+// Also it can be overridden at request level header options, see `resty.R().SetHeader`
+// or `resty.R().SetHeaders`.
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`
 //
@@ -101,7 +102,7 @@ func (c *Client) SetHeader(header, value string) *Client {
 
 // SetHeaders method sets multiple headers field and its values at one go in the client instance.
 // These headers will be applied to all requests raised from this client instance. Also it can be
-// overridden in the request level headers option, see `resty.R().SetHeaders`.
+// overridden at request level headers options, see `resty.R().SetHeaders` or `resty.R().SetHeader`.
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`
 //
@@ -169,8 +170,8 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 // SetQueryParam method sets single paramater and its value in the client instance.
 // It will be formed as query string for the request. For example: `search=kitchen%20papers&size=large`
 // in the URL after `?` mark. These query params will be added to all the request raised from
-// this client instance. Also it can be overridden in the request level Query Param option,
-// see `resty.R().SetQueryParam`.
+// this client instance. Also it can be overridden at request level Query Param options,
+// see `resty.R().SetQueryParam` or `resty.R().SetQueryParams`.
 // 		resty.
 //			SetQueryParam("search", "kitchen papers").
 //			SetQueryParam("size", "large")
@@ -181,9 +182,10 @@ func (c *Client) SetQueryParam(param, value string) *Client {
 }
 
 // SetQueryParams method sets multiple paramaters and its values at one go in the client instance.
-// It will be formed as query string for the request. For example: `search=kitchen%20papers` in the URL after `?` mark.
-// These query params will be added to all the request raised from this client instance.
-// Also it can be overridden in the request level Query Param option, see `resty.R().SetQueryParams`.
+// It will be formed as query string for the request. For example: `search=kitchen%20papers&size=large`
+// in the URL after `?` mark. These query params will be added to all the request raised from this
+// client instance. Also it can be overridden at request level Query Param options,
+// see `resty.R().SetQueryParams` or `resty.R().SetQueryParam`.
 // 		resty.SetQueryParams(map[string]string{
 //				"search": "kitchen papers",
 //				"size": "large",
@@ -198,9 +200,9 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 }
 
 // SetFormData method sets Form parameters and its values in the client instance.
-// It's applicable only HTTP method `POST` and `PUT` and requets content type would be
+// It's applicable only HTTP method `POST` and `PUT` and requets content type would be set as
 // `application/x-www-form-urlencoded`. These form data will be added to all the request raised from
-// this client instance. Also it can be overridden in the request level form data, see `resty.R().SetFormData`.
+// this client instance. Also it can be overridden at request level form data, see `resty.R().SetFormData`.
 // 		resty.SetFormData(map[string]string{
 //				"access_token": "BC594900-518B-4F7E-AC75-BD37F019E08F",
 //				"user_id": "3455454545",
@@ -310,9 +312,11 @@ func (c *Client) SetLogger(w io.Writer) *Client {
 	return c
 }
 
-// SetContentLength method enables the HTTP header `Content-Length` value for every request.
+// SetContentLength method sets the HTTP header `Content-Length` value for every request.
 // By default go-resty won't set `Content-Length`.
 // 		resty.SetContentLength(true)
+//
+// Also you have an option to enable for particular request. See `resty.R().SetContentLength`
 //
 func (c *Client) SetContentLength(l bool) *Client {
 	c.setContentLength = l
@@ -320,7 +324,8 @@ func (c *Client) SetContentLength(l bool) *Client {
 }
 
 // SetError method registers the global or client common `Error` object into go-resty. It is used
-// for automatic unmarshalling if response status code is greater than 399
+// for automatic unmarshalling if response status code is greater than 399 and
+// content type either JSON or XML
 // 		resty.SetError(&Error{})
 //
 func (c *Client) SetError(err interface{}) *Client {
@@ -473,7 +478,11 @@ func (c *Client) disableLogPrefix() {
 // Request
 //
 
-// Type Request
+// Request type is used to compose and send individual request from client
+// go-resty is provide option override client level settings such as
+//		Auth Token, Basic Auth credentials, Header, Query Param, Form Data, Error object
+// and also add more options for particular request
+//
 type Request struct {
 	Url        string
 	Method     string
@@ -495,24 +504,29 @@ type Request struct {
 	setContentLength bool
 }
 
-func (r *Request) SetQueryParam(param, value string) *Request {
-	r.QueryParam.Add(param, value)
-	return r
-}
-
-func (r *Request) SetQueryParams(params map[string]string) *Request {
-	for p, v := range params {
-		r.QueryParam.Add(p, v)
-	}
-
-	return r
-}
-
+// SetHeader method sets a single header field and its value in the current request.
+// For Example: To set `Content-Type` and `Accept` as `application/json`.
+// 		resty.R().
+//			SetHeader("Content-Type", "application/json").
+//			SetHeader("Accept", "application/json")
+//
+// Also you can override header value, which was set at client instance level
+//
 func (r *Request) SetHeader(header, value string) *Request {
 	r.Header.Set(header, value)
 	return r
 }
 
+// SetHeaders method sets multiple headers field and its values at one go in the current request.
+// For Example: To set `Content-Type` and `Accept` as `application/json`
+//
+// 		resty.R().
+//			SetHeaders(map[string]string{
+//				"Content-Type": "application/json",
+//				"Accept": "application/json",
+//			})
+// Also you can override header value, which was set at client instance level
+//
 func (r *Request) SetHeaders(headers map[string]string) *Request {
 	for h, v := range headers {
 		r.Header.Set(h, v)
@@ -521,6 +535,47 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 	return r
 }
 
+// SetQueryParam method sets single paramater and its value in the current request.
+// It will be formed as query string for the request.
+// For example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
+// 		resty.R().
+//			SetQueryParam("search", "kitchen papers").
+//			SetQueryParam("size", "large")
+// Also you can override query params value, which was set at client instance level
+//
+func (r *Request) SetQueryParam(param, value string) *Request {
+	r.QueryParam.Add(param, value)
+	return r
+}
+
+// SetQueryParams method sets multiple paramaters and its values at one go in the current request.
+// It will be formed as query string for the request.
+// For example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
+// 		resty.R().
+//			SetQueryParams(map[string]string{
+//				"search": "kitchen papers",
+//				"size": "large",
+//			})
+// Also you can override query params value, which was set at client instance level
+//
+func (r *Request) SetQueryParams(params map[string]string) *Request {
+	for p, v := range params {
+		r.QueryParam.Add(p, v)
+	}
+
+	return r
+}
+
+// SetFormData method sets Form parameters and its values in the current request.
+// It's applicable only HTTP method `POST` and `PUT` and requets content type would be set as
+// `application/x-www-form-urlencoded`.
+// 		resty.R().
+// 			SetFormData(map[string]string{
+//				"access_token": "BC594900-518B-4F7E-AC75-BD37F019E08F",
+//				"user_id": "3455454545",
+//			})
+// Also you can override form data value, which was set at client instance level
+//
 func (r *Request) SetFormData(data map[string]string) *Request {
 	for k, v := range data {
 		r.FormData.Add(k, v)
@@ -529,21 +584,78 @@ func (r *Request) SetFormData(data map[string]string) *Request {
 	return r
 }
 
+// SetBody method sets the request body for the request. It supports various realtime need easy.
+// We can say its quite handy or powerful. Supported Go language data types as a body is
+// `string`, `[]byte`, `struct` and `map`. Automatic marshalling for JSON and XML content type,
+// if it is `struct` or `map`
+//
+// For Example: body value can be pointer or non-pointer.
+//
+// Struct as a body input, based on content type, it will be marshalled.
+//		resty.R().SetBody(User{
+//					Username:"jeeva@myjeeva.com",
+//					Password:"welcome2resty",
+//				})
+//
+// Map as a body input, based on content type, it will be marshalled.
+//		resty.R().SetBody(map[string]interface{}{
+//					"username":"jeeva@myjeeva.com",
+//					"password":"welcome2resty",
+//					"address":&Address{
+//						Address1:"1111 This is my street",
+//						Address2:"Apt 201",
+//						City:"My City",
+//						State:"My State",
+//						ZipCode:00000,
+//					},
+//				})
+//
+// String as a body input. Suitable for any need as a string input.
+//		resty.R().SetBody(`{
+//			"username":"jeeva@getrightcare.com",
+//			"password":"admin"
+//		}`)
+//
+// []byte as a body input. Suitable for raw request such as file upload, serialize & deserialize, etc.
+// 		resty.R().SetBody([]byte("This is my raw request, sent as-is"))
+//
 func (r *Request) SetBody(body interface{}) *Request {
 	r.Body = body
 	return r
 }
 
+// SetResult method is to register the response `Result` object for automatic unmarshalling in the RESTful mode
+// if response status code is greater than 399 and content type either JSON or XML.
+//
+// Note: Result object has to be pointer reference
+//		resty.R().SetResult(&AuthToken{})
+//
+// Accessing a result value
+//		response.Result().(*AuthToken)
+//
 func (r *Request) SetResult(res interface{}) *Request {
 	r.Result = res
 	return r
 }
 
+// SetError method is to register the request `Error` object for automatic unmarshalling in the RESTful mode
+// if response status code is greater than 399 and content type either JSON or XML.
+//
+// Note: Error object has to be pointer reference
+// 		resty.R().SetError(&AuthError{})
+//
+// Accessing a error value
+//		response.Error().(*AuthError)
+//
 func (r *Request) SetError(err interface{}) *Request {
 	r.Error = err
 	return r
 }
 
+// SetFile method is to set single file field name and its path for multipart upload.
+//	resty.R().
+//		SetFile("my_file", "/Users/jeeva/Gas Bill - 2015 Sep.pdf")
+//
 func (r *Request) SetFile(param, filePath string) *Request {
 	r.FormData.Set("@"+param, filePath)
 	r.isMultiPart = true
@@ -551,6 +663,14 @@ func (r *Request) SetFile(param, filePath string) *Request {
 	return r
 }
 
+// SetFiles method is to set multiple file field name and its path for multipart upload.
+//	resty.R().
+//		SetFiles(map[string]string{
+//				"my_file1": "/Users/jeeva/Gas Bill - 2015 Sep.pdf",
+//				"my_file2": "/Users/jeeva/Electricity Bill - 2015 Sep.pdf",
+//				"my_file3": "/Users/jeeva/Water Bill - 2015 Sep.pdf",
+//			})
+//
 func (r *Request) SetFiles(files map[string]string) *Request {
 	for f, fp := range files {
 		r.FormData.Set("@"+f, fp)
@@ -560,17 +680,39 @@ func (r *Request) SetFiles(files map[string]string) *Request {
 	return r
 }
 
+// SetContentLength method sets the HTTP header `Content-Length` value for current request.
+// By default go-resty won't set `Content-Length`. Also you have an option to enable for every
+// request. See `resty.SetContentLength`
+// 		resty.R().SetContentLength(true)
+//
 func (r *Request) SetContentLength(l bool) *Request {
 	r.setContentLength = true
 
 	return r
 }
 
+// SetBasicAuth method sets the basic authentication header in the current HTTP request.
+// For Header example: `Authorization: Basic <base64-encoded-value>`
+//
+// For example: To set the header for username "go-resty" and password "welcome"
+// 		resty.R().SetBasicAuth("go-resty", "welcome")
+//
+// This method overrides the credentials set by method `resty.SetBasicAuth`.
+//
 func (r *Request) SetBasicAuth(username, password string) *Request {
 	r.UserInfo = &User{Username: username, Password: password}
 	return r
 }
 
+// SetAuthToken method sets bearer auth token header in the current HTTP request. For Header exmaple:
+// `Authorization: Bearer <auth-token-value-comes-here>`
+//
+// For example: To set auth token BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F
+//
+// 		resty.R().SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F")
+//
+// This method overrides the Auth token set by method `resty.SetAuthToken`.
+//
 func (r *Request) SetAuthToken(token string) *Request {
 	r.Token = token
 	return r
@@ -610,7 +752,7 @@ func (r *Request) Options(url string) (*Response, error) {
 
 func (r *Request) execute(method, url string) (*Response, error) {
 	if r.isMultiPart && !(method == POST || method == PUT) {
-		return nil, fmt.Errorf("File upload is not allowed in HTTP verb [%v]", method)
+		return nil, fmt.Errorf("Multipart content is not allowed in HTTP verb [%v]", method)
 	}
 
 	r.Method = method
