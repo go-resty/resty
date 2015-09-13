@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -156,7 +157,10 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 			}
 
 			// []byte into Buffer
-			if bodyBytes != nil {
+			if bodyBytes == nil {
+				err = errors.New("Unsupported 'Body' type/value")
+				return
+			} else {
 				r.bodyBuf = bytes.NewBuffer(bodyBytes)
 			}
 		}
