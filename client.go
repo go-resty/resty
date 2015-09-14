@@ -82,6 +82,13 @@ type User struct {
 	Username, Password string
 }
 
+// SetHostUrl method is to set Host URL in the client instance. It will be used with request
+// raised from this client with relative URL
+func (c *Client) SetHostUrl(url string) *Client {
+	c.HostUrl = url
+	return c
+}
+
 // SetHeader method sets a single header field and its value in the client instance.
 // These headers will be applied to all requests raised from this client instance.
 // Also it can be overridden at request level header options, see `resty.R().SetHeader`
