@@ -90,8 +90,8 @@ type User struct {
 // For Example: To set `Content-Type` and `Accept` as `application/json`
 //
 // 		resty.
-//      	SetHeader("Content-Type", "application/json").
-//			SetHeader("Accept", "application/json")
+// 			SetHeader("Content-Type", "application/json").
+// 			SetHeader("Accept", "application/json")
 //
 func (c *Client) SetHeader(header, value string) *Client {
 	c.Header.Set(header, value)
@@ -145,7 +145,7 @@ func (c *Client) SetCookie(hc *http.Cookie) *Client {
 // 					Domain: "sample.com",
 // 					MaxAge: 36000,
 // 					HttpOnly: true,
-//					Secure: false,  // baseds on https or http
+//					Secure: false,
 // 				})
 //
 //		cookies = append(cookies, &http.Cookie{
@@ -155,9 +155,10 @@ func (c *Client) SetCookie(hc *http.Cookie) *Client {
 // 					Domain: "sample.com",
 // 					MaxAge: 36000,
 // 					HttpOnly: true,
-//					Secure: false,  // baseds on https or http
+//					Secure: false,
 // 				})
 //
+//		// Setting a cookies into resty
 // 		resty.SetCookies(cookies)
 //
 func (c *Client) SetCookies(cs []*http.Cookie) *Client {
@@ -215,7 +216,7 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 }
 
 // SetBasicAuth method sets the basic authentication header in the HTTP request. For example -
-// `Authorization: Basic <base64-encoded-value>`
+//		Authorization: Basic <base64-encoded-value>
 //
 // For example: To set the header for username "go-resty" and password "welcome"
 // 		resty.SetBasicAuth("go-resty", "welcome")
@@ -229,7 +230,7 @@ func (c *Client) SetBasicAuth(username, password string) *Client {
 }
 
 // SetAuthToken method sets bearer auth token header in the HTTP request. For exmaple -
-// `Authorization: Bearer <auth-token-value-comes-here>`
+// 		Authorization: Bearer <auth-token-value-comes-here>
 //
 // For example: To set auth token BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F
 //
@@ -321,8 +322,8 @@ func (c *Client) SetContentLength(l bool) *Client {
 	return c
 }
 
-// SetError method registers the global or client common `Error` object into go-resty. It is used
-// for automatic unmarshalling if response status code is greater than 399 and
+// SetError method is to register the global or client common `Error` object into go-resty.
+// It is used for automatic unmarshalling if response status code is greater than 399 and
 // content type either JSON or XML
 // 		resty.SetError(&Error{})
 //
@@ -348,12 +349,12 @@ func (c *Client) SetRedirectPolicy(policy func(*http.Request, []*http.Request) e
 	return c
 }
 
-// SetHTTPMode method sets go-resty mode into HTTP
+// SetHTTPMode method sets go-resty mode to HTTP
 func (c *Client) SetHTTPMode() *Client {
 	return c.SetMode("http")
 }
 
-// SetRESTMode method sets go-resty mode into RESTful
+// SetRESTMode method sets go-resty mode to RESTful
 func (c *Client) SetRESTMode() *Client {
 	return c.SetMode("rest")
 }
@@ -389,6 +390,7 @@ func (c *Client) SetMode(mode string) *Client {
 }
 
 // SetTLSClientConfig method sets TLSClientConfig for underling client Transport.
+//
 // For example:
 // One can set custom root-certificate. Refer: http://golang.org/pkg/crypto/tls/#example_Dial
 //		resty.SetTLSClientConfig(&tls.Config{ RootCAs: roots })
@@ -479,7 +481,7 @@ func (c *Client) disableLogPrefix() {
 // Request type is used to compose and send individual request from client
 // go-resty is provide option override client level settings such as
 //		Auth Token, Basic Auth credentials, Header, Query Param, Form Data, Error object
-// and also add more options for particular request
+// and also you can add more options for that particular request
 //
 type Request struct {
 	Url        string
@@ -502,13 +504,13 @@ type Request struct {
 	setContentLength bool
 }
 
-// SetHeader method sets a single header field and its value in the current request.
+// SetHeader method is to set a single header field and its value in the current request.
 // For Example: To set `Content-Type` and `Accept` as `application/json`.
 // 		resty.R().
 //			SetHeader("Content-Type", "application/json").
 //			SetHeader("Accept", "application/json")
 //
-// Also you can override header value, which was set at client instance level
+// Also you can override header value, which was set at client instance level.
 //
 func (r *Request) SetHeader(header, value string) *Request {
 	r.Header.Set(header, value)
@@ -523,7 +525,7 @@ func (r *Request) SetHeader(header, value string) *Request {
 //				"Content-Type": "application/json",
 //				"Accept": "application/json",
 //			})
-// Also you can override header value, which was set at client instance level
+// Also you can override header value, which was set at client instance level.
 //
 func (r *Request) SetHeaders(headers map[string]string) *Request {
 	for h, v := range headers {
@@ -583,39 +585,43 @@ func (r *Request) SetFormData(data map[string]string) *Request {
 }
 
 // SetBody method sets the request body for the request. It supports various realtime need easy.
-// We can say its quite handy or powerful. Supported Go language data types as a body is
-// `string`, `[]byte`, `struct` and `map`. Automatic marshalling for JSON and XML content type,
-// if it is `struct` or `map`
+// We can say its quite handy or powerful. Supported request body data types is `string`, `[]byte`,
+// `struct` and `map`. Body value can be pointer or non-pointer. Automatic marshalling
+// for JSON and XML content type, if it is `struct` or `map`.
 //
-// For Example: body value can be pointer or non-pointer.
+// For Example:
 //
 // Struct as a body input, based on content type, it will be marshalled.
-//		resty.R().SetBody(User{
-//					Username:"jeeva@myjeeva.com",
-//					Password:"welcome2resty",
-//				})
+//		resty.R().
+//			SetBody(User{
+//				Username:"jeeva@myjeeva.com",
+//				Password:"welcome2resty",
+//			})
 //
 // Map as a body input, based on content type, it will be marshalled.
-//		resty.R().SetBody(map[string]interface{}{
-//					"username":"jeeva@myjeeva.com",
-//					"password":"welcome2resty",
-//					"address":&Address{
-//						Address1:"1111 This is my street",
-//						Address2:"Apt 201",
-//						City:"My City",
-//						State:"My State",
-//						ZipCode:00000,
-//					},
-//				})
+//		resty.R().
+//			SetBody(map[string]interface{}{
+//				"username":"jeeva@myjeeva.com",
+//				"password":"welcome2resty",
+//				"address":&Address{
+//					Address1:"1111 This is my street",
+//					Address2:"Apt 201",
+//					City:"My City",
+//					State:"My State",
+//					ZipCode:00000,
+//				},
+//			})
 //
 // String as a body input. Suitable for any need as a string input.
-//		resty.R().SetBody(`{
-//			"username":"jeeva@getrightcare.com",
-//			"password":"admin"
-//		}`)
+//		resty.R().
+//			SetBody(`{
+//				"username":"jeeva@getrightcare.com",
+//				"password":"admin"
+//			}`)
 //
 // []byte as a body input. Suitable for raw request such as file upload, serialize & deserialize, etc.
-// 		resty.R().SetBody([]byte("This is my raw request, sent as-is"))
+// 		resty.R().
+//			SetBody([]byte("This is my raw request, sent as-is"))
 //
 func (r *Request) SetBody(body interface{}) *Request {
 	r.Body = body
@@ -652,7 +658,7 @@ func (r *Request) SetError(err interface{}) *Request {
 
 // SetFile method is to set single file field name and its path for multipart upload.
 //	resty.R().
-//		SetFile("my_file", "/Users/jeeva/Gas Bill - 2015 Sep.pdf")
+//		SetFile("my_file", "/Users/jeeva/Gas Bill - Sep.pdf")
 //
 func (r *Request) SetFile(param, filePath string) *Request {
 	r.FormData.Set("@"+param, filePath)
@@ -664,9 +670,9 @@ func (r *Request) SetFile(param, filePath string) *Request {
 // SetFiles method is to set multiple file field name and its path for multipart upload.
 //	resty.R().
 //		SetFiles(map[string]string{
-//				"my_file1": "/Users/jeeva/Gas Bill - 2015 Sep.pdf",
-//				"my_file2": "/Users/jeeva/Electricity Bill - 2015 Sep.pdf",
-//				"my_file3": "/Users/jeeva/Water Bill - 2015 Sep.pdf",
+//				"my_file1": "/Users/jeeva/Gas Bill - Sep.pdf",
+//				"my_file2": "/Users/jeeva/Electricity Bill - Sep.pdf",
+//				"my_file3": "/Users/jeeva/Water Bill - Sep.pdf",
 //			})
 //
 func (r *Request) SetFiles(files map[string]string) *Request {
@@ -690,7 +696,8 @@ func (r *Request) SetContentLength(l bool) *Request {
 }
 
 // SetBasicAuth method sets the basic authentication header in the current HTTP request.
-// For Header example: `Authorization: Basic <base64-encoded-value>`
+// For Header example:
+//		Authorization: Basic <base64-encoded-value>
 //
 // For example: To set the header for username "go-resty" and password "welcome"
 // 		resty.R().SetBasicAuth("go-resty", "welcome")
@@ -703,7 +710,7 @@ func (r *Request) SetBasicAuth(username, password string) *Request {
 }
 
 // SetAuthToken method sets bearer auth token header in the current HTTP request. For Header exmaple:
-// `Authorization: Bearer <auth-token-value-comes-here>`
+// 		Authorization: Bearer <auth-token-value-comes-here>
 //
 // For example: To set auth token BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F
 //
@@ -720,34 +727,42 @@ func (r *Request) SetAuthToken(token string) *Request {
 // HTTP verb method starts here
 //
 
+// Get method does GET HTTP request
 func (r *Request) Get(url string) (*Response, error) {
 	return r.execute(GET, url)
 }
 
+// Post method does POST HTTP request
 func (r *Request) Post(url string) (*Response, error) {
 	return r.execute(POST, url)
 }
 
+// Put method does PUT HTTP request
 func (r *Request) Put(url string) (*Response, error) {
 	return r.execute(PUT, url)
 }
 
+// Delete method does DELETE HTTP request
 func (r *Request) Delete(url string) (*Response, error) {
 	return r.execute(DELETE, url)
 }
 
+// Patch method does PATCH HTTP request
 func (r *Request) Patch(url string) (*Response, error) {
 	return r.execute(PATCH, url)
 }
 
+// Head method does HEAD HTTP request
 func (r *Request) Head(url string) (*Response, error) {
 	return r.execute(HEAD, url)
 }
 
+// Options method does OPTIONS HTTP request
 func (r *Request) Options(url string) (*Response, error) {
 	return r.execute(OPTIONS, url)
 }
 
+// Executes the current request with client
 func (r *Request) execute(method, url string) (*Response, error) {
 	if r.isMultiPart && !(method == POST || method == PUT) {
 		return nil, fmt.Errorf("Multipart content is not allowed in HTTP verb [%v]", method)
@@ -763,7 +778,7 @@ func (r *Request) execute(method, url string) (*Response, error) {
 // Response
 //
 
-// Type Response
+// Response is an object represents executed request and its values.
 type Response struct {
 	Body        []byte
 	ReceivedAt  time.Time
@@ -771,38 +786,50 @@ type Response struct {
 	RawResponse *http.Response
 }
 
+// Status method returns the HTTP status string for the executed request.
+//	For example: 200 OK
 func (r *Response) Status() string {
 	return r.RawResponse.Status
 }
 
+// StatusCode method returns the HTTP status code for the executed request.
+//	For example: 200
 func (r *Response) StatusCode() int {
 	return r.RawResponse.StatusCode
 }
 
+// Result method returns the response value as an object if it has one
 func (r *Response) Result() interface{} {
 	return r.Request.Result
 }
 
+// Error method returns the error object if it has one
 func (r *Response) Error() interface{} {
 	return r.Request.Error
 }
 
+// Header method returns the response headers
 func (r *Response) Header() http.Header {
 	return r.RawResponse.Header
 }
 
+// Cookies method to access all the response cookies
 func (r *Response) Cookies() []*http.Cookie {
 	return r.RawResponse.Cookies()
 }
 
+// String method returns the body of the server response as String.
 func (r *Response) String() string {
 	if r.Body == nil {
 		return ""
 	}
 
-	return string(r.Body)
+	return strings.TrimSpace(string(r.Body))
 }
 
+// Time method returns the time of HTTP response time that from request we sent and received a request.
+// See `response.ReceivedAt` to know when client recevied response and see `response.Request.Time` to know
+// when client sent a request.
 func (r *Response) Time() time.Duration {
 	return r.ReceivedAt.Sub(r.Request.Time)
 }
@@ -811,10 +838,14 @@ func (r *Response) Time() time.Duration {
 // Resty's handy redirect polices
 //
 
+// NoRedirectPolicy is used to disable redirects in the HTTP client
+// 		resty.SetRedirectPolicy(NoRedirectPolicy)
 func NoRedirectPolicy(req *http.Request, via []*http.Request) error {
 	return errors.New("Auto redirect is disabled")
 }
 
+// FlexibleRedirectPolicy is convenient method to create No of redirect policy for HTTP client
+// 		resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
 func FlexibleRedirectPolicy(noOfRedirect int) func(*http.Request, []*http.Request) error {
 	fn := func(req *http.Request, via []*http.Request) error {
 		if len(via) >= noOfRedirect {
@@ -830,15 +861,18 @@ func FlexibleRedirectPolicy(noOfRedirect int) func(*http.Request, []*http.Reques
 // Helper methods
 //
 
+// IsStringEmpty method tells whether given string is empty or not
 func IsStringEmpty(str string) bool {
 	return (len(strings.TrimSpace(str)) == 0)
 }
 
+// IsMarshalRequired method tells whether we need marshalling or not for request body.
 func IsMarshalRequired(body interface{}) bool {
 	kind := reflect.ValueOf(body).Kind()
 	return (kind == reflect.Struct || kind == reflect.Map)
 }
 
+// DetectContentType method is used to figure out `Request.Body` content type for request header
 func DetectContentType(body interface{}) string {
 	contentType := plainTextType
 	kind := reflect.ValueOf(body).Kind()
@@ -855,14 +889,17 @@ func DetectContentType(body interface{}) string {
 	return contentType
 }
 
+// IsJsonType method is to check JSON content type or not
 func IsJsonType(ct string) bool {
 	return jsonCheck.MatchString(ct)
 }
 
+// IsXmlType method is to check XML content type or not
 func IsXmlType(ct string) bool {
 	return xmlCheck.MatchString(ct)
 }
 
+// Unmarshal content into object from JSON or XML
 func Unmarshal(ct string, b []byte, d interface{}) (err error) {
 	if IsJsonType(ct) {
 		err = json.Unmarshal(b, d)

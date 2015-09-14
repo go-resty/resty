@@ -19,7 +19,11 @@ func init() {
 	DefaultClient = New()
 }
 
-// New creates a new resty client
+// New creates a new go-resty client
+// 		For Example:
+// 		client1 := resty.New()
+//
+//		client2 := resty.New()
 func New() *Client {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 
@@ -56,8 +60,8 @@ func New() *Client {
 	return c
 }
 
-// R creates a new resty request
-// such as GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS
+// R creates a new resty request object, it is used form a HTTP request
+// such as GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS.
 func R() *Request {
 	return DefaultClient.R()
 }
