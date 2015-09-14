@@ -85,7 +85,7 @@ type User struct {
 // SetHostUrl method is to set Host URL in the client instance. It will be used with request
 // raised from this client with relative URL
 func (c *Client) SetHostUrl(url string) *Client {
-	c.HostUrl = url
+	c.HostUrl = strings.TrimRight(url, "/")
 	return c
 }
 
@@ -394,6 +394,16 @@ func (c *Client) SetMode(mode string) *Client {
 	}
 
 	return c
+}
+
+// Mode method returns the current client mode. Typically its a "http" or "rest".
+// Default is "rest"
+func (c *Client) Mode() string {
+	if c.isHTTPMode {
+		return "http"
+	}
+
+	return "rest"
 }
 
 // SetTLSClientConfig method sets TLSClientConfig for underling client Transport.
@@ -873,12 +883,6 @@ func IsStringEmpty(str string) bool {
 	return (len(strings.TrimSpace(str)) == 0)
 }
 
-// IsMarshalRequired method tells whether we need marshalling or not for request body.
-func IsMarshalRequired(body interface{}) bool {
-	kind := reflect.ValueOf(body).Kind()
-	return (kind == reflect.Struct || kind == reflect.Map)
-}
-
 // DetectContentType method is used to figure out `Request.Body` content type for request header
 func DetectContentType(body interface{}) string {
 	contentType := plainTextType
@@ -959,10 +963,10 @@ func getRequestBodyString(r *Request) (body string) {
 			contentType := r.Header.Get(hdrContentTypeKey)
 			var prtBodyBytes []byte
 			var err error
-			isMarshal := IsMarshalRequired(r.Body)
-			if IsJsonType(contentType) && isMarshal {
+			kind := reflect.ValueOf(r.Body).Kind()
+			if IsJsonType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
 				prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
-			} else if IsXmlType(contentType) && isMarshal {
+			} else if IsXmlType(contentType) && (kind == reflect.Struct) {
 				prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
 			} else if b, ok := r.Body.(string); ok {
 				if IsJsonType(contentType) {

@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 )
 
@@ -42,15 +43,11 @@ func parseRequestUrl(c *Client, r *Request) error {
 
 	// Adding Query Param
 	query := reqUrl.Query()
-	for k, v := range c.QueryParam {
-		for _, pv := range v {
-			query.Add(k, pv)
-		}
+	for k := range c.QueryParam {
+		query.Set(k, c.QueryParam.Get(k))
 	}
-	for k, v := range r.QueryParam {
-		for _, pv := range v {
-			query.Add(k, pv)
-		}
+	for k := range r.QueryParam {
+		query.Set(k, r.QueryParam.Get(k))
 	}
 
 	reqUrl.RawQuery = query.Encode()
@@ -139,10 +136,10 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 			}
 
 			var bodyBytes []byte
-			isMarshal := IsMarshalRequired(r.Body)
-			if IsJsonType(contentType) && isMarshal {
+			kind := reflect.ValueOf(r.Body).Kind()
+			if IsJsonType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
 				bodyBytes, err = json.Marshal(&r.Body)
-			} else if IsXmlType(contentType) && isMarshal {
+			} else if IsXmlType(contentType) && (kind == reflect.Struct) {
 				bodyBytes, err = xml.Marshal(&r.Body)
 			} else if b, ok := r.Body.(string); ok {
 				bodyBytes = []byte(b)
@@ -200,7 +197,7 @@ func addCredentials(c *Client, r *Request) error {
 		r.RawRequest.SetBasicAuth(c.UserInfo.Username, c.UserInfo.Password)
 		isBasicAuth = true
 	}
-	if isBasicAuth && strings.HasPrefix(r.Url, "http") {
+	if isBasicAuth && !strings.HasPrefix(r.Url, "https") {
 		c.Log.Println("WARNING - Using Basic Auth in HTTP mode is not secure.")
 	}
 
