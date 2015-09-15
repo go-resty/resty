@@ -1,4 +1,5 @@
-# resty
+# resty  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Simple HTTP and REST client for Go inspired by Ruby rest-client
 
 **Development is in progress.**

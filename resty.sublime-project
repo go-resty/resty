@@ -1,0 +1,18 @@
+{
+	"folders":
+	[
+		{
+			"path": "."
+		}
+	],
+	"settings":
+	{
+		"GoSublime":
+		{
+			"env":
+			{
+				"GOPATH": "$HOME/Documents/scm/go-workspace:$GS_GOPATH"
+			}
+		}
+	}
+}
