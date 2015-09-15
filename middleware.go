@@ -21,28 +21,28 @@ import (
 // Request Middleware(s)
 //
 
-func parseRequestUrl(c *Client, r *Request) error {
+func parseRequestURL(c *Client, r *Request) error {
 	// Parsing request URL
-	reqUrl, err := url.Parse(r.Url)
+	reqURL, err := url.Parse(r.URL)
 	if err != nil {
 		return err
 	}
 
 	// If Request.Url is relative path then added c.HostUrl into
 	// the request URL otherwise Request.Url will be used as-is
-	if !reqUrl.IsAbs() {
-		if !strings.HasPrefix(r.Url, "/") {
-			r.Url = "/" + r.Url
+	if !reqURL.IsAbs() {
+		if !strings.HasPrefix(r.URL, "/") {
+			r.URL = "/" + r.URL
 		}
 
-		reqUrl, err = url.Parse(c.HostUrl + r.Url)
+		reqURL, err = url.Parse(c.HostURL + r.URL)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Adding Query Param
-	query := reqUrl.Query()
+	query := reqURL.Query()
 	for k := range c.QueryParam {
 		query.Set(k, c.QueryParam.Get(k))
 	}
@@ -50,8 +50,8 @@ func parseRequestUrl(c *Client, r *Request) error {
 		query.Set(k, r.QueryParam.Get(k))
 	}
 
-	reqUrl.RawQuery = query.Encode()
-	r.Url = reqUrl.String()
+	reqURL.RawQuery = query.Encode()
+	r.URL = reqURL.String()
 
 	return nil
 }
@@ -137,9 +137,9 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 
 			var bodyBytes []byte
 			kind := reflect.ValueOf(r.Body).Kind()
-			if IsJsonType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
+			if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
 				bodyBytes, err = json.Marshal(&r.Body)
-			} else if IsXmlType(contentType) && (kind == reflect.Struct) {
+			} else if IsXMLType(contentType) && (kind == reflect.Struct) {
 				bodyBytes, err = xml.Marshal(&r.Body)
 			} else if b, ok := r.Body.(string); ok {
 				bodyBytes = []byte(b)
@@ -149,13 +149,13 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 
 			if err != nil {
 				return
+			} else if bodyBytes == nil {
+				err = errors.New("Unsupported 'Body' type/value")
+				return
 			}
 
 			// []byte into Buffer
-			if bodyBytes == nil {
-				err = errors.New("Unsupported 'Body' type/value")
-				return
-			} else {
+			if bodyBytes != nil {
 				r.bodyBuf = bytes.NewBuffer(bodyBytes)
 			}
 		}
@@ -169,11 +169,11 @@ CL:
 	return
 }
 
-func createHttpRequest(c *Client, r *Request) (err error) {
+func createHTTPRequest(c *Client, r *Request) (err error) {
 	if r.bodyBuf == nil {
-		r.RawRequest, err = http.NewRequest(r.Method, r.Url, nil)
+		r.RawRequest, err = http.NewRequest(r.Method, r.URL, nil)
 	} else {
-		r.RawRequest, err = http.NewRequest(r.Method, r.Url, r.bodyBuf)
+		r.RawRequest, err = http.NewRequest(r.Method, r.URL, r.bodyBuf)
 	}
 
 	// Add headers into http request
@@ -197,7 +197,7 @@ func addCredentials(c *Client, r *Request) error {
 		r.RawRequest.SetBasicAuth(c.UserInfo.Username, c.UserInfo.Password)
 		isBasicAuth = true
 	}
-	if isBasicAuth && !strings.HasPrefix(r.Url, "https") {
+	if isBasicAuth && !strings.HasPrefix(r.URL, "https") {
 		c.Log.Println("WARNING - Using Basic Auth in HTTP mode is not secure.")
 	}
 
@@ -257,7 +257,7 @@ func responseLogger(c *Client, res *Response) error {
 func parseResponseBody(c *Client, res *Response) (err error) {
 	// Handles only JSON or XML content type
 	ct := res.Header().Get(hdrContentTypeKey)
-	if IsJsonType(ct) || IsXmlType(ct) {
+	if IsJSONType(ct) || IsXMLType(ct) {
 		// Considered as Result
 		if res.StatusCode() > 199 && res.StatusCode() < 300 {
 			if res.Request.Result != nil {

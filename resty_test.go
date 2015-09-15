@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -33,7 +34,9 @@ func TestGet(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dcr().Get(ts.URL + "/")
+	resp, err := R().
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+		Get(ts.URL + "/")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -49,6 +52,7 @@ func TestGetCustomUserAgent(t *testing.T) {
 
 	resp, err := dcr().
 		SetHeader(hdrUserAgentKey, "Test Custom User agent").
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Get(ts.URL + "/")
 
 	assertError(t, err)
@@ -65,13 +69,13 @@ func TestGetClientParamRequestParam(t *testing.T) {
 
 	c := dc()
 	c.SetQueryParam("client_param", "true").
-		SetQueryParam("req_1", "jeeva").
-		SetQueryParam("req_3", "jeeva3").
+		SetQueryParams(map[string]string{"req_1": "jeeva", "req_3": "jeeva3"}).
 		SetDebug(true).
 		SetLogger(ioutil.Discard)
 
 	resp, err := c.R().
 		SetQueryParams(map[string]string{"req_1": "req 1 value", "req_2": "req 2 value"}).
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		SetHeader(hdrUserAgentKey, "Test Custom User agent").
 		Get(ts.URL + "/")
 
@@ -88,7 +92,7 @@ func TestGetRelativePath(t *testing.T) {
 	defer ts.Close()
 
 	c := dc()
-	c.SetHostUrl(ts.URL)
+	c.SetHostURL(ts.URL)
 
 	resp, err := c.R().Get("mypage2")
 
@@ -116,8 +120,11 @@ func TestPostJSONStringSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
-		SetHeader(hdrContentTypeKey, jsonContentType).
+	c := dc()
+	c.SetHeader(hdrContentTypeKey, jsonContentType).
+		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1", hdrAcceptKey: jsonContentType})
+
+	resp, err := c.R().
 		SetBody(`{"username":"testuser", "password":"testpass"}`).
 		Post(ts.URL + "/login")
 
@@ -131,8 +138,11 @@ func TestPostJSONStringError(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
-		SetHeader(hdrContentTypeKey, jsonContentType).
+	c := dc()
+	c.SetHeader(hdrContentTypeKey, jsonContentType).
+		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1", hdrAcceptKey: jsonContentType})
+
+	resp, err := c.R().
 		SetBody(`{"username":"testuser" "password":"testpass"}`).
 		Post(ts.URL + "/login")
 
@@ -146,8 +156,11 @@ func TestPostJSONBytesSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
-		SetHeader(hdrContentTypeKey, jsonContentType).
+	c := dc()
+	c.SetHeader(hdrContentTypeKey, jsonContentType).
+		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1", hdrAcceptKey: jsonContentType})
+
+	resp, err := c.R().
 		SetBody([]byte(`{"username":"testuser", "password":"testpass"}`)).
 		Post(ts.URL + "/login")
 
@@ -235,6 +248,7 @@ func TestPostXMLStringSuccess(t *testing.T) {
 	resp, err := dclr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username><Password>testpass</Password></User>`).
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
@@ -266,6 +280,8 @@ func TestPostXMLBytesSuccess(t *testing.T) {
 	resp, err := dclr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody([]byte(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username><Password>testpass</Password></User>`)).
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+		SetContentLength(true).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
@@ -281,6 +297,7 @@ func TestPostXMLStructSuccess(t *testing.T) {
 	resp, err := dclr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(User{Username: "testuser", Password: "testpass"}).
+		SetContentLength(true).
 		SetResult(&AuthSuccess{}).
 		Post(ts.URL + "/login")
 
@@ -347,7 +364,7 @@ func TestClientBasicAuth(t *testing.T) {
 
 	c := dc()
 	c.SetBasicAuth("myuser", "basicauth").
-		SetHostUrl(ts.URL).
+		SetHostURL(ts.URL).
 		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
 
 	resp, err := c.R().
@@ -366,7 +383,7 @@ func TestRequestBasicAuth(t *testing.T) {
 	defer ts.Close()
 
 	c := dc()
-	c.SetHostUrl(ts.URL).
+	c.SetHostURL(ts.URL).
 		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
 
 	resp, err := c.R().
@@ -386,11 +403,11 @@ func TestRequestBasicAuthFail(t *testing.T) {
 	defer ts.Close()
 
 	c := dc()
-	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+		SetError(&AuthError{})
 
 	resp, err := c.R().
 		SetBasicAuth("myuser", "basicauth1").
-		SetError(&AuthError{}).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
@@ -407,7 +424,7 @@ func TestClientAuthToken(t *testing.T) {
 	c := dc()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
-		SetHostUrl(ts.URL + "/")
+		SetHostURL(ts.URL + "/")
 
 	resp, err := c.R().Get("/profile")
 
@@ -437,6 +454,7 @@ func TestFormData(t *testing.T) {
 
 	c := dc()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
+		SetContentLength(true).
 		SetDebug(true).
 		SetLogger(ioutil.Discard)
 
@@ -456,13 +474,16 @@ func TestMultiPartUploadFile(t *testing.T) {
 	pwd, _ := os.Getwd()
 	basePath := pwd + "/test-data"
 
-	resp, err := dclr().
+	c := dc()
+	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
+
+	resp, err := c.R().
 		SetFile("profile_img", basePath+"/test-img.png").
+		SetContentLength(true).
 		Post(ts.URL + "/upload")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	fmt.Println(resp)
 }
 
 func TestMultiPartUploadFiles(t *testing.T) {
@@ -479,17 +500,245 @@ func TestMultiPartUploadFiles(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	fmt.Println(resp)
+}
+
+func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+
+	pwd, _ := os.Getwd()
+	basePath := pwd + "/test-data"
+
+	_, err := dclr().
+		SetFile("profile_img", basePath+"/test-img.png").
+		Get(ts.URL + "/upload")
+
+	assertEqual(t, "Multipart content is not allowed in HTTP verb [GET]", err.Error())
+
+	_, err = dclr().
+		SetFile("profile_img", basePath+"/test-img.png").
+		Delete(ts.URL + "/upload")
+
+	assertEqual(t, "Multipart content is not allowed in HTTP verb [DELETE]", err.Error())
+}
+
+func TestGetWithCookie(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetHostURL(ts.URL)
+	c.SetCookie(&http.Cookie{
+		Name:     "go-resty-1",
+		Value:    "This is cookie 1 value",
+		Path:     "/",
+		Domain:   "localhost",
+		MaxAge:   36000,
+		HttpOnly: true,
+		Secure:   false,
+	})
+
+	resp, err := c.R().Get("mypage2")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "TestGet: text response from mypage2", resp.String())
+
+	logResponse(t, resp)
+}
+
+func TestGetWithCookies(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	cookies := make([]*http.Cookie, 0)
+
+	cookies = append(cookies, &http.Cookie{
+		Name:     "go-resty-1",
+		Value:    "This is cookie 1 value",
+		Path:     "/",
+		Domain:   "sample.com",
+		MaxAge:   36000,
+		HttpOnly: true,
+		Secure:   false,
+	})
+
+	cookies = append(cookies, &http.Cookie{
+		Name:     "go-resty-2",
+		Value:    "This is cookie 2 value",
+		Path:     "/",
+		Domain:   "sample.com",
+		MaxAge:   36000,
+		HttpOnly: true,
+		Secure:   false,
+	})
+
+	c := dc()
+	c.SetHostURL(ts.URL).
+		SetCookies(cookies)
+
+	resp, err := c.R().Get("mypage2")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "TestGet: text response from mypage2", resp.String())
+
+	logResponse(t, resp)
+}
+
+func TestPutPlainString(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	resp, err := R().
+		SetBody("This is plain text body to server").
+		Put(ts.URL + "/plaintext")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "TestPut: plain text response", resp.String())
+}
+
+func TestPutJSONString(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	DefaultClient.OnBeforeRequest(func(c *Client, r *Request) error {
+		r.SetHeader("X-Custom-Request-Middleware", "OnBeforeRequest middleware")
+		return nil
+	})
+	DefaultClient.OnBeforeRequest(func(c *Client, r *Request) error {
+		c.SetContentLength(true)
+		r.SetHeader("X-ContentLength", "OnBeforeRequest ContentLength set")
+		return nil
+	})
+
+	DefaultClient.SetDebug(true).SetLogger(ioutil.Discard)
+
+	resp, err := R().
+		SetHeaders(map[string]string{hdrContentTypeKey: jsonContentType, hdrAcceptKey: jsonContentType}).
+		SetBody(`{"content":"json content sending to server"}`).
+		Put(ts.URL + "/json")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, `{"response":"json response"}`, resp.String())
+}
+
+func TestPutXMLString(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	resp, err := R().
+		SetHeaders(map[string]string{hdrContentTypeKey: "application/xml", hdrAcceptKey: "application/xml"}).
+		SetBody(`<?xml version="1.0" encoding="UTF-8"?><Request>XML Content sending to server</Request>`).
+		Put(ts.URL + "/xml")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, `<?xml version="1.0" encoding="UTF-8"?><Response>XML response</Response>`, resp.String())
+}
+
+func TestOnBeforeMiddleware(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.OnBeforeRequest(func(c *Client, r *Request) error {
+		r.SetHeader("X-Custom-Request-Middleware", "OnBeforeRequest middleware")
+		return nil
+	})
+	c.OnBeforeRequest(func(c *Client, r *Request) error {
+		c.SetContentLength(true)
+		r.SetHeader("X-ContentLength", "OnBeforeRequest ContentLength set")
+		return nil
+	})
+
+	resp, err := c.R().
+		SetBody("OnBeforeRequest: This is plain text body to server").
+		Put(ts.URL + "/plaintext")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "TestPut: plain text response", resp.String())
+}
+
+func TestOnAfterMiddleware(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.OnAfterResponse(func(c *Client, res *Response) error {
+		t.Logf("Request sent at: %v", res.Request.Time)
+		t.Logf("Response Recevied at: %v", res.ReceivedAt)
+
+		return nil
+	})
+
+	resp, err := c.R().
+		SetBody("OnAfterResponse: This is plain text body to server").
+		Put(ts.URL + "/plaintext")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "TestPut: plain text response", resp.String())
+}
+
+func TestNoAutoRedirect(t *testing.T) {
+	ts := createRedirectServer(t)
+	defer ts.Close()
+
+	_, err := R().Get(ts.URL + "/redirect-1")
+
+	assertEqual(t, "Get /redirect-2: Auto redirect is disabled", err.Error())
+}
+
+func TestHTTPAutoRedirectUpto10(t *testing.T) {
+	ts := createRedirectServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetHTTPMode()
+	_, err := c.R().Get(ts.URL + "/redirect-1")
+
+	assertEqual(t, "Get /redirect-11: Stopped after 10 redirects", err.Error())
+}
+
+func TestClientRedirectPolicy(t *testing.T) {
+	ts := createRedirectServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetHTTPMode().
+		SetRedirectPolicy(FlexibleRedirectPolicy(20))
+
+	_, err := c.R().Get(ts.URL + "/redirect-1")
+
+	assertEqual(t, "Get /redirect-21: Stopped after 20 redirects", err.Error())
+}
+
+func TestClientTimeout(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetHTTPMode().
+		SetTimeout(time.Duration(time.Second * 3))
+
+	_, err := c.R().Get(ts.URL + "/set-timeout-test")
+
+	assertEqual(t, true, strings.Contains(err.Error(), "i/o timeout"))
 }
 
 func TestClientOptions(t *testing.T) {
 	c := dc()
 
-	c.SetHTTPMode().
-		SetContentLength(true)
-
+	c.SetHTTPMode().SetContentLength(true)
 	assertEqual(t, c.Mode(), "http")
 	assertEqual(t, c.setContentLength, true)
+
+	c.SetRESTMode()
+	assertEqual(t, c.Mode(), "rest")
 }
 
 func createGetServer(t *testing.T) *httptest.Server {
@@ -503,6 +752,9 @@ func createGetServer(t *testing.T) *httptest.Server {
 				w.WriteHeader(http.StatusBadRequest)
 			} else if r.URL.Path == "/mypage2" {
 				w.Write([]byte("TestGet: text response from mypage2"))
+			} else if r.URL.Path == "/set-timeout-test" {
+				time.Sleep(time.Second * 5)
+				w.Write([]byte("TestClientTimeout page"))
 			}
 		}
 	})
@@ -521,7 +773,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 				user := &User{}
 
 				// JSON
-				if IsJsonType(r.Header.Get(hdrContentTypeKey)) {
+				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
 					jd := json.NewDecoder(r.Body)
 					err := jd.Decode(user)
 					w.Header().Set(hdrContentTypeKey, jsonContentType)
@@ -545,7 +797,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 				}
 
 				// XML
-				if IsXmlType(r.Header.Get(hdrContentTypeKey)) {
+				if IsXMLType(r.Header.Get(hdrContentTypeKey)) {
 					xd := xml.NewDecoder(r.Body)
 					err := xd.Decode(user)
 
@@ -686,6 +938,45 @@ func createAuthServer(t *testing.T) *httptest.Server {
 			return
 		}
 	}))
+
+	return ts
+}
+
+func createGenServer(t *testing.T) *httptest.Server {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("Method: %v", r.Method)
+		t.Logf("Path: %v", r.URL.Path)
+
+		if r.Method == PUT {
+			if r.URL.Path == "/plaintext" {
+				w.Write([]byte("TestPut: plain text response"))
+			} else if r.URL.Path == "/json" {
+				w.Header().Set(hdrContentTypeKey, jsonContentType)
+				w.Write([]byte(`{"response":"json response"}`))
+			} else if r.URL.Path == "/xml" {
+				w.Header().Set(hdrContentTypeKey, "application/xml")
+				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Response>XML response</Response>`))
+			}
+		}
+	})
+
+	return ts
+}
+
+func createRedirectServer(t *testing.T) *httptest.Server {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("Method: %v", r.Method)
+		t.Logf("Path: %v", r.URL.Path)
+
+		if r.Method == GET {
+			if strings.HasPrefix(r.URL.Path, "/redirect-") {
+				cntStr := strings.SplitAfter(r.URL.Path, "-")[1]
+				cnt, _ := strconv.Atoi(cntStr)
+
+				http.Redirect(w, r, fmt.Sprintf("/redirect-%d", (cnt+1)), http.StatusTemporaryRedirect)
+			}
+		}
+	})
 
 	return ts
 }

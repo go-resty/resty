@@ -28,12 +28,25 @@ import (
 )
 
 const (
-	GET     = "GET"
-	POST    = "POST"
-	PUT     = "PUT"
-	DELETE  = "DELETE"
-	PATCH   = "PATCH"
-	HEAD    = "HEAD"
+	// HTTP method GET
+	GET = "GET"
+
+	// HTTP method POST
+	POST = "POST"
+
+	// HTTP method PUT
+	PUT = "PUT"
+
+	// HTTP method DELETE
+	DELETE = "DELETE"
+
+	// HTTP method PATCH
+	PATCH = "PATCH"
+
+	// HTTP method HEAD
+	HEAD = "HEAD"
+
+	// HTTP method OPTIONS
 	OPTIONS = "OPTIONS"
 )
 
@@ -58,7 +71,7 @@ var (
 // Client type is used for HTTP/RESTful global values
 // for all request raised from the client
 type Client struct {
-	HostUrl    string
+	HostURL    string
 	QueryParam url.Values
 	FormData   url.Values
 	Header     http.Header
@@ -77,15 +90,15 @@ type Client struct {
 	afterResponse    []func(*Client, *Response) error
 }
 
-// Type User is hold a username and password information
+// User type is to hold an username and password information
 type User struct {
 	Username, Password string
 }
 
 // SetHostUrl method is to set Host URL in the client instance. It will be used with request
 // raised from this client with relative URL
-func (c *Client) SetHostUrl(url string) *Client {
-	c.HostUrl = strings.TrimRight(url, "/")
+func (c *Client) SetHostURL(url string) *Client {
+	c.HostURL = strings.TrimRight(url, "/")
 	return c
 }
 
@@ -133,7 +146,7 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 // 					Domain: "sample.com",
 // 					MaxAge: 36000,
 // 					HttpOnly: true,
-//					Secure: false,  // baseds on https or http
+//					Secure: false,
 // 				})
 //
 func (c *Client) SetCookie(hc *http.Cookie) *Client {
@@ -254,7 +267,7 @@ func (c *Client) SetAuthToken(token string) *Client {
 // R method creates a request instance, its used for Get, Post, Put, Delete, Patch, Head and Options.
 func (c *Client) R() *Request {
 	r := &Request{
-		Url:        "",
+		URL:        "",
 		Method:     "",
 		QueryParam: url.Values{},
 		FormData:   url.Values{},
@@ -501,7 +514,7 @@ func (c *Client) disableLogPrefix() {
 // and also you can add more options for that particular request
 //
 type Request struct {
-	Url        string
+	URL        string
 	Method     string
 	QueryParam url.Values
 	FormData   url.Values
@@ -786,7 +799,7 @@ func (r *Request) execute(method, url string) (*Response, error) {
 	}
 
 	r.Method = method
-	r.Url = url
+	r.URL = url
 
 	return r.client.execute(r)
 }
@@ -900,21 +913,21 @@ func DetectContentType(body interface{}) string {
 	return contentType
 }
 
-// IsJsonType method is to check JSON content type or not
-func IsJsonType(ct string) bool {
+// IsJSONType method is to check JSON content type or not
+func IsJSONType(ct string) bool {
 	return jsonCheck.MatchString(ct)
 }
 
-// IsXmlType method is to check XML content type or not
-func IsXmlType(ct string) bool {
+// IsXMLType method is to check XML content type or not
+func IsXMLType(ct string) bool {
 	return xmlCheck.MatchString(ct)
 }
 
 // Unmarshal content into object from JSON or XML
 func Unmarshal(ct string, b []byte, d interface{}) (err error) {
-	if IsJsonType(ct) {
+	if IsJSONType(ct) {
 		err = json.Unmarshal(b, d)
-	} else if IsXmlType(ct) {
+	} else if IsXMLType(ct) {
 		err = xml.Unmarshal(b, d)
 	}
 
@@ -964,17 +977,20 @@ func getRequestBodyString(r *Request) (body string) {
 			var prtBodyBytes []byte
 			var err error
 			kind := reflect.ValueOf(r.Body).Kind()
-			if IsJsonType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
+			if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
 				prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
-			} else if IsXmlType(contentType) && (kind == reflect.Struct) {
+			} else if IsXMLType(contentType) && (kind == reflect.Struct) {
 				prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
 			} else if b, ok := r.Body.(string); ok {
-				if IsJsonType(contentType) {
+				if IsJSONType(contentType) {
 					bodyBytes := []byte(b)
 					var out bytes.Buffer
 					if err = json.Indent(&out, bodyBytes, "", "   "); err == nil {
 						prtBodyBytes = out.Bytes()
 					}
+				} else {
+					body = b
+					return
 				}
 			} else if b, ok := r.Body.([]byte); ok {
 				body = base64.StdEncoding.EncodeToString(b)
@@ -994,7 +1010,7 @@ func getResponseBodyString(res *Response) string {
 	bodyStr := "***** NO CONTENT *****"
 	if res.Body != nil {
 		ct := res.Header().Get(hdrContentTypeKey)
-		if IsJsonType(ct) {
+		if IsJSONType(ct) {
 			var out bytes.Buffer
 			if err := json.Indent(&out, res.Body, "", "   "); err == nil {
 				bodyStr = string(out.Bytes())

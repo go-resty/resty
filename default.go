@@ -28,7 +28,7 @@ func New() *Client {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 
 	c := &Client{
-		HostUrl:    "",
+		HostURL:    "",
 		QueryParam: url.Values{},
 		FormData:   url.Values{},
 		Header:     http.Header{},
@@ -43,10 +43,10 @@ func New() *Client {
 
 	// default before request middlewares
 	c.beforeRequest = []func(*Client, *Request) error{
-		parseRequestUrl,
+		parseRequestURL,
 		parseRequestHeader,
 		parseRequestBody,
-		createHttpRequest,
+		createHTTPRequest,
 		addCredentials,
 		requestLogger,
 	}
