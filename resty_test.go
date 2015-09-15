@@ -23,11 +23,11 @@ import (
 )
 
 type AuthSuccess struct {
-	Id, Message string
+	ID, Message string
 }
 
 type AuthError struct {
-	Id, Message string
+	ID, Message string
 }
 
 func TestGet(t *testing.T) {
@@ -460,6 +460,7 @@ func TestFormData(t *testing.T) {
 
 	resp, err := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
+		SetBasicAuth("myuser", "mypass").
 		Post(ts.URL + "/profile")
 
 	assertError(t, err)
@@ -551,7 +552,7 @@ func TestGetWithCookies(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	cookies := make([]*http.Cookie, 0)
+	var cookies []*http.Cookie
 
 	cookies = append(cookies, &http.Cookie{
 		Name:     "go-resty-1",
@@ -728,6 +729,37 @@ func TestClientTimeout(t *testing.T) {
 	_, err := c.R().Get(ts.URL + "/set-timeout-test")
 
 	assertEqual(t, true, strings.Contains(err.Error(), "i/o timeout"))
+}
+
+func TestHeadMethod(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dclr().Head(ts.URL + "/")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+func TestOptionsMethod(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	resp, err := dclr().Options(ts.URL + "/options")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, resp.Header().Get("Access-Control-Expose-Headers"), "x-go-resty-id")
+}
+
+func TestPatchMethod(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	resp, err := dclr().Patch(ts.URL + "/patch")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
 func TestClientOptions(t *testing.T) {
@@ -957,6 +989,17 @@ func createGenServer(t *testing.T) *httptest.Server {
 				w.Header().Set(hdrContentTypeKey, "application/xml")
 				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Response>XML response</Response>`))
 			}
+		}
+
+		if r.Method == OPTIONS && r.URL.Path == "/options" {
+			w.Header().Set("Access-Control-Allow-Origin", "localhost")
+			w.Header().Set("Access-Control-Allow-Methods", "PUT, PATCH")
+			w.Header().Set("Access-Control-Expose-Headers", "x-go-resty-id")
+			w.WriteHeader(http.StatusOK)
+		}
+
+		if r.Method == PATCH && r.URL.Path == "/patch" {
+			w.WriteHeader(http.StatusOK)
 		}
 	})
 

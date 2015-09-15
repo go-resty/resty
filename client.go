@@ -28,25 +28,25 @@ import (
 )
 
 const (
-	// HTTP method GET
+	// GET HTTP method
 	GET = "GET"
 
-	// HTTP method POST
+	// POST HTTP method
 	POST = "POST"
 
-	// HTTP method PUT
+	// PUT HTTP method
 	PUT = "PUT"
 
-	// HTTP method DELETE
+	// DELETE HTTP method
 	DELETE = "DELETE"
 
-	// HTTP method PATCH
+	// PATCH HTTP method
 	PATCH = "PATCH"
 
-	// HTTP method HEAD
+	// HEAD HTTP method
 	HEAD = "HEAD"
 
-	// HTTP method OPTIONS
+	// OPTIONS HTTP method
 	OPTIONS = "OPTIONS"
 )
 
@@ -95,7 +95,7 @@ type User struct {
 	Username, Password string
 }
 
-// SetHostUrl method is to set Host URL in the client instance. It will be used with request
+// SetHostURL method is to set Host URL in the client instance. It will be used with request
 // raised from this client with relative URL
 func (c *Client) SetHostURL(url string) *Client {
 	c.HostURL = strings.TrimRight(url, "/")
