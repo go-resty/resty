@@ -331,7 +331,7 @@ func (c *Client) SetLogger(w io.Writer) *Client {
 	return c
 }
 
-// SetContentLength method sets the HTTP header `Content-Length` value for every request.
+// SetContentLength method enables the HTTP header `Content-Length` value for every request.
 // By default go-resty won't set `Content-Length`.
 // 		resty.SetContentLength(true)
 //
@@ -369,12 +369,12 @@ func (c *Client) SetRedirectPolicy(policy func(*http.Request, []*http.Request) e
 	return c
 }
 
-// SetHTTPMode method sets go-resty mode to HTTP
+// SetHTTPMode method sets go-resty mode into HTTP
 func (c *Client) SetHTTPMode() *Client {
 	return c.SetMode("http")
 }
 
-// SetRESTMode method sets go-resty mode to RESTful
+// SetRESTMode method sets go-resty mode into RESTful
 func (c *Client) SetRESTMode() *Client {
 	return c.SetMode("rest")
 }
