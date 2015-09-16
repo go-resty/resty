@@ -6,6 +6,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client.
 * Get, Post, Put, Delete, Head, Patch and Options
 * Simple methods/chainable methods for settings and request
 * Request Body can be `string`, `[]byte`, `struct` and `map`
+  * Auto detect `Content-Type`
 * Response object gives you more possibility
   * Access as `[]byte` array - `response.Body` OR Access as `string` - `response.String()`
   * Know your `response.Time()` and when we `response.ReceivedAt`

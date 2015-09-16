@@ -99,7 +99,7 @@ func SetQueryParam(param, value string) *Client {
 	return DefaultClient.SetQueryParam(param, value)
 }
 
-// SetQueryParam method sets multiple paramaters and its value. See Client.SetQueryParams for more information.
+// SetQueryParams method sets multiple paramaters and its value. See Client.SetQueryParams for more information.
 func SetQueryParams(params map[string]string) *Client {
 	return DefaultClient.SetQueryParams(params)
 }

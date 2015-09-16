@@ -289,6 +289,8 @@ func (c *Client) R() *Request {
 // 		resty.OnBeforeRequest(func(c *Client, r *Request) error {
 //				// Now you have access to Client and Request instance
 //				// manipulate it as per your need
+//
+//				return nil 	// if its success otherwise return error
 //			})
 //
 func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
@@ -304,6 +306,8 @@ func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
 // 		resty.OnAfterResponse(func(c *Client, r *Response) error {
 //				// Now you have access to Client and Response instance
 //				// manipulate it as per your need
+//
+//				return nil 	// if its success otherwise return error
 //			})
 //
 func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {

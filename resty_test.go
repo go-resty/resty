@@ -760,17 +760,110 @@ func TestPatchMethod(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	resp.Body = nil
+	assertEqual(t, "", resp.String())
+}
+
+func TestRawFileUploadByBody(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+
+	pwd, _ := os.Getwd()
+	file, _ := os.Open(pwd + "/test-data/test-img.png")
+	fileBytes, _ := ioutil.ReadAll(file)
+
+	resp, err := dclr().
+		SetBody(fileBytes).
+		SetContentLength(true).
+		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
+		Put(ts.URL + "/raw-upload")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "image/png", resp.Request.Header.Get(hdrContentTypeKey))
 }
 
 func TestClientOptions(t *testing.T) {
-	c := dc()
+	SetHTTPMode().SetContentLength(true)
+	assertEqual(t, Mode(), "http")
+	assertEqual(t, DefaultClient.setContentLength, true)
 
-	c.SetHTTPMode().SetContentLength(true)
-	assertEqual(t, c.Mode(), "http")
-	assertEqual(t, c.setContentLength, true)
+	SetRESTMode()
+	assertEqual(t, Mode(), "rest")
 
-	c.SetRESTMode()
-	assertEqual(t, c.Mode(), "rest")
+	SetHostURL("http://httpbin.org")
+	assertEqual(t, "http://httpbin.org", DefaultClient.HostURL)
+
+	SetHeader(hdrContentTypeKey, jsonContentType)
+	SetHeaders(map[string]string{
+		hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1",
+		"X-Request-Id":  strconv.FormatInt(time.Now().UnixNano(), 10),
+	})
+	assertEqual(t, jsonContentType, DefaultClient.Header.Get(hdrContentTypeKey))
+
+	SetCookie(&http.Cookie{
+		Name:     "default-cookie",
+		Value:    "This is cookie default-cookie value",
+		Path:     "/",
+		Domain:   "localhost",
+		MaxAge:   36000,
+		HttpOnly: true,
+		Secure:   false,
+	})
+	assertEqual(t, "default-cookie", DefaultClient.Cookies[0].Name)
+
+	var cookies []*http.Cookie
+	cookies = append(cookies, &http.Cookie{
+		Name:  "default-cookie-1",
+		Value: "This is default-cookie 1 value",
+		Path:  "/",
+	})
+	cookies = append(cookies, &http.Cookie{
+		Name:  "default-cookie-2",
+		Value: "This is default-cookie 2 value",
+		Path:  "/",
+	})
+	SetCookies(cookies)
+	assertEqual(t, "default-cookie-1", DefaultClient.Cookies[1].Name)
+	assertEqual(t, "default-cookie-2", DefaultClient.Cookies[2].Name)
+
+	SetQueryParam("test_param_1", "Param_1")
+	SetQueryParams(map[string]string{"test_param_2": "Param_2", "test_param_3": "Param_3"})
+	assertEqual(t, "Param_3", DefaultClient.QueryParam.Get("test_param_3"))
+
+	r_time := strconv.FormatInt(time.Now().UnixNano(), 10)
+	SetFormData(map[string]string{"r_time": r_time})
+	assertEqual(t, r_time, DefaultClient.FormData.Get("r_time"))
+
+	SetBasicAuth("myuser", "mypass")
+	assertEqual(t, "myuser", DefaultClient.UserInfo.Username)
+
+	SetAuthToken("AC75BD37F019E08FBC594900518B4F7E")
+	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", DefaultClient.Token)
+
+	err := &AuthError{}
+	SetError(err)
+	if err != DefaultClient.Error {
+		t.Error("SetError failed")
+	}
+
+	SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	assertEqual(t, true, DefaultClient.transport.TLSClientConfig.InsecureSkipVerify)
+
+	OnBeforeRequest(func(c *Client, r *Request) error {
+		c.Log.Println("I'm in Request middleware")
+		return nil // if it success
+	})
+	OnAfterResponse(func(c *Client, r *Response) error {
+		c.Log.Println("I'm in Response middleware")
+		return nil // if it success
+	})
+
+	SetTimeout(time.Duration(5 * time.Second))
+	SetRedirectPolicy(FlexibleRedirectPolicy(10))
+	SetDebug(true)
+	SetLogger(ioutil.Discard)
 }
 
 func createGetServer(t *testing.T) *httptest.Server {
