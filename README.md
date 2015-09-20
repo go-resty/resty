@@ -32,6 +32,12 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client.
 
 resty tested with Go 1.2 and above.
 
+#### Included Batteries
+  * Redirect Policies - [NoRedirectPolicy](https://github.com/go-resty/resty/blob/master/client.go#L877), [FlexibleRedirectPolicy](https://github.com/go-resty/resty/blob/master/client.go#L883), more to come...
+  * Bulk Request (upcoming)
+  * Write Cookies to file from CookiesJar (upcoming)
+  * etc.
+
 ## Installation
 #### Stable
 ```sh
@@ -106,7 +112,7 @@ resp, err := resty.R().
       SetBody(`{"username":"testuser", "password":"testpass"}`).
       SetResult(&AuthSuccess{}).
       Post("https://myapp.com/login")
-  		
+      
 // POST []byte array
 // No need to set content type, if you have client level setting
 resp, err := resty.R().
@@ -114,21 +120,21 @@ resp, err := resty.R().
       SetBody([]byte(`{"username":"testuser", "password":"testpass"}`)).
       SetResult(&AuthSuccess{}).
       Post("https://myapp.com/login")
-  		
+      
 // POST Struct, default is JSON content type. No need to set one
 resp, err := resty.R().
       SetBody(User{Username: "testuser", Password: "testpass"}).
       SetResult(&AuthSuccess{}).
       SetError(&AuthError{}).
       Post("https://myapp.com/login")
-  		
+      
 // POST Map, default is JSON content type. No need to set one
 resp, err := resty.R().
       SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
       SetResult(&AuthSuccess{}).
       SetError(&AuthError{}).
       Post("https://myapp.com/login")
-  		
+      
 // POST of raw bytes for file upload. For example: upload file to Dropbox
 file, _ := os.Open("/Users/jeeva/mydocument.pdf")
 fileBytes, _ := ioutil.ReadAll(file)
@@ -254,15 +260,15 @@ resp, err := resty.R().
 ```go
 // Registering Request Middleware 
 resty.OnBeforeRequest(func(c *Client, r *Request) error {
-		// Now you have access to Client and current Request object
-		// manipulate it as per your need
-	})
+    // Now you have access to Client and current Request object
+    // manipulate it as per your need
+  })
 
 // Registering Response Middleware
 resty.OnAfterResponse(func(c *Client, r *Response) error {
-		// Now you have access to Client and current Response object
-		// manipulate it as per your need
-	})
+    // Now you have access to Client and current Response object
+    // manipulate it as per your need
+  })
 ```
 
 #### Choose REST or HTTP mode
@@ -325,31 +331,31 @@ resty.SetHeader("Accept", "application/json")
 resty.SetHeaders(map[string]string{
         "Content-Type": "application/json",
         "User-Agent": "My cutsom User Agent String",
-  	  })
+      })
 
 // Cookies for all request
 resty.SetCookie(&http.Cookie{
-  		Name:"go-resty",
-  		Value:"This is cookie value",
-  		Path: "/",
-  		Domain: "sample.com",
-  		MaxAge: 36000,
-  		HttpOnly: true,
-  		Secure: false,
-  	})
+      Name:"go-resty",
+      Value:"This is cookie value",
+      Path: "/",
+      Domain: "sample.com",
+      MaxAge: 36000,
+      HttpOnly: true,
+      Secure: false,
+    })
 resty.SetCookies(cookies)
 
 // URL query parameters for all request
 resty.SetQueryParam("user_id", "00001")
 resty.SetQueryParams(map[string]string{ // sample of those who use this manner
-			"api_key": "api-key-here",
-			"api_secert": "api-secert",
-		})
+      "api_key": "api-key-here",
+      "api_secert": "api-secert",
+    })
 
 // Form data for all request. Typically used with POST and PUT
 resty.SetFormData(map[string]string{
-		"access_token": "BC594900-518B-4F7E-AC75-BD37F019E08F",
-	})
+    "access_token": "BC594900-518B-4F7E-AC75-BD37F019E08F",
+  })
 
 // Basic Auth for all request
 resty.SetBasicAuth("myuser", "mypass")
