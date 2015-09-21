@@ -348,11 +348,13 @@ func (c *Client) SetContentLength(l bool) *Client {
 
 // SetError method is to register the global or client common `Error` object into go-resty.
 // It is used for automatic unmarshalling if response status code is greater than 399 and
-// content type either JSON or XML
+// content type either JSON or XML. Can be pointer or non-pointer.
 // 		resty.SetError(&Error{})
+//		// OR
+//		resty.SetError(Error{})
 //
 func (c *Client) SetError(err interface{}) *Client {
-	c.Error = err
+	c.Error = getPointer(err)
 	return c
 }
 
@@ -665,28 +667,32 @@ func (r *Request) SetBody(body interface{}) *Request {
 // SetResult method is to register the response `Result` object for automatic unmarshalling in the RESTful mode
 // if response status code is greater than 399 and content type either JSON or XML.
 //
-// Note: Result object has to be pointer reference
+// Note: Result object can be pointer or non-pointer.
 //		resty.R().SetResult(&AuthToken{})
+//		// OR
+//		resty.R().SetResult(AuthToken{})
 //
 // Accessing a result value
 //		response.Result().(*AuthToken)
 //
 func (r *Request) SetResult(res interface{}) *Request {
-	r.Result = res
+	r.Result = getPointer(res)
 	return r
 }
 
 // SetError method is to register the request `Error` object for automatic unmarshalling in the RESTful mode
 // if response status code is greater than 399 and content type either JSON or XML.
 //
-// Note: Error object has to be pointer reference
+// Note: Error object can be pointer or non-pointer.
 // 		resty.R().SetError(&AuthError{})
+//		// OR
+//		resty.R().SetError(AuthError{})
 //
 // Accessing a error value
 //		response.Error().(*AuthError)
 //
 func (r *Request) SetError(err interface{}) *Request {
-	r.Error = err
+	r.Error = getPointer(err)
 	return r
 }
 
@@ -1026,5 +1032,15 @@ func getResponseBodyString(res *Response) string {
 			}
 		}
 	}
+
 	return bodyStr
+}
+
+func getPointer(v interface{}) interface{} {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Ptr {
+		return reflect.New(rv.Type()).Interface()
+	}
+
+	return v
 }

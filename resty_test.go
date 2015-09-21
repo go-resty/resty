@@ -195,7 +195,7 @@ func TestPostJSONStructInvalidLogin(t *testing.T) {
 	resp, err := dclr().
 		SetHeader(hdrContentTypeKey, jsonContentType).
 		SetBody(User{Username: "testuser", Password: "testpass1"}).
-		SetError(&AuthError{}).
+		SetError(AuthError{}).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
@@ -213,7 +213,7 @@ func TestPostJSONMapSuccess(t *testing.T) {
 
 	resp, err := dclr().
 		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
-		SetResult(&AuthSuccess{}).
+		SetResult(AuthSuccess{}).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
@@ -832,9 +832,9 @@ func TestClientOptions(t *testing.T) {
 	SetQueryParams(map[string]string{"test_param_2": "Param_2", "test_param_3": "Param_3"})
 	assertEqual(t, "Param_3", DefaultClient.QueryParam.Get("test_param_3"))
 
-	r_time := strconv.FormatInt(time.Now().UnixNano(), 10)
-	SetFormData(map[string]string{"r_time": r_time})
-	assertEqual(t, r_time, DefaultClient.FormData.Get("r_time"))
+	rTime := strconv.FormatInt(time.Now().UnixNano(), 10)
+	SetFormData(map[string]string{"r_time": rTime})
+	assertEqual(t, rTime, DefaultClient.FormData.Get("r_time"))
 
 	SetBasicAuth("myuser", "mypass")
 	assertEqual(t, "myuser", DefaultClient.UserInfo.Username)
