@@ -665,7 +665,7 @@ func (r *Request) SetBody(body interface{}) *Request {
 }
 
 // SetResult method is to register the response `Result` object for automatic unmarshalling in the RESTful mode
-// if response status code is greater than 399 and content type either JSON or XML.
+// if response status code is between 200 and 299 and content type either JSON or XML.
 //
 // Note: Result object can be pointer or non-pointer.
 //		resty.R().SetResult(&AuthToken{})
