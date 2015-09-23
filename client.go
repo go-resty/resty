@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -23,6 +22,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -358,20 +358,32 @@ func (c *Client) SetError(err interface{}) *Client {
 	return c
 }
 
-// SetRedirectPolicy method sets the client redirect poilicy. Default go-resty provides
-// `NoRedirectPolicy` and `FlexibleRedirectPolicy` for convientent use. However you can create one.
+// SetRedirectPolicy method sets the client redirect poilicy. go-resty provides ready to use
+// redirect policies. Wanna create one for yourself refer `redirect.go`.
 //
-// For example:
-//		func MyCustomRedirectPolicy(req *http.Request, via []*http.Request) error {
-//			//...
-//			// Write your logic here
-//			//...
-//		}
+//		resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
 //
-//		resty.SetRedirectPolicy(MyCustomRedirectPolicy)
+// 		// Need multiple redirect policies together
+//		resty.SetRedirectPolicy(FlexibleRedirectPolicy(20), DomainCheckRedirectPolicy("host1.com", "host2.net"))
 //
-func (c *Client) SetRedirectPolicy(policy func(*http.Request, []*http.Request) error) *Client {
-	c.httpClient.CheckRedirect = policy
+func (c *Client) SetRedirectPolicy(policies ...interface{}) *Client {
+	for _, p := range policies {
+		if _, ok := p.(RedirectPolicy); !ok {
+			c.Log.Printf("ERORR: %v does not implement resty.RedirectPolicy (missing Apply method)",
+				runtime.FuncForPC(reflect.ValueOf(p).Pointer()).Name())
+		}
+	}
+
+	c.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		for _, p := range policies {
+			err := p.(RedirectPolicy).Apply(req, via)
+			if err != nil {
+				return err
+			}
+		}
+		return nil // looks good, go ahead
+	}
+
 	return c
 }
 
@@ -399,13 +411,13 @@ func (c *Client) SetRESTMode() *Client {
 func (c *Client) SetMode(mode string) *Client {
 	if mode == "http" {
 		c.isHTTPMode = true
-		c.httpClient.CheckRedirect = FlexibleRedirectPolicy(10)
+		c.SetRedirectPolicy(FlexibleRedirectPolicy(10))
 		c.afterResponse = []func(*Client, *Response) error{
 			responseLogger,
 		}
 	} else { // RESTful
 		c.isHTTPMode = false
-		c.httpClient.CheckRedirect = NoRedirectPolicy
+		c.SetRedirectPolicy(NoRedirectPolicy())
 		c.afterResponse = []func(*Client, *Response) error{
 			responseLogger,
 			parseResponseBody,
@@ -872,29 +884,6 @@ func (r *Response) String() string {
 // when client sent a request.
 func (r *Response) Time() time.Duration {
 	return r.ReceivedAt.Sub(r.Request.Time)
-}
-
-//
-// Resty's handy redirect polices
-//
-
-// NoRedirectPolicy is used to disable redirects in the HTTP client
-// 		resty.SetRedirectPolicy(NoRedirectPolicy)
-func NoRedirectPolicy(req *http.Request, via []*http.Request) error {
-	return errors.New("Auto redirect is disabled")
-}
-
-// FlexibleRedirectPolicy is convenient method to create No of redirect policy for HTTP client
-// 		resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
-func FlexibleRedirectPolicy(noOfRedirect int) func(*http.Request, []*http.Request) error {
-	fn := func(req *http.Request, via []*http.Request) error {
-		if len(via) >= noOfRedirect {
-			return fmt.Errorf("Stopped after %d redirects", noOfRedirect)
-		}
-		return nil
-	}
-
-	return fn
 }
 
 //

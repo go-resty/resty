@@ -40,9 +40,12 @@ func New() *Client {
 		Cookies:    make([]*http.Cookie, 0),
 		Debug:      false,
 		Log:        getLogger(nil),
-		httpClient: &http.Client{CheckRedirect: NoRedirectPolicy, Jar: cookieJar},
+		httpClient: &http.Client{Jar: cookieJar},
 		transport:  &http.Transport{},
 	}
+
+	// Default redirect policy
+	c.SetRedirectPolicy(NoRedirectPolicy())
 
 	// default before request middlewares
 	c.beforeRequest = []func(*Client, *Request) error{
@@ -150,8 +153,8 @@ func SetError(err interface{}) *Client {
 }
 
 // SetRedirectPolicy method sets the client redirect poilicy. See Client.SetRedirectPolicy for more information.
-func SetRedirectPolicy(policy func(*http.Request, []*http.Request) error) *Client {
-	return DefaultClient.SetRedirectPolicy(policy)
+func SetRedirectPolicy(policies ...interface{}) *Client {
+	return DefaultClient.SetRedirectPolicy(policies...)
 }
 
 // SetHTTPMode method sets go-resty mode into HTTP. See Client.SetMode for more information.
