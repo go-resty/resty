@@ -784,6 +784,17 @@ func TestRawFileUploadByBody(t *testing.T) {
 	assertEqual(t, "image/png", resp.Request.Header.Get(hdrContentTypeKey))
 }
 
+func TestProxySetting(t *testing.T) {
+	c := dc()
+	c.SetProxy("http://sampleproxy:8888")
+	c.RemoveProxy()
+	assertEqual(t, true, (c.transport.Proxy == nil))
+
+	SetProxy("http://sampleproxy:8888")
+	RemoveProxy()
+	assertEqual(t, true, (DefaultClient.transport.Proxy == nil))
+}
+
 func TestClientOptions(t *testing.T) {
 	SetHTTPMode().SetContentLength(true)
 	assertEqual(t, Mode(), "http")

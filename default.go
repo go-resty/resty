@@ -178,3 +178,13 @@ func SetTLSClientConfig(config *tls.Config) *Client {
 func SetTimeout(timeout time.Duration) *Client {
 	return DefaultClient.SetTimeout(timeout)
 }
+
+// SetProxy method sets Proxy for request. See Client.SetProxy for more information.
+func SetProxy(proxyUrl string) *Client {
+	return DefaultClient.SetProxy(proxyUrl)
+}
+
+// RemoveProxy method removes the proxy configuration. See Client.RemoveProxy for more information.
+func RemoveProxy() *Client {
+	return DefaultClient.RemoveProxy()
+}

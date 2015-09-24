@@ -457,6 +457,30 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	return c
 }
 
+// SetProxy method sets the Proxy URL and Port for resty client.
+//		resty.SetProxy("http://proxyserver:8888")
+//
+// Alternative: Without this `SetProxy` method, you can also set Proxy via environment variable.
+// By default `Go` uses setting from `HTTP_PROXY`.
+//
+func (c *Client) SetProxy(proxyUrl string) *Client {
+	if pURL, err := url.Parse(proxyUrl); err == nil {
+		c.transport.Proxy = http.ProxyURL(pURL)
+	} else {
+		c.Log.Printf("ERROR: %s", err)
+	}
+
+	return c
+}
+
+// RemoveProxy method removes the proxy configuration from resty client
+//		resty.RemoveProxy()
+//
+func (c *Client) RemoveProxy() *Client {
+	c.transport.Proxy = nil
+	return c
+}
+
 // executes the given `Request` object and returns response
 func (c *Client) execute(req *Request) (*Response, error) {
 	// Apply Request middleware
