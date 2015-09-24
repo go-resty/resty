@@ -813,6 +813,11 @@ func TestProxySetting(t *testing.T) {
 func TestIncorrectURL(t *testing.T) {
 	_, err := R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
 	assertEqual(t, true, strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
+
+	c := dc()
+	c.SetHostURL("//not.a.user@%66%6f%6f.com")
+	_, err1 := c.R().Get("/just/a/path/also")
+	assertEqual(t, true, strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
 }
 
 func TestClientOptions(t *testing.T) {
@@ -895,6 +900,7 @@ func TestClientOptions(t *testing.T) {
 	SetRedirectPolicy(FlexibleRedirectPolicy(10), func(req *http.Request, via []*http.Request) error {
 		return errors.New("sample test redirect")
 	})
+	SetContentLength(true)
 	SetDebug(true)
 	SetLogger(ioutil.Discard)
 }
