@@ -20,7 +20,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client.
 * Choose between HTTP and RESTful mode. Default is RESTful
   * `HTTP` - default upto 10 redirects and no automaic response unmarshal
   * `RESTful` - default no redirects and automatic response unmarshal for `JSON` & `XML`
-* Client settings like Timeout, RedirectPolicy and TLSClientConfig
+* Client settings like Timeout, RedirectPolicy and TLSClientConfig. *(Proxy support - upcoming)*
 * Client API design 
   * Have client level settings & options and also override at Request level if you want to
   * [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middleware
@@ -33,8 +33,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client.
 resty tested with Go 1.2 and above.
 
 #### Included Batteries
-  * Redirect Policies - [NoRedirectPolicy](https://github.com/go-resty/resty/blob/master/client.go#L877), [FlexibleRedirectPolicy](https://github.com/go-resty/resty/blob/master/client.go#L883), more to come...
-  * Bulk Request (upcoming)
+  * Redirect Policies - NoRedirectPolicy, FlexibleRedirectPolicy, DomainCheckRedirectPolicy, etc. [more info](redirect.go)
   * Write Cookies to file from CookiesJar (upcoming)
   * etc.
 
@@ -110,7 +109,7 @@ resp, err := resty.R().
 resp, err := resty.R().
       SetHeader("Content-Type", "application/json").
       SetBody(`{"username":"testuser", "password":"testpass"}`).
-      SetResult(&AuthSuccess{}).
+      SetResult(&AuthSuccess{}).    // or SetResult(AuthSuccess{}).
       Post("https://myapp.com/login")
       
 // POST []byte array
@@ -118,21 +117,21 @@ resp, err := resty.R().
 resp, err := resty.R().
       SetHeader("Content-Type", "application/json").
       SetBody([]byte(`{"username":"testuser", "password":"testpass"}`)).
-      SetResult(&AuthSuccess{}).
+      SetResult(&AuthSuccess{}).    // or SetResult(AuthSuccess{}).
       Post("https://myapp.com/login")
       
 // POST Struct, default is JSON content type. No need to set one
 resp, err := resty.R().
       SetBody(User{Username: "testuser", Password: "testpass"}).
-      SetResult(&AuthSuccess{}).
-      SetError(&AuthError{}).
+      SetResult(&AuthSuccess{}).    // or SetResult(AuthSuccess{}).
+      SetError(&AuthError{}).       // or SetError(AuthError{}).
       Post("https://myapp.com/login")
       
 // POST Map, default is JSON content type. No need to set one
 resp, err := resty.R().
       SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
-      SetResult(&AuthSuccess{}).
-      SetError(&AuthError{}).
+      SetResult(&AuthSuccess{}).    // or SetResult(AuthSuccess{}).
+      SetError(&AuthError{}).       // or SetError(AuthError{}).
       Post("https://myapp.com/login")
       
 // POST of raw bytes for file upload. For example: upload file to Dropbox
@@ -142,9 +141,9 @@ fileBytes, _ := ioutil.ReadAll(file)
 // See we are not setting content-type header, since go-resty automatically detects Content-Type for you
 resp, err := resty.R().
       SetBody(fileBytes).
-      SetContentLength(true). // Dropbox expects this value
+      SetContentLength(true).          // Dropbox expects this value
       SetAuthToken("<you-auth-token>").
-      SetError(&DropboxError{}).
+      SetError(&DropboxError{}).       // or SetError(DropboxError{}).
       Post("https://content.dropboxapi.com/1/files_put/auto/resty/mydocument.pdf") // for upload Dropbox supports PUT too 
 ```
 
@@ -162,7 +161,7 @@ resp, err := resty.R().
         Tags: []string{"article", "sample", "resty"},
       }).
       SetAuthToken("C6A79608-782F-4ED0-A11D-BD82FAD829CD").
-      SetError(&Error{}).
+      SetError(&Error{}).       // or SetError(Error{}).
       Put("https://myapp.com/article/1234")
 ```
 
@@ -177,7 +176,7 @@ resp, err := resty.R().
         Tags: []string{"new tag1", "new tag2"},
       }).
       SetAuthToken("C6A79608-782F-4ED0-A11D-BD82FAD829CD").
-      SetError(&Error{}).
+      SetError(&Error{}).       // or SetError(Error{}).
       Patch("https://myapp.com/article/1234")
 ```
 
@@ -187,7 +186,7 @@ resp, err := resty.R().
 // No need to set auth token, error, if you have client level settings
 resp, err := resty.R().
       SetAuthToken("C6A79608-782F-4ED0-A11D-BD82FAD829CD").
-      SetError(&Error{}).
+      SetError(&Error{}).       // or SetError(Error{}).
       Delete("https://myapp.com/article/1234")
 
 // HEAD of resource
@@ -262,13 +261,29 @@ resp, err := resty.R().
 resty.OnBeforeRequest(func(c *Client, r *Request) error {
     // Now you have access to Client and current Request object
     // manipulate it as per your need
+
+    return nil  // if its success otherwise return error
   })
 
 // Registering Response Middleware
 resty.OnAfterResponse(func(c *Client, r *Response) error {
     // Now you have access to Client and current Response object
     // manipulate it as per your need
+
+    return nil  // if its success otherwise return error
   })
+```
+
+#### Redirect Policy
+Resty provides few ready to use redirect policy(s) also it supports multiple policies together.
+```go
+// Assign Client Redirect Policy. Create one as per you need
+resty.SetRedirectPolicy(FlexibleRedirectPolicy(15))
+
+// Wanna multiple policies such as redirect count, domain name check, etc
+resty.SetRedirectPolicy(FlexibleRedirectPolicy(20), 
+                        DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
+
 ```
 
 #### Choose REST or HTTP mode
@@ -306,9 +321,6 @@ resty.SetDebug(true)
 // Using you custom log writer
 logFile, _ := os.OpenFile("/Users/jeeva/go-resty.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 resty.SetLogger(logFile)
-
-// Assign Client Redirect Policy. Create one as per you need
-resty.SetRedirectPolicy(FlexibleRedirectPolicy(15))
 
 // Assign Client TLSClientConfig
 // One can set custom root-certificate. Refer: http://golang.org/pkg/crypto/tls/#example_Dial
@@ -367,7 +379,7 @@ resty.SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019
 resty.SetContentLength(true)
 
 // Registering global Error object structure for JSON/XML request
-resty.SetError(&Error{}) 
+resty.SetError(&Error{})    // or resty.SetError(Error{})
 ```
 
 ### Versioning

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -705,6 +706,17 @@ func TestHTTPAutoRedirectUpto10(t *testing.T) {
 	assertEqual(t, "Get /redirect-11: Stopped after 10 redirects", err.Error())
 }
 
+func TestHostCheckRedirectPolicy(t *testing.T) {
+	ts := createRedirectServer(t)
+	defer ts.Close()
+
+	c := dc().
+		SetRedirectPolicy(DomainCheckRedirectPolicy("NotAllowed.com")).
+		SetTimeout(time.Duration(time.Second * 2))
+
+	c.R().Get(ts.URL + "/redirect-host-check-1")
+}
+
 func TestClientRedirectPolicy(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
@@ -861,7 +873,9 @@ func TestClientOptions(t *testing.T) {
 	})
 
 	SetTimeout(time.Duration(5 * time.Second))
-	SetRedirectPolicy(FlexibleRedirectPolicy(10))
+	SetRedirectPolicy(FlexibleRedirectPolicy(10), func(req *http.Request, via []*http.Request) error {
+		return errors.New("sample test redirect")
+	})
 	SetDebug(true)
 	SetLogger(ioutil.Discard)
 }
@@ -1105,7 +1119,18 @@ func createRedirectServer(t *testing.T) *httptest.Server {
 		t.Logf("Path: %v", r.URL.Path)
 
 		if r.Method == GET {
-			if strings.HasPrefix(r.URL.Path, "/redirect-") {
+			if strings.HasPrefix(r.URL.Path, "/redirect-host-check-") {
+				cntStr := strings.SplitAfter(r.URL.Path, "-")[3]
+				cnt, _ := strconv.Atoi(cntStr)
+
+				if cnt != 7 { // Testing hard stop via logical
+					if cnt >= 5 {
+						http.Redirect(w, r, "http://notallowed.com/go-redirect", http.StatusTemporaryRedirect)
+					} else {
+						http.Redirect(w, r, fmt.Sprintf("/redirect-host-check-%d", (cnt+1)), http.StatusTemporaryRedirect)
+					}
+				}
+			} else if strings.HasPrefix(r.URL.Path, "/redirect-") {
 				cntStr := strings.SplitAfter(r.URL.Path, "-")[1]
 				cnt, _ := strconv.Atoi(cntStr)
 
