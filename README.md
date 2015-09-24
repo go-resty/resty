@@ -20,7 +20,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client.
 * Choose between HTTP and RESTful mode. Default is RESTful
   * `HTTP` - default upto 10 redirects and no automaic response unmarshal
   * `RESTful` - default no redirects and automatic response unmarshal for `JSON` & `XML`
-* Client settings like Timeout, RedirectPolicy and TLSClientConfig. *(Proxy support - upcoming)*
+* Client settings like Timeout, RedirectPolicy, Proxy and TLSClientConfig
 * Client API design 
   * Have client level settings & options and also override at Request level if you want to
   * [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middleware
