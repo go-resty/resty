@@ -283,7 +283,46 @@ resty.SetRedirectPolicy(FlexibleRedirectPolicy(15))
 // Wanna multiple policies such as redirect count, domain name check, etc
 resty.SetRedirectPolicy(FlexibleRedirectPolicy(20), 
                         DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
+```
 
+##### Custom Redirect Policy
+Implement [RedirectPolicy](redirect.go#L20) interface and register it with resty client. Have a look [redirect.go](redirect.go) for more information.
+```go
+// Using raw func into resty.SetRedirectPolicy
+resty.SetRedirectPolicy(resty.RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
+  // Implement your logic here
+
+  // return nil for continue redirect otherwise return error to stop/prevent redirect
+  return nil
+}))
+
+//---------------------------------------------------
+
+// Using struct create more flexible redirect policy
+type CustomRedirectPolicy struct {
+  // variables goes here
+}
+
+func (c *CustomRedirectPolicy) Apply(req *http.Request, via []*http.Request) error {
+  // Implement your logic here
+  
+  // return nil for continue redirect otherwise return error to stop/prevent redirect
+  return nil
+}
+
+// Registering in resty
+resty.SetRedirectPolicy(CustomRedirectPolicy{/* initial variables */})
+```
+
+#### Proxy Settings
+Default `Go` supports Proxy via environment variable `HTTP_PROXY`. Resty provides support via `SetProxy` & `RemoveProxy`.
+Choose as per your need.
+```go
+// Setting a Proxy URL and Port
+resty.SetProxy("http://proxyserver:8888")
+
+// Want to remove proxy setting
+resty.RemoveProxy()
 ```
 
 #### Choose REST or HTTP mode
