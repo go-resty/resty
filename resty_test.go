@@ -812,7 +812,7 @@ func TestProxySetting(t *testing.T) {
 
 func TestIncorrectURL(t *testing.T) {
 	_, err := R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
-	assertEqual(t, true, strings.Contains(err.Error(), "percent-encoded characters in host"))
+	assertEqual(t, true, strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
 }
 
 func TestClientOptions(t *testing.T) {
