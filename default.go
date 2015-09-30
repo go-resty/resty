@@ -183,8 +183,8 @@ func SetTimeout(timeout time.Duration) *Client {
 }
 
 // SetProxy method sets Proxy for request. See Client.SetProxy for more information.
-func SetProxy(proxyUrl string) *Client {
-	return DefaultClient.SetProxy(proxyUrl)
+func SetProxy(proxyURL string) *Client {
+	return DefaultClient.SetProxy(proxyURL)
 }
 
 // RemoveProxy method removes the proxy configuration. See Client.RemoveProxy for more information.

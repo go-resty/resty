@@ -1,6 +1,6 @@
 # resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty)  [![GoCover](http://gocover.io/_badge/github.com/go-resty/resty)](http://gocover.io/github.com/go-resty/resty)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty)  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Simple HTTP and REST client for Go inspired by Ruby rest-client.
+Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notable features - robust request body input, auto marshal & unmarshal, request and response middlewares, custom & extensible redirect policy (multiple policies can be applied), etc.
 
 #### Features
 * Get, Post, Put, Delete, Head, Patch and Options
@@ -33,7 +33,11 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client.
 resty tested with Go 1.2 and above.
 
 #### Included Batteries
-  * Redirect Policies - NoRedirectPolicy, FlexibleRedirectPolicy, DomainCheckRedirectPolicy, etc. [more info](redirect.go)
+  * Redirect Policies
+    * NoRedirectPolicy
+    * FlexibleRedirectPolicy
+    * DomainCheckRedirectPolicy
+    * etc. [more info](redirect.go)
   * Write Cookies to file from CookiesJar (upcoming)
   * etc.
 

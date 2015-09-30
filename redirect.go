@@ -12,8 +12,8 @@ import (
 	"strings"
 )
 
+// RedirectPolicy to regulate the redirects in the resty client.
 // Objects implementing the RedirectPolicy interface can be registered as
-// RedirectPolicy to regulate the redirects in the resty.
 //
 // Apply function should return nil to continue the redirect jounery, otherwise
 // return error to stop the redirect.

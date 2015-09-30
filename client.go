@@ -475,11 +475,11 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 // Alternative: Without this `SetProxy` method, you can also set Proxy via environment variable.
 // By default `Go` uses setting from `HTTP_PROXY`.
 //
-func (c *Client) SetProxy(proxyUrl string) *Client {
-	if pURL, err := url.Parse(proxyUrl); err == nil {
+func (c *Client) SetProxy(proxyURL string) *Client {
+	if pURL, err := url.Parse(proxyURL); err == nil {
 		c.transport.Proxy = http.ProxyURL(pURL)
 	} else {
-		c.Log.Printf("ERROR: %s", err)
+		c.Log.Printf("ERROR: %v", err)
 	}
 
 	return c
