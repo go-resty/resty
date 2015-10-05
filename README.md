@@ -91,7 +91,7 @@ Response Body: {
 }
 */
 ```
-#### Ehanced GET
+#### Enhanced GET
 ```go
 resp, err := resty.R().
       SetQueryParams(map[string]string{
@@ -146,7 +146,7 @@ fileBytes, _ := ioutil.ReadAll(file)
 resp, err := resty.R().
       SetBody(fileBytes).
       SetContentLength(true).          // Dropbox expects this value
-      SetAuthToken("<you-auth-token>").
+      SetAuthToken("<your-auth-token>").
       SetError(&DropboxError{}).       // or SetError(DropboxError{}).
       Post("https://content.dropboxapi.com/1/files_put/auto/resty/mydocument.pdf") // for upload Dropbox supports PUT too 
 ```
