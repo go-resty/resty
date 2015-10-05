@@ -137,10 +137,14 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 
 			var bodyBytes []byte
 			kind := reflect.ValueOf(r.Body).Kind()
+			if kind == reflect.Ptr {
+				kind = reflect.TypeOf(r.Body).Elem().Kind()
+			}
+
 			if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
-				bodyBytes, err = json.Marshal(&r.Body)
+				bodyBytes, err = json.Marshal(r.Body)
 			} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-				bodyBytes, err = xml.Marshal(&r.Body)
+				bodyBytes, err = xml.Marshal(r.Body)
 			} else if b, ok := r.Body.(string); ok {
 				bodyBytes = []byte(b)
 			} else if b, ok := r.Body.([]byte); ok {

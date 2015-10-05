@@ -175,9 +175,11 @@ func TestPostJSONStructSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
+	user := &User{Username: "testuser", Password: "testpass"}
+
 	resp, err := dclr().
 		SetHeader(hdrContentTypeKey, jsonContentType).
-		SetBody(User{Username: "testuser", Password: "testpass"}).
+		SetBody(user).
 		SetResult(&AuthSuccess{}).
 		Post(ts.URL + "/login")
 
