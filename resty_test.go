@@ -314,10 +314,12 @@ func TestPostXMLStructInvalidLogin(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	c := dc()
+	c.SetError(&AuthError{})
+
+	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(User{Username: "testuser", Password: "testpass1"}).
-		SetError(&AuthError{}).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
@@ -405,7 +407,7 @@ func TestRequestBasicAuthFail(t *testing.T) {
 
 	c := dc()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
-		SetError(&AuthError{})
+		SetError(AuthError{})
 
 	resp, err := c.R().
 		SetBasicAuth("myuser", "basicauth1").
@@ -880,7 +882,7 @@ func TestClientOptions(t *testing.T) {
 
 	err := &AuthError{}
 	SetError(err)
-	if err != DefaultClient.Error {
+	if reflect.TypeOf(err) == DefaultClient.Error {
 		t.Error("SetError failed")
 	}
 

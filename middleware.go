@@ -269,7 +269,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 		if res.StatusCode() > 399 {
 			// global error interface
 			if res.Request.Error == nil && c.Error != nil {
-				res.Request.Error = c.Error
+				res.Request.Error = reflect.New(c.Error).Interface()
 			}
 
 			if res.Request.Error != nil {

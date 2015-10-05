@@ -78,7 +78,7 @@ type Client struct {
 	UserInfo   *User
 	Token      string
 	Cookies    []*http.Cookie
-	Error      interface{}
+	Error      reflect.Type
 	Debug      bool
 	Log        *log.Logger
 
@@ -354,7 +354,12 @@ func (c *Client) SetContentLength(l bool) *Client {
 //		resty.SetError(Error{})
 //
 func (c *Client) SetError(err interface{}) *Client {
-	c.Error = getPointer(err)
+	t := reflect.TypeOf(err)
+	if t.Kind() == reflect.Ptr {
+		c.Error = t.Elem()
+	} else {
+		c.Error = t
+	}
 	return c
 }
 
@@ -1050,9 +1055,9 @@ func getResponseBodyString(res *Response) string {
 }
 
 func getPointer(v interface{}) interface{} {
-	rv := reflect.ValueOf(v)
+	rv := reflect.TypeOf(v)
 	if rv.Kind() != reflect.Ptr {
-		return reflect.New(rv.Type()).Interface()
+		return reflect.New(rv).Interface()
 	}
 
 	return v
