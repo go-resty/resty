@@ -18,7 +18,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notabl
 * Authorization option of `Basic` and `Bearer` token
 * Set request `ContentLength` value for all request or particular request
 * Choose between HTTP and RESTful mode. Default is RESTful
-  * `HTTP` - default upto 10 redirects and no automaic response unmarshal
+  * `HTTP` - default upto 10 redirects and no automatic response unmarshal
   * `RESTful` - default no redirects and automatic response unmarshal for `JSON` & `XML`
 * Client settings like Timeout, RedirectPolicy, Proxy and TLSClientConfig
 * Client API design 
@@ -91,7 +91,7 @@ Response Body: {
 }
 */
 ```
-#### Ehanced GET
+#### Enhanced GET
 ```go
 resp, err := resty.R().
       SetQueryParams(map[string]string{
@@ -146,7 +146,7 @@ fileBytes, _ := ioutil.ReadAll(file)
 resp, err := resty.R().
       SetBody(fileBytes).
       SetContentLength(true).          // Dropbox expects this value
-      SetAuthToken("<you-auth-token>").
+      SetAuthToken("<your-auth-token>").
       SetError(&DropboxError{}).       // or SetError(DropboxError{}).
       Post("https://content.dropboxapi.com/1/files_put/auto/resty/mydocument.pdf") // for upload Dropbox supports PUT too 
 ```
@@ -426,7 +426,7 @@ resty.SetError(&Error{})    // or resty.SetError(Error{})
 ```
 
 ### Versioning
-* resty release version according to [Semantic Versioning](http://semver.org)
+* resty releases versions according to [Semantic Versioning](http://semver.org)
  
 ### Contributing
 Welcome! If you find any improvement or issue you want to fix. Feel free to send a pull request, I like pull requests that include tests case for fix/enhancement. Did my best to bring pretty good code coverage and feel free to write tests.
