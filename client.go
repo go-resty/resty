@@ -808,39 +808,46 @@ func (r *Request) SetAuthToken(token string) *Request {
 // HTTP verb method starts here
 //
 
-// Get method does GET HTTP request
+// Get method does GET HTTP request.
+// The HTTP GET method is defined in section 4.3.1 of RFC7231.
 func (r *Request) Get(url string) (*Response, error) {
 	return r.execute(GET, url)
 }
 
-// Post method does POST HTTP request
-func (r *Request) Post(url string) (*Response, error) {
-	return r.execute(POST, url)
-}
-
-// Put method does PUT HTTP request
-func (r *Request) Put(url string) (*Response, error) {
-	return r.execute(PUT, url)
-}
-
-// Delete method does DELETE HTTP request
-func (r *Request) Delete(url string) (*Response, error) {
-	return r.execute(DELETE, url)
-}
-
-// Patch method does PATCH HTTP request
-func (r *Request) Patch(url string) (*Response, error) {
-	return r.execute(PATCH, url)
-}
-
-// Head method does HEAD HTTP request
+// Head method does HEAD HTTP request.
+// The HTTP HEAD method is defined in section 4.3.2 of RFC7231.
 func (r *Request) Head(url string) (*Response, error) {
 	return r.execute(HEAD, url)
 }
 
-// Options method does OPTIONS HTTP request
+// Post method does POST HTTP request.
+// The HTTP POST method is defined in section 4.3.3 of RFC7231.
+func (r *Request) Post(url string) (*Response, error) {
+	return r.execute(POST, url)
+}
+
+// Put method does PUT HTTP request.
+// The HTTP PUT method is defined in section 4.3.4 of RFC7231.
+func (r *Request) Put(url string) (*Response, error) {
+	return r.execute(PUT, url)
+}
+
+// Delete method does DELETE HTTP request.
+// The HTTP DELETE method is defined in section 4.3.5 of RFC7231.
+func (r *Request) Delete(url string) (*Response, error) {
+	return r.execute(DELETE, url)
+}
+
+// Options method does OPTIONS HTTP request.
+// The HTTP OPTIONS method is defined in section 4.3.7 of RFC7231.
 func (r *Request) Options(url string) (*Response, error) {
 	return r.execute(OPTIONS, url)
+}
+
+// Patch method does PATCH HTTP request.
+// The HTTP PATCH method is defined in section 2 of RFC5789.
+func (r *Request) Patch(url string) (*Response, error) {
+	return r.execute(PATCH, url)
 }
 
 // Executes the current request with client
