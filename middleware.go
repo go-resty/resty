@@ -163,6 +163,8 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 				r.bodyBuf = bytes.NewBuffer(bodyBytes)
 			}
 		}
+	} else {
+		r.Header.Del(hdrContentTypeKey)
 	}
 
 CL:
