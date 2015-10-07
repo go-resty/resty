@@ -824,6 +824,25 @@ func TestIncorrectURL(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
 }
 
+func TestDetectContentTypeForPointer(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	user := &User{Username: "testuser", Password: "testpass"}
+
+	resp, err := dclr().
+		SetBody(user).
+		SetResult(AuthSuccess{}).
+		Post(ts.URL + "/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+
+	logResponse(t, resp)
+}
+
 func TestClientOptions(t *testing.T) {
 	SetHTTPMode().SetContentLength(true)
 	assertEqual(t, Mode(), "http")

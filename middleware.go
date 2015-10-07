@@ -81,7 +81,7 @@ func parseRequestHeader(c *Client, r *Request) error {
 }
 
 func parseRequestBody(c *Client, r *Request) (err error) {
-	if r.Method == POST || r.Method == PUT || r.Method == PATCH {
+	if isPayloadSupported(r.Method) {
 		// Handling Multipart
 		if r.isMultiPart && !(r.Method == PATCH) {
 			r.bodyBuf = &bytes.Buffer{}

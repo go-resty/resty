@@ -935,6 +935,9 @@ func IsStringEmpty(str string) bool {
 func DetectContentType(body interface{}) string {
 	contentType := plainTextType
 	kind := reflect.ValueOf(body).Kind()
+	if kind == reflect.Ptr {
+		kind = reflect.TypeOf(body).Elem().Kind()
+	}
 
 	switch kind {
 	case reflect.Struct, reflect.Map:
@@ -998,11 +1001,10 @@ func addFile(w *multipart.Writer, fieldName, path string) error {
 
 func getRequestBodyString(r *Request) (body string) {
 	body = "***** NO CONTENT *****"
-	if r.Method == POST || r.Method == PUT || r.Method == PATCH {
+	if isPayloadSupported(r.Method) {
 		// multipart/form-data OR form data
 		if r.isMultiPart || r.isFormData {
 			body = string(r.bodyBuf.Bytes())
-
 			return
 		}
 
@@ -1068,4 +1070,8 @@ func getPointer(v interface{}) interface{} {
 	}
 
 	return v
+}
+
+func isPayloadSupported(m string) bool {
+	return (m == POST || m == PUT || m == DELETE || m == PATCH)
 }
