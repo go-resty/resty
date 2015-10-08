@@ -354,12 +354,7 @@ func (c *Client) SetContentLength(l bool) *Client {
 //		resty.SetError(Error{})
 //
 func (c *Client) SetError(err interface{}) *Client {
-	t := reflect.TypeOf(err)
-	if t.Kind() == reflect.Ptr {
-		c.Error = t.Elem()
-	} else {
-		c.Error = t
-	}
+	c.Error = getType(err)
 	return c
 }
 
@@ -463,7 +458,7 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	c.transport.Dial = func(network, addr string) (net.Conn, error) {
 		conn, err := net.DialTimeout(network, addr, timeout)
 		if err != nil {
-			c.Log.Printf("Error: %v", err)
+			c.Log.Printf("ERROR [%v]", err)
 			return nil, err
 		}
 		conn.SetDeadline(time.Now().Add(timeout))
@@ -484,7 +479,7 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 	if pURL, err := url.Parse(proxyURL); err == nil {
 		c.transport.Proxy = http.ProxyURL(pURL)
 	} else {
-		c.Log.Printf("ERROR: %v", err)
+		c.Log.Printf("ERROR [%v]", err)
 	}
 
 	return c
@@ -640,6 +635,24 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 		r.QueryParam.Add(p, v)
 	}
 
+	return r
+}
+
+// SetQueryString method provides ability to use string as an input to set URL query string for the request.
+//
+// Using String as an input
+// 		resty.R().
+//			SetQueryString("productId=232&template=fresh-sample&cat=resty&source=google&kw=buy a lot more")
+//
+func (r *Request) SetQueryString(query string) *Request {
+	values, err := url.ParseQuery(strings.TrimSpace(query))
+	if err == nil {
+		for p, _ := range values {
+			r.QueryParam.Add(p, values.Get(p))
+		}
+	} else {
+		r.client.Log.Printf("ERROR [%v]", err)
+	}
 	return r
 }
 
@@ -934,9 +947,7 @@ func IsStringEmpty(str string) bool {
 // DetectContentType method is used to figure out `Request.Body` content type for request header
 func DetectContentType(body interface{}) string {
 	contentType := plainTextType
-	kind := reflect.ValueOf(body).Kind()
-
-	switch kind {
+	switch getBaseKind(body) {
 	case reflect.Struct, reflect.Map:
 		contentType = jsonContentType
 	case reflect.String:
@@ -970,14 +981,7 @@ func Unmarshal(ct string, b []byte, d interface{}) (err error) {
 }
 
 func getLogger(w io.Writer) *log.Logger {
-	var l *log.Logger
-	if w == nil {
-		l = log.New(os.Stderr, "RESTY ", log.LstdFlags)
-	} else {
-		l = log.New(w, "RESTY ", log.LstdFlags)
-	}
-
-	return l
+	return log.New(w, "RESTY ", log.LstdFlags)
 }
 
 func addFile(w *multipart.Writer, fieldName, path string) error {
@@ -998,11 +1002,10 @@ func addFile(w *multipart.Writer, fieldName, path string) error {
 
 func getRequestBodyString(r *Request) (body string) {
 	body = "***** NO CONTENT *****"
-	if r.Method == POST || r.Method == PUT || r.Method == PATCH {
+	if isPayloadSupported(r.Method) {
 		// multipart/form-data OR form data
 		if r.isMultiPart || r.isFormData {
 			body = string(r.bodyBuf.Bytes())
-
 			return
 		}
 
@@ -1062,10 +1065,25 @@ func getResponseBodyString(res *Response) string {
 }
 
 func getPointer(v interface{}) interface{} {
-	rv := reflect.TypeOf(v)
-	if rv.Kind() != reflect.Ptr {
-		return reflect.New(rv).Interface()
+	vv := reflect.ValueOf(v)
+	if vv.Kind() == reflect.Ptr {
+		return v
 	}
+	return reflect.New(vv.Type()).Interface()
+}
 
-	return v
+func isPayloadSupported(m string) bool {
+	return (m == POST || m == PUT || m == DELETE || m == PATCH)
+}
+
+func getBaseKind(v interface{}) reflect.Kind {
+	return getType(v).Kind()
+}
+
+func getType(v interface{}) reflect.Type {
+	vv := reflect.ValueOf(v)
+	if vv.Kind() == reflect.Ptr {
+		return vv.Elem().Type()
+	}
+	return vv.Type()
 }
