@@ -647,8 +647,8 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 func (r *Request) SetQueryString(query string) *Request {
 	values, err := url.ParseQuery(strings.TrimSpace(query))
 	if err == nil {
-		for p, _ := range values {
-			r.QueryParam.Add(p, values.Get(p))
+		for k := range values {
+			r.QueryParam.Add(k, values.Get(k))
 		}
 	} else {
 		r.client.Log.Printf("ERROR [%v]", err)
