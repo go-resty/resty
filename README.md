@@ -20,7 +20,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notabl
 * Choose between HTTP and RESTful mode. Default is RESTful
   * `HTTP` - default upto 10 redirects and no automatic response unmarshal
   * `RESTful` - default no redirects and automatic response unmarshal for `JSON` & `XML`
-* Client settings like Timeout, RedirectPolicy, Proxy and TLSClientConfig
+* Client settings like `Timeout`, `RedirectPolicy`, `Proxy` and `TLSClientConfig`
 * Client API design 
   * Have client level settings & options and also override at Request level if you want to
   * [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middleware
@@ -38,7 +38,7 @@ resty tested with Go 1.2 and above.
     * FlexibleRedirectPolicy
     * DomainCheckRedirectPolicy
     * etc. [more info](redirect.go)
-  * Write Cookies to file from CookiesJar (upcoming)
+  * Persist Cookies into file in JSON format from resty client (upcoming)
   * etc.
 
 ## Installation
@@ -104,6 +104,14 @@ resp, err := resty.R().
       SetHeader("Accept", "application/json").
       SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F").
       Get("/search_result")
+
+
+// Sample of using Request.SetQueryString method
+resp, err := resty.R().
+      SetQueryString("productId=232&template=fresh-sample&cat=resty&source=google&kw=buy a lot more").
+      SetHeader("Accept", "application/json").
+      SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F").
+      Get("/show_product")
 ```
 
 #### Various POST method combinations

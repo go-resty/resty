@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"time"
 
 	"golang.org/x/net/publicsuffix"
@@ -39,7 +40,7 @@ func New() *Client {
 		Token:      "",
 		Cookies:    make([]*http.Cookie, 0),
 		Debug:      false,
-		Log:        getLogger(nil),
+		Log:        getLogger(os.Stderr),
 		httpClient: &http.Client{Jar: cookieJar},
 		transport:  &http.Transport{},
 	}
@@ -72,122 +73,122 @@ func R() *Request {
 	return DefaultClient.R()
 }
 
-// SetHostURL sets Host URL. See Client.SetHostURL for more information.
+// SetHostURL sets Host URL. See `Client.SetHostURL for more information.
 func SetHostURL(url string) *Client {
 	return DefaultClient.SetHostURL(url)
 }
 
-// SetHeader sets single header. See Client.SetHeader for more information.
+// SetHeader sets single header. See `Client.SetHeader` for more information.
 func SetHeader(header, value string) *Client {
 	return DefaultClient.SetHeader(header, value)
 }
 
-// SetHeaders sets multiple headers. See Client.SetHeaders for more information.
+// SetHeaders sets multiple headers. See `Client.SetHeaders` for more information.
 func SetHeaders(headers map[string]string) *Client {
 	return DefaultClient.SetHeaders(headers)
 }
 
-// SetCookie sets single cookie object. See Client.SetCookie for more information.
+// SetCookie sets single cookie object. See `Client.SetCookie` for more information.
 func SetCookie(hc *http.Cookie) *Client {
 	return DefaultClient.SetCookie(hc)
 }
 
-// SetCookies sets multiple cookie object. See Client.SetCookies for more information.
+// SetCookies sets multiple cookie object. See `Client.SetCookies` for more information.
 func SetCookies(cs []*http.Cookie) *Client {
 	return DefaultClient.SetCookies(cs)
 }
 
-// SetQueryParam method sets single paramater and its value. See Client.SetQueryParam for more information.
+// SetQueryParam method sets single paramater and its value. See `Client.SetQueryParam` for more information.
 func SetQueryParam(param, value string) *Client {
 	return DefaultClient.SetQueryParam(param, value)
 }
 
-// SetQueryParams method sets multiple paramaters and its value. See Client.SetQueryParams for more information.
+// SetQueryParams method sets multiple paramaters and its value. See `Client.SetQueryParams` for more information.
 func SetQueryParams(params map[string]string) *Client {
 	return DefaultClient.SetQueryParams(params)
 }
 
-// SetFormData method sets Form parameters and its values. See Client.SetFormData for more information.
+// SetFormData method sets Form parameters and its values. See `Client.SetFormData` for more information.
 func SetFormData(data map[string]string) *Client {
 	return DefaultClient.SetFormData(data)
 }
 
-// SetBasicAuth method sets the basic authentication header. See Client.SetBasicAuth for more information.
+// SetBasicAuth method sets the basic authentication header. See `Client.SetBasicAuth` for more information.
 func SetBasicAuth(username, password string) *Client {
 	return DefaultClient.SetBasicAuth(username, password)
 }
 
-// SetAuthToken method sets bearer auth token header. See Client.SetAuthToken for more information.
+// SetAuthToken method sets bearer auth token header. See `Client.SetAuthToken` for more information.
 func SetAuthToken(token string) *Client {
 	return DefaultClient.SetAuthToken(token)
 }
 
-// OnBeforeRequest method sets request middleware. See Client.OnBeforeRequest for more information.
+// OnBeforeRequest method sets request middleware. See `Client.OnBeforeRequest` for more information.
 func OnBeforeRequest(m func(*Client, *Request) error) *Client {
 	return DefaultClient.OnBeforeRequest(m)
 }
 
-// OnAfterResponse method sets response middleware. See Client.OnAfterResponse for more information.
+// OnAfterResponse method sets response middleware. See `Client.OnAfterResponse` for more information.
 func OnAfterResponse(m func(*Client, *Response) error) *Client {
 	return DefaultClient.OnAfterResponse(m)
 }
 
-// SetDebug method enables the debug mode. See Client.SetDebug for more information.
+// SetDebug method enables the debug mode. See `Client.SetDebug` for more information.
 func SetDebug(d bool) *Client {
 	return DefaultClient.SetDebug(d)
 }
 
-// SetLogger method sets given writer for logging. See Client.SetLogger for more information.
+// SetLogger method sets given writer for logging. See `Client.SetLogger` for more information.
 func SetLogger(w io.Writer) *Client {
 	return DefaultClient.SetLogger(w)
 }
 
-// SetContentLength method enables `Content-Length` value. See Client.SetContentLength for more information.
+// SetContentLength method enables `Content-Length` value. See `Client.SetContentLength` for more information.
 func SetContentLength(l bool) *Client {
 	return DefaultClient.SetContentLength(l)
 }
 
-// SetError method is to register the global or client common `Error` object. See Client.SetError for more information.
+// SetError method is to register the global or client common `Error` object. See `Client.SetError` for more information.
 func SetError(err interface{}) *Client {
 	return DefaultClient.SetError(err)
 }
 
-// SetRedirectPolicy method sets the client redirect poilicy. See Client.SetRedirectPolicy for more information.
+// SetRedirectPolicy method sets the client redirect poilicy. See `Client.SetRedirectPolicy` for more information.
 func SetRedirectPolicy(policies ...interface{}) *Client {
 	return DefaultClient.SetRedirectPolicy(policies...)
 }
 
-// SetHTTPMode method sets go-resty mode into HTTP. See Client.SetMode for more information.
+// SetHTTPMode method sets go-resty mode into HTTP. See `Client.SetMode` for more information.
 func SetHTTPMode() *Client {
 	return DefaultClient.SetHTTPMode()
 }
 
-// SetRESTMode method sets go-resty mode into RESTful. See Client.SetMode for more information.
+// SetRESTMode method sets go-resty mode into RESTful. See `Client.SetMode` for more information.
 func SetRESTMode() *Client {
 	return DefaultClient.SetRESTMode()
 }
 
-// Mode method returns the current client mode. See Client.Mode for more information.
+// Mode method returns the current client mode. See `Client.Mode` for more information.
 func Mode() string {
 	return DefaultClient.Mode()
 }
 
-// SetTLSClientConfig method sets TLSClientConfig for underling client Transport. See Client.SetTLSClientConfig for more information.
+// SetTLSClientConfig method sets TLSClientConfig for underling client Transport. See `Client.SetTLSClientConfig` for more information.
 func SetTLSClientConfig(config *tls.Config) *Client {
 	return DefaultClient.SetTLSClientConfig(config)
 }
 
-// SetTimeout method sets timeout for request. See Client.SetTimeout for more information.
+// SetTimeout method sets timeout for request. See `Client.SetTimeout` for more information.
 func SetTimeout(timeout time.Duration) *Client {
 	return DefaultClient.SetTimeout(timeout)
 }
 
-// SetProxy method sets Proxy for request. See Client.SetProxy for more information.
+// SetProxy method sets Proxy for request. See `Client.SetProxy` for more information.
 func SetProxy(proxyURL string) *Client {
 	return DefaultClient.SetProxy(proxyURL)
 }
 
-// RemoveProxy method removes the proxy configuration. See Client.RemoveProxy for more information.
+// RemoveProxy method removes the proxy configuration. See `Client.RemoveProxy` for more information.
 func RemoveProxy() *Client {
 	return DefaultClient.RemoveProxy()
 }
