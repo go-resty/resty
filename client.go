@@ -821,50 +821,46 @@ func (r *Request) SetAuthToken(token string) *Request {
 // HTTP verb method starts here
 //
 
-// Get method does GET HTTP request.
-// The HTTP GET method is defined in section 4.3.1 of RFC7231.
+// Get method does GET HTTP request. It's defined in section 4.3.1 of RFC7231.
 func (r *Request) Get(url string) (*Response, error) {
-	return r.execute(GET, url)
+	return r.Execute(GET, url)
 }
 
-// Head method does HEAD HTTP request.
-// The HTTP HEAD method is defined in section 4.3.2 of RFC7231.
+// Head method does HEAD HTTP request. It's defined in section 4.3.2 of RFC7231.
 func (r *Request) Head(url string) (*Response, error) {
-	return r.execute(HEAD, url)
+	return r.Execute(HEAD, url)
 }
 
-// Post method does POST HTTP request.
-// The HTTP POST method is defined in section 4.3.3 of RFC7231.
+// Post method does POST HTTP request. It's defined in section 4.3.3 of RFC7231.
 func (r *Request) Post(url string) (*Response, error) {
-	return r.execute(POST, url)
+	return r.Execute(POST, url)
 }
 
-// Put method does PUT HTTP request.
-// The HTTP PUT method is defined in section 4.3.4 of RFC7231.
+// Put method does PUT HTTP request. It's defined in section 4.3.4 of RFC7231.
 func (r *Request) Put(url string) (*Response, error) {
-	return r.execute(PUT, url)
+	return r.Execute(PUT, url)
 }
 
-// Delete method does DELETE HTTP request.
-// The HTTP DELETE method is defined in section 4.3.5 of RFC7231.
+// Delete method does DELETE HTTP request. It's defined in section 4.3.5 of RFC7231.
 func (r *Request) Delete(url string) (*Response, error) {
-	return r.execute(DELETE, url)
+	return r.Execute(DELETE, url)
 }
 
-// Options method does OPTIONS HTTP request.
-// The HTTP OPTIONS method is defined in section 4.3.7 of RFC7231.
+// Options method does OPTIONS HTTP request. It's defined in section 4.3.7 of RFC7231.
 func (r *Request) Options(url string) (*Response, error) {
-	return r.execute(OPTIONS, url)
+	return r.Execute(OPTIONS, url)
 }
 
-// Patch method does PATCH HTTP request.
-// The HTTP PATCH method is defined in section 2 of RFC5789.
+// Patch method does PATCH HTTP request. It's defined in section 2 of RFC5789.
 func (r *Request) Patch(url string) (*Response, error) {
-	return r.execute(PATCH, url)
+	return r.Execute(PATCH, url)
 }
 
-// Executes the current request with client
-func (r *Request) execute(method, url string) (*Response, error) {
+// Execute method performs the HTTP request with given HTTP method and URL
+// for current `Request`.
+// 		resp, err := resty.R().Execute(resty.GET, "http://httpbin.org/get")
+//
+func (r *Request) Execute(method, url string) (*Response, error) {
 	if r.isMultiPart && !(method == POST || method == PUT) {
 		return nil, fmt.Errorf("Multipart content is not allowed in HTTP verb [%v]", method)
 	}

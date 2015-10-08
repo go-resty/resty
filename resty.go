@@ -9,4 +9,4 @@ Package resty provides simple HTTP and REST client for Go inspired by Ruby rest-
 package resty
 
 // go-resty version no
-var Version = "0.3"
+var Version = "0.3.1"
