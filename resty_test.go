@@ -492,6 +492,28 @@ func TestMultiPartUploadFile(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
+func TestMultiPartUploadFileError(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+
+	pwd, _ := os.Getwd()
+	basePath := pwd + "/test-data"
+
+	c := dc()
+	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
+
+	resp, err := c.R().
+		SetFile("profile_img", basePath+"/test-img-not-exists.png").
+		Post(ts.URL + "/upload")
+
+	if err == nil {
+		t.Errorf("Expected [%v], got [%v]", nil, err)
+	}
+	if resp != nil {
+		t.Errorf("Expected [%v], got [%v]", nil, resp)
+	}
+}
+
 func TestMultiPartUploadFiles(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
@@ -747,6 +769,14 @@ func TestClientTimeout(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err.Error(), "i/o timeout"))
 }
 
+func TestClientTimeoutInternalError(t *testing.T) {
+	c := dc()
+	c.SetHTTPMode()
+	c.SetTimeout(time.Duration(time.Second * 1))
+
+	c.R().Get("http://localhost:9000/set-timeout-test")
+}
+
 func TestHeadMethod(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
@@ -841,6 +871,34 @@ func TestDetectContentTypeForPointer(t *testing.T) {
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
 
 	logResponse(t, resp)
+}
+
+func TestSetQueryStringTypical(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dclr().
+		SetQueryString("productId=232&template=fresh-sample&cat=resty&source=google&kw=buy a lot more").
+		Get(ts.URL)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "200 OK", resp.Status())
+	assertEqual(t, "TestGet: text response", resp.String())
+}
+
+func TestSetQueryStringTypicalError(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dclr().
+		SetQueryString("&%%amp;").
+		Get(ts.URL)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "200 OK", resp.Status())
+	assertEqual(t, "TestGet: text response", resp.String())
 }
 
 func TestClientOptions(t *testing.T) {
