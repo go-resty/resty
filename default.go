@@ -19,15 +19,7 @@ import (
 // The default Client
 var DefaultClient *Client
 
-func init() {
-	DefaultClient = New()
-}
-
-// New creates a new go-resty client
-// 		For Example:
-// 		client1 := resty.New()
-//
-//		client2 := resty.New()
+// New method creates a new go-resty client
 func New() *Client {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 
@@ -191,4 +183,8 @@ func SetProxy(proxyURL string) *Client {
 // RemoveProxy method removes the proxy configuration. See `Client.RemoveProxy` for more information.
 func RemoveProxy() *Client {
 	return DefaultClient.RemoveProxy()
+}
+
+func init() {
+	DefaultClient = New()
 }

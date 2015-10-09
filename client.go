@@ -97,6 +97,12 @@ type User struct {
 
 // SetHostURL method is to set Host URL in the client instance. It will be used with request
 // raised from this client with relative URL
+//		// Setting HTTP address
+//		resty.SetHostURL("http://myjeeva.com")
+//
+//		// Setting HTTPS address
+//		resty.SetHostURL("https://myjeeva.com")
+//
 func (c *Client) SetHostURL(url string) *Client {
 	c.HostURL = strings.TrimRight(url, "/")
 	return c
