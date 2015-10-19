@@ -151,7 +151,7 @@ func Example_clientCertificates() {
 }
 
 func Example_customRootCertificate() {
-	resty.SetRootCertificate("path/to/root/pemFile.pem")
+	resty.SetRootCertificate("/path/to/root/pemFile.pem")
 }
 
 //

@@ -87,6 +87,7 @@ type Client struct {
 	transport        *http.Transport
 	setContentLength bool
 	isHTTPMode       bool
+	outputDirectory  string
 	beforeRequest    []func(*Client, *Request) error
 	afterResponse    []func(*Client, *Response) error
 }
@@ -421,6 +422,7 @@ func (c *Client) SetMode(mode string) *Client {
 		c.SetRedirectPolicy(FlexibleRedirectPolicy(10))
 		c.afterResponse = []func(*Client, *Response) error{
 			responseLogger,
+			saveResponseIntoFile,
 		}
 	} else { // RESTful
 		c.isHTTPMode = false
@@ -428,6 +430,7 @@ func (c *Client) SetMode(mode string) *Client {
 		c.afterResponse = []func(*Client, *Response) error{
 			responseLogger,
 			parseResponseBody,
+			saveResponseIntoFile,
 		}
 	}
 
@@ -447,11 +450,12 @@ func (c *Client) Mode() string {
 // SetTLSClientConfig method sets TLSClientConfig for underling client Transport.
 //
 // For example:
-// One can set custom root-certificate. Refer: http://golang.org/pkg/crypto/tls/#example_Dial
+// 		// One can set custom root-certificate. Refer: http://golang.org/pkg/crypto/tls/#example_Dial
 //		resty.SetTLSClientConfig(&tls.Config{ RootCAs: roots })
 //
-// or One can disable security check (https)
+// 		// or One can disable security check (https)
 //		resty.SetTLSClientConfig(&tls.Config{ InsecureSkipVerify: true })
+// Note: This method overwrites existing `TLSClientConfig`.
 //
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	c.transport.TLSClientConfig = config
@@ -508,7 +512,7 @@ func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 }
 
 // SetRootCertificate method helps to add one or more root certificates into resty client
-// 		resty.SetRootCertificate("path/to/root/pemFile.pem")
+// 		resty.SetRootCertificate("/path/to/root/pemFile.pem")
 //
 func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	rootPemData, err := ioutil.ReadFile(pemFilePath)
@@ -523,6 +527,21 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	}
 
 	config.RootCAs.AppendCertsFromPEM(rootPemData)
+
+	return c
+}
+
+// SetOutputDirectory method sets output directory. So that HTTP response gets saved underneath
+// output directory.
+// 		resty.SetOutputDirectory("/save/http/response/here")
+//
+func (c *Client) SetOutputDirectory(dirPath string) *Client {
+	err := createDirectory(dirPath)
+	if err != nil {
+		c.Log.Printf("ERROR [%v]", err)
+	}
+
+	c.outputDirectory = dirPath
 
 	return c
 }
@@ -617,6 +636,8 @@ type Request struct {
 	isMultiPart      bool
 	isFormData       bool
 	setContentLength bool
+	isSaveResponse   bool
+	outputFile       string
 }
 
 // SetHeader method is to set a single header field and its value in the current request.
@@ -857,6 +878,18 @@ func (r *Request) SetBasicAuth(username, password string) *Request {
 //
 func (r *Request) SetAuthToken(token string) *Request {
 	r.Token = token
+	return r
+}
+
+// SetOutput method sets the output file for current HTTP request. Current HTTP response will be
+// saved into given file. It is similar to `curl -o` flag.
+// 		resty.R().
+// 			SetOutput("/Users/jeeva/Downloads/ReplyWithHeader-v5.1-beta.zip").
+// 			Get("http://bit.ly/1LouEKr")
+//
+func (r *Request) SetOutput(file string) *Request {
+	r.outputFile = file
+	r.isSaveResponse = true
 	return r
 }
 
@@ -1125,4 +1158,15 @@ func getType(v interface{}) reflect.Type {
 		return vv.Elem().Type()
 	}
 	return vv.Type()
+}
+
+func createDirectory(dir string) (err error) {
+	if _, err = os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(dir, 0755); err != nil {
+				return err
+			}
+		}
+	}
+	return
 }

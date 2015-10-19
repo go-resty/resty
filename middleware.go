@@ -10,9 +10,11 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"strings"
 )
@@ -277,6 +279,31 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 			if res.Request.Error != nil {
 				err = Unmarshal(ct, res.Body, res.Request.Error)
 			}
+		}
+	}
+
+	return
+}
+
+func saveResponseIntoFile(c *Client, res *Response) (err error) {
+	if res.Request.isSaveResponse {
+		file := ""
+
+		if len(c.outputDirectory) > 0 && !filepath.IsAbs(res.Request.outputFile) {
+			file += c.outputDirectory + string(filepath.Separator)
+		}
+		file = filepath.Clean(file + res.Request.outputFile)
+
+		err = createDirectory(filepath.Dir(file))
+		if err != nil {
+			c.Log.Printf("ERROR [%v]", err)
+			return
+		}
+
+		err = ioutil.WriteFile(file, res.Body, 0644)
+		if err != nil {
+			c.Log.Printf("ERROR [%v]", err)
+			return
 		}
 	}
 

@@ -917,6 +917,56 @@ func TestSetRootCertificateNotExists(t *testing.T) {
 	assertEqual(t, true, DefaultClient.transport.TLSClientConfig == nil)
 }
 
+func TestOutputFileRelativePath(t *testing.T) {
+	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10))
+
+	_, err := c.R().
+		SetOutput("go-resty/ReplyWithHeader-v5.1-beta.zip").
+		Get("http://bit.ly/1LouEKr")
+
+	assertError(t, err)
+}
+
+func TestOutputFileWithBaseDir(t *testing.T) {
+	DefaultClient = dc()
+
+	SetRedirectPolicy(FlexibleRedirectPolicy(10))
+	SetOutputDirectory(getTestDataPath() + "/sample1")
+
+	_, err := R().
+		SetOutput("go-resty/ReplyWithHeader-v5.1-beta.zip").
+		Get("http://bit.ly/1LouEKr")
+
+	assertError(t, err)
+}
+
+func TestOutputFileAbsPath(t *testing.T) {
+	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10))
+
+	_, err := c.R().
+		SetOutput(getTestDataPath() + "/go-resty-test-2/ReplyWithHeader-v5.1-beta.zip").
+		Get("http://bit.ly/1LouEKr")
+
+	assertError(t, err)
+}
+
+func TestOutputFileWithBaseDirError(t *testing.T) {
+	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10)).
+		SetOutputDirectory("/go-resty")
+
+	_ = c
+}
+
+func TestOutputFileAbsPathError(t *testing.T) {
+	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10))
+
+	_, err := c.R().
+		SetOutput("/go-resty-test-2/ReplyWithHeader-v5.1-beta.zip").
+		Get("http://bit.ly/1LouEKr")
+
+	assertEqual(t, true, err != nil)
+}
+
 func TestClientOptions(t *testing.T) {
 	SetHTTPMode().SetContentLength(true)
 	assertEqual(t, Mode(), "http")

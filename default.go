@@ -54,6 +54,7 @@ func New() *Client {
 	c.afterResponse = []func(*Client, *Response) error{
 		responseLogger,
 		parseResponseBody,
+		saveResponseIntoFile,
 	}
 
 	return c
@@ -194,6 +195,11 @@ func SetCertificates(certs ...tls.Certificate) *Client {
 // See `Client.SetRootCertificate` for more information.
 func SetRootCertificate(pemFilePath string) *Client {
 	return DefaultClient.SetRootCertificate(pemFilePath)
+}
+
+// SetOutputDirectory method sets output directory. See `Client.SetOutputDirectory` for more information.
+func SetOutputDirectory(dirPath string) *Client {
+	return DefaultClient.SetOutputDirectory(dirPath)
 }
 
 func init() {
