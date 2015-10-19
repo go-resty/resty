@@ -1,8 +1,10 @@
 package resty_test
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -138,6 +140,20 @@ func Example_put() {
 	printOutput(resp, err)
 }
 
+func Example_clientCertificates() {
+	// Parsing public/private key pair from a pair of files. The files must contain PEM encoded data.
+	cert, err := tls.LoadX509KeyPair("certs/client.pem", "certs/client.key")
+	if err != nil {
+		log.Fatalf("ERROR client certificate: %s", err)
+	}
+
+	resty.SetCertificates(cert)
+}
+
+func Example_customRootCertificate() {
+	resty.SetRootCertificate("path/to/root/pemFile.pem")
+}
+
 //
 // top level method examples
 //
@@ -150,6 +166,20 @@ func ExampleNew() {
 	// Creating client2
 	client2 := resty.New()
 	client2.R().Get("http://httpbin.org/get")
+}
+
+//
+// Client object methods
+//
+
+func ExampleClient_SetCertificates() {
+	// Parsing public/private key pair from a pair of files. The files must contain PEM encoded data.
+	cert, err := tls.LoadX509KeyPair("certs/client.pem", "certs/client.key")
+	if err != nil {
+		log.Fatalf("ERROR client certificate: %s", err)
+	}
+
+	resty.SetCertificates(cert)
 }
 
 func printOutput(resp *resty.Response, err error) {

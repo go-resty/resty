@@ -477,8 +477,7 @@ func TestMultiPartUploadFile(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	pwd, _ := os.Getwd()
-	basePath := pwd + "/test-data"
+	basePath := getTestDataPath()
 
 	c := dc()
 	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
@@ -496,8 +495,7 @@ func TestMultiPartUploadFileError(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	pwd, _ := os.Getwd()
-	basePath := pwd + "/test-data"
+	basePath := getTestDataPath()
 
 	c := dc()
 	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
@@ -518,8 +516,7 @@ func TestMultiPartUploadFiles(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	pwd, _ := os.Getwd()
-	basePath := pwd + "/test-data"
+	basePath := getTestDataPath()
 
 	resp, err := dclr().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
@@ -534,8 +531,7 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	pwd, _ := os.Getwd()
-	basePath := pwd + "/test-data"
+	basePath := getTestDataPath()
 
 	_, err := dclr().
 		SetFile("profile_img", basePath+"/test-img.png").
@@ -815,8 +811,7 @@ func TestRawFileUploadByBody(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	pwd, _ := os.Getwd()
-	file, _ := os.Open(pwd + "/test-data/test-img.png")
+	file, _ := os.Open(getTestDataPath() + "/test-img.png")
 	fileBytes, _ := ioutil.ReadAll(file)
 
 	resp, err := dclr().
@@ -899,6 +894,27 @@ func TestSetQueryStringTypicalError(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
 	assertEqual(t, "TestGet: text response", resp.String())
+}
+
+func TestSetCertificates(t *testing.T) {
+	DefaultClient = dc()
+	SetCertificates(tls.Certificate{})
+
+	assertEqual(t, 1, len(DefaultClient.transport.TLSClientConfig.Certificates))
+}
+
+func TestSetRootCertificate(t *testing.T) {
+	DefaultClient = dc()
+	SetRootCertificate(getTestDataPath() + "/sample-root.pem")
+
+	assertEqual(t, true, DefaultClient.transport.TLSClientConfig.RootCAs != nil)
+}
+
+func TestSetRootCertificateNotExists(t *testing.T) {
+	DefaultClient = dc()
+	SetRootCertificate(getTestDataPath() + "/not-exists-sample-root.pem")
+
+	assertEqual(t, true, DefaultClient.transport.TLSClientConfig == nil)
 }
 
 func TestClientOptions(t *testing.T) {
@@ -984,6 +1000,11 @@ func TestClientOptions(t *testing.T) {
 	SetContentLength(true)
 	SetDebug(true)
 	SetLogger(ioutil.Discard)
+}
+
+func getTestDataPath() string {
+	pwd, _ := os.Getwd()
+	return pwd + "/test-data"
 }
 
 func createGetServer(t *testing.T) *httptest.Server {
@@ -1097,8 +1118,7 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				t.Logf("FirstName: %v", r.FormValue("first_name"))
 				t.Logf("LastName: %v", r.FormValue("last_name"))
 
-				pwd, _ := os.Getwd()
-				targetPath := pwd + "/test-data/upload"
+				targetPath := getTestDataPath() + "/upload"
 				os.MkdirAll(targetPath, 0700)
 
 				for _, fhdrs := range r.MultipartForm.File {

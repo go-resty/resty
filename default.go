@@ -185,6 +185,17 @@ func RemoveProxy() *Client {
 	return DefaultClient.RemoveProxy()
 }
 
+// SetCertificates method helps to set client certificates into resty conveniently.
+func SetCertificates(certs ...tls.Certificate) *Client {
+	return DefaultClient.SetCertificates(certs...)
+}
+
+// SetRootCertificate method helps to add one or more root certificates into resty client.
+// See `Client.SetRootCertificate` for more information.
+func SetRootCertificate(pemFilePath string) *Client {
+	return DefaultClient.SetRootCertificate(pemFilePath)
+}
+
 func init() {
 	DefaultClient = New()
 }

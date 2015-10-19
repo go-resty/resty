@@ -7,6 +7,7 @@ package resty
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -498,6 +499,34 @@ func (c *Client) RemoveProxy() *Client {
 	return c
 }
 
+// SetCertificates method helps to set client certificates into resty conveniently.
+func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
+	config := c.getTLSConfig()
+	config.Certificates = append(config.Certificates, certs...)
+
+	return c
+}
+
+// SetRootCertificate method helps to add one or more root certificates into resty client
+// 		resty.SetRootCertificate("path/to/root/pemFile.pem")
+//
+func (c *Client) SetRootCertificate(pemFilePath string) *Client {
+	rootPemData, err := ioutil.ReadFile(pemFilePath)
+	if err != nil {
+		c.Log.Printf("ERROR [%v]", err)
+		return c
+	}
+
+	config := c.getTLSConfig()
+	if config.RootCAs == nil {
+		config.RootCAs = x509.NewCertPool()
+	}
+
+	config.RootCAs.AppendCertsFromPEM(rootPemData)
+
+	return c
+}
+
 // executes the given `Request` object and returns response
 func (c *Client) execute(req *Request) (*Response, error) {
 	// Apply Request middleware
@@ -549,6 +578,15 @@ func (c *Client) enableLogPrefix() {
 func (c *Client) disableLogPrefix() {
 	c.Log.SetFlags(0)
 	c.Log.SetPrefix("")
+}
+
+// getting TLS client config if not exists then create one
+func (c *Client) getTLSConfig() *tls.Config {
+	if c.transport.TLSClientConfig == nil {
+		c.transport.TLSClientConfig = &tls.Config{}
+	}
+
+	return c.transport.TLSClientConfig
 }
 
 //
