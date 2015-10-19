@@ -30,7 +30,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notabl
   * Gzip - I'm not doing anything here. Go does it automatically
 * Well tested client library
 
-resty tested with Go 1.2 and above.
+resty tested with Go v1.2 and above.
 
 #### Included Batteries
   * Redirect Policies
@@ -156,14 +156,19 @@ resp, err := resty.R().
       SetContentLength(true).          // Dropbox expects this value
       SetAuthToken("<your-auth-token>").
       SetError(&DropboxError{}).       // or SetError(DropboxError{}).
-      Post("https://content.dropboxapi.com/1/files_put/auto/resty/mydocument.pdf") // for upload Dropbox supports PUT too 
+      Post("https://content.dropboxapi.com/1/files_put/auto/resty/mydocument.pdf") // for upload Dropbox supports PUT too
+
+// Note: resty detects Content-Type for request body/payload if content type header is not set.
+//   * For struct and map data type defaults to 'application/json'
+//   * Fallback is plain text content type
 ```
 
 #### Sample PUT 
 You can use various combinations of `PUT` method call like demonstrated for `POST`.
 ```go
-// Just one sample of PUT, refer POST for more combination
-// request goes as JSON content type
+// Note: This is one sample of PUT method usage, refer POST for more combination
+
+// Request goes as JSON content type
 // No need to set auth token, error, if you have client level settings
 resp, err := resty.R().
       SetBody(Article{
@@ -180,8 +185,9 @@ resp, err := resty.R().
 #### Sample PATCH 
 You can use various combinations of `PATCH` method call like demonstrated for `POST`.
 ```go
-// Just one sample of PATCH, refer POST for more combination
-// request goes as JSON content type
+// Note: This is one sample of PUT method usage, refer POST for more combination
+
+// Request goes as JSON content type
 // No need to set auth token, error, if you have client level settings
 resp, err := resty.R().
       SetBody(Article{
@@ -189,7 +195,7 @@ resp, err := resty.R().
       }).
       SetAuthToken("C6A79608-782F-4ED0-A11D-BD82FAD829CD").
       SetError(&Error{}).       // or SetError(Error{}).
-      Patch("https://myapp.com/article/1234")
+      Patch("https://myapp.com/articles/1234")
 ```
 
 #### Sample DELETE, HEAD, OPTIONS
@@ -199,19 +205,28 @@ resp, err := resty.R().
 resp, err := resty.R().
       SetAuthToken("C6A79608-782F-4ED0-A11D-BD82FAD829CD").
       SetError(&Error{}).       // or SetError(Error{}).
-      Delete("https://myapp.com/article/1234")
+      Delete("https://myapp.com/articles/1234")
+
+// DELETE a articles with payload/body as a JSON string
+// No need to set auth token, error, if you have client level settings
+resp, err := resty.R().
+      SetAuthToken("C6A79608-782F-4ED0-A11D-BD82FAD829CD").
+      SetError(&Error{}).       // or SetError(Error{}).
+      SetHeader("Content-Type", "application/json").
+      SetBody(`{article_ids: [1002, 1006, 1007, 87683, 45432] }`).
+      Delete("https://myapp.com/articles")
 
 // HEAD of resource
 // No need to set auth token, if you have client level settings
 resp, err := resty.R().
       SetAuthToken("C6A79608-782F-4ED0-A11D-BD82FAD829CD").
-      Head("https://myapp.com/video/hi-res-video")
+      Head("https://myapp.com/videos/hi-res-video")
 
 // OPTIONS of resource
 // No need to set auth token, if you have client level settings
 resp, err := resty.R().
       SetAuthToken("C6A79608-782F-4ED0-A11D-BD82FAD829CD").
-      Options("https://myapp.com/server/nyc-dc-01")
+      Options("https://myapp.com/servers/nyc-dc-01")
 ```
 
 ### Multipart File(s) upload
@@ -268,9 +283,10 @@ resp, err := resty.R().
 ```
 
 #### Request and Response Middleware
+Resty provides middleware ability to manipulate for Request and Response. It is more flexible than callback approach.
 ```go
 // Registering Request Middleware 
-resty.OnBeforeRequest(func(c *Client, r *Request) error {
+resty.OnBeforeRequest(func(c *resty.Client, req *resty.Request) error {
     // Now you have access to Client and current Request object
     // manipulate it as per your need
 
@@ -278,7 +294,7 @@ resty.OnBeforeRequest(func(c *Client, r *Request) error {
   })
 
 // Registering Response Middleware
-resty.OnAfterResponse(func(c *Client, r *Response) error {
+resty.OnAfterResponse(func(c *resty.Client, resp *resty.Response) error {
     // Now you have access to Client and current Response object
     // manipulate it as per your need
 
@@ -290,11 +306,11 @@ resty.OnAfterResponse(func(c *Client, r *Response) error {
 Resty provides few ready to use redirect policy(s) also it supports multiple policies together.
 ```go
 // Assign Client Redirect Policy. Create one as per you need
-resty.SetRedirectPolicy(FlexibleRedirectPolicy(15))
+resty.SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
 
 // Wanna multiple policies such as redirect count, domain name check, etc
-resty.SetRedirectPolicy(FlexibleRedirectPolicy(20), 
-                        DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
+resty.SetRedirectPolicy(resty.FlexibleRedirectPolicy(20), 
+                        resty.DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
 ```
 
 ##### Custom Redirect Policy
@@ -323,7 +339,7 @@ func (c *CustomRedirectPolicy) Apply(req *http.Request, via []*http.Request) err
 }
 
 // Registering in resty
-resty.SetRedirectPolicy(CustomRedirectPolicy{/* initial variables */})
+resty.SetRedirectPolicy(CustomRedirectPolicy{/* initialize variables */})
 ```
 
 #### Proxy Settings
@@ -414,6 +430,7 @@ resty.SetQueryParams(map[string]string{ // sample of those who use this manner
       "api_key": "api-key-here",
       "api_secert": "api-secert",
     })
+resty.R().SetQueryString("productId=232&template=fresh-sample&cat=resty&source=google&kw=buy a lot more")
 
 // Form data for all request. Typically used with POST and PUT
 resty.SetFormData(map[string]string{

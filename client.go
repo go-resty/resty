@@ -292,7 +292,7 @@ func (c *Client) R() *Request {
 // OnBeforeRequest method sets request middleware into the before request chain.
 // Its gets applied after default `go-resty` request middlewares and before request
 // been sent from `go-resty` to host server.
-// 		resty.OnBeforeRequest(func(c *Client, r *Request) error {
+// 		resty.OnBeforeRequest(func(c *resty.Client, r *resty.Request) error {
 //				// Now you have access to Client and Request instance
 //				// manipulate it as per your need
 //
@@ -309,7 +309,7 @@ func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
 // OnAfterResponse method sets response middleware into the after response chain.
 // Once we receive response from host server, default `go-resty` response middleware
 // gets applied and then user assigened response middlewares applied.
-// 		resty.OnAfterResponse(func(c *Client, r *Response) error {
+// 		resty.OnAfterResponse(func(c *resty.Client, r *resty.Response) error {
 //				// Now you have access to Client and Response instance
 //				// manipulate it as per your need
 //
@@ -468,7 +468,6 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 			return nil, err
 		}
 		conn.SetDeadline(time.Now().Add(timeout))
-
 		return conn, nil
 	}
 
@@ -690,29 +689,29 @@ func (r *Request) SetFormData(data map[string]string) *Request {
 // Struct as a body input, based on content type, it will be marshalled.
 //		resty.R().
 //			SetBody(User{
-//				Username:"jeeva@myjeeva.com",
-//				Password:"welcome2resty",
+//				Username: "jeeva@myjeeva.com",
+//				Password: "welcome2resty",
 //			})
 //
 // Map as a body input, based on content type, it will be marshalled.
 //		resty.R().
 //			SetBody(map[string]interface{}{
-//				"username":"jeeva@myjeeva.com",
-//				"password":"welcome2resty",
-//				"address":&Address{
-//					Address1:"1111 This is my street",
-//					Address2:"Apt 201",
-//					City:"My City",
-//					State:"My State",
-//					ZipCode:00000,
+//				"username": "jeeva@myjeeva.com",
+//				"password": "welcome2resty",
+//				"address": &Address{
+//					Address1: "1111 This is my street",
+//					Address2: "Apt 201",
+//					City: "My City",
+//					State: "My State",
+//					ZipCode: 00000,
 //				},
 //			})
 //
 // String as a body input. Suitable for any need as a string input.
 //		resty.R().
 //			SetBody(`{
-//				"username":"jeeva@getrightcare.com",
-//				"password":"admin"
+//				"username": "jeeva@getrightcare.com",
+//				"password": "admin"
 //			}`)
 //
 // []byte as a body input. Suitable for raw request such as file upload, serialize & deserialize, etc.
@@ -799,7 +798,7 @@ func (r *Request) SetContentLength(l bool) *Request {
 // For Header example:
 //		Authorization: Basic <base64-encoded-value>
 //
-// For example: To set the header for username "go-resty" and password "welcome"
+// To set the header for username "go-resty" and password "welcome"
 // 		resty.R().SetBasicAuth("go-resty", "welcome")
 //
 // This method overrides the credentials set by method `resty.SetBasicAuth`.
