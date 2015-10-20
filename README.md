@@ -20,6 +20,8 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notabl
 * Choose between HTTP and RESTful mode. Default is RESTful
   * `HTTP` - default upto 10 redirects and no automatic response unmarshal
   * `RESTful` - default no redirects and automatic response unmarshal for `JSON` & `XML`
+* Custom [Root Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetRootCertificate) and Client [Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetCertificates)
+* Save HTTP response into File, similar to `curl -o` flag. More info [SetOutputDirectory](https://godoc.org/github.com/go-resty/resty#Client.SetOutputDirectory) & [SetOutput](https://godoc.org/github.com/go-resty/resty#Request.SetOutput).
 * Client settings like `Timeout`, `RedirectPolicy`, `Proxy` and `TLSClientConfig`
 * Client API design 
   * Have client level settings & options and also override at Request level if you want to
@@ -282,6 +284,25 @@ resp, err := resty.R().
       Post("http://myapp.com/profile")
 ```
 
+#### Save HTTP Response into File
+```go
+// Setting output directory path, If directory not exists then resty creates one!
+// This is optional one, if you're planning using absoule path in 
+// `Request.SetOutput` and can used together.
+resty.SetOutputDirectory("/Users/jeeva/Downloads")
+
+// HTTP response gets saved into file, similar to curl -o flag
+_, err := resty.R().
+          SetOutput("plugin/ReplyWithHeader-v5.1-beta.zip").
+          Get("http://bit.ly/1LouEKr")
+
+// OR using absolute path
+// Note: output directory path is not used for absoulte path
+_, err := resty.R().
+          SetOutput("/MyDownloads/plugin/ReplyWithHeader-v5.1-beta.zip").
+          Get("http://bit.ly/1LouEKr")
+```
+
 #### Request and Response Middleware
 Resty provides middleware ability to manipulate for Request and Response. It is more flexible than callback approach.
 ```go
@@ -340,6 +361,27 @@ func (c *CustomRedirectPolicy) Apply(req *http.Request, via []*http.Request) err
 
 // Registering in resty
 resty.SetRedirectPolicy(CustomRedirectPolicy{/* initialize variables */})
+```
+
+#### Custom Root Certificates and Client Certifcates
+```go
+// Custom Root certificates, just supply .pem file.
+// you can add one or more root certificates, its get appended
+resty.SetRootCertificate("/path/to/root/pemFile1.pem")
+resty.SetRootCertificate("/path/to/root/pemFile2.pem")
+// ... and so on!
+
+// Adding Client Certificates, you add one or more certificates
+// Sample for creating certificate object
+// Parsing public/private key pair from a pair of files. The files must contain PEM encoded data.
+cert1, err := tls.LoadX509KeyPair("certs/client.pem", "certs/client.key")
+if err != nil {
+  log.Fatalf("ERROR client certificate: %s", err)
+}
+// ...
+
+// You add one or more certificates
+resty.SetCertificates(cert1, cert2, cert3)
 ```
 
 #### Proxy Settings

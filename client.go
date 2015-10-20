@@ -531,8 +531,9 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	return c
 }
 
-// SetOutputDirectory method sets output directory. So that HTTP response gets saved underneath
-// output directory.
+// SetOutputDirectory method sets output directory for saving HTTP response into file.
+// If the output directory not exists then resty creates one. This setting is optional one,
+// if you're planning using absoule path in `Request.SetOutput` and can used together.
 // 		resty.SetOutputDirectory("/save/http/response/here")
 //
 func (c *Client) SetOutputDirectory(dirPath string) *Client {
@@ -882,7 +883,9 @@ func (r *Request) SetAuthToken(token string) *Request {
 }
 
 // SetOutput method sets the output file for current HTTP request. Current HTTP response will be
-// saved into given file. It is similar to `curl -o` flag.
+// saved into given file. It is similar to `curl -o` flag. Absoulte path or relative path can be used.
+// If is it relative path then output file goes under the output directory, as mentioned
+// in the `Client.SetOutputDirectory`.
 // 		resty.R().
 // 			SetOutput("/Users/jeeva/Downloads/ReplyWithHeader-v5.1-beta.zip").
 // 			Get("http://bit.ly/1LouEKr")
