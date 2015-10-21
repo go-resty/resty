@@ -733,10 +733,12 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 	defer ts.Close()
 
 	c := dc().
-		SetRedirectPolicy(DomainCheckRedirectPolicy("NotAllowed.com")).
-		SetTimeout(time.Duration(time.Second * 2))
+		SetRedirectPolicy(DomainCheckRedirectPolicy("127.0.0.1"))
 
-	c.R().Get(ts.URL + "/redirect-host-check-1")
+	_, err := c.R().Get(ts.URL + "/redirect-host-check-1")
+
+	assertEqual(t, true, err != nil)
+	assertEqual(t, true, strings.Contains(err.Error(), "Redirect is not allowed as per DomainCheckRedirectPolicy"))
 }
 
 func TestClientRedirectPolicy(t *testing.T) {
@@ -917,54 +919,39 @@ func TestSetRootCertificateNotExists(t *testing.T) {
 	assertEqual(t, true, DefaultClient.transport.TLSClientConfig == nil)
 }
 
-func TestOutputFileRelativePath(t *testing.T) {
-	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10))
+func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
 
-	_, err := c.R().
-		SetOutput("go-resty/ReplyWithHeader-v5.1-beta.zip").
-		Get("http://bit.ly/1LouEKr")
-
-	assertError(t, err)
-}
-
-func TestOutputFileWithBaseDir(t *testing.T) {
 	DefaultClient = dc()
-
 	SetRedirectPolicy(FlexibleRedirectPolicy(10))
-	SetOutputDirectory(getTestDataPath() + "/sample1")
+	SetOutputDirectory(getTestDataPath() + "/dir-sample")
+	SetDebug(true)
 
-	_, err := R().
-		SetOutput("go-resty/ReplyWithHeader-v5.1-beta.zip").
-		Get("http://bit.ly/1LouEKr")
-
-	assertError(t, err)
-}
-
-func TestOutputFileAbsPath(t *testing.T) {
-	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10))
-
-	_, err := c.R().
-		SetOutput(getTestDataPath() + "/go-resty-test-2/ReplyWithHeader-v5.1-beta.zip").
-		Get("http://bit.ly/1LouEKr")
+	resp, err := R().
+		SetOutput("go-resty/test-img-success.png").
+		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
+	assertEqual(t, true, resp.Size() != 0)
 }
 
 func TestOutputFileWithBaseDirError(t *testing.T) {
 	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10)).
-		SetOutputDirectory("/go-resty")
+		SetOutputDirectory(getTestDataPath() + `/go-resty\0`)
 
 	_ = c
 }
 
-func TestOutputFileAbsPathError(t *testing.T) {
-	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10))
+func TestOutputFileAbsPath(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
 
-	_, err := c.R().
-		SetOutput("/go-resty-test-2/ReplyWithHeader-v5.1-beta.zip").
-		Get("http://bit.ly/1LouEKr")
+	_, err := dcr().
+		SetOutput(getTestDataPath() + "/go-resty/test-img-success-2.png").
+		Get(ts.URL + "/my-image.png")
 
-	assertEqual(t, true, err != nil)
+	assertError(t, err)
 }
 
 func TestClientOptions(t *testing.T) {
@@ -1071,6 +1058,11 @@ func createGetServer(t *testing.T) *httptest.Server {
 			} else if r.URL.Path == "/set-timeout-test" {
 				time.Sleep(time.Second * 5)
 				w.Write([]byte("TestClientTimeout page"))
+			} else if r.URL.Path == "/my-image.png" {
+				fileBytes, _ := ioutil.ReadFile(getTestDataPath() + "/test-img.png")
+				w.Header().Set("Content-Type", "image/png")
+				w.Header().Set("Content-Length", strconv.Itoa(len(fileBytes)))
+				w.Write(fileBytes)
 			}
 		}
 	})
@@ -1301,7 +1293,7 @@ func createRedirectServer(t *testing.T) *httptest.Server {
 
 				if cnt != 7 { // Testing hard stop via logical
 					if cnt >= 5 {
-						http.Redirect(w, r, "http://notallowed.com/go-redirect", http.StatusTemporaryRedirect)
+						http.Redirect(w, r, "http://httpbin.org/get", http.StatusTemporaryRedirect)
 					} else {
 						http.Redirect(w, r, fmt.Sprintf("/redirect-host-check-%d", (cnt+1)), http.StatusTemporaryRedirect)
 					}

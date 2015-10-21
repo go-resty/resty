@@ -571,10 +571,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		RawResponse: resp,
 	}
 
-	defer resp.Body.Close()
-	response.Body, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	if !req.isSaveResponse {
+		defer resp.Body.Close()
+		response.Body, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		response.size = int64(len(response.Body))
 	}
 
 	// Apply Response middleware
@@ -890,6 +894,7 @@ func (r *Request) SetAuthToken(token string) *Request {
 // 			SetOutput("/Users/jeeva/Downloads/ReplyWithHeader-v5.1-beta.zip").
 // 			Get("http://bit.ly/1LouEKr")
 //
+// Note: In this scenario `Response.Body` might be nil.
 func (r *Request) SetOutput(file string) *Request {
 	r.outputFile = file
 	r.isSaveResponse = true
@@ -960,6 +965,8 @@ type Response struct {
 	ReceivedAt  time.Time
 	Request     *Request
 	RawResponse *http.Response
+
+	size int64
 }
 
 // Status method returns the HTTP status string for the executed request.
@@ -1008,6 +1015,13 @@ func (r *Response) String() string {
 // when client sent a request.
 func (r *Response) Time() time.Duration {
 	return r.ReceivedAt.Sub(r.Request.Time)
+}
+
+// Size method returns the HTTP response size in bytes. Ya, you can relay on HTTP `Content-Length` header,
+// however it won't be good for chucked transfer/compressed response. Since Resty calculates response size
+// at the client end. You will get actual size of the http response.
+func (r *Response) Size() int64 {
+	return r.size
 }
 
 //
@@ -1167,7 +1181,7 @@ func createDirectory(dir string) (err error) {
 	if _, err = os.Stat(dir); err != nil {
 		if os.IsNotExist(err) {
 			if err = os.MkdirAll(dir, 0755); err != nil {
-				return err
+				return
 			}
 		}
 	}

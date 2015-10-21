@@ -50,6 +50,7 @@ func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 }
 
 // DomainCheckRedirectPolicy is convenient method to define domain name redirect rule in resty client.
+// Redirect is allowed for only mentioned host in the policy.
 // 		resty.SetRedirectPolicy(DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
 func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 	hosts := make(map[string]bool)
@@ -58,9 +59,16 @@ func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 	}
 
 	fn := RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
-		host, _, _ := net.SplitHostPort(req.URL.Host)
-		if _, ok := hosts[strings.ToLower(host)]; ok {
-			return fmt.Errorf("Redirect is not allowed for host[%s]", strings.ToLower(host))
+		hostname := ""
+		if strings.Index(req.URL.Host, ":") > 0 {
+			host, _, _ := net.SplitHostPort(req.URL.Host)
+			hostname = strings.ToLower(host)
+		} else {
+			hostname = strings.ToLower(req.URL.Host)
+		}
+
+		if ok := hosts[hostname]; !ok {
+			return errors.New("Redirect is not allowed as per DomainCheckRedirectPolicy")
 		}
 
 		return nil

@@ -10,10 +10,11 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -250,7 +251,11 @@ func responseLogger(c *Client, res *Response) error {
 		for h, v := range res.Header() {
 			c.Log.Printf("%30s: %v", h, strings.Join(v, ", "))
 		}
-		c.Log.Printf("BODY   :\n%v", getResponseBodyString(res))
+		if res.Request.isSaveResponse {
+			c.Log.Printf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****")
+		} else {
+			c.Log.Printf("BODY   :\n%v", getResponseBodyString(res))
+		}
 		c.Log.Println("----------------------------------------------------------")
 		c.enableLogPrefix()
 	}
@@ -285,27 +290,35 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 	return
 }
 
-func saveResponseIntoFile(c *Client, res *Response) (err error) {
+func saveResponseIntoFile(c *Client, res *Response) error {
 	if res.Request.isSaveResponse {
 		file := ""
 
 		if len(c.outputDirectory) > 0 && !filepath.IsAbs(res.Request.outputFile) {
 			file += c.outputDirectory + string(filepath.Separator)
 		}
+
 		file = filepath.Clean(file + res.Request.outputFile)
-
-		err = createDirectory(filepath.Dir(file))
+		err := createDirectory(filepath.Dir(file))
 		if err != nil {
-			c.Log.Printf("ERROR [%v]", err)
-			return
+			return err
 		}
 
-		err = ioutil.WriteFile(file, res.Body, 0644)
+		outFile, err := os.Create(file)
 		if err != nil {
-			c.Log.Printf("ERROR [%v]", err)
-			return
+			return err
 		}
+		defer outFile.Close()
+
+		// io.Copy reads maximum 32kb size, it is perfect for large file download too
+		defer res.RawResponse.Body.Close()
+		written, err := io.Copy(outFile, res.RawResponse.Body)
+		if err != nil {
+			return err
+		}
+
+		res.size = written
 	}
 
-	return
+	return nil
 }
