@@ -88,6 +88,7 @@ type Client struct {
 	setContentLength bool
 	isHTTPMode       bool
 	outputDirectory  string
+	proxyURL         *url.URL
 	beforeRequest    []func(*Client, *Request) error
 	afterResponse    []func(*Client, *Response) error
 }
@@ -482,14 +483,15 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 // SetProxy method sets the Proxy URL and Port for resty client.
 //		resty.SetProxy("http://proxyserver:8888")
 //
-// Alternative: Without this `SetProxy` method, you can also set Proxy via environment variable.
-// By default `Go` uses setting from `HTTP_PROXY`.
+// Alternatives: At request level proxy, see `Request.SetProxy`.  OR Without this `SetProxy` method,
+// you can also set Proxy via environment variable. By default `Go` uses setting from `HTTP_PROXY`.
 //
 func (c *Client) SetProxy(proxyURL string) *Client {
 	if pURL, err := url.Parse(proxyURL); err == nil {
-		c.transport.Proxy = http.ProxyURL(pURL)
+		c.proxyURL = pURL
 	} else {
 		c.Log.Printf("ERROR [%v]", err)
+		c.proxyURL = nil
 	}
 
 	return c
@@ -499,7 +501,7 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 //		resty.RemoveProxy()
 //
 func (c *Client) RemoveProxy() *Client {
-	c.transport.Proxy = nil
+	c.proxyURL = nil
 	return c
 }
 
@@ -556,6 +558,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if req.proxyURL != nil {
+		c.transport.Proxy = http.ProxyURL(req.proxyURL)
+	} else if c.proxyURL != nil {
+		c.transport.Proxy = http.ProxyURL(c.proxyURL)
+	} else {
+		c.transport.Proxy = nil
 	}
 
 	req.Time = time.Now()
@@ -643,6 +653,7 @@ type Request struct {
 	setContentLength bool
 	isSaveResponse   bool
 	outputFile       string
+	proxyURL         *url.URL
 }
 
 // SetHeader method is to set a single header field and its value in the current request.
@@ -901,6 +912,24 @@ func (r *Request) SetOutput(file string) *Request {
 	return r
 }
 
+// SetProxy method sets the Proxy URL for current Request. It does not affect client level
+// proxy settings. Request level proxy settings takes higher priority, even though client
+// level proxy settings exists.
+// 		resty.R().
+//			SetProxy("http://proxyserver:8888").
+//			Get("http://httpbin.org/get")
+//
+func (r *Request) SetProxy(proxyURL string) *Request {
+	if pURL, err := url.Parse(proxyURL); err == nil {
+		r.proxyURL = pURL
+	} else {
+		r.client.Log.Printf("ERROR [%v]", err)
+		r.proxyURL = nil
+	}
+
+	return r
+}
+
 //
 // HTTP verb method starts here
 //
@@ -961,6 +990,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 // Response is an object represents executed request and its values.
 type Response struct {
+	// Note: `Response.Body` might be nil, if `Request.SetOutput` is used.
 	Body        []byte
 	ReceivedAt  time.Time
 	Request     *Request
