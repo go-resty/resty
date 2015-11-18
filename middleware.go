@@ -245,8 +245,9 @@ func responseLogger(c *Client, res *Response) error {
 		c.Log.Println("")
 		c.disableLogPrefix()
 		c.Log.Println("---------------------- RESPONSE LOG -----------------------")
-		c.Log.Printf("STATUS : %s", res.Status())
-		c.Log.Printf("TIME   : %v", res.Time())
+		c.Log.Printf("STATUS 		: %s", res.Status())
+		c.Log.Printf("RECEIVED AT	: %v", res.ReceivedAt())
+		c.Log.Printf("RESPONSE TIME	: %v", res.Time())
 		c.Log.Println("HEADERS:")
 		for h, v := range res.Header() {
 			c.Log.Printf("%30s: %v", h, strings.Join(v, ", "))
@@ -270,7 +271,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 		// Considered as Result
 		if res.StatusCode() > 199 && res.StatusCode() < 300 {
 			if res.Request.Result != nil {
-				err = Unmarshal(ct, res.Body, res.Request.Result)
+				err = Unmarshal(ct, res.body, res.Request.Result)
 			}
 		}
 
@@ -282,7 +283,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 			}
 
 			if res.Request.Error != nil {
-				err = Unmarshal(ct, res.Body, res.Request.Error)
+				err = Unmarshal(ct, res.body, res.Request.Error)
 			}
 		}
 	}

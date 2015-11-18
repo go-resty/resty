@@ -694,7 +694,7 @@ func TestOnAfterMiddleware(t *testing.T) {
 	c := dc()
 	c.OnAfterResponse(func(c *Client, res *Response) error {
 		t.Logf("Request sent at: %v", res.Request.Time)
-		t.Logf("Response Recevied at: %v", res.ReceivedAt)
+		t.Logf("Response Recevied at: %v", res.ReceivedAt())
 
 		return nil
 	})
@@ -805,7 +805,7 @@ func TestPatchMethod(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	resp.Body = nil
+	resp.body = nil
 	assertEqual(t, "", resp.String())
 }
 
@@ -1003,6 +1003,22 @@ func TestOutputFileWithBaseDirError(t *testing.T) {
 		SetOutputDirectory(getTestDataPath() + `/go-resty\0`)
 
 	_ = c
+}
+
+func TestOutputPathDirNotExists(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	DefaultClient = dc()
+	SetRedirectPolicy(FlexibleRedirectPolicy(10))
+	SetOutputDirectory(getTestDataPath() + "/not-exists-dir")
+
+	resp, err := R().
+		SetOutput("test-img-success.png").
+		Get(ts.URL + "/my-image.png")
+
+	assertError(t, err)
+	assertEqual(t, true, resp.Size() != 0)
 }
 
 func TestOutputFileAbsPath(t *testing.T) {

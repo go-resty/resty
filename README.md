@@ -71,7 +71,7 @@ fmt.Printf("\nError: %v", err)
 fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
 fmt.Printf("\nResponse Status: %v", resp.Status())
 fmt.Printf("\nResponse Time: %v", resp.Time())
-fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt)
+fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
 fmt.Printf("\nResponse Body: %v", resp)
 // more...
 

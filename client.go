@@ -577,18 +577,18 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	response := &Response{
 		Request:     req,
-		ReceivedAt:  time.Now(),
 		RawResponse: resp,
+		receivedAt:  time.Now(),
 	}
 
 	if !req.isSaveResponse {
 		defer resp.Body.Close()
-		response.Body, err = ioutil.ReadAll(resp.Body)
+		response.body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, err
 		}
 
-		response.size = int64(len(response.Body))
+		response.size = int64(len(response.body))
 	}
 
 	// Apply Response middleware
@@ -990,13 +990,18 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 // Response is an object represents executed request and its values.
 type Response struct {
-	// Note: `Response.Body` might be nil, if `Request.SetOutput` is used.
-	Body        []byte
-	ReceivedAt  time.Time
 	Request     *Request
 	RawResponse *http.Response
 
-	size int64
+	body       []byte
+	size       int64
+	receivedAt time.Time
+}
+
+// Body method returns HTTP response as []byte array for the executed request.
+// Note: `Response.Body` might be nil, if `Request.SetOutput` is used.
+func (r *Response) Body() []byte {
+	return r.body
 }
 
 // Status method returns the HTTP status string for the executed request.
@@ -1033,18 +1038,23 @@ func (r *Response) Cookies() []*http.Cookie {
 
 // String method returns the body of the server response as String.
 func (r *Response) String() string {
-	if r.Body == nil {
+	if r.body == nil {
 		return ""
 	}
 
-	return strings.TrimSpace(string(r.Body))
+	return strings.TrimSpace(string(r.body))
 }
 
 // Time method returns the time of HTTP response time that from request we sent and received a request.
 // See `response.ReceivedAt` to know when client recevied response and see `response.Request.Time` to know
 // when client sent a request.
 func (r *Response) Time() time.Duration {
-	return r.ReceivedAt.Sub(r.Request.Time)
+	return r.receivedAt.Sub(r.Request.Time)
+}
+
+// ReceivedAt method returns when response got recevied from server for the request.
+func (r *Response) ReceivedAt() time.Time {
+	return r.receivedAt
 }
 
 // Size method returns the HTTP response size in bytes. Ya, you can relay on HTTP `Content-Length` header,
@@ -1165,11 +1175,11 @@ func getRequestBodyString(r *Request) (body string) {
 
 func getResponseBodyString(res *Response) string {
 	bodyStr := "***** NO CONTENT *****"
-	if res.Body != nil {
+	if res.body != nil {
 		ct := res.Header().Get(hdrContentTypeKey)
 		if IsJSONType(ct) {
 			var out bytes.Buffer
-			if err := json.Indent(&out, res.Body, "", "   "); err == nil {
+			if err := json.Indent(&out, res.body, "", "   "); err == nil {
 				bodyStr = string(out.Bytes())
 			}
 		} else {
