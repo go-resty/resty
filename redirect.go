@@ -45,6 +45,9 @@ func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 		if len(via) >= noOfRedirect {
 			return fmt.Errorf("Stopped after %d redirects", noOfRedirect)
 		}
+
+		checkHostAndAddHeaders(req, via[0])
+
 		return nil
 	})
 }
@@ -59,20 +62,40 @@ func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 	}
 
 	fn := RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
-		hostname := ""
-		if strings.Index(req.URL.Host, ":") > 0 {
-			host, _, _ := net.SplitHostPort(req.URL.Host)
-			hostname = strings.ToLower(host)
-		} else {
-			hostname = strings.ToLower(req.URL.Host)
-		}
-
-		if ok := hosts[hostname]; !ok {
+		if ok := hosts[getHostname(req.URL.Host)]; !ok {
 			return errors.New("Redirect is not allowed as per DomainCheckRedirectPolicy")
 		}
+
+		checkHostAndAddHeaders(req, via[0])
 
 		return nil
 	})
 
 	return fn
+}
+
+func getHostname(host string) (hostname string) {
+	if strings.Index(host, ":") > 0 {
+		host, _, _ := net.SplitHostPort(host)
+		hostname = strings.ToLower(host)
+	} else {
+		hostname = strings.ToLower(host)
+	}
+	return
+}
+
+// By default Golang will not redirect request headers
+// after go throughing various discussion commments from thread
+// https://github.com/golang/go/issues/4800
+// go-resty will add all the headers during a redirect for the same host
+func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {
+	curHostname := getHostname(cur.URL.Host)
+	preHostname := getHostname(pre.URL.Host)
+	if strings.EqualFold(curHostname, preHostname) {
+		for key, val := range pre.Header {
+			cur.Header[key] = val
+		}
+	} else { // only library User-Agent header is added
+		cur.Header.Set(hdrUserAgentKey, fmt.Sprintf(hdrUserAgentValue, Version))
+	}
 }
