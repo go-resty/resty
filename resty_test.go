@@ -857,7 +857,7 @@ func TestClientProxy(t *testing.T) {
 	c.SetProxy("http://sampleproxy:8888")
 
 	resp, err := c.R().Get(ts.URL)
-	assertEqual(t, true, resp == nil)
+	assertEqual(t, true, resp != nil)
 	assertEqual(t, true, err != nil)
 }
 
@@ -871,7 +871,7 @@ func TestPerRequestProxy(t *testing.T) {
 	resp, err := c.R().
 		SetProxy("http://sampleproxy:8888").
 		Get(ts.URL)
-	assertEqual(t, true, resp == nil)
+	assertEqual(t, true, resp != nil)
 	assertEqual(t, true, err != nil)
 }
 
@@ -886,7 +886,7 @@ func TestClientProxyOverride(t *testing.T) {
 	resp, err := c.R().
 		SetProxy("http://requestproxy:8888").
 		Get(ts.URL)
-	assertEqual(t, true, resp == nil)
+	assertEqual(t, true, resp != nil)
 	assertEqual(t, true, err != nil)
 }
 

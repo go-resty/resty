@@ -571,9 +571,6 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	req.Time = time.Now()
 	c.httpClient.Transport = c.transport
 	resp, err := c.httpClient.Do(req.RawRequest)
-	if err != nil {
-		return nil, err
-	}
 
 	response := &Response{
 		Request:     req,
@@ -581,11 +578,15 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		receivedAt:  time.Now(),
 	}
 
+	if err != nil {
+		return response, err
+	}
+
 	if !req.isSaveResponse {
 		defer resp.Body.Close()
 		response.body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, err
+			return response, err
 		}
 
 		response.size = int64(len(response.body))
