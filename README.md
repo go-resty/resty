@@ -2,14 +2,16 @@
 
 Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notable features - robust request body input, auto marshal & unmarshal, request and response middlewares, custom & extensible redirect policy (multiple policies can be applied), etc.
 
+***Latest v0.5 released on Jan 03, 2016.***
+
 #### Features
 * Get, Post, Put, Delete, Head, Patch and Options
 * Simple methods/chainable methods for settings and request
 * Request Body can be `string`, `[]byte`, `struct` and `map`
   * Auto detect `Content-Type`
 * Response object gives you more possibility
-  * Access as `[]byte` array - `response.Body` OR Access as `string` - `response.String()`
-  * Know your `response.Time()` and when we `response.ReceivedAt`
+  * Access as `[]byte` array - `response.Body()` OR Access as `string` - `response.String()`
+  * Know your `response.Time()` and when we `response.ReceivedAt()`
   * Have a look [godoc](https://godoc.org/github.com/go-resty/resty#Response)
 * Automatic marshal and unmarshal for `JSON` and `XML` content type
   * Default is `JSON`, if you supply `struct/map` without header `Content-Type`
@@ -44,7 +46,7 @@ resty tested with Go v1.2 and above.
   * etc.
 
 ## Installation
-#### Stable
+#### Stable - Versioning
 ```sh
 go get gopkg.in/resty.v0
 ```
@@ -72,7 +74,7 @@ fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
 fmt.Printf("\nResponse Status: %v", resp.Status())
 fmt.Printf("\nResponse Time: %v", resp.Time())
 fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-fmt.Printf("\nResponse Body: %v", resp)
+fmt.Printf("\nResponse Body: %v", resp)     // or string(resp.Body())
 // more...
 
 /* Output
@@ -384,9 +386,11 @@ if err != nil {
 resty.SetCertificates(cert1, cert2, cert3)
 ```
 
-#### Proxy Settings
+#### Proxy Settings - Client as well as at Request Level
 Default `Go` supports Proxy via environment variable `HTTP_PROXY`. Resty provides support via `SetProxy` & `RemoveProxy`.
 Choose as per your need.
+
+**Client Level Proxy** settings applied to all the request
 ```go
 // Setting a Proxy URL and Port
 resty.SetProxy("http://proxyserver:8888")
@@ -394,14 +398,21 @@ resty.SetProxy("http://proxyserver:8888")
 // Want to remove proxy setting
 resty.RemoveProxy()
 ```
+**Request Level Proxy** settings, gives control to override at individal request level
+```go
+// Set proxy for current request
+resp, err := c.R().
+    SetProxy("http://sampleproxy:8888").
+    Get("http://httpbin.org/get")
+```
 
 #### Choose REST or HTTP mode
 ```go
+// REST mode. This is Default.
+resty.SetRESTMode()
+
 // HTTP mode
 resty.SetHTTPMode() 
-
-// REST mode. Default one
-resty.SetRESTMode()
 ```
 
 #### Wanna Multiple Clients
