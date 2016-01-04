@@ -66,8 +66,6 @@ func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 			return errors.New("Redirect is not allowed as per DomainCheckRedirectPolicy")
 		}
 
-		checkHostAndAddHeaders(req, via[0])
-
 		return nil
 	})
 
