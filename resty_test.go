@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -178,7 +179,8 @@ func TestPostJSONStructSuccess(t *testing.T) {
 
 	user := &User{Username: "testuser", Password: "testpass"}
 
-	resp, err := dclr().
+	c := dc()
+	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, jsonContentType).
 		SetBody(user).
 		SetResult(&AuthSuccess{}).
@@ -196,7 +198,10 @@ func TestPostJSONStructInvalidLogin(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	c := dc()
+	c.SetDebug(false)
+
+	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, jsonContentType).
 		SetBody(User{Username: "testuser", Password: "testpass1"}).
 		SetError(AuthError{}).
@@ -215,7 +220,10 @@ func TestPostJSONMapSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	c := dc()
+	c.SetDebug(false)
+
+	resp, err := c.R().
 		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
 		SetResult(AuthSuccess{}).
 		Post(ts.URL + "/login")
@@ -249,7 +257,10 @@ func TestPostXMLStringSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	c := dc()
+	c.SetDebug(false)
+
+	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username><Password>testpass</Password></User>`).
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
@@ -281,7 +292,10 @@ func TestPostXMLBytesSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	c := dc()
+	c.SetDebug(false)
+
+	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody([]byte(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username><Password>testpass</Password></User>`)).
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
@@ -524,8 +538,34 @@ func TestMultiPartUploadFiles(t *testing.T) {
 		SetFiles(map[string]string{"profile_img": basePath + "/test-img.png", "notes": basePath + "/text-file.txt"}).
 		Post(ts.URL + "/upload")
 
+	responseStr := resp.String()
+
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
+	assertEqual(t, true, strings.Contains(responseStr, "text-file.txt"))
+}
+
+func TestMultiPartIoReaderFiles(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+
+	basePath := getTestDataPath()
+	profileImgBytes, _ := ioutil.ReadFile(basePath + "/test-img.png")
+	notesBytes, _ := ioutil.ReadFile(basePath + "/text-file.txt")
+
+	resp, err := dclr().
+		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
+		SetFileReader("profile_img", "test-img.png", bytes.NewReader(profileImgBytes)).
+		SetFileReader("notes", "text-file.txt", bytes.NewReader(notesBytes)).
+		Post(ts.URL + "/upload")
+
+	responseStr := resp.String()
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
+	assertEqual(t, true, strings.Contains(responseStr, "text-file.txt"))
 }
 
 func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {

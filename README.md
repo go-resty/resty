@@ -21,10 +21,10 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notabl
 * Set request `ContentLength` value for all request or particular request
 * Choose between HTTP and RESTful mode. Default is RESTful
   * `HTTP` - default upto 10 redirects and no automatic response unmarshal
-  * `RESTful` - default no redirects and automatic response unmarshal for `JSON` & `XML`
+  * `REST` - defaults to no redirects and automatic response marshal/unmarshal for `JSON` & `XML`
 * Custom [Root Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetRootCertificate) and Client [Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetCertificates)
-* Save HTTP response into File, similar to `curl -o` flag. More info [SetOutputDirectory](https://godoc.org/github.com/go-resty/resty#Client.SetOutputDirectory) & [SetOutput](https://godoc.org/github.com/go-resty/resty#Request.SetOutput).
-* Client settings like `Timeout`, `RedirectPolicy`, `Proxy` and `TLSClientConfig`
+* Download/Save HTTP response into File, similar to `curl -o` flag. More info [SetOutputDirectory](https://godoc.org/github.com/go-resty/resty#Client.SetOutputDirectory) & [SetOutput](https://godoc.org/github.com/go-resty/resty#Request.SetOutput).
+* Client settings like `Timeout`, `RedirectPolicy`, `Proxy`, `TLSClientConfig`, etc.
 * Client API design 
   * Have client level settings & options and also override at Request level if you want to
   * [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middleware
@@ -74,7 +74,7 @@ fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
 fmt.Printf("\nResponse Status: %v", resp.Status())
 fmt.Printf("\nResponse Time: %v", resp.Time())
 fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-fmt.Printf("\nResponse Body: %v", resp)     // or string(resp.Body())
+fmt.Printf("\nResponse Body: %v", resp)     // or resp.String() or string(resp.Body())
 // more...
 
 /* Output
@@ -234,6 +234,22 @@ resp, err := resty.R().
 ```
 
 ### Multipart File(s) upload
+#### Using io.Reader
+```go
+profileImgBytes, _ := ioutil.ReadFile("/Users/jeeva/test-img.png")
+notesBytes, _ := ioutil.ReadFile("/Users/jeeva/text-file.txt")
+
+resp, err := dclr().
+      SetFileReader("profile_img", "test-img.png", bytes.NewReader(profileImgBytes)).
+      SetFileReader("notes", "text-file.txt", bytes.NewReader(notesBytes)).
+      SetFormData(map[string]string{
+          "first_name": "Jeevanandam", 
+          "last_name": "M",
+      }).
+      Post(t"http://myapp.com/upload")
+```
+
+#### Using File directly from Path
 ```go
 // Single file scenario
 resp, err := resty.R().

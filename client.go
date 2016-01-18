@@ -363,7 +363,7 @@ func (c *Client) SetContentLength(l bool) *Client {
 //		resty.SetError(Error{})
 //
 func (c *Client) SetError(err interface{}) *Client {
-	c.Error = getType(err)
+	c.Error = typeOf(err)
 	return c
 }
 
@@ -655,6 +655,7 @@ type Request struct {
 	isSaveResponse   bool
 	outputFile       string
 	proxyURL         *url.URL
+	multipartFiles   []*File
 }
 
 // SetHeader method is to set a single header field and its value in the current request.
@@ -836,8 +837,8 @@ func (r *Request) SetError(err interface{}) *Request {
 //		SetFile("my_file", "/Users/jeeva/Gas Bill - Sep.pdf")
 //
 func (r *Request) SetFile(param, filePath string) *Request {
-	r.FormData.Set("@"+param, filePath)
 	r.isMultiPart = true
+	r.FormData.Set("@"+param, filePath)
 
 	return r
 }
@@ -851,10 +852,30 @@ func (r *Request) SetFile(param, filePath string) *Request {
 //			})
 //
 func (r *Request) SetFiles(files map[string]string) *Request {
+	r.isMultiPart = true
+
 	for f, fp := range files {
 		r.FormData.Set("@"+f, fp)
 	}
+
+	return r
+}
+
+// SetFileReader method is to set single file using io.Reader for multipart upload.
+//	resty.R().
+//		SetFileReader("profile_img", "my-profile-img.png", bytes.NewReader(profileImgBytes)).
+//		SetFileReader("notes", "user-notes.txt", bytes.NewReader(notesBytes))
+//
+func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Request {
 	r.isMultiPart = true
+
+	file := File{
+		Name:      fileName,
+		ParamName: param,
+		Reader:    reader,
+	}
+	r.multipartFiles = append(r.multipartFiles, &file)
+	r.client.Log.Println("Added:", file.String())
 
 	return r
 }
@@ -1065,6 +1086,18 @@ func (r *Response) Size() int64 {
 	return r.size
 }
 
+// File represent file information for multipart request
+type File struct {
+	Name      string
+	ParamName string
+	io.Reader
+}
+
+// String returns string value of current file details
+func (f *File) String() string {
+	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
+}
+
 //
 // Helper methods
 //
@@ -1077,7 +1110,7 @@ func IsStringEmpty(str string) bool {
 // DetectContentType method is used to figure out `Request.Body` content type for request header
 func DetectContentType(body interface{}) string {
 	contentType := plainTextType
-	switch getBaseKind(body) {
+	switch kindOf(body) {
 	case reflect.Struct, reflect.Map:
 		contentType = jsonContentType
 	case reflect.String:
@@ -1130,6 +1163,16 @@ func addFile(w *multipart.Writer, fieldName, path string) error {
 	return err
 }
 
+func addFileReader(w *multipart.Writer, f *File) error {
+	part, err := w.CreateFormFile(f.ParamName, f.Name)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, f.Reader)
+
+	return err
+}
+
 func getRequestBodyString(r *Request) (body string) {
 	body = "***** NO CONTENT *****"
 	if isPayloadSupported(r.Method) {
@@ -1141,10 +1184,11 @@ func getRequestBodyString(r *Request) (body string) {
 
 		// request body data
 		if r.Body != nil {
-			contentType := r.Header.Get(hdrContentTypeKey)
 			var prtBodyBytes []byte
 			var err error
-			kind := reflect.ValueOf(r.Body).Kind()
+
+			contentType := r.Header.Get(hdrContentTypeKey)
+			kind := kindOf(r.Body)
 			if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
 				prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
 			} else if IsXMLType(contentType) && (kind == reflect.Struct) {
@@ -1195,7 +1239,7 @@ func getResponseBodyString(res *Response) string {
 }
 
 func getPointer(v interface{}) interface{} {
-	vv := reflect.ValueOf(v)
+	vv := valueOf(v)
 	if vv.Kind() == reflect.Ptr {
 		return v
 	}
@@ -1206,16 +1250,20 @@ func isPayloadSupported(m string) bool {
 	return (m == POST || m == PUT || m == DELETE || m == PATCH)
 }
 
-func getBaseKind(v interface{}) reflect.Kind {
-	return getType(v).Kind()
+func typeOf(i interface{}) reflect.Type {
+	return indirect(valueOf(i)).Type()
 }
 
-func getType(v interface{}) reflect.Type {
-	vv := reflect.ValueOf(v)
-	if vv.Kind() == reflect.Ptr {
-		return vv.Elem().Type()
-	}
-	return vv.Type()
+func valueOf(i interface{}) reflect.Value {
+	return reflect.ValueOf(i)
+}
+
+func indirect(v reflect.Value) reflect.Value {
+	return reflect.Indirect(v)
+}
+
+func kindOf(v interface{}) reflect.Kind {
+	return typeOf(v).Kind()
 }
 
 func createDirectory(dir string) (err error) {

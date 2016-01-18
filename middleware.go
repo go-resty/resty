@@ -105,6 +105,16 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 				}
 			}
 
+			// #21 - adding io.Reader support
+			if len(r.multipartFiles) > 0 {
+				for _, f := range r.multipartFiles {
+					err = addFileReader(w, f)
+					if err != nil {
+						return
+					}
+				}
+			}
+
 			r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
 			err = w.Close()
 
@@ -139,7 +149,7 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 			}
 
 			var bodyBytes []byte
-			kind := getBaseKind(r.Body)
+			kind := kindOf(r.Body)
 			if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
 				bodyBytes, err = json.Marshal(r.Body)
 			} else if IsXMLType(contentType) && (kind == reflect.Struct) {
