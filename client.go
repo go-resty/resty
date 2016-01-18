@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -727,6 +726,23 @@ func (r *Response) Size() int64 {
 	return r.size
 }
 
+func (r *Response) fmtBodyString() string {
+	bodyStr := "***** NO CONTENT *****"
+	if r.body != nil {
+		ct := r.Header().Get(hdrContentTypeKey)
+		if IsJSONType(ct) {
+			var out bytes.Buffer
+			if err := json.Indent(&out, r.body, "", "   "); err == nil {
+				bodyStr = string(out.Bytes())
+			}
+		} else {
+			bodyStr = r.String()
+		}
+	}
+
+	return bodyStr
+}
+
 //
 // File
 //
@@ -816,71 +832,6 @@ func addFileReader(w *multipart.Writer, f *File) error {
 	_, err = io.Copy(part, f.Reader)
 
 	return err
-}
-
-func getRequestBodyString(r *Request) (body string) {
-	body = "***** NO CONTENT *****"
-	if isPayloadSupported(r.Method) {
-		// multipart/form-data OR form data
-		if r.isMultiPart || r.isFormData {
-			body = string(r.bodyBuf.Bytes())
-			return
-		}
-
-		// request body data
-		if r.Body != nil {
-			var prtBodyBytes []byte
-			var err error
-
-			contentType := r.Header.Get(hdrContentTypeKey)
-			kind := kindOf(r.Body)
-			if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
-				prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
-			} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-				prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
-			} else if b, ok := r.Body.(string); ok {
-				if IsJSONType(contentType) {
-					bodyBytes := []byte(b)
-					var out bytes.Buffer
-					if err = json.Indent(&out, bodyBytes, "", "   "); err == nil {
-						prtBodyBytes = out.Bytes()
-					}
-				} else {
-					body = b
-					return
-				}
-			} else if b, ok := r.Body.([]byte); ok {
-				body = base64.StdEncoding.EncodeToString(b)
-			}
-
-			if prtBodyBytes != nil {
-				body = string(prtBodyBytes)
-			}
-		}
-
-	}
-
-	return
-}
-
-func getResponseBodyString(res *Response) string {
-	bodyStr := "***** NO CONTENT *****"
-	if res.body != nil {
-		ct := res.Header().Get(hdrContentTypeKey)
-		if IsJSONType(ct) {
-			var out bytes.Buffer
-			if err := json.Indent(&out, res.body, "", "   "); err == nil {
-				bodyStr = string(out.Bytes())
-			}
-		} else {
-			str := res.String()
-			if !IsStringEmpty(str) {
-				bodyStr = str
-			}
-		}
-	}
-
-	return bodyStr
 }
 
 func getPointer(v interface{}) interface{} {

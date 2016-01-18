@@ -1,4 +1,4 @@
-// Copyright (c) 2015 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -182,7 +182,8 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 	}
 
 CL:
-	if c.setContentLength || r.setContentLength { // by default resty won't set content length
+	// by default resty won't set content length, you can if you want to :)
+	if c.setContentLength || r.setContentLength {
 		r.Header.Set(hdrContentLengthKey, fmt.Sprintf("%d", r.bodyBuf.Len()))
 	}
 
@@ -234,7 +235,7 @@ func addCredentials(c *Client, r *Request) error {
 func requestLogger(c *Client, r *Request) error {
 	if c.Debug {
 		rr := r.RawRequest
-		c.Log.Println("")
+		c.Log.Println()
 		c.disableLogPrefix()
 		c.Log.Println("---------------------- REQUEST LOG -----------------------")
 		c.Log.Printf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto)
@@ -243,7 +244,7 @@ func requestLogger(c *Client, r *Request) error {
 		for h, v := range rr.Header {
 			c.Log.Printf("%25s: %v", h, strings.Join(v, ", "))
 		}
-		c.Log.Printf("BODY   :\n%v", getRequestBodyString(r))
+		c.Log.Printf("BODY   :\n%v", r.fmtBodyString())
 		c.Log.Println("----------------------------------------------------------")
 		c.enableLogPrefix()
 	}
@@ -257,7 +258,7 @@ func requestLogger(c *Client, r *Request) error {
 
 func responseLogger(c *Client, res *Response) error {
 	if c.Debug {
-		c.Log.Println("")
+		c.Log.Println()
 		c.disableLogPrefix()
 		c.Log.Println("---------------------- RESPONSE LOG -----------------------")
 		c.Log.Printf("STATUS 		: %s", res.Status())
@@ -270,7 +271,7 @@ func responseLogger(c *Client, res *Response) error {
 		if res.Request.isSaveResponse {
 			c.Log.Printf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****")
 		} else {
-			c.Log.Printf("BODY   :\n%v", getResponseBodyString(res))
+			c.Log.Printf("BODY   :\n%v", res.fmtBodyString())
 		}
 		c.Log.Println("----------------------------------------------------------")
 		c.enableLogPrefix()
