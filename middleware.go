@@ -150,7 +150,10 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 
 			var bodyBytes []byte
 			kind := kindOf(r.Body)
-			if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
+			if reader, ok := r.Body.(io.Reader); ok {
+				r.bodyBuf = &bytes.Buffer{}
+				r.bodyBuf.ReadFrom(reader)
+			} else if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
 				bodyBytes, err = json.Marshal(r.Body)
 			} else if IsXMLType(contentType) && (kind == reflect.Struct) {
 				bodyBytes, err = xml.Marshal(r.Body)
@@ -160,15 +163,17 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 				bodyBytes = b
 			}
 
-			if err != nil {
-				return
-			} else if bodyBytes == nil {
+			if bodyBytes == nil && r.bodyBuf == nil {
 				err = errors.New("Unsupported 'Body' type/value")
+			}
+
+			// if any errors during body bytes handling, return it
+			if err != nil {
 				return
 			}
 
 			// []byte into Buffer
-			if bodyBytes != nil {
+			if bodyBytes != nil && r.bodyBuf == nil {
 				r.bodyBuf = bytes.NewBuffer(bodyBytes)
 			}
 		}

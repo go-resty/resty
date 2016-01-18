@@ -173,6 +173,25 @@ func TestPostJSONBytesSuccess(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestPostJSONBytesIoReader(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetHeader(hdrContentTypeKey, jsonContentType)
+
+	bodyBytes := []byte(`{"username":"testuser", "password":"testpass"}`)
+
+	resp, err := c.R().
+		SetBody(bytes.NewReader(bodyBytes)).
+		Post(ts.URL + "/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	logResponse(t, resp)
+}
+
 func TestPostJSONStructSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()

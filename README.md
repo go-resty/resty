@@ -7,7 +7,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notabl
 #### Features
 * Get, Post, Put, Delete, Head, Patch and Options
 * Simple methods/chainable methods for settings and request
-* Request Body can be `string`, `[]byte`, `struct` and `map`
+* Request Body can be `string`, `[]byte`, `struct`, `map` and `io.Reader` too
   * Auto detect `Content-Type`
 * Response object gives you more possibility
   * Access as `[]byte` array - `response.Body()` OR Access as `string` - `response.String()`
@@ -151,8 +151,7 @@ resp, err := resty.R().
       Post("https://myapp.com/login")
       
 // POST of raw bytes for file upload. For example: upload file to Dropbox
-file, _ := os.Open("/Users/jeeva/mydocument.pdf")
-fileBytes, _ := ioutil.ReadAll(file)
+fileBytes, _ := ioutil.ReadFile("/Users/jeeva/mydocument.pdf")
 
 // See we are not setting content-type header, since go-resty automatically detects Content-Type for you
 resp, err := resty.R().
