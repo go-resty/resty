@@ -24,7 +24,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notabl
   * `REST` - defaults to no redirects and automatic response marshal/unmarshal for `JSON` & `XML`
 * Custom [Root Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetRootCertificate) and Client [Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetCertificates)
 * Download/Save HTTP response into File, similar to `curl -o` flag. More info [SetOutputDirectory](https://godoc.org/github.com/go-resty/resty#Client.SetOutputDirectory) & [SetOutput](https://godoc.org/github.com/go-resty/resty#Request.SetOutput).
-* Client settings like `Timeout`, `RedirectPolicy`, `Proxy`, `TLSClientConfig`, etc.
+* Client settings like `Timeout`, `RedirectPolicy`, `Proxy`, `TLSClientConfig`, `Transport`, etc.
 * Client API design 
   * Have client level settings & options and also override at Request level if you want to
   * [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middleware
@@ -34,24 +34,26 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notabl
   * Gzip - I'm not doing anything here. Go does it automatically
 * Well tested client library
 
-resty tested with Go v1.2 and above.
+resty tested with Go `v1.2` and above.
 
 #### Included Batteries
-  * Redirect Policies
+  * Redirect Policies - see [how to use in action](#redirect-policy)
     * NoRedirectPolicy
     * FlexibleRedirectPolicy
     * DomainCheckRedirectPolicy
     * etc. [more info](redirect.go)
-  * Persist Cookies into file in JSON format from resty client (upcoming)
-  * etc.
+  * etc (upcoming - throw your idea's via [issues](https://github.com/go-resty/resty/issues)). 
 
 ## Installation
-#### Stable - Versioning
+#### Stable - Version
+Please refer section [Versioning](#versioning) for detailed info.
 ```sh
+# install the library
 go get gopkg.in/resty.v0
 ```
 #### Latest
 ```sh
+# install the latest & greatest library
 go get github.com/go-resty/resty
 ```
 
@@ -60,7 +62,9 @@ Following samples will assist you to become as much comfortable as possible with
 
 Import resty into your code and refer it as `resty`.
 ```go
-import "gopkg.in/resty.v0"
+import (
+  "gopkg.in/resty.v0"
+)
 ```
 
 #### Simple GET
@@ -519,7 +523,10 @@ resty.SetError(&Error{})    // or resty.SetError(Error{})
 ```
 
 ### Versioning
-* resty releases versions according to [Semantic Versioning](http://semver.org)
+resty releases versions according to [Semantic Versioning](http://semver.org)
+
+`gopkg.in/resty.vX` points to appropriate tag versions; `X` denotes version number and its a stable release. It is recommended to use version, for eg. `gopkg.in/resty.v0`. Development takes place at the master branch. Althought the code in master should always compile and test successfully, it might break API's. We aim to maintain backwards compatibility, but API's and behaviour might be changed to fix a bug.
+
  
 ### Contributing
 Welcome! If you find any improvement or issue you want to fix. Feel free to send a pull request, I like pull requests that include tests case for fix/enhancement. Did my best to bring pretty good code coverage and feel free to write tests.
