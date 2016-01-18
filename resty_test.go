@@ -1,4 +1,4 @@
-// Copyright (c) 2015 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -16,6 +16,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"reflect"
 	"strconv"
@@ -1090,6 +1091,22 @@ func TestOutputFileAbsPath(t *testing.T) {
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
+}
+
+func TestSetTransport(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+	DefaultClient := dc()
+
+	transport := &http.Transport{
+		// somthing like Proxying to httptest.Server, etc...
+		Proxy: func(req *http.Request) (*url.URL, error) {
+			return url.Parse(ts.URL)
+		},
+	}
+	SetTransport(transport)
+
+	assertEqual(t, true, DefaultClient.transport != nil)
 }
 
 func TestClientOptions(t *testing.T) {

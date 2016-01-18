@@ -1,4 +1,4 @@
-// Copyright (c) 2015 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -187,6 +187,7 @@ func RemoveProxy() *Client {
 }
 
 // SetCertificates method helps to set client certificates into resty conveniently.
+// See `Client.SetCertificates` for more information and example.
 func SetCertificates(certs ...tls.Certificate) *Client {
 	return DefaultClient.SetCertificates(certs...)
 }
@@ -200,6 +201,12 @@ func SetRootCertificate(pemFilePath string) *Client {
 // SetOutputDirectory method sets output directory. See `Client.SetOutputDirectory` for more information.
 func SetOutputDirectory(dirPath string) *Client {
 	return DefaultClient.SetOutputDirectory(dirPath)
+}
+
+// SetTransport method sets custom *http.Transport in the resty client.
+// See `Client.SetTransport` for more information.
+func SetTransport(transport *http.Transport) *Client {
+	return DefaultClient.SetTransport(transport)
 }
 
 func init() {
