@@ -259,13 +259,11 @@ func (r *Request) SetFiles(files map[string]string) *Request {
 func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Request {
 	r.isMultiPart = true
 
-	file := File{
+	r.multipartFiles = append(r.multipartFiles, &File{
 		Name:      fileName,
 		ParamName: param,
 		Reader:    reader,
-	}
-	r.multipartFiles = append(r.multipartFiles, &file)
-	r.client.Log.Printf("INFO Added [%v]", file.String())
+	})
 
 	return r
 }
