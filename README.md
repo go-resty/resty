@@ -1,12 +1,12 @@
 # resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty)  [![GoCover](http://gocover.io/_badge/github.com/go-resty/resty)](http://gocover.io/github.com/go-resty/resty)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty)  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notable features - robust request body input, auto marshal & unmarshal, request and response middlewares, custom & extensible redirect policy (multiple policies can be applied), etc.
+Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty.
 
-***Latest v0.5 released on Jan 03, 2016.***
+***v0.5 released and tagged on Jan 03, 2016.***
 
 #### Features
-* Get, Post, Put, Delete, Head, Patch and Options
-* Simple methods/chainable methods for settings and request
+* GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS
+* Simple and chainable methods for settings and request
 * Request Body can be `string`, `[]byte`, `struct`, `map` and `io.Reader` too
   * Auto detect `Content-Type`
 * Response object gives you more possibility
@@ -15,19 +15,19 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. Provides notabl
   * Have a look [godoc](https://godoc.org/github.com/go-resty/resty#Response)
 * Automatic marshal and unmarshal for `JSON` and `XML` content type
   * Default is `JSON`, if you supply `struct/map` without header `Content-Type`
-* Easy to upload single or multiple files via `multipart/form-data`
-* Cookies for your request and CookieJar support
-* Authorization option of `Basic` and `Bearer` token
+* Easy to upload one or more file(s) via `multipart/form-data`
+* Client [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middlewares
+* Authorization option of `BasicAuth` and `Bearer` token
 * Set request `ContentLength` value for all request or particular request
-* Choose between HTTP and RESTful mode. Default is RESTful
+* Choose between HTTP and REST mode. Default is `REST`
   * `HTTP` - default upto 10 redirects and no automatic response unmarshal
   * `REST` - defaults to no redirects and automatic response marshal/unmarshal for `JSON` & `XML`
 * Custom [Root Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetRootCertificate) and Client [Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetCertificates)
-* Download/Save HTTP response into File, similar to `curl -o` flag. More info [SetOutputDirectory](https://godoc.org/github.com/go-resty/resty#Client.SetOutputDirectory) & [SetOutput](https://godoc.org/github.com/go-resty/resty#Request.SetOutput).
+* Download/Save HTTP response directly into File, like `curl -o` flag. See [SetOutputDirectory](https://godoc.org/github.com/go-resty/resty#Client.SetOutputDirectory) & [SetOutput](https://godoc.org/github.com/go-resty/resty#Request.SetOutput).
+* Cookies for your request and CookieJar support
 * Client settings like `Timeout`, `RedirectPolicy`, `Proxy`, `TLSClientConfig`, `Transport`, etc.
 * Client API design 
   * Have client level settings & options and also override at Request level if you want to
-  * [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middleware
   * Create Multiple clients if want to `resty.New()`
   * goroutine concurrent safe
   * Debug mode - clean and informative logging presentation
