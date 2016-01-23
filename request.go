@@ -49,7 +49,7 @@ type Request struct {
 }
 
 // SetHeader method is to set a single header field and its value in the current request.
-// For Example: To set `Content-Type` and `Accept` as `application/json`.
+// Example: To set `Content-Type` and `Accept` as `application/json`.
 // 		resty.R().
 //			SetHeader("Content-Type", "application/json").
 //			SetHeader("Accept", "application/json")
@@ -62,7 +62,7 @@ func (r *Request) SetHeader(header, value string) *Request {
 }
 
 // SetHeaders method sets multiple headers field and its values at one go in the current request.
-// For Example: To set `Content-Type` and `Accept` as `application/json`
+// Example: To set `Content-Type` and `Accept` as `application/json`
 //
 // 		resty.R().
 //			SetHeaders(map[string]string{
@@ -81,7 +81,7 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 
 // SetQueryParam method sets single paramater and its value in the current request.
 // It will be formed as query string for the request.
-// For example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
+// Example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
 // 		resty.R().
 //			SetQueryParam("search", "kitchen papers").
 //			SetQueryParam("size", "large")
@@ -94,7 +94,7 @@ func (r *Request) SetQueryParam(param, value string) *Request {
 
 // SetQueryParams method sets multiple paramaters and its values at one go in the current request.
 // It will be formed as query string for the request.
-// For example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
+// Example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
 // 		resty.R().
 //			SetQueryParams(map[string]string{
 //				"search": "kitchen papers",
@@ -151,7 +151,7 @@ func (r *Request) SetFormData(data map[string]string) *Request {
 // `struct` and `map`. Body value can be pointer or non-pointer. Automatic marshalling
 // for JSON and XML content type, if it is `struct` or `map`.
 //
-// For Example:
+// Example:
 //
 // Struct as a body input, based on content type, it will be marshalled.
 //		resty.R().
@@ -293,10 +293,10 @@ func (r *Request) SetBasicAuth(username, password string) *Request {
 	return r
 }
 
-// SetAuthToken method sets bearer auth token header in the current HTTP request. For Header exmaple:
+// SetAuthToken method sets bearer auth token header in the current HTTP request. Header example:
 // 		Authorization: Bearer <auth-token-value-comes-here>
 //
-// For example: To set auth token BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F
+// Example: To set auth token BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F
 //
 // 		resty.R().SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F")
 //

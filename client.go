@@ -115,7 +115,7 @@ func (c *Client) SetHostURL(url string) *Client {
 // Also it can be overridden at request level header options, see `resty.R().SetHeader`
 // or `resty.R().SetHeaders`.
 //
-// For Example: To set `Content-Type` and `Accept` as `application/json`
+// Example: To set `Content-Type` and `Accept` as `application/json`
 //
 // 		resty.
 // 			SetHeader("Content-Type", "application/json").
@@ -130,7 +130,7 @@ func (c *Client) SetHeader(header, value string) *Client {
 // These headers will be applied to all requests raised from this client instance. Also it can be
 // overridden at request level headers options, see `resty.R().SetHeaders` or `resty.R().SetHeader`.
 //
-// For Example: To set `Content-Type` and `Accept` as `application/json`
+// Example: To set `Content-Type` and `Accept` as `application/json`
 //
 // 		resty.SetHeaders(map[string]string{
 //				"Content-Type": "application/json",
@@ -243,10 +243,10 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 	return c
 }
 
-// SetBasicAuth method sets the basic authentication header in the HTTP request. For example -
+// SetBasicAuth method sets the basic authentication header in the HTTP request. Example:
 //		Authorization: Basic <base64-encoded-value>
 //
-// For example: To set the header for username "go-resty" and password "welcome"
+// Example: To set the header for username "go-resty" and password "welcome"
 // 		resty.SetBasicAuth("go-resty", "welcome")
 //
 // This basic auth information gets added to all the request rasied from this client instance.
@@ -257,10 +257,10 @@ func (c *Client) SetBasicAuth(username, password string) *Client {
 	return c
 }
 
-// SetAuthToken method sets bearer auth token header in the HTTP request. For exmaple -
+// SetAuthToken method sets bearer auth token header in the HTTP request. Example:
 // 		Authorization: Bearer <auth-token-value-comes-here>
 //
-// For example: To set auth token BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F
+// Example: To set auth token BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F
 //
 // 		resty.SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F")
 //
@@ -451,7 +451,7 @@ func (c *Client) Mode() string {
 
 // SetTLSClientConfig method sets TLSClientConfig for underling client Transport.
 //
-// For example:
+// Example:
 // 		// One can set custom root-certificate. Refer: http://golang.org/pkg/crypto/tls/#example_Dial
 //		resty.SetTLSClientConfig(&tls.Config{ RootCAs: roots })
 //
@@ -553,7 +553,7 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 
 // SetTransport method sets custom *http.Transport in the resty client. Its way to override default.
 //
-// **Note:** It overwites the default resty transport instance and its configurations.
+// **Note:** It overwrites the default resty transport instance and its configurations.
 //		transport := &http.Transport{
 //			// somthing like Proxying to httptest.Server, etc...
 //			Proxy: func(req *http.Request) (*url.URL, error) {
@@ -667,13 +667,13 @@ func (r *Response) Body() []byte {
 }
 
 // Status method returns the HTTP status string for the executed request.
-//	For example: 200 OK
+//	Example: 200 OK
 func (r *Response) Status() string {
 	return r.RawResponse.Status
 }
 
 // StatusCode method returns the HTTP status code for the executed request.
-//	For example: 200
+//	Example: 200
 func (r *Response) StatusCode() int {
 	return r.RawResponse.StatusCode
 }
