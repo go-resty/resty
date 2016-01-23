@@ -16,7 +16,7 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-// The default Client
+// DefaultClient of resty
 var DefaultClient *Client
 
 // New method creates a new go-resty client
