@@ -1,4 +1,4 @@
-# resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty)  [![GoCover](http://gocover.io/_badge/github.com/go-resty/resty)](http://gocover.io/github.com/go-resty/resty)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty)  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+# resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty)  [![GoCover](http://gocover.io/_badge/github.com/go-resty/resty)](http://gocover.io/github.com/go-resty/resty)  [![GoReport](http://goreportcard.com/badge/go-resty/resty)](http://goreportcard.com/report/go-resty/resty)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty)  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty.
 
@@ -522,16 +522,22 @@ resty.SetContentLength(true)
 resty.SetError(&Error{})    // or resty.SetError(Error{})
 ```
 
-### Versioning
+## Versioning
 resty releases versions according to [Semantic Versioning](http://semver.org)
 
-`gopkg.in/resty.vX` points to appropriate tag versions; `X` denotes version number and its a stable release. It is recommended to use version, for eg. `gopkg.in/resty.v0`. Development takes place at the master branch. Althought the code in master should always compile and test successfully, it might break API's. We aim to maintain backwards compatibility, but API's and behaviour might be changed to fix a bug.
+`gopkg.in/resty.vX` points to appropriate tag versions; `X` denotes version number and it's a stable release. It's recommended to use version, for eg. `gopkg.in/resty.v0`. Development takes place at the master branch. Although the code in master should always compile and test successfully, it might break API's. We aim to maintain backwards compatibility, but API's and behaviour might be changed to fix a bug.
 
  
-### Contributing
-Welcome! If you find any improvement or issue you want to fix. Feel free to send a pull request, I like pull requests that include tests case for fix/enhancement. Did my best to bring pretty good code coverage and feel free to write tests.
+## Contributing
+Welcome! If you find any improvement or issue you want to fix, feel free to send a pull request, I like pull requests that include test cases for fix/enhancement. I have done my best to bring pretty good code coverage. Feel free to write tests.
 
 BTW, I'd like to know what you think about go-resty. Kindly open an issue or send me an email; it'd mean a lot to me.
 
-### License
+## Author
+Jeevanandam M. - jeeva@myjeeva.com
+
+## Contributors
+Have a look on [Contributors](https://github.com/go-resty/resty/graphs/contributors) page.
+
+## License
 resty released under MIT license, refer [LICENSE](LICENSE) file.
