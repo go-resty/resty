@@ -85,96 +85,27 @@ func parseRequestHeader(c *Client, r *Request) error {
 
 func parseRequestBody(c *Client, r *Request) (err error) {
 	if isPayloadSupported(r.Method) {
+
 		// Handling Multipart
 		if r.isMultiPart && !(r.Method == PATCH) {
-			r.bodyBuf = &bytes.Buffer{}
-			w := multipart.NewWriter(r.bodyBuf)
-
-			for p := range c.FormData {
-				w.WriteField(p, c.FormData.Get(p))
+			if err = handleMultipart(c, r); err != nil {
+				return
 			}
-
-			for p := range r.FormData {
-				if strings.HasPrefix(p, "@") { // file
-					err = addFile(w, p[1:], r.FormData.Get(p))
-					if err != nil {
-						return
-					}
-				} else { // form value
-					w.WriteField(p, r.FormData.Get(p))
-				}
-			}
-
-			// #21 - adding io.Reader support
-			if len(r.multipartFiles) > 0 {
-				for _, f := range r.multipartFiles {
-					err = addFileReader(w, f)
-					if err != nil {
-						return
-					}
-				}
-			}
-
-			r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
-			err = w.Close()
 
 			goto CL
 		}
 
 		// Handling Form Data
 		if len(c.FormData) > 0 || len(r.FormData) > 0 {
-			formData := url.Values{}
-
-			for p := range c.FormData {
-				formData.Set(p, c.FormData.Get(p))
-			}
-
-			for p := range r.FormData { // takes precedence
-				formData.Set(p, r.FormData.Get(p))
-			}
-
-			r.bodyBuf = bytes.NewBuffer([]byte(formData.Encode()))
-			r.Header.Set(hdrContentTypeKey, formContentType)
-			r.isFormData = true
+			handleFormData(c, r)
 
 			goto CL
 		}
 
 		// Handling Request body
 		if r.Body != nil {
-			contentType := r.Header.Get(hdrContentTypeKey)
-			if IsStringEmpty(contentType) {
-				contentType = DetectContentType(r.Body)
-				r.Header.Set(hdrContentTypeKey, contentType)
-			}
-
-			var bodyBytes []byte
-			kind := kindOf(r.Body)
-			if reader, ok := r.Body.(io.Reader); ok {
-				r.bodyBuf = &bytes.Buffer{}
-				r.bodyBuf.ReadFrom(reader)
-			} else if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
-				bodyBytes, err = json.Marshal(r.Body)
-			} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-				bodyBytes, err = xml.Marshal(r.Body)
-			} else if b, ok := r.Body.(string); ok {
-				bodyBytes = []byte(b)
-			} else if b, ok := r.Body.([]byte); ok {
-				bodyBytes = b
-			}
-
-			if bodyBytes == nil && r.bodyBuf == nil {
-				err = errors.New("Unsupported 'Body' type/value")
-			}
-
-			// if any errors during body bytes handling, return it
-			if err != nil {
+			if err = handleRequestBody(c, r); err != nil {
 				return
-			}
-
-			// []byte into Buffer
-			if bodyBytes != nil && r.bodyBuf == nil {
-				r.bodyBuf = bytes.NewBuffer(bodyBytes)
 			}
 		}
 	} else {
@@ -302,6 +233,96 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 				err = Unmarshal(ct, res.body, res.Request.Error)
 			}
 		}
+	}
+
+	return
+}
+
+func handleMultipart(c *Client, r *Request) (err error) {
+	r.bodyBuf = &bytes.Buffer{}
+	w := multipart.NewWriter(r.bodyBuf)
+
+	for p := range c.FormData {
+		w.WriteField(p, c.FormData.Get(p))
+	}
+
+	for p := range r.FormData {
+		if strings.HasPrefix(p, "@") { // file
+			err = addFile(w, p[1:], r.FormData.Get(p))
+			if err != nil {
+				return
+			}
+		} else { // form value
+			w.WriteField(p, r.FormData.Get(p))
+		}
+	}
+
+	// #21 - adding io.Reader support
+	if len(r.multipartFiles) > 0 {
+		for _, f := range r.multipartFiles {
+			err = addFileReader(w, f)
+			if err != nil {
+				return
+			}
+		}
+	}
+
+	r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
+	err = w.Close()
+
+	return
+}
+
+func handleFormData(c *Client, r *Request) {
+	formData := url.Values{}
+
+	for p := range c.FormData {
+		formData.Set(p, c.FormData.Get(p))
+	}
+
+	for p := range r.FormData { // takes precedence
+		formData.Set(p, r.FormData.Get(p))
+	}
+
+	r.bodyBuf = bytes.NewBuffer([]byte(formData.Encode()))
+	r.Header.Set(hdrContentTypeKey, formContentType)
+	r.isFormData = true
+}
+
+func handleRequestBody(c *Client, r *Request) (err error) {
+	contentType := r.Header.Get(hdrContentTypeKey)
+	if IsStringEmpty(contentType) {
+		contentType = DetectContentType(r.Body)
+		r.Header.Set(hdrContentTypeKey, contentType)
+	}
+
+	var bodyBytes []byte
+	kind := kindOf(r.Body)
+	if reader, ok := r.Body.(io.Reader); ok {
+		r.bodyBuf = &bytes.Buffer{}
+		r.bodyBuf.ReadFrom(reader)
+	} else if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
+		bodyBytes, err = json.Marshal(r.Body)
+	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
+		bodyBytes, err = xml.Marshal(r.Body)
+	} else if b, ok := r.Body.(string); ok {
+		bodyBytes = []byte(b)
+	} else if b, ok := r.Body.([]byte); ok {
+		bodyBytes = b
+	}
+
+	if bodyBytes == nil && r.bodyBuf == nil {
+		err = errors.New("Unsupported 'Body' type/value")
+	}
+
+	// if any errors during body bytes handling, return it
+	if err != nil {
+		return
+	}
+
+	// []byte into Buffer
+	if bodyBytes != nil && r.bodyBuf == nil {
+		r.bodyBuf = bytes.NewBuffer(bodyBytes)
 	}
 
 	return
