@@ -1,32 +1,31 @@
 # resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty)  [![GoCover](http://gocover.io/_badge/github.com/go-resty/resty)](http://gocover.io/github.com/go-resty/resty)  [![GoReport](http://goreportcard.com/badge/go-resty/resty)](http://goreportcard.com/report/go-resty/resty)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty)  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty.
+Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty capabilities.
 
-***v0.5 released and tagged on Jan 03, 2016.***
+***v0.6 released on Feb 03, 2016.***
 
 #### Features
 * GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS
 * Simple and chainable methods for settings and request
 * Request Body can be `string`, `[]byte`, `struct`, `map` and `io.Reader` too
-  * Auto detect `Content-Type`
-* Response object gives you more possibility
+  * Auto detects `Content-Type`
+* [Response](https://godoc.org/github.com/go-resty/resty#Response) object gives you more possibility
   * Access as `[]byte` array - `response.Body()` OR Access as `string` - `response.String()`
   * Know your `response.Time()` and when we `response.ReceivedAt()`
-  * Have a look [godoc](https://godoc.org/github.com/go-resty/resty#Response)
 * Automatic marshal and unmarshal for `JSON` and `XML` content type
   * Default is `JSON`, if you supply `struct/map` without header `Content-Type`
 * Easy to upload one or more file(s) via `multipart/form-data`
-* Client [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middlewares
+* resty client [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middlewares
 * Authorization option of `BasicAuth` and `Bearer` token
 * Set request `ContentLength` value for all request or particular request
 * Choose between HTTP and REST mode. Default is `REST`
-  * `HTTP` - default upto 10 redirects and no automatic response unmarshal
+  * `HTTP` - default up to 10 redirects and no automatic response unmarshal
   * `REST` - defaults to no redirects and automatic response marshal/unmarshal for `JSON` & `XML`
 * Custom [Root Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetRootCertificate) and Client [Certificates](https://godoc.org/github.com/go-resty/resty#Client.SetCertificates)
 * Download/Save HTTP response directly into File, like `curl -o` flag. See [SetOutputDirectory](https://godoc.org/github.com/go-resty/resty#Client.SetOutputDirectory) & [SetOutput](https://godoc.org/github.com/go-resty/resty#Request.SetOutput).
 * Cookies for your request and CookieJar support
 * Client settings like `Timeout`, `RedirectPolicy`, `Proxy`, `TLSClientConfig`, `Transport`, etc.
-* Client API design 
+* Client API design
   * Have client level settings & options and also override at Request level if you want to
   * Create Multiple clients if want to `resty.New()`
   * goroutine concurrent safe
@@ -42,7 +41,7 @@ resty tested with Go `v1.2` and above.
     * FlexibleRedirectPolicy
     * DomainCheckRedirectPolicy
     * etc. [more info](redirect.go)
-  * etc (upcoming - throw your idea's via [issues](https://github.com/go-resty/resty/issues)). 
+  * etc (upcoming - throw your idea's [here](https://github.com/go-resty/resty/issues)).
 
 ## Installation
 #### Stable - Version
@@ -88,13 +87,13 @@ Response Status: 200 OK
 Response Time: 644.290186ms
 Response Recevied At: 2015-09-15 12:05:28.922780103 -0700 PDT
 Response Body: {
-  "args": {}, 
+  "args": {},
   "headers": {
-    "Accept-Encoding": "gzip", 
-    "Host": "httpbin.org", 
+    "Accept-Encoding": "gzip",
+    "Host": "httpbin.org",
     "User-Agent": "go-resty v0.1 - https://github.com/go-resty/resty"
-  }, 
-  "origin": "0.0.0.0", 
+  },
+  "origin": "0.0.0.0",
   "url": "http://httpbin.org/get"
 }
 */
@@ -103,7 +102,7 @@ Response Body: {
 ```go
 resp, err := resty.R().
       SetQueryParams(map[string]string{
-          "page_no": "1", 
+          "page_no": "1",
           "limit": "20",
           "sort":"name",
           "order": "asc",
@@ -131,7 +130,7 @@ resp, err := resty.R().
       SetBody(`{"username":"testuser", "password":"testpass"}`).
       SetResult(&AuthSuccess{}).    // or SetResult(AuthSuccess{}).
       Post("https://myapp.com/login")
-      
+
 // POST []byte array
 // No need to set content type, if you have client level setting
 resp, err := resty.R().
@@ -139,21 +138,21 @@ resp, err := resty.R().
       SetBody([]byte(`{"username":"testuser", "password":"testpass"}`)).
       SetResult(&AuthSuccess{}).    // or SetResult(AuthSuccess{}).
       Post("https://myapp.com/login")
-      
+
 // POST Struct, default is JSON content type. No need to set one
 resp, err := resty.R().
       SetBody(User{Username: "testuser", Password: "testpass"}).
       SetResult(&AuthSuccess{}).    // or SetResult(AuthSuccess{}).
       SetError(&AuthError{}).       // or SetError(AuthError{}).
       Post("https://myapp.com/login")
-      
+
 // POST Map, default is JSON content type. No need to set one
 resp, err := resty.R().
       SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
       SetResult(&AuthSuccess{}).    // or SetResult(AuthSuccess{}).
       SetError(&AuthError{}).       // or SetError(AuthError{}).
       Post("https://myapp.com/login")
-      
+
 // POST of raw bytes for file upload. For example: upload file to Dropbox
 fileBytes, _ := ioutil.ReadFile("/Users/jeeva/mydocument.pdf")
 
@@ -170,7 +169,7 @@ resp, err := resty.R().
 //   * Fallback is plain text content type
 ```
 
-#### Sample PUT 
+#### Sample PUT
 You can use various combinations of `PUT` method call like demonstrated for `POST`.
 ```go
 // Note: This is one sample of PUT method usage, refer POST for more combination
@@ -179,7 +178,7 @@ You can use various combinations of `PUT` method call like demonstrated for `POS
 // No need to set auth token, error, if you have client level settings
 resp, err := resty.R().
       SetBody(Article{
-        Title: "go-resty", 
+        Title: "go-resty",
         Content: "This is my article content, oh ya!",
         Author: "Jeevanandam M",
         Tags: []string{"article", "sample", "resty"},
@@ -189,7 +188,7 @@ resp, err := resty.R().
       Put("https://myapp.com/article/1234")
 ```
 
-#### Sample PATCH 
+#### Sample PATCH
 You can use various combinations of `PATCH` method call like demonstrated for `POST`.
 ```go
 // Note: This is one sample of PUT method usage, refer POST for more combination
@@ -246,7 +245,7 @@ resp, err := dclr().
       SetFileReader("profile_img", "test-img.png", bytes.NewReader(profileImgBytes)).
       SetFileReader("notes", "text-file.txt", bytes.NewReader(notesBytes)).
       SetFormData(map[string]string{
-          "first_name": "Jeevanandam", 
+          "first_name": "Jeevanandam",
           "last_name": "M",
       }).
       Post(t"http://myapp.com/upload")
@@ -262,7 +261,7 @@ resp, err := resty.R().
 // Multiple files scenario
 resp, err := resty.R().
       SetFiles(map[string]string{
-        "profile_img": "/Users/jeeva/test-img.png", 
+        "profile_img": "/Users/jeeva/test-img.png",
         "notes": "/Users/jeeva/text-file.txt",
       }).
       Post("http://myapp.com/upload")
@@ -270,13 +269,13 @@ resp, err := resty.R().
 // Multipart of form fields and files
 resp, err := resty.R().
       SetFiles(map[string]string{
-        "profile_img": "/Users/jeeva/test-img.png", 
+        "profile_img": "/Users/jeeva/test-img.png",
         "notes": "/Users/jeeva/text-file.txt",
       }).
       SetFormData(map[string]string{
-        "first_name": "Jeevanandam", 
+        "first_name": "Jeevanandam",
         "last_name": "M",
-        "zip_code": "00001", 
+        "zip_code": "00001",
         "city": "my city",
         "access_token": "C6A79608-782F-4ED0-A11D-BD82FAD829CD",
       }).
@@ -289,7 +288,7 @@ resp, err := resty.R().
 // User Login
 resp, err := resty.R().
       SetFormData(map[string]string{
-        "username": "jeeva", 
+        "username": "jeeva",
         "password": "mypass",
       }).
       Post("http://myapp.com/login")
@@ -297,9 +296,9 @@ resp, err := resty.R().
 // Followed by profile update
 resp, err := resty.R().
       SetFormData(map[string]string{
-        "first_name": "Jeevanandam", 
+        "first_name": "Jeevanandam",
         "last_name": "M",
-        "zip_code": "00001", 
+        "zip_code": "00001",
         "city": "new city update",
       }).
       Post("http://myapp.com/profile")
@@ -308,7 +307,7 @@ resp, err := resty.R().
 #### Save HTTP Response into File
 ```go
 // Setting output directory path, If directory not exists then resty creates one!
-// This is optional one, if you're planning using absoule path in 
+// This is optional one, if you're planning using absoule path in
 // `Request.SetOutput` and can used together.
 resty.SetOutputDirectory("/Users/jeeva/Downloads")
 
@@ -327,7 +326,7 @@ _, err := resty.R().
 #### Request and Response Middleware
 Resty provides middleware ability to manipulate for Request and Response. It is more flexible than callback approach.
 ```go
-// Registering Request Middleware 
+// Registering Request Middleware
 resty.OnBeforeRequest(func(c *resty.Client, req *resty.Request) error {
     // Now you have access to Client and current Request object
     // manipulate it as per your need
@@ -351,7 +350,7 @@ Resty provides few ready to use redirect policy(s) also it supports multiple pol
 resty.SetRedirectPolicy(resty.FlexibleRedirectPolicy(15))
 
 // Wanna multiple policies such as redirect count, domain name check, etc
-resty.SetRedirectPolicy(resty.FlexibleRedirectPolicy(20), 
+resty.SetRedirectPolicy(resty.FlexibleRedirectPolicy(20),
                         resty.DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
 ```
 
@@ -375,7 +374,7 @@ type CustomRedirectPolicy struct {
 
 func (c *CustomRedirectPolicy) Apply(req *http.Request, via []*http.Request) error {
   // Implement your logic here
-  
+
   // return nil for continue redirect otherwise return error to stop/prevent redirect
   return nil
 }
@@ -431,7 +430,7 @@ resp, err := c.R().
 resty.SetRESTMode()
 
 // HTTP mode
-resty.SetHTTPMode() 
+resty.SetHTTPMode()
 ```
 
 #### Wanna Multiple Clients
@@ -527,7 +526,7 @@ resty releases versions according to [Semantic Versioning](http://semver.org)
 
 `gopkg.in/resty.vX` points to appropriate tag versions; `X` denotes version number and it's a stable release. It's recommended to use version, for eg. `gopkg.in/resty.v0`. Development takes place at the master branch. Although the code in master should always compile and test successfully, it might break API's. We aim to maintain backwards compatibility, but API's and behaviour might be changed to fix a bug.
 
- 
+
 ## Contributing
 Welcome! If you find any improvement or issue you want to fix, feel free to send a pull request, I like pull requests that include test cases for fix/enhancement. I have done my best to bring pretty good code coverage. Feel free to write tests.
 
