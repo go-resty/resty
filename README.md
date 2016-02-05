@@ -1,8 +1,8 @@
-# resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty)  [![GoCover](https://gocover.io/_badge/github.com/go-resty/resty)](http://gocover.io/github.com/go-resty/resty)  [![GoReport](https://goreportcard.com/badge/go-resty/resty)](http://goreportcard.com/report/go-resty/resty)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty)  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+# resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty)  [![GoCover](https://gocover.io/_badge/github.com/go-resty/resty)](https://gocover.io/github.com/go-resty/resty)  [![GoReport](https://goreportcard.com/badge/go-resty/resty)](https://goreportcard.com/report/go-resty/resty)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty)  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty capabilities.
 
-***v0.6 released on Feb 03, 2016.***
+***v0.6 released and tagged on Feb 03, 2016.***
 
 #### Features
 * GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS
