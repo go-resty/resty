@@ -480,7 +480,7 @@ resty.SetHostURL("http://httpbin.org")
 resty.SetHeader("Accept", "application/json")
 resty.SetHeaders(map[string]string{
         "Content-Type": "application/json",
-        "User-Agent": "My cutsom User Agent String",
+        "User-Agent": "My custom User Agent String",
       })
 
 // Cookies for all request
