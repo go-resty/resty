@@ -162,7 +162,7 @@ func TestPostJSONBytesSuccess(t *testing.T) {
 
 	c := dc()
 	c.SetHeader(hdrContentTypeKey, jsonContentType).
-		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1", hdrAcceptKey: jsonContentType})
+		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.7", hdrAcceptKey: jsonContentType})
 
 	resp, err := c.R().
 		SetBody([]byte(`{"username":"testuser", "password":"testpass"}`)).
@@ -1001,6 +1001,81 @@ func TestDetectContentTypeForPointer(t *testing.T) {
 	logResponse(t, resp)
 }
 
+type ExampleUser struct {
+	FirstName string `json:"frist_name"`
+	LastName  string `json:"last_name"`
+	ZipCode   string `json:"zip_code"`
+}
+
+func TestDetectContentTypeForPointerWithSlice(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	users := &[]ExampleUser{
+		ExampleUser{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
+		ExampleUser{FirstName: "firstname2", LastName: "lastname3", ZipCode: "10002"},
+		ExampleUser{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
+	}
+
+	resp, err := dclr().
+		SetBody(users).
+		Post(ts.URL + "/users")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusAccepted, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp)
+
+	logResponse(t, resp)
+}
+
+func TestDetectContentTypeForPointerWithSliceMap(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	usersmap := map[string]interface{}{
+		"user1": ExampleUser{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
+		"user2": &ExampleUser{FirstName: "firstname2", LastName: "lastname3", ZipCode: "10002"},
+		"user3": ExampleUser{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
+	}
+
+	var users []map[string]interface{}
+	users = append(users, usersmap)
+
+	resp, err := dclr().
+		SetBody(&users).
+		Post(ts.URL + "/usersmap")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusAccepted, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp)
+
+	logResponse(t, resp)
+}
+
+func TestDetectContentTypeForSlice(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	users := []ExampleUser{
+		ExampleUser{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
+		ExampleUser{FirstName: "firstname2", LastName: "lastname3", ZipCode: "10002"},
+		ExampleUser{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
+	}
+
+	resp, err := dclr().
+		SetBody(users).
+		Post(ts.URL + "/users")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusAccepted, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp)
+
+	logResponse(t, resp)
+}
+
 func TestSetQueryStringTypical(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
@@ -1249,6 +1324,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 					err := jd.Decode(user)
 					w.Header().Set(hdrContentTypeKey, jsonContentType)
 					if err != nil {
+						t.Logf("Error: %#v", err)
 						w.WriteHeader(http.StatusBadRequest)
 						w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
 						return
@@ -1274,6 +1350,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 
 					w.Header().Set(hdrContentTypeKey, "application/xml")
 					if err != nil {
+						t.Logf("Error: %v", err)
 						w.WriteHeader(http.StatusBadRequest)
 						w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
 						w.Write([]byte(`<AuthError><Id>bad_request</Id><Message>Unable to read user info</Message></AuthError>`))
@@ -1292,6 +1369,67 @@ func createPostServer(t *testing.T) *httptest.Server {
 						w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
 						w.Write([]byte(`<AuthError><Id>unauthorized</Id><Message>Invalid credentials</Message></AuthError>`))
 					}
+
+					return
+				}
+			}
+
+			if r.URL.Path == "/users" {
+				// JSON
+				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+					var users []ExampleUser
+					jd := json.NewDecoder(r.Body)
+					err := jd.Decode(&users)
+					w.Header().Set(hdrContentTypeKey, jsonContentType)
+					if err != nil {
+						t.Logf("Error: %v", err)
+						w.WriteHeader(http.StatusBadRequest)
+						w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
+						return
+					}
+
+					// logic check, since we are excepting to reach 3 records
+					if len(users) != 3 {
+						t.Log("Error: Excepted count of 3 records")
+						w.WriteHeader(http.StatusBadRequest)
+						w.Write([]byte(`{ "id": "bad_request", "message": "Expected record count doesn't match" }`))
+						return
+					}
+
+					eu := users[2]
+					if eu.FirstName == "firstname3" && eu.ZipCode == "10003" {
+						w.WriteHeader(http.StatusAccepted)
+						w.Write([]byte(`{ "message": "Accepted" }`))
+					}
+
+					return
+				}
+			}
+
+			if r.URL.Path == "/usersmap" {
+				// JSON
+				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+					var users []map[string]interface{}
+					jd := json.NewDecoder(r.Body)
+					err := jd.Decode(&users)
+					w.Header().Set(hdrContentTypeKey, jsonContentType)
+					if err != nil {
+						t.Logf("Error: %v", err)
+						w.WriteHeader(http.StatusBadRequest)
+						w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
+						return
+					}
+
+					// logic check, since we are excepting to reach 1 map records
+					if len(users) != 1 {
+						t.Log("Error: Excepted count of 1 map records")
+						w.WriteHeader(http.StatusBadRequest)
+						w.Write([]byte(`{ "id": "bad_request", "message": "Expected record count doesn't match" }`))
+						return
+					}
+
+					w.WriteHeader(http.StatusAccepted)
+					w.Write([]byte(`{ "message": "Accepted" }`))
 
 					return
 				}

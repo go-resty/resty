@@ -771,13 +771,18 @@ func IsStringEmpty(str string) bool {
 // DetectContentType method is used to figure out `Request.Body` content type for request header
 func DetectContentType(body interface{}) string {
 	contentType := plainTextType
-	switch kindOf(body) {
+	kind := kindOf(body)
+	switch kind {
 	case reflect.Struct, reflect.Map:
 		contentType = jsonContentType
 	case reflect.String:
 		contentType = plainTextType
 	default:
-		contentType = http.DetectContentType(body.([]byte))
+		if b, ok := body.([]byte); ok {
+			contentType = http.DetectContentType(b)
+		} else if kind == reflect.Slice {
+			contentType = jsonContentType
+		}
 	}
 
 	return contentType
