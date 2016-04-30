@@ -149,8 +149,11 @@ func addCredentials(c *Client, r *Request) error {
 		r.RawRequest.SetBasicAuth(c.UserInfo.Username, c.UserInfo.Password)
 		isBasicAuth = true
 	}
-	if isBasicAuth && !strings.HasPrefix(r.URL, "https") {
-		c.Log.Println("WARNING - Using Basic Auth in HTTP mode is not secure.")
+
+	if !c.DisableWarn {
+		if isBasicAuth && !strings.HasPrefix(r.URL, "https") {
+			c.Log.Println("WARNING - Using Basic Auth in HTTP mode is not secure.")
+		}
 	}
 
 	// Token Auth

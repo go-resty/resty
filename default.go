@@ -131,6 +131,11 @@ func SetDebug(d bool) *Client {
 	return DefaultClient.SetDebug(d)
 }
 
+// SetDisableWarn method disables warning comes from `go-resty` client. See `Client.SetDisableWarn` for more information.
+func SetDisableWarn(d bool) *Client {
+	return DefaultClient.SetDisableWarn(d)
+}
+
 // SetLogger method sets given writer for logging. See `Client.SetLogger` for more information.
 func SetLogger(w io.Writer) *Client {
 	return DefaultClient.SetLogger(w)

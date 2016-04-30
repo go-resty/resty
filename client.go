@@ -71,16 +71,17 @@ var (
 // Client type is used for HTTP/RESTful global values
 // for all request raised from the client
 type Client struct {
-	HostURL    string
-	QueryParam url.Values
-	FormData   url.Values
-	Header     http.Header
-	UserInfo   *User
-	Token      string
-	Cookies    []*http.Cookie
-	Error      reflect.Type
-	Debug      bool
-	Log        *log.Logger
+	HostURL     string
+	QueryParam  url.Values
+	FormData    url.Values
+	Header      http.Header
+	UserInfo    *User
+	Token       string
+	Cookies     []*http.Cookie
+	Error       reflect.Type
+	Debug       bool
+	DisableWarn bool
+	Log         *log.Logger
 
 	httpClient       *http.Client
 	transport        *http.Transport
@@ -328,9 +329,19 @@ func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
 // SetDebug method enables the debug mode on `go-resty` client. Client logs details of every request and response.
 // For `Request` it logs information such as HTTP verb, Relative URL path, Host, Headers, Body if it has one.
 // For `Response` it logs information such as Status, Response Time, Headers, Body if it has one.
+//		resty.SetDebug(true)
 //
 func (c *Client) SetDebug(d bool) *Client {
 	c.Debug = d
+	return c
+}
+
+// SetDisableWarn method disables the warning message on `go-resty` client.
+// For example: go-resty warns the user when BasicAuth used on HTTP mode.
+//		resty.SetDisableWarn(true)
+//
+func (c *Client) SetDisableWarn(d bool) *Client {
+	c.DisableWarn = d
 	return c
 }
 

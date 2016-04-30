@@ -508,6 +508,27 @@ func TestFormData(t *testing.T) {
 	assertEqual(t, "Success", resp.String())
 }
 
+func TestFormDataDisableWarn(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
+		SetContentLength(true).
+		SetDebug(true).
+		SetLogger(ioutil.Discard).
+		SetDisableWarn(true)
+
+	resp, err := c.R().
+		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
+		SetBasicAuth("myuser", "mypass").
+		Post(ts.URL + "/profile")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "Success", resp.String())
+}
+
 func TestMultiPartUploadFile(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
@@ -1179,7 +1200,7 @@ func TestOutputFileAbsPath(t *testing.T) {
 func TestSetTransport(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
-	DefaultClient := dc()
+	DefaultClient = dc()
 
 	transport := &http.Transport{
 		// somthing like Proxying to httptest.Server, etc...
@@ -1250,6 +1271,9 @@ func TestClientOptions(t *testing.T) {
 	SetAuthToken("AC75BD37F019E08FBC594900518B4F7E")
 	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", DefaultClient.Token)
 
+	SetDisableWarn(true)
+	assertEqual(t, DefaultClient.DisableWarn, true)
+
 	err := &AuthError{}
 	SetError(err)
 	if reflect.TypeOf(err) == DefaultClient.Error {
@@ -1273,7 +1297,10 @@ func TestClientOptions(t *testing.T) {
 		return errors.New("sample test redirect")
 	})
 	SetContentLength(true)
+
 	SetDebug(true)
+	assertEqual(t, DefaultClient.Debug, true)
+
 	SetLogger(ioutil.Discard)
 }
 
