@@ -49,12 +49,12 @@ func Example_get() {
 func Example_enhancedGet() {
 	resp, err := resty.R().
 		SetQueryParams(map[string]string{
-		"page_no": "1",
-		"limit":   "20",
-		"sort":    "name",
-		"order":   "asc",
-		"random":  strconv.FormatInt(time.Now().Unix(), 10),
-	}).
+			"page_no": "1",
+			"limit":   "20",
+			"sort":    "name",
+			"order":   "asc",
+			"random":  strconv.FormatInt(time.Now().Unix(), 10),
+		}).
 		SetHeader("Accept", "application/json").
 		SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F").
 		Get("/search_result")
@@ -128,11 +128,11 @@ func Example_put() {
 	// No need to set auth token, error, if you have client level settings
 	resp, err := resty.R().
 		SetBody(Article{
-		Title:   "go-resty",
-		Content: "This is my article content, oh ya!",
-		Author:  "Jeevanandam M",
-		Tags:    []string{"article", "sample", "resty"},
-	}).
+			Title:   "go-resty",
+			Content: "This is my article content, oh ya!",
+			Author:  "Jeevanandam M",
+			Tags:    []string{"article", "sample", "resty"},
+		}).
 		SetAuthToken("C6A79608-782F-4ED0-A11D-BD82FAD829CD").
 		SetError(&Error{}). // or SetError(Error{}).
 		Put("https://myapp.com/article/1234")

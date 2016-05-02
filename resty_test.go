@@ -1335,6 +1335,101 @@ func createGetServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
+func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/login" {
+		user := &User{}
+
+		// JSON
+		if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+			jd := json.NewDecoder(r.Body)
+			err := jd.Decode(user)
+			w.Header().Set(hdrContentTypeKey, jsonContentType)
+			if err != nil {
+				t.Logf("Error: %#v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
+				return
+			}
+
+			if user.Username == "testuser" && user.Password == "testpass" {
+				w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
+			} else if user.Username == "testuser" && user.Password == "invalidjson" {
+				w.Write([]byte(`{ "id": "success", "message": "login successful", }`))
+			} else {
+				w.Header().Set("Www-Authenticate", "Protected Realm")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
+			}
+
+			return
+		}
+
+		// XML
+		if IsXMLType(r.Header.Get(hdrContentTypeKey)) {
+			xd := xml.NewDecoder(r.Body)
+			err := xd.Decode(user)
+
+			w.Header().Set(hdrContentTypeKey, "application/xml")
+			if err != nil {
+				t.Logf("Error: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
+				w.Write([]byte(`<AuthError><Id>bad_request</Id><Message>Unable to read user info</Message></AuthError>`))
+				return
+			}
+
+			if user.Username == "testuser" && user.Password == "testpass" {
+				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
+				w.Write([]byte(`<AuthSuccess><Id>success</Id><Message>login successful</Message></AuthSuccess>`))
+			} else if user.Username == "testuser" && user.Password == "invalidxml" {
+				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
+				w.Write([]byte(`<AuthSuccess><Id>success</Id><Message>login successful</AuthSuccess>`))
+			} else {
+				w.Header().Set("Www-Authenticate", "Protected Realm")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
+				w.Write([]byte(`<AuthError><Id>unauthorized</Id><Message>Invalid credentials</Message></AuthError>`))
+			}
+
+			return
+		}
+	}
+}
+
+func handleUsersEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/users" {
+		// JSON
+		if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+			var users []ExampleUser
+			jd := json.NewDecoder(r.Body)
+			err := jd.Decode(&users)
+			w.Header().Set(hdrContentTypeKey, jsonContentType)
+			if err != nil {
+				t.Logf("Error: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
+				return
+			}
+
+			// logic check, since we are excepting to reach 3 records
+			if len(users) != 3 {
+				t.Log("Error: Excepted count of 3 records")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{ "id": "bad_request", "message": "Expected record count doesn't match" }`))
+				return
+			}
+
+			eu := users[2]
+			if eu.FirstName == "firstname3" && eu.ZipCode == "10003" {
+				w.WriteHeader(http.StatusAccepted)
+				w.Write([]byte(`{ "message": "Accepted" }`))
+			}
+
+			return
+		}
+	}
+}
+
 func createPostServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
@@ -1342,96 +1437,9 @@ func createPostServer(t *testing.T) *httptest.Server {
 		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
 
 		if r.Method == POST {
-			if r.URL.Path == "/login" {
-				user := &User{}
+			handleLoginEndpoint(t, w, r)
 
-				// JSON
-				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
-					jd := json.NewDecoder(r.Body)
-					err := jd.Decode(user)
-					w.Header().Set(hdrContentTypeKey, jsonContentType)
-					if err != nil {
-						t.Logf("Error: %#v", err)
-						w.WriteHeader(http.StatusBadRequest)
-						w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
-						return
-					}
-
-					if user.Username == "testuser" && user.Password == "testpass" {
-						w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
-					} else if user.Username == "testuser" && user.Password == "invalidjson" {
-						w.Write([]byte(`{ "id": "success", "message": "login successful", }`))
-					} else {
-						w.Header().Set("Www-Authenticate", "Protected Realm")
-						w.WriteHeader(http.StatusUnauthorized)
-						w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
-					}
-
-					return
-				}
-
-				// XML
-				if IsXMLType(r.Header.Get(hdrContentTypeKey)) {
-					xd := xml.NewDecoder(r.Body)
-					err := xd.Decode(user)
-
-					w.Header().Set(hdrContentTypeKey, "application/xml")
-					if err != nil {
-						t.Logf("Error: %v", err)
-						w.WriteHeader(http.StatusBadRequest)
-						w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
-						w.Write([]byte(`<AuthError><Id>bad_request</Id><Message>Unable to read user info</Message></AuthError>`))
-						return
-					}
-
-					if user.Username == "testuser" && user.Password == "testpass" {
-						w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
-						w.Write([]byte(`<AuthSuccess><Id>success</Id><Message>login successful</Message></AuthSuccess>`))
-					} else if user.Username == "testuser" && user.Password == "invalidxml" {
-						w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
-						w.Write([]byte(`<AuthSuccess><Id>success</Id><Message>login successful</AuthSuccess>`))
-					} else {
-						w.Header().Set("Www-Authenticate", "Protected Realm")
-						w.WriteHeader(http.StatusUnauthorized)
-						w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
-						w.Write([]byte(`<AuthError><Id>unauthorized</Id><Message>Invalid credentials</Message></AuthError>`))
-					}
-
-					return
-				}
-			}
-
-			if r.URL.Path == "/users" {
-				// JSON
-				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
-					var users []ExampleUser
-					jd := json.NewDecoder(r.Body)
-					err := jd.Decode(&users)
-					w.Header().Set(hdrContentTypeKey, jsonContentType)
-					if err != nil {
-						t.Logf("Error: %v", err)
-						w.WriteHeader(http.StatusBadRequest)
-						w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
-						return
-					}
-
-					// logic check, since we are excepting to reach 3 records
-					if len(users) != 3 {
-						t.Log("Error: Excepted count of 3 records")
-						w.WriteHeader(http.StatusBadRequest)
-						w.Write([]byte(`{ "id": "bad_request", "message": "Expected record count doesn't match" }`))
-						return
-					}
-
-					eu := users[2]
-					if eu.FirstName == "firstname3" && eu.ZipCode == "10003" {
-						w.WriteHeader(http.StatusAccepted)
-						w.Write([]byte(`{ "message": "Accepted" }`))
-					}
-
-					return
-				}
-			}
+			handleUsersEndpoint(t, w, r)
 
 			if r.URL.Path == "/usersmap" {
 				// JSON
