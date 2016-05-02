@@ -74,7 +74,7 @@ func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 
 func getHostname(host string) (hostname string) {
 	if strings.Index(host, ":") > 0 {
-		host, _, _ := net.SplitHostPort(host)
+		host, _, _ = net.SplitHostPort(host)
 		hostname = strings.ToLower(host)
 	} else {
 		hostname = strings.ToLower(host)
