@@ -2,12 +2,14 @@
 
 Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty capabilities.
 
-***v0.6 released and tagged on Feb 03, 2016.***
+***v0.7 released and tagged on May 01, 2016.***
+
+*Since Go v1.6 HTTP/2 & HTTP/1.1 protocol is used transparently. `Resty` works fine with HTTP/2 and HTTP/1.1.*
 
 #### Features
 * GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS
 * Simple and chainable methods for settings and request
-* Request Body can be `string`, `[]byte`, `struct`, `map` and `io.Reader` too
+* Request Body can be `string`, `[]byte`, `struct`, `map`, `slice` and `io.Reader` too
   * Auto detects `Content-Type`
 * [Response](https://godoc.org/github.com/go-resty/resty#Response) object gives you more possibility
   * Access as `[]byte` array - `response.Body()` OR Access as `string` - `response.String()`
@@ -48,12 +50,12 @@ resty tested with Go `v1.2` and above.
 Please refer section [Versioning](#versioning) for detailed info.
 ```sh
 # install the library
-go get gopkg.in/resty.v0
+go get -u gopkg.in/resty.v0
 ```
 #### Latest
 ```sh
 # install the latest & greatest library
-go get github.com/go-resty/resty
+go get -u github.com/go-resty/resty
 ```
 
 ## Usage
