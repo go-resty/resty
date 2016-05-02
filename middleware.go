@@ -104,6 +104,8 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 
 		// Handling Request body
 		if r.Body != nil {
+			handleContentType(c, r)
+
 			if err = handleRequestBody(c, r); err != nil {
 				return
 			}
@@ -292,15 +294,19 @@ func handleFormData(c *Client, r *Request) {
 	r.isFormData = true
 }
 
-func handleRequestBody(c *Client, r *Request) (err error) {
+func handleContentType(c *Client, r *Request) {
 	contentType := r.Header.Get(hdrContentTypeKey)
 	if IsStringEmpty(contentType) {
 		contentType = DetectContentType(r.Body)
 		r.Header.Set(hdrContentTypeKey, contentType)
 	}
+}
 
+func handleRequestBody(c *Client, r *Request) (err error) {
 	var bodyBytes []byte
+	contentType := r.Header.Get(hdrContentTypeKey)
 	kind := kindOf(r.Body)
+
 	if reader, ok := r.Body.(io.Reader); ok {
 		r.bodyBuf = &bytes.Buffer{}
 		r.bodyBuf.ReadFrom(reader)
