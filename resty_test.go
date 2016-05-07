@@ -1097,6 +1097,44 @@ func TestDetectContentTypeForSlice(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestMuliParamQueryString(t *testing.T) {
+	ts1 := createGetServer(t)
+	defer ts1.Close()
+
+	client := dc()
+	req1 := client.R()
+
+	client.SetQueryParam("status", "open")
+
+	req1.SetQueryParam("status", "pending").
+		SetQueryParam("status", "approved").
+		Get(ts1.URL)
+
+	assertEqual(t, true, strings.Contains(req1.URL, "status=pending"))
+	assertEqual(t, true, strings.Contains(req1.URL, "status=approved"))
+
+	// because it's removed by key
+	assertEqual(t, false, strings.Contains(req1.URL, "status=open"))
+
+	ts2 := createGetServer(t)
+	defer ts2.Close()
+
+	req2 := client.R()
+
+	v := url.Values{
+		"status": []string{"pending", "approved", "reject"},
+	}
+
+	req2.SetMultiValueQueryParams(v).Get(ts2.URL)
+
+	assertEqual(t, true, strings.Contains(req2.URL, "status=pending"))
+	assertEqual(t, true, strings.Contains(req2.URL, "status=approved"))
+	assertEqual(t, true, strings.Contains(req2.URL, "status=reject"))
+
+	// because it's removed by key
+	assertEqual(t, false, strings.Contains(req2.URL, "status=open"))
+}
+
 func TestSetQueryStringTypical(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
