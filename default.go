@@ -11,6 +11,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"golang.org/x/net/publicsuffix"
@@ -35,6 +36,7 @@ func New() *Client {
 		Log:        getLogger(os.Stderr),
 		httpClient: &http.Client{Jar: cookieJar},
 		transport:  &http.Transport{},
+		mutex:      &sync.Mutex{},
 	}
 
 	// Default redirect policy

@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -61,9 +62,8 @@ var (
 	jsonContentType = "application/json; charset=utf-8"
 	formContentType = "application/x-www-form-urlencoded"
 
-	plainTextCheck = regexp.MustCompile("(?i:text/plain)")
-	jsonCheck      = regexp.MustCompile("(?i:[application|text]/json)")
-	xmlCheck       = regexp.MustCompile("(?i:[application|text]/xml)")
+	jsonCheck = regexp.MustCompile("(?i:[application|text]/json)")
+	xmlCheck  = regexp.MustCompile("(?i:[application|text]/xml)")
 
 	hdrUserAgentValue = "go-resty v%s - https://github.com/go-resty/resty"
 )
@@ -89,6 +89,7 @@ type Client struct {
 	isHTTPMode       bool
 	outputDirectory  string
 	proxyURL         *url.URL
+	mutex            *sync.Mutex
 	beforeRequest    []func(*Client, *Request) error
 	afterResponse    []func(*Client, *Response) error
 }
@@ -593,6 +594,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
+	// Do improvement here
+	c.mutex.Lock()
+
 	if req.proxyURL != nil {
 		c.transport.Proxy = http.ProxyURL(req.proxyURL)
 	} else if c.proxyURL != nil {
@@ -624,6 +628,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 		response.size = int64(len(response.body))
 	}
+
+	c.mutex.Unlock()
 
 	// Apply Response middleware
 	for _, f := range c.afterResponse {
