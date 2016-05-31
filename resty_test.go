@@ -1359,7 +1359,7 @@ func createGetServer(t *testing.T) *httptest.Server {
 			} else if r.URL.Path == "/mypage2" {
 				w.Write([]byte("TestGet: text response from mypage2"))
 			} else if r.URL.Path == "/set-timeout-test" {
-				time.Sleep(time.Second * 5)
+				time.Sleep(time.Second * 6)
 				w.Write([]byte("TestClientTimeout page"))
 			} else if r.URL.Path == "/my-image.png" {
 				fileBytes, _ := ioutil.ReadFile(getTestDataPath() + "/test-img.png")
