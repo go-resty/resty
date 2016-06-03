@@ -1033,9 +1033,9 @@ func TestDetectContentTypeForPointerWithSlice(t *testing.T) {
 	defer ts.Close()
 
 	users := &[]ExampleUser{
-		ExampleUser{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
-		ExampleUser{FirstName: "firstname2", LastName: "lastname3", ZipCode: "10002"},
-		ExampleUser{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
+		{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
+		{FirstName: "firstname2", LastName: "lastname3", ZipCode: "10002"},
+		{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
 	}
 
 	resp, err := dclr().
@@ -1080,9 +1080,9 @@ func TestDetectContentTypeForSlice(t *testing.T) {
 	defer ts.Close()
 
 	users := []ExampleUser{
-		ExampleUser{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
-		ExampleUser{FirstName: "firstname2", LastName: "lastname3", ZipCode: "10002"},
-		ExampleUser{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
+		{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
+		{FirstName: "firstname2", LastName: "lastname3", ZipCode: "10002"},
+		{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
 	}
 
 	resp, err := dclr().

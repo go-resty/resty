@@ -594,7 +594,6 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	// Do improvement here
 	c.mutex.Lock()
 
 	if req.proxyURL != nil {
@@ -608,6 +607,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	req.Time = time.Now()
 	c.httpClient.Transport = c.transport
 	resp, err := c.httpClient.Do(req.RawRequest)
+
+	c.mutex.Unlock()
 
 	response := &Response{
 		Request:     req,
@@ -628,8 +629,6 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 		response.size = int64(len(response.body))
 	}
-
-	c.mutex.Unlock()
 
 	// Apply Response middleware
 	for _, f := range c.afterResponse {
