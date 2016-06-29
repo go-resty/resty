@@ -216,6 +216,12 @@ func SetTransport(transport *http.Transport) *Client {
 	return DefaultClient.SetTransport(transport)
 }
 
+// SetScheme method sets custom scheme in the resty client.
+// See `Client.SetScheme` for more information.
+func SetScheme(scheme string) *Client {
+	return DefaultClient.SetScheme(scheme)
+}
+
 func init() {
 	DefaultClient = New()
 }
