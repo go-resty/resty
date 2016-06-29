@@ -88,6 +88,7 @@ type Client struct {
 	setContentLength bool
 	isHTTPMode       bool
 	outputDirectory  string
+	scheme           string
 	proxyURL         *url.URL
 	beforeRequest    []func(*Client, *Request) error
 	afterResponse    []func(*Client, *Response) error
@@ -582,6 +583,17 @@ func (c *Client) SetTransport(transport *http.Transport) *Client {
 	return c
 }
 
+// SetScheme method sets custom scheme in the resty client. Its way to override default.
+// 		resty.SetScheme("http")
+//
+func (c *Client) SetScheme(scheme string) *Client {
+	if c.scheme == "" {
+		c.scheme = scheme
+	}
+
+	return c
+}
+
 // executes the given `Request` object and returns response
 func (c *Client) execute(req *Request) (*Response, error) {
 	// Apply Request middleware
@@ -603,6 +615,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	req.Time = time.Now()
 	c.httpClient.Transport = c.transport
+
 	resp, err := c.httpClient.Do(req.RawRequest)
 
 	response := &Response{

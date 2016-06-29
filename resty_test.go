@@ -1213,6 +1213,14 @@ func TestSetTransport(t *testing.T) {
 	assertEqual(t, true, DefaultClient.transport != nil)
 }
 
+func TestSetScheme(t *testing.T) {
+	DefaultClient = dc()
+
+	SetScheme("http")
+
+	assertEqual(t, true, DefaultClient.scheme == "http")
+}
+
 func TestClientOptions(t *testing.T) {
 	SetHTTPMode().SetContentLength(true)
 	assertEqual(t, Mode(), "http")
@@ -1300,6 +1308,9 @@ func TestClientOptions(t *testing.T) {
 
 	SetDebug(true)
 	assertEqual(t, DefaultClient.Debug, true)
+
+	SetScheme("http")
+	assertEqual(t, DefaultClient.scheme, "http")
 
 	SetLogger(ioutil.Discard)
 }
