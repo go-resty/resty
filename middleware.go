@@ -147,6 +147,11 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest.AddCookie(cookie)
 	}
 
+	if r.RawRequest.URL != nil && r.RawRequest.URL.Scheme == "" {
+		r.RawRequest.URL.Scheme = c.scheme
+		r.RawRequest.URL.Host = r.URL
+	}
+
 	return
 }
 
