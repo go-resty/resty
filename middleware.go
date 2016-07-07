@@ -139,6 +139,10 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest, err = http.NewRequest(r.Method, r.URL, r.bodyBuf)
 	}
 
+	if err == nil {
+		r.RawRequest.Close = c.closeConnection
+	}
+
 	// Add headers into http request
 	r.RawRequest.Header = r.Header
 
