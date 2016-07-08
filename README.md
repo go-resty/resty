@@ -2,7 +2,7 @@
 
 Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty capabilities.
 
-***v0.7 released and tagged on May 01, 2016.***
+***v0.8 [released](https://github.com/go-resty/resty/releases/latest) and tagged on Jul 08, 2016.***
 
 *Since Go v1.6 HTTP/2 & HTTP/1.1 protocol is used transparently. `Resty` works fine with HTTP/2 and HTTP/1.1.*
 
