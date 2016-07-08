@@ -1350,6 +1350,9 @@ func TestClientOptions(t *testing.T) {
 	SetScheme("http")
 	assertEqual(t, DefaultClient.scheme, "http")
 
+	SetCloseConnection(true)
+	assertEqual(t, DefaultClient.closeConnection, true)
+
 	SetLogger(ioutil.Discard)
 }
 
