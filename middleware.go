@@ -139,9 +139,12 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest, err = http.NewRequest(r.Method, r.URL, r.bodyBuf)
 	}
 
-	if err == nil {
-		r.RawRequest.Close = c.closeConnection
+	if err != nil {
+		return
 	}
+
+	// Assign close connection option
+	r.RawRequest.Close = c.closeConnection
 
 	// Add headers into http request
 	r.RawRequest.Header = r.Header
@@ -151,6 +154,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest.AddCookie(cookie)
 	}
 
+	// it's for non-http scheme option
 	if r.RawRequest.URL != nil && r.RawRequest.URL.Scheme == "" {
 		r.RawRequest.URL.Scheme = c.scheme
 		r.RawRequest.URL.Host = r.URL
