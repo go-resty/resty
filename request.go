@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"brabbler/util/retry"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -410,7 +411,24 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	r.Method = method
 	r.URL = url
 
-	return r.client.execute(r)
+	if r.client.RetryCount == 0 {
+		return r.client.execute(r)
+	}
+
+	var resp *Response
+	var err error
+	attempt := 0
+	_ = retry.Backoff(func() error {
+		attempt++
+		resp, err = r.client.execute(r)
+		if err != nil {
+			r.client.Log.Printf("ERROR [%v] Attempt [%v]", err, attempt)
+		}
+
+		return err
+	}, retry.Retries(r.client.RetryCount))
+
+	return resp, err
 }
 
 func (r *Request) fmtBodyString() (body string) {

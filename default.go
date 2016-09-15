@@ -37,6 +37,7 @@ func New() *Client {
 		httpClient: &http.Client{Jar: cookieJar},
 		transport:  &http.Transport{},
 		mutex:      &sync.Mutex{},
+		RetryCount: 0,
 	}
 
 	// Default redirect policy
@@ -131,6 +132,11 @@ func OnAfterResponse(m func(*Client, *Response) error) *Client {
 // SetDebug method enables the debug mode. See `Client.SetDebug` for more information.
 func SetDebug(d bool) *Client {
 	return DefaultClient.SetDebug(d)
+}
+
+// SetRetryCount method set the retry count. See `Client.SetRetryCount` for more information.
+func SetRetryCount(count int) *Client {
+	return DefaultClient.SetRetryCount(count)
 }
 
 // SetDisableWarn method disables warning comes from `go-resty` client. See `Client.SetDisableWarn` for more information.
