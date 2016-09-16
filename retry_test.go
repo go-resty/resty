@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func Test_Backoff_Success(t *testing.T) {
+func TestBackoffSuccess(t *testing.T) {
 	attempts := 3
 	externalCounter := 0
 	retryErr := Backoff(func() error {
@@ -20,7 +20,7 @@ func Test_Backoff_Success(t *testing.T) {
 	assertEqual(t, externalCounter, attempts)
 }
 
-func Test_BackoffTenAttempts_Success(t *testing.T) {
+func TestBackoffTenAttemptsSuccess(t *testing.T) {
 	attempts := 10
 	externalCounter := 0
 	retryErr := Backoff(func() error {
