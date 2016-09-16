@@ -82,6 +82,7 @@ type Client struct {
 	Debug       bool
 	DisableWarn bool
 	Log         *log.Logger
+	RetryCount  int
 
 	httpClient       *http.Client
 	transport        *http.Transport
@@ -336,6 +337,12 @@ func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
 //
 func (c *Client) SetDebug(d bool) *Client {
 	c.Debug = d
+	return c
+}
+
+// SetRetryCount method enables retry on `go-resty` client. Uses a Backoff mechanism.
+func (c *Client) SetRetryCount(count int) *Client {
+	c.RetryCount = count
 	return c
 }
 
