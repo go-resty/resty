@@ -71,17 +71,19 @@ var (
 // Client type is used for HTTP/RESTful global values
 // for all request raised from the client
 type Client struct {
-	HostURL     string
-	QueryParam  url.Values
-	FormData    url.Values
-	Header      http.Header
-	UserInfo    *User
-	Token       string
-	Cookies     []*http.Cookie
-	Error       reflect.Type
-	Debug       bool
-	DisableWarn bool
-	Log         *log.Logger
+	HostURL         string
+	QueryParam      url.Values
+	FormData        url.Values
+	Header          http.Header
+	UserInfo        *User
+	Token           string
+	Cookies         []*http.Cookie
+	Error           reflect.Type
+	Debug           bool
+	DisableWarn     bool
+	Log             *log.Logger
+	RetryCount      int
+	RetryConditions []func(*Response) (bool, error)
 
 	httpClient       *http.Client
 	transport        *http.Transport
@@ -336,6 +338,20 @@ func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
 //
 func (c *Client) SetDebug(d bool) *Client {
 	c.Debug = d
+	return c
+}
+
+// SetRetryCount method enables retry on `go-resty` client. Uses a Backoff mechanism.
+func (c *Client) SetRetryCount(count int) *Client {
+	c.RetryCount = count
+	return c
+}
+
+// AddRetryCondition adds a function to the array of functions that are checked
+// to determine if the request is retried. The request will retry if any of the
+// functions return true.
+func (c *Client) AddRetryCondition(m func(*Response) (bool, error)) *Client {
+	c.RetryConditions = append(c.RetryConditions, m)
 	return c
 }
 
