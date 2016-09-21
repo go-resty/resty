@@ -71,18 +71,19 @@ var (
 // Client type is used for HTTP/RESTful global values
 // for all request raised from the client
 type Client struct {
-	HostURL     string
-	QueryParam  url.Values
-	FormData    url.Values
-	Header      http.Header
-	UserInfo    *User
-	Token       string
-	Cookies     []*http.Cookie
-	Error       reflect.Type
-	Debug       bool
-	DisableWarn bool
-	Log         *log.Logger
-	RetryCount  int
+	HostURL         string
+	QueryParam      url.Values
+	FormData        url.Values
+	Header          http.Header
+	UserInfo        *User
+	Token           string
+	Cookies         []*http.Cookie
+	Error           reflect.Type
+	Debug           bool
+	DisableWarn     bool
+	Log             *log.Logger
+	RetryCount      int
+	RetryConditions []func(*Response) (bool, error)
 
 	httpClient       *http.Client
 	transport        *http.Transport
@@ -95,7 +96,6 @@ type Client struct {
 	closeConnection  bool
 	beforeRequest    []func(*Client, *Request) error
 	afterResponse    []func(*Client, *Response) error
-	retryCondition   []func(*Response) (bool, error)
 }
 
 // User type is to hold an username and password information
@@ -351,7 +351,7 @@ func (c *Client) SetRetryCount(count int) *Client {
 // to determine if the request is retried. The request will retry if any of the
 // functions return true.
 func (c *Client) AddRetryCondition(m func(*Response) (bool, error)) *Client {
-	c.retryCondition = append(c.retryCondition, m)
+	c.RetryConditions = append(c.RetryConditions, m)
 	return c
 }
 

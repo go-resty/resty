@@ -425,7 +425,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		}
 
 		return resp, err
-	}, Retries(r.client.RetryCount))
+	}, Retries(r.client.RetryCount), RetryConditions(r.client.RetryConditions))
 
 	return resp, err
 }
