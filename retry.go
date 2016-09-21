@@ -13,9 +13,10 @@ type Option func(*Options)
 
 // Options ...
 type Options struct {
-	maxRetries  int
-	waitTime    int
-	maxWaitTime int
+	maxRetries      int
+	waitTime        int
+	maxWaitTime     int
+	retryConditions []func(*Response) (bool, error)
 }
 
 // Retries sets the max number of retries
@@ -39,20 +40,40 @@ func MaxWaitTime(value int) Option {
 	}
 }
 
+// RetryConditions sets the conditions that will be checked for retry.
+func RetryConditions(conditions []func(*Response) (bool, error)) Option {
+	return func(o *Options) {
+		o.retryConditions = conditions
+	}
+}
+
 //Backoff retries with increasing timeout duration up until X amount of retries (Default is 3 attempts, Override with option Retries(n))
-func Backoff(operation function, options ...Option) error {
+func Backoff(operation func() (*Response, error), options ...Option) error {
 	// Defaults
-	opts := Options{maxRetries: 3, waitTime: 100, maxWaitTime: 2000}
+	opts := Options{maxRetries: 3, waitTime: 100, maxWaitTime: 2000, retryConditions: []func(*Response) (bool, error){}}
 	for _, o := range options {
 		o(&opts)
 	}
 
+	var resp *Response
 	var err error
 	base := float64(opts.waitTime)        // Time to wait between each attempt
 	capLevel := float64(opts.maxWaitTime) // Maximum amount of wait time for the retry
 	for attempt := 0; attempt < opts.maxRetries; attempt++ {
-		err = operation()
-		if err == nil {
+		resp, err = operation()
+
+		var needsRetry bool
+		var conditionErr error
+		for _, condition := range opts.retryConditions {
+			needsRetry, conditionErr = condition(resp)
+			if needsRetry || conditionErr != nil {
+				break
+			}
+		}
+
+		// If the operation returned no error, there was no condition satisfied and
+		// there was no error caused by the conditional functions.
+		if err == nil && needsRetry == false && conditionErr == nil {
 			return nil
 		}
 		// Adding capped exponential backup with jitter

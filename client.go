@@ -95,6 +95,7 @@ type Client struct {
 	closeConnection  bool
 	beforeRequest    []func(*Client, *Request) error
 	afterResponse    []func(*Client, *Response) error
+	retryCondition   []func(*Response) (bool, error)
 }
 
 // User type is to hold an username and password information
@@ -343,6 +344,14 @@ func (c *Client) SetDebug(d bool) *Client {
 // SetRetryCount method enables retry on `go-resty` client. Uses a Backoff mechanism.
 func (c *Client) SetRetryCount(count int) *Client {
 	c.RetryCount = count
+	return c
+}
+
+// AddRetryCondition adds a function to the array of functions that are checked
+// to determine if the request is retried. The request will retry if any of the
+// functions return true.
+func (c *Client) AddRetryCondition(m func(*Response) (bool, error)) *Client {
+	c.retryCondition = append(c.retryCondition, m)
 	return c
 }
 

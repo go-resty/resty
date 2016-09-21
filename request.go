@@ -417,14 +417,14 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	var resp *Response
 	var err error
 	attempt := 0
-	_ = Backoff(func() error {
+	_ = Backoff(func() (*Response, error) {
 		attempt++
 		resp, err = r.client.execute(r)
 		if err != nil {
 			r.client.Log.Printf("ERROR [%v] Attempt [%v]", err, attempt)
 		}
 
-		return err
+		return resp, err
 	}, Retries(r.client.RetryCount))
 
 	return resp, err
