@@ -122,3 +122,37 @@ func TestConditionalGet(t *testing.T) {
 
 	logResponse(t, resp)
 }
+
+// Check to make sure the package Function works.
+func TestConditionalGetDefaultClient(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+	attemptCount := 1
+	externalCounter := 0
+
+	// This check should pass on first run, and let the response through
+	check := func(*Response) (bool, error) {
+		externalCounter++
+		if attemptCount != externalCounter {
+			return false, errors.New("Attempts not equal Counter")
+		}
+		return false, nil
+	}
+
+	// Clear the default client.
+	_ = dc()
+	// Proceed to check.
+	client := AddRetryCondition(check).SetRetryCount(1)
+	resp, err := client.R().
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+		Get(ts.URL + "/")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "200 OK", resp.Status())
+	assertEqual(t, true, resp.Body() != nil)
+	assertEqual(t, "TestGet: text response", resp.String())
+	assertEqual(t, externalCounter, attemptCount)
+
+	logResponse(t, resp)
+}
