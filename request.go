@@ -165,6 +165,24 @@ func (r *Request) SetFormData(data map[string]string) *Request {
 	return r
 }
 
+// SetMultiValueFormData method sets multiple form paramaters with multi-value
+// at one go in the current request.
+// 		resty.R().
+//			SetMultiValueFormData(url.Values{
+//				"search_criteria": []string{"book", "glass", "pencil"},
+//			})
+// Also you can override form data value, which was set at client instance level
+//
+func (r *Request) SetMultiValueFormData(params url.Values) *Request {
+	for k, v := range params {
+		for _, kv := range v {
+			r.FormData.Add(k, kv)
+		}
+	}
+
+	return r
+}
+
 // SetBody method sets the request body for the request. It supports various realtime need easy.
 // We can say its quite handy or powerful. Supported request body data types is `string`, `[]byte`,
 // `struct` and `map`. Body value can be pointer or non-pointer. Automatic marshalling

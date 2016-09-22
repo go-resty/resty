@@ -269,18 +269,22 @@ func handleMultipart(c *Client, r *Request) (err error) {
 	r.bodyBuf = &bytes.Buffer{}
 	w := multipart.NewWriter(r.bodyBuf)
 
-	for p := range c.FormData {
-		w.WriteField(p, c.FormData.Get(p))
+	for k, v := range c.FormData {
+		for _, iv := range v {
+			w.WriteField(k, iv)
+		}
 	}
 
-	for p := range r.FormData {
-		if strings.HasPrefix(p, "@") { // file
-			err = addFile(w, p[1:], r.FormData.Get(p))
-			if err != nil {
-				return
+	for k, v := range r.FormData {
+		for _, iv := range v {
+			if strings.HasPrefix(k, "@") { // file
+				err = addFile(w, k[1:], iv)
+				if err != nil {
+					return
+				}
+			} else { // form value
+				w.WriteField(k, iv)
 			}
-		} else { // form value
-			w.WriteField(p, r.FormData.Get(p))
 		}
 	}
 
@@ -303,12 +307,20 @@ func handleMultipart(c *Client, r *Request) (err error) {
 func handleFormData(c *Client, r *Request) {
 	formData := url.Values{}
 
-	for p := range c.FormData {
-		formData.Set(p, c.FormData.Get(p))
+	for k, v := range c.FormData {
+		for _, iv := range v {
+			formData.Add(k, iv)
+		}
 	}
 
-	for p := range r.FormData { // takes precedence
-		formData.Set(p, r.FormData.Get(p))
+	for k, v := range r.FormData {
+		// remove form data field from client level by key
+		// since overrides happens for that key in the request
+		formData.Del(k)
+
+		for _, iv := range v {
+			formData.Add(k, iv)
+		}
 	}
 
 	r.bodyBuf = bytes.NewBuffer([]byte(formData.Encode()))
