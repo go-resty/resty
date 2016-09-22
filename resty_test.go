@@ -508,6 +508,28 @@ func TestFormData(t *testing.T) {
 	assertEqual(t, "Success", resp.String())
 }
 
+func TestMultiValueFormData(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+
+	v := url.Values{
+		"search_criteria": []string{"book", "glass", "pencil"},
+	}
+
+	c := dc()
+	c.SetContentLength(true).
+		SetDebug(true).
+		SetLogger(ioutil.Discard)
+
+	resp, err := c.R().
+		SetMultiValueFormData(v).
+		Post(ts.URL + "/search")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "Success", resp.String())
+}
+
 func TestFormDataDisableWarn(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
@@ -1541,6 +1563,15 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				t.Logf("LastName: %v", r.FormValue("last_name"))
 				t.Logf("City: %v", r.FormValue("city"))
 				t.Logf("Zip Code: %v", r.FormValue("zip_code"))
+
+				w.Write([]byte("Success"))
+				return
+			} else if r.URL.Path == "/search" {
+				formEncodedData := r.Form.Encode()
+				t.Logf("Recevied Form Encoded values: %v", formEncodedData)
+
+				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=pencil"))
+				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=glass"))
 
 				w.Write([]byte("Success"))
 				return

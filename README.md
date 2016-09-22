@@ -304,6 +304,14 @@ resp, err := resty.R().
         "city": "new city update",
       }).
       Post("http://myapp.com/profile")
+
+// Multi value form data
+criteria := url.Values{
+  "search_criteria": []string{"book", "glass", "pencil"},
+}
+resp, err := resty.R().
+      SetMultiValueFormData(criteria).
+      Post("http://myapp.com/search")
 ```
 
 #### Save HTTP Response into File
