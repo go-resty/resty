@@ -1,3 +1,7 @@
+// Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// resty source code and usage is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 package resty
 
 import (
@@ -11,7 +15,7 @@ type function func() error
 // Option ...
 type Option func(*Options)
 
-// Options ...
+// Options to hold go-resty retry values
 type Options struct {
 	maxRetries  int
 	waitTime    int
@@ -39,7 +43,8 @@ func MaxWaitTime(value int) Option {
 	}
 }
 
-//Backoff retries with increasing timeout duration up until X amount of retries (Default is 3 attempts, Override with option Retries(n))
+// Backoff retries with increasing timeout duration up until X amount of retries
+// (Default is 3 attempts, Override with option Retries(n))
 func Backoff(operation function, options ...Option) error {
 	// Defaults
 	opts := Options{maxRetries: 3, waitTime: 100, maxWaitTime: 2000}
@@ -55,6 +60,7 @@ func Backoff(operation function, options ...Option) error {
 		if err == nil {
 			return nil
 		}
+
 		// Adding capped exponential backup with jitter
 		// See the following article...
 		// http://www.awsarchitectureblog.com/2015/03/backoff.html
