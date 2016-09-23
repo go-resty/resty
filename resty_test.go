@@ -879,6 +879,20 @@ func TestClientTimeout(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err.Error(), "i/o timeout"))
 }
 
+func TestClientRetry(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetHTTPMode().
+		SetTimeout(time.Duration(time.Second * 3)).
+		SetRetryCount(3)
+
+	_, err := c.R().Get(ts.URL + "/set-retrycount-test")
+
+	assertError(t, err)
+}
+
 func TestClientTimeoutInternalError(t *testing.T) {
 	c := dc()
 	c.SetHTTPMode()
@@ -1342,6 +1356,9 @@ func TestClientOptions(t *testing.T) {
 	SetDisableWarn(true)
 	assertEqual(t, DefaultClient.DisableWarn, true)
 
+	SetRetryCount(3)
+	assertEqual(t, 3, DefaultClient.RetryCount)
+
 	err := &AuthError{}
 	SetError(err)
 	if reflect.TypeOf(err) == DefaultClient.Error {
@@ -1383,10 +1400,14 @@ func getTestDataPath() string {
 	return pwd + "/test-data"
 }
 
+// Used for retry testing...
+var attempt int
+
 func createGetServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
+
 		if r.Method == GET {
 			if r.URL.Path == "/" {
 				w.Write([]byte("TestGet: text response"))
@@ -1394,9 +1415,16 @@ func createGetServer(t *testing.T) *httptest.Server {
 				w.WriteHeader(http.StatusBadRequest)
 			} else if r.URL.Path == "/mypage2" {
 				w.Write([]byte("TestGet: text response from mypage2"))
+			} else if r.URL.Path == "/set-retrycount-test" {
+				attempt++
+				if attempt != 3 {
+					time.Sleep(time.Second * 6)
+				}
+				w.Write([]byte("TestClientRetry page"))
 			} else if r.URL.Path == "/set-timeout-test" {
 				time.Sleep(time.Second * 6)
 				w.Write([]byte("TestClientTimeout page"))
+
 			} else if r.URL.Path == "/my-image.png" {
 				fileBytes, _ := ioutil.ReadFile(getTestDataPath() + "/test-img.png")
 				w.Header().Set("Content-Type", "image/png")
