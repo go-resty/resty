@@ -627,8 +627,6 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		c.transport.Proxy = http.ProxyURL(req.proxyURL)
 	} else if c.proxyURL != nil {
 		c.transport.Proxy = http.ProxyURL(c.proxyURL)
-	} else {
-		c.transport.Proxy = nil
 	}
 
 	req.Time = time.Now()
