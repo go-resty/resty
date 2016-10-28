@@ -71,18 +71,19 @@ var (
 // Client type is used for HTTP/RESTful global values
 // for all request raised from the client
 type Client struct {
-	HostURL     string
-	QueryParam  url.Values
-	FormData    url.Values
-	Header      http.Header
-	UserInfo    *User
-	Token       string
-	Cookies     []*http.Cookie
-	Error       reflect.Type
-	Debug       bool
-	DisableWarn bool
-	Log         *log.Logger
-	RetryCount  int
+	HostURL         string
+	QueryParam      url.Values
+	FormData        url.Values
+	Header          http.Header
+	UserInfo        *User
+	Token           string
+	Cookies         []*http.Cookie
+	Error           reflect.Type
+	Debug           bool
+	DisableWarn     bool
+	Log             *log.Logger
+	RetryCount      int
+	RetryConditions []RetryConditionFunc
 
 	httpClient       *http.Client
 	transport        *http.Transport
@@ -340,12 +341,6 @@ func (c *Client) SetDebug(d bool) *Client {
 	return c
 }
 
-// SetRetryCount method enables retry on `go-resty` client. Uses a Backoff mechanism.
-func (c *Client) SetRetryCount(count int) *Client {
-	c.RetryCount = count
-	return c
-}
-
 // SetDisableWarn method disables the warning message on `go-resty` client.
 // For example: go-resty warns the user when BasicAuth used on HTTP mode.
 //		resty.SetDisableWarn(true)
@@ -415,6 +410,21 @@ func (c *Client) SetRedirectPolicy(policies ...interface{}) *Client {
 		return nil // looks good, go ahead
 	}
 
+	return c
+}
+
+// SetRetryCount method enables retry on `go-resty` client and allows you
+// to set no. of retry count. Resty uses a Backoff mechanism.
+func (c *Client) SetRetryCount(count int) *Client {
+	c.RetryCount = count
+	return c
+}
+
+// AddRetryCondition method adds a retry condition function to array of functions
+// that are checked to determine if the request is retried. The request will
+// retry if any of the functions return true and error is nil.
+func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
+	c.RetryConditions = append(c.RetryConditions, condition)
 	return c
 }
 

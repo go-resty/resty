@@ -139,6 +139,11 @@ func SetRetryCount(count int) *Client {
 	return DefaultClient.SetRetryCount(count)
 }
 
+// AddRetryCondition method appends check function for retry. See `Client.AddRetryCondition` for more information.
+func AddRetryCondition(condition RetryConditionFunc) *Client {
+	return DefaultClient.AddRetryCondition(condition)
+}
+
 // SetDisableWarn method disables warning comes from `go-resty` client. See `Client.SetDisableWarn` for more information.
 func SetDisableWarn(d bool) *Client {
 	return DefaultClient.SetDisableWarn(d)
