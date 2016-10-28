@@ -256,7 +256,7 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 // 		resty.SetBasicAuth("go-resty", "welcome")
 //
 // This basic auth information gets added to all the request rasied from this client instance.
-// Also it can be overriden or set one at the request level is supported, see `resty.R().SetBasicAuth`.
+// Also it can be overridden or set one at the request level is supported, see `resty.R().SetBasicAuth`.
 //
 func (c *Client) SetBasicAuth(username, password string) *Client {
 	c.UserInfo = &User{Username: username, Password: password}
@@ -271,7 +271,7 @@ func (c *Client) SetBasicAuth(username, password string) *Client {
 // 		resty.SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F")
 //
 // This bearer auth token gets added to all the request rasied from this client instance.
-// Also it can be overriden or set one at the request level is supported, see `resty.R().SetAuthToken`.
+// Also it can be overridden or set one at the request level is supported, see `resty.R().SetAuthToken`.
 //
 func (c *Client) SetAuthToken(token string) *Client {
 	c.Token = token
