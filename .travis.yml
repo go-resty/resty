@@ -16,11 +16,6 @@ go:
   - 1.7
   - tip
 
-before_install:
-  - go get github.com/onsi/gomega
-  - go get github.com/onsi/ginkgo
-  - go get golang.org/x/tools/cmd/cover
-
 install:
   - go get -v ./...
 
