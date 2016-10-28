@@ -10,16 +10,24 @@ import (
 	"time"
 )
 
-type function func() error
+const (
+	defaultMaxRetries  = 3
+	defaultWaitTime    = 100  // base Milliseconds
+	defaultMaxWaitTime = 2000 // cap level Milliseconds
+)
 
-// Option ...
+// Option is to create convenient retry options like wait time, max retries, etc.
 type Option func(*Options)
+
+// RetryConditionFunc type is for retry condition function
+type RetryConditionFunc func(*Response) (bool, error)
 
 // Options to hold go-resty retry values
 type Options struct {
-	maxRetries  int
-	waitTime    int
-	maxWaitTime int
+	maxRetries      int
+	waitTime        int
+	maxWaitTime     int
+	retryConditions []RetryConditionFunc
 }
 
 // Retries sets the max number of retries
@@ -43,24 +51,51 @@ func MaxWaitTime(value int) Option {
 	}
 }
 
+// RetryConditions sets the conditions that will be checked for retry.
+func RetryConditions(conditions []RetryConditionFunc) Option {
+	return func(o *Options) {
+		o.retryConditions = conditions
+	}
+}
+
 // Backoff retries with increasing timeout duration up until X amount of retries
 // (Default is 3 attempts, Override with option Retries(n))
-func Backoff(operation function, options ...Option) error {
+func Backoff(operation func() (*Response, error), options ...Option) error {
 	// Defaults
-	opts := Options{maxRetries: 3, waitTime: 100, maxWaitTime: 2000}
+	opts := Options{
+		maxRetries:      defaultMaxRetries,
+		waitTime:        defaultWaitTime,
+		maxWaitTime:     defaultMaxWaitTime,
+		retryConditions: []RetryConditionFunc{},
+	}
+
 	for _, o := range options {
 		o(&opts)
 	}
 
-	var err error
+	var (
+		resp *Response
+		err  error
+	)
 	base := float64(opts.waitTime)        // Time to wait between each attempt
 	capLevel := float64(opts.maxWaitTime) // Maximum amount of wait time for the retry
 	for attempt := 0; attempt < opts.maxRetries; attempt++ {
-		err = operation()
-		if err == nil {
-			return nil
+		resp, err = operation()
+
+		var needsRetry bool
+		var conditionErr error
+		for _, condition := range opts.retryConditions {
+			needsRetry, conditionErr = condition(resp)
+			if needsRetry || conditionErr != nil {
+				break
+			}
 		}
 
+		// If the operation returned no error, there was no condition satisfied and
+		// there was no error caused by the conditional functions.
+		if err == nil && !needsRetry && conditionErr == nil {
+			return nil
+		}
 		// Adding capped exponential backup with jitter
 		// See the following article...
 		// http://www.awsarchitectureblog.com/2015/03/backoff.html
