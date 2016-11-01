@@ -2,9 +2,18 @@
 
 Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty capabilities.
 
-***v0.8 [released](https://github.com/go-resty/resty/releases/latest) and tagged on Jul 08, 2016.***
+***v0.9 [released](https://github.com/go-resty/resty/releases/latest) and tagged on Nov 01, 2016.***
 
 *Since Go v1.6 HTTP/2 & HTTP/1.1 protocol is used transparently. `Resty` works fine with HTTP/2 and HTTP/1.1.*
+
+#### Roadmap
+***v0.10***
+
+I will be focusing on golint, etc. code quality improvements (may have very minor breaking change due to golint)
+
+***v1.0 (Around New Year)***
+
+Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very handy and helpful library of HTTP & REST Client in the golang community. I'm planning to freeze API and make v1.0 release.
 
 #### Features
 * GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS
@@ -17,6 +26,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#fea
 * Automatic marshal and unmarshal for `JSON` and `XML` content type
   * Default is `JSON`, if you supply `struct/map` without header `Content-Type`
 * Easy to upload one or more file(s) via `multipart/form-data`
+* Backoff Retry Mechanism with retry condition function [reference](retry_test.go)
 * resty client [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middlewares
 * Authorization option of `BasicAuth` and `Bearer` token
 * Set request `ContentLength` value for all request or particular request
@@ -43,6 +53,7 @@ resty tested with Go `v1.2` and above.
     * FlexibleRedirectPolicy
     * DomainCheckRedirectPolicy
     * etc. [more info](redirect.go)
+  * Backoff Retry Mechanism with retry condition function [reference](retry_test.go)
   * etc (upcoming - throw your idea's [here](https://github.com/go-resty/resty/issues)).
 
 ## Installation
