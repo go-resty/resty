@@ -43,7 +43,7 @@ func Example_get() {
 	fmt.Printf("\nResponse Status: %v", resp.Status())
 	fmt.Printf("\nResponse Body: %v", resp)
 	fmt.Printf("\nResponse Time: %v", resp.Time())
-	fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt)
+	fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
 }
 
 func Example_enhancedGet() {
