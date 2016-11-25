@@ -1280,6 +1280,25 @@ func TestOutputFileAbsPath(t *testing.T) {
 	assertError(t, err)
 }
 
+func TestContextInternal(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	r := R().
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10))
+
+	if r.isContextCancelledIfAvailable() != false {
+		t.Error("isContextCancelledIfAvailable != false for vanilla R()")
+	}
+	r.addContextIfAvailable()
+
+	resp, err := r.Get(ts.URL + "/")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+}
+
 func TestSetTransport(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
