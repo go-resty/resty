@@ -885,7 +885,7 @@ func TestClientTimeout(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err.Error(), "i/o timeout"))
 }
 
-func TestClientRetry(t *testing.T) {
+func TestClientRetryGet(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -897,6 +897,49 @@ func TestClientRetry(t *testing.T) {
 	_, err := c.R().Get(ts.URL + "/set-retrycount-test")
 
 	assertError(t, err)
+}
+
+func TestClientRetryPost(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	usersmap := map[string]interface{}{
+		"user1": ExampleUser{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
+	}
+
+	var users []map[string]interface{}
+	users = append(users, usersmap)
+
+	c := dc()
+	c.SetRetryCount(3)
+	c.OnAfterResponse(func(c *Client, r *Response) error {
+		if r.StatusCode() >= 500 {
+			return errors.New("error")
+		}
+		return nil
+	})
+
+	resp, err := c.R().
+		SetBody(&users).
+		Post(ts.URL + "/usersmap?status=500")
+
+	assertError(t, err)
+	if resp.RawResponse != nil {
+		if resp.RawResponse.StatusCode == 500 {
+			t.Logf("Got response body: %s", string(resp.body))
+			var usersResponse []map[string]interface{}
+			err := json.Unmarshal(resp.body, usersResponse)
+			if err != nil {
+				t.Errorf("Could not decode json response: %s", err.Error())
+			}
+			if !reflect.DeepEqual(users, usersResponse) {
+				t.Errorf("Expected request body to be echoed back as response body. Instead got: %s", string(resp.body))
+			}
+
+			return
+		}
+		t.Errorf("Got unexpected response code: %d with body: %s", resp.StatusCode(), string(resp.body))
+	}
 }
 
 func TestClientTimeoutInternalError(t *testing.T) {
@@ -1555,6 +1598,17 @@ func createPostServer(t *testing.T) *httptest.Server {
 			if r.URL.Path == "/usersmap" {
 				// JSON
 				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+					if r.URL.Query().Get("status") == "500" {
+						body, err := ioutil.ReadAll(r.Body)
+						if err != nil {
+							t.Errorf("Error: could not read post body: %s", err.Error())
+						}
+						t.Logf("Got query param: status=500 so we're returning the post body as response and a 500 status code. body: %s", string(body))
+						w.WriteHeader(http.StatusInternalServerError)
+						w.Write(body)
+						return
+					}
+
 					var users []map[string]interface{}
 					jd := json.NewDecoder(r.Body)
 					err := jd.Decode(&users)
