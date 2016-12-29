@@ -5,8 +5,11 @@
 package resty
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -156,6 +159,65 @@ func TestConditionalGetDefaultClient(t *testing.T) {
 	assertEqual(t, externalCounter, attemptCount)
 
 	logResponse(t, resp)
+}
+
+func TestClientRetryGet(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetHTTPMode().
+		SetTimeout(time.Duration(time.Second * 3)).
+		SetRetryCount(3)
+
+	_, err := c.R().Get(ts.URL + "/set-retrycount-test")
+
+	assertError(t, err)
+}
+
+func GetFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
+func TestClientRetryPost(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	usersmap := map[string]interface{}{
+		"user1": map[string]interface{}{"FirstName": "firstname1", "LastName": "lastname1", "ZipCode": "10001"},
+	}
+
+	var users []map[string]interface{}
+	users = append(users, usersmap)
+
+	c := dc()
+	c.SetRetryCount(3)
+	c.AddRetryCondition(RetryConditionFunc(func(r *Response) (bool, error) {
+		if r.StatusCode() >= http.StatusInternalServerError {
+			return false, errors.New("error")
+		}
+		return true, nil
+	}))
+
+	resp, _ := c.R().
+		SetBody(&users).
+		Post(ts.URL + "/usersmap?status=500")
+
+	if resp != nil {
+		if resp.StatusCode() == http.StatusInternalServerError {
+			t.Logf("Got response body: %s", string(resp.body))
+			var usersResponse []map[string]interface{}
+			err := json.Unmarshal(resp.body, &usersResponse)
+			assertError(t, err)
+
+			if !reflect.DeepEqual(users, usersResponse) {
+				t.Errorf("Expected request body to be echoed back as response body. Instead got: %s", string(resp.body))
+			}
+
+			return
+		}
+		t.Errorf("Got unexpected response code: %d with body: %s", resp.StatusCode(), string(resp.body))
+	}
 }
 
 func filler(*Response) (bool, error) {

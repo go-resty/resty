@@ -885,20 +885,6 @@ func TestClientTimeout(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err.Error(), "i/o timeout"))
 }
 
-func TestClientRetry(t *testing.T) {
-	ts := createGetServer(t)
-	defer ts.Close()
-
-	c := dc()
-	c.SetHTTPMode().
-		SetTimeout(time.Duration(time.Second * 3)).
-		SetRetryCount(3)
-
-	_, err := c.R().Get(ts.URL + "/set-retrycount-test")
-
-	assertError(t, err)
-}
-
 func TestClientTimeoutInternalError(t *testing.T) {
 	c := dc()
 	c.SetHTTPMode()
@@ -1545,6 +1531,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
+		t.Logf("RawQuery: %v", r.URL.RawQuery)
 		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
 
 		if r.Method == MethodPost {
@@ -1555,6 +1542,18 @@ func createPostServer(t *testing.T) *httptest.Server {
 			if r.URL.Path == "/usersmap" {
 				// JSON
 				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+					if r.URL.Query().Get("status") == "500" {
+						body, err := ioutil.ReadAll(r.Body)
+						if err != nil {
+							t.Errorf("Error: could not read post body: %s", err.Error())
+						}
+						t.Logf("Got query param: status=500 so we're returning the post body as response and a 500 status code. body: %s", string(body))
+						w.Header().Set(hdrContentTypeKey, jsonContentType)
+						w.WriteHeader(http.StatusInternalServerError)
+						_, _ = w.Write(body)
+						return
+					}
+
 					var users []map[string]interface{}
 					jd := json.NewDecoder(r.Body)
 					err := jd.Decode(&users)

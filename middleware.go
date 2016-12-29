@@ -344,6 +344,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	var bodyBytes []byte
 	contentType := r.Header.Get(hdrContentTypeKey)
 	kind := kindOf(r.Body)
+	r.bodyBuf = nil
 
 	if reader, ok := r.Body.(io.Reader); ok {
 		r.bodyBuf = &bytes.Buffer{}
