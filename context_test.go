@@ -5,7 +5,6 @@ package resty
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 )
@@ -74,7 +73,7 @@ func TestSetContextCancel(t *testing.T) {
 	<-ch // wait for server to finish request handling
 
 	t.Logf("Error: %v", err)
-	if !strings.Contains(err.Error(), "request canceled") {
+	if !errIsContextCanceled(err) {
 		t.Errorf("Got unexpected error: %v", err)
 	}
 }
@@ -118,7 +117,7 @@ func TestSetContextCancelRetry(t *testing.T) {
 	<-ch // wait for server to finish request handling
 
 	t.Logf("Error: %v", err)
-	if !strings.Contains(err.Error(), "request canceled") {
+	if !errIsContextCanceled(err) {
 		t.Errorf("Got unexpected error: %v", err)
 	}
 
@@ -161,7 +160,7 @@ func TestSetContextCancelWithError(t *testing.T) {
 	<-ch // wait for server to finish request handling
 
 	t.Logf("Error: %v", err)
-	if !strings.Contains(err.Error(), "request canceled") {
+	if !errIsContextCanceled(err) {
 		t.Errorf("Got unexpected error: %v", err)
 	}
 }
