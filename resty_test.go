@@ -1273,7 +1273,7 @@ func TestContextInternal(t *testing.T) {
 	r := R().
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10))
 
-	if r.isContextCancelledIfAvailable() != false {
+	if r.isContextCancelledIfAvailable() {
 		t.Error("isContextCancelledIfAvailable != false for vanilla R()")
 	}
 	r.addContextIfAvailable()
