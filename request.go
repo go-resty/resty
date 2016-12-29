@@ -11,42 +11,10 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
-	"time"
 )
-
-// Request type is used to compose and send individual request from client
-// go-resty is provide option override client level settings such as
-//		Auth Token, Basic Auth credentials, Header, Query Param, Form Data, Error object
-// and also you can add more options for that particular request
-//
-type Request struct {
-	URL        string
-	Method     string
-	QueryParam url.Values
-	FormData   url.Values
-	Header     http.Header
-	UserInfo   *User
-	Token      string
-	Body       interface{}
-	Result     interface{}
-	Error      interface{}
-	Time       time.Time
-	RawRequest *http.Request
-
-	client           *Client
-	bodyBuf          *bytes.Buffer
-	isMultiPart      bool
-	isFormData       bool
-	setContentLength bool
-	isSaveResponse   bool
-	outputFile       string
-	proxyURL         *url.URL
-	multipartFiles   []*File
-}
 
 // SetHeader method is to set a single header field and its value in the current request.
 // Example: To set `Content-Type` and `Accept` as `application/json`.
@@ -440,6 +408,11 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		resp, err = r.client.execute(r)
 		if err != nil {
 			r.client.Log.Printf("ERROR [%v] Attempt [%v]", err, attempt)
+			if r.isContextCancelledIfAvailable() {
+				// stop Backoff from retrying request if request has been
+				// canceled by context
+				return resp, nil
+			}
 		}
 
 		return resp, err

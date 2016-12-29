@@ -160,6 +160,9 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest.URL.Host = r.URL
 	}
 
+	// Use context if it was specified
+	r.addContextIfAvailable()
+
 	return
 }
 
