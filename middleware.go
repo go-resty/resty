@@ -96,7 +96,7 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 	if isPayloadSupported(r.Method) {
 
 		// Handling Multipart
-		if r.isMultiPart && !(r.Method == PATCH) {
+		if r.isMultiPart && !(r.Method == MethodPatch) {
 			if err = handleMultipart(c, r); err != nil {
 				return
 			}
@@ -271,7 +271,9 @@ func handleMultipart(c *Client, r *Request) (err error) {
 
 	for k, v := range c.FormData {
 		for _, iv := range v {
-			w.WriteField(k, iv)
+			if err = w.WriteField(k, iv); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -283,7 +285,9 @@ func handleMultipart(c *Client, r *Request) (err error) {
 					return
 				}
 			} else { // form value
-				w.WriteField(k, iv)
+				if err = w.WriteField(k, iv); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -343,7 +347,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 
 	if reader, ok := r.Body.(io.Reader); ok {
 		r.bodyBuf = &bytes.Buffer{}
-		r.bodyBuf.ReadFrom(reader)
+		_, err = r.bodyBuf.ReadFrom(reader)
 	} else if b, ok := r.Body.([]byte); ok {
 		bodyBytes = b
 	} else if s, ok := r.Body.(string); ok {
@@ -390,10 +394,14 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 		if err != nil {
 			return err
 		}
-		defer outFile.Close()
+		defer func() {
+			_ = outFile.Close()
+		}()
 
 		// io.Copy reads maximum 32kb size, it is perfect for large file download too
-		defer res.RawResponse.Body.Close()
+		defer func() {
+			_ = res.RawResponse.Body.Close()
+		}()
 		written, err := io.Copy(outFile, res.RawResponse.Body)
 		if err != nil {
 			return err

@@ -161,11 +161,13 @@ func Example_customRootCertificate() {
 func ExampleNew() {
 	// Creating client1
 	client1 := resty.New()
-	client1.R().Get("http://httpbin.org/get")
+	resp1, err1 := client1.R().Get("http://httpbin.org/get")
+	fmt.Println(resp1, err1)
 
 	// Creating client2
 	client2 := resty.New()
-	client2.R().Get("http://httpbin.org/get")
+	resp2, err2 := client2.R().Get("http://httpbin.org/get")
+	fmt.Println(resp2, err2)
 }
 
 //

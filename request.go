@@ -383,37 +383,37 @@ func (r *Request) SetProxy(proxyURL string) *Request {
 
 // Get method does GET HTTP request. It's defined in section 4.3.1 of RFC7231.
 func (r *Request) Get(url string) (*Response, error) {
-	return r.Execute(GET, url)
+	return r.Execute(MethodGet, url)
 }
 
 // Head method does HEAD HTTP request. It's defined in section 4.3.2 of RFC7231.
 func (r *Request) Head(url string) (*Response, error) {
-	return r.Execute(HEAD, url)
+	return r.Execute(MethodHead, url)
 }
 
 // Post method does POST HTTP request. It's defined in section 4.3.3 of RFC7231.
 func (r *Request) Post(url string) (*Response, error) {
-	return r.Execute(POST, url)
+	return r.Execute(MethodPost, url)
 }
 
 // Put method does PUT HTTP request. It's defined in section 4.3.4 of RFC7231.
 func (r *Request) Put(url string) (*Response, error) {
-	return r.Execute(PUT, url)
+	return r.Execute(MethodPut, url)
 }
 
 // Delete method does DELETE HTTP request. It's defined in section 4.3.5 of RFC7231.
 func (r *Request) Delete(url string) (*Response, error) {
-	return r.Execute(DELETE, url)
+	return r.Execute(MethodDelete, url)
 }
 
 // Options method does OPTIONS HTTP request. It's defined in section 4.3.7 of RFC7231.
 func (r *Request) Options(url string) (*Response, error) {
-	return r.Execute(OPTIONS, url)
+	return r.Execute(MethodOptions, url)
 }
 
 // Patch method does PATCH HTTP request. It's defined in section 2 of RFC5789.
 func (r *Request) Patch(url string) (*Response, error) {
-	return r.Execute(PATCH, url)
+	return r.Execute(MethodPatch, url)
 }
 
 // Execute method performs the HTTP request with given HTTP method and URL
@@ -421,7 +421,7 @@ func (r *Request) Patch(url string) (*Response, error) {
 // 		resp, err := resty.R().Execute(resty.GET, "http://httpbin.org/get")
 //
 func (r *Request) Execute(method, url string) (*Response, error) {
-	if r.isMultiPart && !(method == POST || method == PUT) {
+	if r.isMultiPart && !(method == MethodPost || method == MethodPut) {
 		return nil, fmt.Errorf("Multipart content is not allowed in HTTP verb [%v]", method)
 	}
 

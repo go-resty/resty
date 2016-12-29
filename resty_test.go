@@ -904,7 +904,7 @@ func TestClientTimeoutInternalError(t *testing.T) {
 	c.SetHTTPMode()
 	c.SetTimeout(time.Duration(time.Second * 1))
 
-	c.R().Get("http://localhost:9000/set-timeout-test")
+	_, _ = c.R().Get("http://localhost:9000/set-timeout-test")
 }
 
 func TestHeadMethod(t *testing.T) {
@@ -1148,7 +1148,7 @@ func TestMuliParamQueryString(t *testing.T) {
 
 	client.SetQueryParam("status", "open")
 
-	req1.SetQueryParam("status", "pending").
+	_, _ = req1.SetQueryParam("status", "pending").
 		SetQueryParam("status", "approved").
 		Get(ts1.URL)
 
@@ -1167,7 +1167,7 @@ func TestMuliParamQueryString(t *testing.T) {
 		"status": []string{"pending", "approved", "reject"},
 	}
 
-	req2.SetMultiValueQueryParams(v).Get(ts2.URL)
+	_, _ = req2.SetMultiValueQueryParams(v).Get(ts2.URL)
 
 	assertEqual(t, true, strings.Contains(req2.URL, "status=pending"))
 	assertEqual(t, true, strings.Contains(req2.URL, "status=approved"))
@@ -1417,28 +1417,28 @@ func createGetServer(t *testing.T) *httptest.Server {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 
-		if r.Method == GET {
+		if r.Method == MethodGet {
 			if r.URL.Path == "/" {
-				w.Write([]byte("TestGet: text response"))
+				_, _ = w.Write([]byte("TestGet: text response"))
 			} else if r.URL.Path == "/mypage" {
 				w.WriteHeader(http.StatusBadRequest)
 			} else if r.URL.Path == "/mypage2" {
-				w.Write([]byte("TestGet: text response from mypage2"))
+				_, _ = w.Write([]byte("TestGet: text response from mypage2"))
 			} else if r.URL.Path == "/set-retrycount-test" {
 				attempt++
 				if attempt != 3 {
 					time.Sleep(time.Second * 6)
 				}
-				w.Write([]byte("TestClientRetry page"))
+				_, _ = w.Write([]byte("TestClientRetry page"))
 			} else if r.URL.Path == "/set-timeout-test" {
 				time.Sleep(time.Second * 6)
-				w.Write([]byte("TestClientTimeout page"))
+				_, _ = w.Write([]byte("TestClientTimeout page"))
 
 			} else if r.URL.Path == "/my-image.png" {
 				fileBytes, _ := ioutil.ReadFile(getTestDataPath() + "/test-img.png")
 				w.Header().Set("Content-Type", "image/png")
 				w.Header().Set("Content-Length", strconv.Itoa(len(fileBytes)))
-				w.Write(fileBytes)
+				_, _ = w.Write(fileBytes)
 			}
 		}
 	})
@@ -1458,18 +1458,18 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				t.Logf("Error: %#v", err)
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
+				_, _ = w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
 				return
 			}
 
 			if user.Username == "testuser" && user.Password == "testpass" {
-				w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
+				_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
 			} else if user.Username == "testuser" && user.Password == "invalidjson" {
-				w.Write([]byte(`{ "id": "success", "message": "login successful", }`))
+				_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful", }`))
 			} else {
 				w.Header().Set("Www-Authenticate", "Protected Realm")
 				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
+				_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
 			}
 
 			return
@@ -1484,22 +1484,22 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				t.Logf("Error: %v", err)
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
-				w.Write([]byte(`<AuthError><Id>bad_request</Id><Message>Unable to read user info</Message></AuthError>`))
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
+				_, _ = w.Write([]byte(`<AuthError><Id>bad_request</Id><Message>Unable to read user info</Message></AuthError>`))
 				return
 			}
 
 			if user.Username == "testuser" && user.Password == "testpass" {
-				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
-				w.Write([]byte(`<AuthSuccess><Id>success</Id><Message>login successful</Message></AuthSuccess>`))
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
+				_, _ = w.Write([]byte(`<AuthSuccess><Id>success</Id><Message>login successful</Message></AuthSuccess>`))
 			} else if user.Username == "testuser" && user.Password == "invalidxml" {
-				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
-				w.Write([]byte(`<AuthSuccess><Id>success</Id><Message>login successful</AuthSuccess>`))
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
+				_, _ = w.Write([]byte(`<AuthSuccess><Id>success</Id><Message>login successful</AuthSuccess>`))
 			} else {
 				w.Header().Set("Www-Authenticate", "Protected Realm")
 				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
-				w.Write([]byte(`<AuthError><Id>unauthorized</Id><Message>Invalid credentials</Message></AuthError>`))
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
+				_, _ = w.Write([]byte(`<AuthError><Id>unauthorized</Id><Message>Invalid credentials</Message></AuthError>`))
 			}
 
 			return
@@ -1518,7 +1518,7 @@ func handleUsersEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				t.Logf("Error: %v", err)
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
+				_, _ = w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
 				return
 			}
 
@@ -1526,14 +1526,14 @@ func handleUsersEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 			if len(users) != 3 {
 				t.Log("Error: Excepted count of 3 records")
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`{ "id": "bad_request", "message": "Expected record count doesn't match" }`))
+				_, _ = w.Write([]byte(`{ "id": "bad_request", "message": "Expected record count doesn't match" }`))
 				return
 			}
 
 			eu := users[2]
 			if eu.FirstName == "firstname3" && eu.ZipCode == "10003" {
 				w.WriteHeader(http.StatusAccepted)
-				w.Write([]byte(`{ "message": "Accepted" }`))
+				_, _ = w.Write([]byte(`{ "message": "Accepted" }`))
 			}
 
 			return
@@ -1547,7 +1547,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 		t.Logf("Path: %v", r.URL.Path)
 		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
 
-		if r.Method == POST {
+		if r.Method == MethodPost {
 			handleLoginEndpoint(t, w, r)
 
 			handleUsersEndpoint(t, w, r)
@@ -1562,7 +1562,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 					if err != nil {
 						t.Logf("Error: %v", err)
 						w.WriteHeader(http.StatusBadRequest)
-						w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
+						_, _ = w.Write([]byte(`{ "id": "bad_request", "message": "Unable to read user info" }`))
 						return
 					}
 
@@ -1570,12 +1570,12 @@ func createPostServer(t *testing.T) *httptest.Server {
 					if len(users) != 1 {
 						t.Log("Error: Excepted count of 1 map records")
 						w.WriteHeader(http.StatusBadRequest)
-						w.Write([]byte(`{ "id": "bad_request", "message": "Expected record count doesn't match" }`))
+						_, _ = w.Write([]byte(`{ "id": "bad_request", "message": "Expected record count doesn't match" }`))
 						return
 					}
 
 					w.WriteHeader(http.StatusAccepted)
-					w.Write([]byte(`{ "message": "Accepted" }`))
+					_, _ = w.Write([]byte(`{ "message": "Accepted" }`))
 
 					return
 				}
@@ -1592,8 +1592,8 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 		t.Logf("Path: %v", r.URL.Path)
 		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
 
-		if r.Method == POST {
-			r.ParseMultipartForm(10e6)
+		if r.Method == MethodPost {
+			_ = r.ParseMultipartForm(10e6)
 
 			if r.URL.Path == "/profile" {
 				t.Logf("FirstName: %v", r.FormValue("first_name"))
@@ -1601,7 +1601,7 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				t.Logf("City: %v", r.FormValue("city"))
 				t.Logf("Zip Code: %v", r.FormValue("zip_code"))
 
-				w.Write([]byte("Success"))
+				_, _ = w.Write([]byte("Success"))
 				return
 			} else if r.URL.Path == "/search" {
 				formEncodedData := r.Form.Encode()
@@ -1610,14 +1610,14 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=pencil"))
 				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=glass"))
 
-				w.Write([]byte("Success"))
+				_, _ = w.Write([]byte("Success"))
 				return
 			} else if r.URL.Path == "/upload" {
 				t.Logf("FirstName: %v", r.FormValue("first_name"))
 				t.Logf("LastName: %v", r.FormValue("last_name"))
 
 				targetPath := getTestDataPath() + "/upload"
-				os.MkdirAll(targetPath, 0700)
+				_ = os.MkdirAll(targetPath, 0700)
 
 				for _, fhdrs := range r.MultipartForm.File {
 					for _, hdr := range fhdrs {
@@ -1634,10 +1634,12 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 							t.Logf("Error: %v", err)
 							return
 						}
-						defer f.Close()
-						io.Copy(f, infile)
+						defer func() {
+							_ = f.Close()
+						}()
+						_, _ = io.Copy(f, infile)
 
-						w.Write([]byte(fmt.Sprintf("File: %v, uploaded as: %v\n", hdr.Filename, fname)))
+						_, _ = w.Write([]byte(fmt.Sprintf("File: %v, uploaded as: %v\n", hdr.Filename, fname)))
 					}
 				}
 
@@ -1655,7 +1657,7 @@ func createAuthServer(t *testing.T) *httptest.Server {
 		t.Logf("Path: %v", r.URL.Path)
 		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
 
-		if r.Method == GET {
+		if r.Method == MethodGet {
 			if r.URL.Path == "/profile" {
 				// 004DDB79-6801-4587-B976-F093E6AC44FF
 				auth := r.Header.Get("Authorization")
@@ -1666,20 +1668,20 @@ func createAuthServer(t *testing.T) *httptest.Server {
 				if !strings.HasPrefix(auth, "Bearer ") {
 					w.Header().Set("Www-Authenticate", "Protected Realm")
 					w.WriteHeader(http.StatusUnauthorized)
-					w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
+					_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
 
 					return
 				}
 
 				if auth[7:] == "004DDB79-6801-4587-B976-F093E6AC44FF" || auth[7:] == "004DDB79-6801-4587-B976-F093E6AC44FF-Request" {
-					w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
+					_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
 				}
 			}
 
 			return
 		}
 
-		if r.Method == POST {
+		if r.Method == MethodPost {
 			if r.URL.Path == "/login" {
 				auth := r.Header.Get("Authorization")
 				t.Logf("Basic Auth: %v", auth)
@@ -1690,12 +1692,12 @@ func createAuthServer(t *testing.T) *httptest.Server {
 				if err != nil || string(password) != "myuser:basicauth" {
 					w.Header().Set("Www-Authenticate", "Protected Realm")
 					w.WriteHeader(http.StatusUnauthorized)
-					w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
+					_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
 
 					return
 				}
 
-				w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
+				_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
 			}
 
 			return
@@ -1710,26 +1712,26 @@ func createGenServer(t *testing.T) *httptest.Server {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 
-		if r.Method == PUT {
+		if r.Method == MethodPut {
 			if r.URL.Path == "/plaintext" {
-				w.Write([]byte("TestPut: plain text response"))
+				_, _ = w.Write([]byte("TestPut: plain text response"))
 			} else if r.URL.Path == "/json" {
 				w.Header().Set(hdrContentTypeKey, jsonContentType)
-				w.Write([]byte(`{"response":"json response"}`))
+				_, _ = w.Write([]byte(`{"response":"json response"}`))
 			} else if r.URL.Path == "/xml" {
 				w.Header().Set(hdrContentTypeKey, "application/xml")
-				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Response>XML response</Response>`))
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Response>XML response</Response>`))
 			}
 		}
 
-		if r.Method == OPTIONS && r.URL.Path == "/options" {
+		if r.Method == MethodOptions && r.URL.Path == "/options" {
 			w.Header().Set("Access-Control-Allow-Origin", "localhost")
 			w.Header().Set("Access-Control-Allow-Methods", "PUT, PATCH")
 			w.Header().Set("Access-Control-Expose-Headers", "x-go-resty-id")
 			w.WriteHeader(http.StatusOK)
 		}
 
-		if r.Method == PATCH && r.URL.Path == "/patch" {
+		if r.Method == MethodPatch && r.URL.Path == "/patch" {
 			w.WriteHeader(http.StatusOK)
 		}
 	})
@@ -1742,7 +1744,7 @@ func createRedirectServer(t *testing.T) *httptest.Server {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 
-		if r.Method == GET {
+		if r.Method == MethodGet {
 			if strings.HasPrefix(r.URL.Path, "/redirect-host-check-") {
 				cntStr := strings.SplitAfter(r.URL.Path, "-")[3]
 				cnt, _ := strconv.Atoi(cntStr)

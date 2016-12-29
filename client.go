@@ -29,26 +29,26 @@ import (
 )
 
 const (
-	// GET HTTP method
-	GET = "GET"
+	// MethodGet HTTP method
+	MethodGet = "GET"
 
-	// POST HTTP method
-	POST = "POST"
+	// MethodPost HTTP method
+	MethodPost = "POST"
 
-	// PUT HTTP method
-	PUT = "PUT"
+	// MethodPut HTTP method
+	MethodPut = "PUT"
 
-	// DELETE HTTP method
-	DELETE = "DELETE"
+	// MethodDelete HTTP method
+	MethodDelete = "DELETE"
 
-	// PATCH HTTP method
-	PATCH = "PATCH"
+	// MethodPatch HTTP method
+	MethodPatch = "PATCH"
 
-	// HEAD HTTP method
-	HEAD = "HEAD"
+	// MethodHead HTTP method
+	MethodHead = "HEAD"
 
-	// OPTIONS HTTP method
-	OPTIONS = "OPTIONS"
+	// MethodOptions HTTP method
+	MethodOptions = "OPTIONS"
 )
 
 var (
@@ -505,8 +505,8 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 			c.Log.Printf("ERROR [%v]", err)
 			return nil, err
 		}
-		conn.SetDeadline(time.Now().Add(timeout))
-		return conn, nil
+		err = conn.SetDeadline(time.Now().Add(timeout))
+		return conn, err
 	}
 
 	return c
@@ -657,7 +657,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if !req.isSaveResponse {
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 		response.body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return response, err
@@ -870,7 +872,9 @@ func addFile(w *multipart.Writer, fieldName, path string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	part, err := w.CreateFormFile(fieldName, filepath.Base(path))
 	if err != nil {
@@ -900,7 +904,7 @@ func getPointer(v interface{}) interface{} {
 }
 
 func isPayloadSupported(m string) bool {
-	return (m == POST || m == PUT || m == DELETE || m == PATCH)
+	return (m == MethodPost || m == MethodPut || m == MethodDelete || m == MethodPatch)
 }
 
 func typeOf(i interface{}) reflect.Type {
