@@ -5,5 +5,5 @@
 // Package resty provides simple HTTP and REST client for Go inspired by Ruby rest-client.
 package resty
 
-// Version # of go-resty
-var Version = "0.10"
+// Version # of resty
+const Version = "0.11"
