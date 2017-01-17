@@ -1409,6 +1409,31 @@ func TestClientOptions(t *testing.T) {
 	SetLogger(ioutil.Discard)
 }
 
+func TestSRV(t *testing.T) {
+	c := dc().
+		SetRedirectPolicy(FlexibleRedirectPolicy(20)).
+		SetScheme("http")
+
+	r := c.R().
+		SetSRV(&SRVRecord{"xmpp-server", "google.com"})
+
+	assertEqual(t, "xmpp-server", r.SRV.Service)
+	assertEqual(t, "google.com", r.SRV.Domain)
+
+	resp, err := r.Get("/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+func TestSRVInvalidService(t *testing.T) {
+	_, err := R().
+		SetSRV(&SRVRecord{"nonexistantservice", "sampledomain"}).
+		Get("/")
+
+	assertEqual(t, true, (err != nil))
+	assertEqual(t, true, strings.Contains(err.Error(), "no such host"))
+}
+
 func getTestDataPath() string {
 	pwd, _ := os.Getwd()
 	return pwd + "/test-data"
