@@ -11,10 +11,17 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"reflect"
 	"strings"
 )
+
+// SRVRecord holds the data to query the SRV record for the following service
+type SRVRecord struct {
+	Service string
+	Domain  string
+}
 
 // SetHeader method is to set a single header field and its value in the current request.
 // Example: To set `Content-Type` and `Accept` as `application/json`.
@@ -345,6 +352,16 @@ func (r *Request) SetProxy(proxyURL string) *Request {
 	return r
 }
 
+// SetSRV method sets the details to query the service SRV record and execute the
+// request.
+// 		resty.R().
+//			SetSRV(SRVRecord{"web", "testservice.com"}).
+//			Get("/get")
+func (r *Request) SetSRV(srv *SRVRecord) *Request {
+	r.SRV = srv
+	return r
+}
+
 //
 // HTTP verb method starts here
 //
@@ -389,22 +406,34 @@ func (r *Request) Patch(url string) (*Response, error) {
 // 		resp, err := resty.R().Execute(resty.GET, "http://httpbin.org/get")
 //
 func (r *Request) Execute(method, url string) (*Response, error) {
+	var addrs []*net.SRV
+	var err error
+
 	if r.isMultiPart && !(method == MethodPost || method == MethodPut) {
 		return nil, fmt.Errorf("Multipart content is not allowed in HTTP verb [%v]", method)
 	}
 
+	if r.SRV != nil {
+		_, addrs, err = net.LookupSRV(r.SRV.Service, "tcp", r.SRV.Domain)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	r.Method = method
-	r.URL = url
+	r.URL = r.selectAddr(addrs, url, 0)
 
 	if r.client.RetryCount == 0 {
 		return r.client.execute(r)
 	}
 
 	var resp *Response
-	var err error
 	attempt := 0
 	_ = Backoff(func() (*Response, error) {
 		attempt++
+
+		r.URL = r.selectAddr(addrs, url, attempt)
+
 		resp, err = r.client.execute(r)
 		if err != nil {
 			r.client.Log.Printf("ERROR [%v] Attempt [%v]", err, attempt)
@@ -464,4 +493,16 @@ func (r *Request) fmtBodyString() (body string) {
 	}
 
 	return
+}
+
+func (r *Request) selectAddr(addrs []*net.SRV, path string, attempt int) string {
+	if addrs == nil {
+		return path
+	}
+
+	idx := attempt % len(addrs)
+	domain := strings.TrimRight(addrs[idx].Target, ".")
+	path = strings.TrimLeft(path, "/")
+
+	return fmt.Sprintf("%s://%s:%d/%s", r.client.scheme, domain, addrs[idx].Port, path)
 }
