@@ -47,14 +47,15 @@ Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very h
 resty tested with Go `v1.2` and above.
 
 #### Included Batteries
-  * Redirect Policies - see [how to use in action](#redirect-policy)
+  * Redirect Policies - see [how to use](#redirect-policy)
     * NoRedirectPolicy
     * FlexibleRedirectPolicy
     * DomainCheckRedirectPolicy
     * etc. [more info](redirect.go)
-  * Retry Mechanism [reference](retry_test.go)
+  * Retry Mechanism [how to use](retry_test.go)
     * Backoff Retry
     * Conditional Retry
+  * SRV Record based request instead of Host URL [how to use](resty_test.go#L1412)
   * etc (upcoming - throw your idea's [here](https://github.com/go-resty/resty/issues)).
 
 ## Installation

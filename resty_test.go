@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2017 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -948,11 +948,11 @@ func TestRawFileUploadByBody(t *testing.T) {
 func TestProxySetting(t *testing.T) {
 	c := dc()
 
-	assertEqual(t, true, c.proxyURL == nil)
+	assertEqual(t, true, !c.IsProxySet())
 	assertEqual(t, true, (c.transport.Proxy == nil))
 
 	c.SetProxy("http://sampleproxy:8888")
-	assertEqual(t, true, c.proxyURL != nil)
+	assertEqual(t, true, c.IsProxySet())
 	assertEqual(t, true, (c.transport.Proxy == nil))
 
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")

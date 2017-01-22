@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2017 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -214,7 +214,7 @@ func (c *Client) SetQueryParam(param, value string) *Client {
 	return c
 }
 
-// SetQueryParams method sets multiple paramaters and its values at one go in the client instance.
+// SetQueryParams method sets multiple parameters and its values at one go in the client instance.
 // It will be formed as query string for the request. For example: `search=kitchen%20papers&size=large`
 // in the URL after `?` mark. These query params will be added to all the request raised from this
 // client instance. Also it can be overridden at request level Query Param options,
@@ -698,6 +698,11 @@ func (c *Client) getTLSConfig() *tls.Config {
 	}
 
 	return c.transport.TLSClientConfig
+}
+
+// IsProxySet method returns the true if proxy is set on client otherwise false.
+func (c *Client) IsProxySet() bool {
+	return c.proxyURL != nil
 }
 
 //

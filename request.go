@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2017 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -67,7 +67,7 @@ func (r *Request) SetQueryParam(param, value string) *Request {
 	return r
 }
 
-// SetQueryParams method sets multiple paramaters and its values at one go in the current request.
+// SetQueryParams method sets multiple parameters and its values at one go in the current request.
 // It will be formed as query string for the request.
 // Example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
 // 		resty.R().
@@ -85,7 +85,7 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 	return r
 }
 
-// SetMultiValueQueryParams method sets multiple paramaters with multi-value
+// SetMultiValueQueryParams method sets multiple parameters with multi-value
 // at one go in the current request. It will be formed as query string for the request.
 // Example: `status=pending&status=approved&status=open` in the URL after `?` mark.
 // 		resty.R().
@@ -140,7 +140,7 @@ func (r *Request) SetFormData(data map[string]string) *Request {
 	return r
 }
 
-// SetMultiValueFormData method sets multiple form paramaters with multi-value
+// SetMultiValueFormData method sets multiple form parameters with multi-value
 // at one go in the current request.
 // 		resty.R().
 //			SetMultiValueFormData(url.Values{
@@ -320,7 +320,7 @@ func (r *Request) SetAuthToken(token string) *Request {
 }
 
 // SetOutput method sets the output file for current HTTP request. Current HTTP response will be
-// saved into given file. It is similar to `curl -o` flag. Absoulte path or relative path can be used.
+// saved into given file. It is similar to `curl -o` flag. Absolute path or relative path can be used.
 // If is it relative path then output file goes under the output directory, as mentioned
 // in the `Client.SetOutputDirectory`.
 // 		resty.R().
@@ -485,7 +485,7 @@ func (r *Request) fmtBodyString() (body string) {
 				body = base64.StdEncoding.EncodeToString(b)
 			}
 
-			if prtBodyBytes != nil {
+			if prtBodyBytes != nil && err == nil {
 				body = string(prtBodyBytes)
 			}
 		}

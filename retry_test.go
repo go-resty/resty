@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2017 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -9,7 +9,6 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
-	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -173,10 +172,6 @@ func TestClientRetryGet(t *testing.T) {
 	_, err := c.R().Get(ts.URL + "/set-retrycount-test")
 
 	assertError(t, err)
-}
-
-func GetFunctionName(i interface{}) string {
-	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
 func TestClientRetryPost(t *testing.T) {
