@@ -5,7 +5,7 @@ sudo: false
 branches:
   only:
     - master
-    - develop
+    - integration
 
 go:
   - 1.2
@@ -14,6 +14,7 @@ go:
   - 1.5
   - 1.6
   - 1.7
+  - 1.8
   - tip
 
 install:
