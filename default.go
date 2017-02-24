@@ -53,6 +53,9 @@ func New() *Client {
 		requestLogger,
 	}
 
+	// user defined request middlewares
+	c.udBeforeRequest = []func(*Client, *Request) error{}
+
 	// default after response middlewares
 	c.afterResponse = []func(*Client, *Response) error{
 		responseLogger,
