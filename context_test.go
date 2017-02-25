@@ -11,6 +11,8 @@ package resty
 import (
 	"context"
 	"net/http"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -171,11 +173,15 @@ func TestSetContextCancelWithError(t *testing.T) {
 	}
 }
 
+var mcr = &sync.Mutex{}
+
 func TestClientRetryWithSetContext(t *testing.T) {
 	attempt := 0
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
+		mcr.Lock()
+		defer mcr.Unlock()
 		attempt++
 		if attempt != 3 {
 			time.Sleep(time.Second * 2)
@@ -193,5 +199,5 @@ func TestClientRetryWithSetContext(t *testing.T) {
 		SetContext(context.Background()).
 		Get(ts.URL + "/")
 
-	assertError(t, err)
+	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/"))
 }

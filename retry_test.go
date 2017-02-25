@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -170,8 +171,7 @@ func TestClientRetryGet(t *testing.T) {
 		SetRetryCount(3)
 
 	_, err := c.R().Get(ts.URL + "/set-retrycount-test")
-
-	assertError(t, err)
+	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test"))
 }
 
 func TestClientRetryPost(t *testing.T) {
