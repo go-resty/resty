@@ -7,7 +7,6 @@ package resty
 import (
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -127,9 +126,9 @@ func TestClientProxyOverrideError(t *testing.T) {
 
 	c := dc()
 	c.SetTimeout(1 * time.Second)
+	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
 
 	resp, err := c.R().
-		SetProxy("//not.a.user@%66%6f%6f.com:8888").
 		Get(ts.URL)
 	assertEqual(t, false, resp == nil)
 	assertEqual(t, true, err == nil)
@@ -167,7 +166,6 @@ func TestOnBeforeRequestModification(t *testing.T) {
 	defer ts.Close()
 
 	resp, err := tc.R().Get(ts.URL + "/")
-	fmt.Println(err, resp)
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())

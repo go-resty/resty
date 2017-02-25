@@ -858,35 +858,21 @@ func TestRawFileUploadByBody(t *testing.T) {
 func TestProxySetting(t *testing.T) {
 	c := dc()
 
-	assertEqual(t, true, !c.IsProxySet())
+	assertEqual(t, false, c.IsProxySet())
 	assertEqual(t, true, (c.transport.Proxy == nil))
 
 	c.SetProxy("http://sampleproxy:8888")
 	assertEqual(t, true, c.IsProxySet())
-	assertEqual(t, true, (c.transport.Proxy == nil))
+	assertEqual(t, false, (c.transport.Proxy == nil))
 
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
-	assertEqual(t, true, (c.proxyURL == nil))
+	assertEqual(t, false, c.IsProxySet())
 	assertEqual(t, true, (c.transport.Proxy == nil))
 
 	SetProxy("http://sampleproxy:8888")
 	RemoveProxy()
 	assertEqual(t, true, (DefaultClient.proxyURL == nil))
 	assertEqual(t, true, (DefaultClient.transport.Proxy == nil))
-}
-
-func TestPerRequestProxy(t *testing.T) {
-	ts := createGetServer(t)
-	defer ts.Close()
-
-	c := dc()
-	c.SetTimeout(1 * time.Second)
-
-	resp, err := c.R().
-		SetProxy("http://sampleproxy:8888").
-		Get(ts.URL)
-	assertEqual(t, true, resp != nil)
-	assertEqual(t, true, err != nil)
 }
 
 func TestClientProxyOverride(t *testing.T) {
@@ -898,7 +884,6 @@ func TestClientProxyOverride(t *testing.T) {
 	c.SetProxy("http://sampleproxy:8888")
 
 	resp, err := c.R().
-		SetProxy("http://requestproxy:8888").
 		Get(ts.URL)
 	assertEqual(t, true, resp != nil)
 	assertEqual(t, true, err != nil)

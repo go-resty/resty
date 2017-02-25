@@ -11,7 +11,6 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
-	"sync"
 	"time"
 
 	"golang.org/x/net/publicsuffix"
@@ -34,11 +33,12 @@ func New() *Client {
 		Cookies:    make([]*http.Cookie, 0),
 		Debug:      false,
 		Log:        getLogger(os.Stderr),
+		RetryCount: 0,
 		httpClient: &http.Client{Jar: cookieJar},
 		transport:  &http.Transport{},
-		mutex:      &sync.Mutex{},
-		RetryCount: 0,
 	}
+
+	c.httpClient.Transport = c.transport
 
 	// Default redirect policy
 	c.SetRedirectPolicy(NoRedirectPolicy())

@@ -1,4 +1,4 @@
-// +build go1.7
+// +build go1.7 go1.8
 
 // Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com)
 // 2016 Andrew Grigorev (https://github.com/ei-grad)
@@ -43,7 +43,6 @@ type Request struct {
 	setContentLength bool
 	isSaveResponse   bool
 	outputFile       string
-	proxyURL         *url.URL
 	multipartFiles   []*File
 	ctx              context.Context
 }

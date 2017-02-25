@@ -42,7 +42,6 @@ type Request struct {
 	setContentLength bool
 	isSaveResponse   bool
 	outputFile       string
-	proxyURL         *url.URL
 	multipartFiles   []*File
 }
 

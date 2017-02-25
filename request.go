@@ -334,24 +334,6 @@ func (r *Request) SetOutput(file string) *Request {
 	return r
 }
 
-// SetProxy method sets the Proxy URL for current Request. It does not affect client level
-// proxy settings. Request level proxy settings takes higher priority, even though client
-// level proxy settings exists.
-// 		resty.R().
-//			SetProxy("http://proxyserver:8888").
-//			Get("http://httpbin.org/get")
-//
-func (r *Request) SetProxy(proxyURL string) *Request {
-	if pURL, err := url.Parse(proxyURL); err == nil {
-		r.proxyURL = pURL
-	} else {
-		r.client.Log.Printf("ERROR [%v]", err)
-		r.proxyURL = nil
-	}
-
-	return r
-}
-
 // SetSRV method sets the details to query the service SRV record and execute the
 // request.
 // 		resty.R().

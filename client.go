@@ -23,7 +23,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -91,7 +90,6 @@ type Client struct {
 	outputDirectory  string
 	scheme           string
 	proxyURL         *url.URL
-	mutex            *sync.Mutex
 	closeConnection  bool
 	beforeRequest    []func(*Client, *Request) error
 	udBeforeRequest  []func(*Client, *Request) error
@@ -292,7 +290,6 @@ func (c *Client) R() *Request {
 		RawRequest:     nil,
 		client:         c,
 		bodyBuf:        nil,
-		proxyURL:       nil,
 		multipartFiles: []*File{},
 	}
 
@@ -311,7 +308,6 @@ func (c *Client) R() *Request {
 //
 func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
 	c.udBeforeRequest = append(c.udBeforeRequest, m)
-
 	return c
 }
 
@@ -491,6 +487,8 @@ func (c *Client) Mode() string {
 //
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	c.transport.TLSClientConfig = config
+	c.httpClient.Transport = c.transport
+
 	return c
 }
 
@@ -507,6 +505,7 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 		err = conn.SetDeadline(time.Now().Add(timeout))
 		return conn, err
 	}
+	c.httpClient.Transport = c.transport
 
 	return c
 }
@@ -520,9 +519,11 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 func (c *Client) SetProxy(proxyURL string) *Client {
 	if pURL, err := url.Parse(proxyURL); err == nil {
 		c.proxyURL = pURL
+		c.transport.Proxy = http.ProxyURL(c.proxyURL)
+		c.httpClient.Transport = c.transport
 	} else {
 		c.Log.Printf("ERROR [%v]", err)
-		c.proxyURL = nil
+		c.RemoveProxy()
 	}
 
 	return c
@@ -533,6 +534,9 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 //
 func (c *Client) RemoveProxy() *Client {
 	c.proxyURL = nil
+	c.transport.Proxy = nil
+	c.httpClient.Transport = c.transport
+
 	return c
 }
 
@@ -541,7 +545,6 @@ func (c *Client) RemoveProxy() *Client {
 func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 	config := c.getTLSConfig()
 	config.Certificates = append(config.Certificates, certs...)
-
 	return c
 }
 
@@ -591,21 +594,22 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 //			},
 //		}
 //
-//		resty.SetTransport(&transport)
+//		resty.SetTransport(transport)
 //
 func (c *Client) SetTransport(transport *http.Transport) *Client {
 	if transport != nil {
 		c.transport = transport
+		c.httpClient.Transport = c.transport
 	}
 
 	return c
 }
 
-// SetScheme method sets custom scheme in the resty client. Its way to override default.
+// SetScheme method sets custom scheme in the resty client. It's way to override default.
 // 		resty.SetScheme("http")
 //
 func (c *Client) SetScheme(scheme string) *Client {
-	if c.scheme == "" {
+	if len(strings.TrimSpace(scheme)) > 0 {
 		c.scheme = scheme
 	}
 
@@ -617,6 +621,11 @@ func (c *Client) SetScheme(scheme string) *Client {
 func (c *Client) SetCloseConnection(close bool) *Client {
 	c.closeConnection = close
 	return c
+}
+
+// IsProxySet method returns the true if proxy is set on client otherwise false.
+func (c *Client) IsProxySet() bool {
+	return c.proxyURL != nil
 }
 
 // executes the given `Request` object and returns response
@@ -633,6 +642,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
+	// resty middlewares
 	for _, f := range c.beforeRequest {
 		err = f(c, req)
 		if err != nil {
@@ -640,20 +650,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	c.mutex.Lock()
-
-	if req.proxyURL != nil {
-		c.transport.Proxy = http.ProxyURL(req.proxyURL)
-	} else if c.proxyURL != nil {
-		c.transport.Proxy = http.ProxyURL(c.proxyURL)
-	}
-
 	req.Time = time.Now()
-	c.httpClient.Transport = c.transport
-
 	resp, err := c.httpClient.Do(req.RawRequest)
-
-	c.mutex.Unlock()
 
 	response := &Response{
 		Request:     req,
@@ -704,14 +702,9 @@ func (c *Client) disableLogPrefix() {
 func (c *Client) getTLSConfig() *tls.Config {
 	if c.transport.TLSClientConfig == nil {
 		c.transport.TLSClientConfig = &tls.Config{}
+		c.httpClient.Transport = c.transport
 	}
-
 	return c.transport.TLSClientConfig
-}
-
-// IsProxySet method returns the true if proxy is set on client otherwise false.
-func (c *Client) IsProxySet() bool {
-	return c.proxyURL != nil
 }
 
 //
