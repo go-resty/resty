@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -1165,6 +1166,7 @@ func getTestDataPath() string {
 // Used for retry testing...
 var mc = &sync.Mutex{}
 var attempt int
+var sequence int64
 
 func createGetServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
@@ -1186,6 +1188,10 @@ func createGetServer(t *testing.T) *httptest.Server {
 					time.Sleep(time.Second * 6)
 				}
 				_, _ = w.Write([]byte("TestClientRetry page"))
+			} else if r.URL.Path == "/set-timeout-test-with-sequence" {
+				seq := atomic.AddInt64(&sequence, 1)
+				time.Sleep(time.Second * 2)
+				_, _ = fmt.Fprintf(w, "%d", seq)
 			} else if r.URL.Path == "/set-timeout-test" {
 				time.Sleep(time.Second * 6)
 				_, _ = w.Write([]byte("TestClientTimeout page"))

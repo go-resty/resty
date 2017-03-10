@@ -95,8 +95,28 @@ func TestClientTimeout(t *testing.T) {
 		SetTimeout(time.Duration(time.Second * 3))
 
 	_, err := c.R().Get(ts.URL + "/set-timeout-test")
+	assertEqual(t, true, strings.Contains(strings.ToLower(err.Error()), "timeout"))
+}
 
-	assertEqual(t, true, strings.Contains(err.Error(), "i/o timeout"))
+func TestClientTimeoutWithinThreshold(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetHTTPMode().
+		SetTimeout(time.Duration(time.Second * 3))
+
+	resp, err := c.R().Get(ts.URL + "/set-timeout-test-with-sequence")
+	assertError(t, err)
+
+	seq1, _ := strconv.ParseInt(resp.String(), 10, 64)
+
+	resp, err = c.R().Get(ts.URL + "/set-timeout-test-with-sequence")
+	assertError(t, err)
+
+	seq2, _ := strconv.ParseInt(resp.String(), 10, 64)
+
+	assertEqual(t, seq1+1, seq2)
 }
 
 func TestClientTimeoutInternalError(t *testing.T) {
