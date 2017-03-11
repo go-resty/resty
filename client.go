@@ -14,7 +14,6 @@ import (
 	"io/ioutil"
 	"log"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -487,24 +486,6 @@ func (c *Client) Mode() string {
 //
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	c.transport.TLSClientConfig = config
-	c.httpClient.Transport = c.transport
-
-	return c
-}
-
-// SetTimeout method sets timeout for request raised from client
-//		resty.SetTimeout(time.Duration(1 * time.Minute))
-//
-func (c *Client) SetTimeout(timeout time.Duration) *Client {
-	c.transport.Dial = func(network, addr string) (net.Conn, error) {
-		conn, err := net.DialTimeout(network, addr, timeout)
-		if err != nil {
-			c.Log.Printf("ERROR [%v]", err)
-			return nil, err
-		}
-		err = conn.SetDeadline(time.Now().Add(timeout))
-		return conn, err
-	}
 	c.httpClient.Transport = c.transport
 
 	return c
