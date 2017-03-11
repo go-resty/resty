@@ -491,14 +491,6 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	return c
 }
 
-// SetTimeout method sets timeout for request raised from client
-//		resty.SetTimeout(time.Duration(1 * time.Minute))
-//
-func (c *Client) SetTimeout(timeout time.Duration) *Client {
-	c.httpClient.Timeout = timeout
-	return c
-}
-
 // SetProxy method sets the Proxy URL and Port for resty client.
 //		resty.SetProxy("http://proxyserver:8888")
 //
