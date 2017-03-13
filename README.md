@@ -60,20 +60,20 @@ resty tested with Go `v1.2` and above.
   * etc (upcoming - throw your idea's [here](https://github.com/go-resty/resty/issues)).
 
 ## Installation
-#### Stable - Version
+#### Stable Version - Production Ready
 Please refer section [Versioning](#versioning) for detailed info.
 ```sh
 # install the library
 go get -u gopkg.in/resty.v0
 ```
-#### Latest
+#### Latest Version - Development Edge
 ```sh
 # install the latest & greatest library
 go get -u github.com/go-resty/resty
 ```
 
 ## Usage
-Following samples will assist you to become as much comfortable as possible with resty library. Resty comes with ready to use DefaultClient.
+The following samples will assist you to become as comfortable as possible with resty library. Resty comes with ready to use DefaultClient.
 
 Import resty into your code and refer it as `resty`.
 ```go
