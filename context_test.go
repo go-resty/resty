@@ -12,7 +12,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -173,17 +173,13 @@ func TestSetContextCancelWithError(t *testing.T) {
 	}
 }
 
-var mcr = &sync.Mutex{}
-
 func TestClientRetryWithSetContext(t *testing.T) {
-	attempt := 0
+	var attemptctx int32
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
-		mcr.Lock()
-		defer mcr.Unlock()
-		attempt++
-		if attempt != 3 {
+		attp := atomic.AddInt32(&attemptctx, 1)
+		if attp <= 3 {
 			time.Sleep(time.Second * 2)
 		}
 		_, _ = w.Write([]byte("TestClientRetry page"))

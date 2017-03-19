@@ -109,12 +109,12 @@ func TestClientTimeoutWithinThreshold(t *testing.T) {
 	resp, err := c.R().Get(ts.URL + "/set-timeout-test-with-sequence")
 	assertError(t, err)
 
-	seq1, _ := strconv.ParseInt(resp.String(), 10, 64)
+	seq1, _ := strconv.ParseInt(resp.String(), 10, 32)
 
 	resp, err = c.R().Get(ts.URL + "/set-timeout-test-with-sequence")
 	assertError(t, err)
 
-	seq2, _ := strconv.ParseInt(resp.String(), 10, 64)
+	seq2, _ := strconv.ParseInt(resp.String(), 10, 32)
 
 	assertEqual(t, seq1+1, seq2)
 }

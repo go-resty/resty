@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -871,6 +870,7 @@ func TestProxySetting(t *testing.T) {
 	assertEqual(t, true, (c.transport.Proxy == nil))
 
 	SetProxy("http://sampleproxy:8888")
+	assertEqual(t, true, IsProxySet())
 	RemoveProxy()
 	assertEqual(t, true, (DefaultClient.proxyURL == nil))
 	assertEqual(t, true, (DefaultClient.transport.Proxy == nil))
@@ -1163,10 +1163,8 @@ func getTestDataPath() string {
 	return pwd + "/test-data"
 }
 
-// Used for retry testing...
-var mc = &sync.Mutex{}
-var attempt int
-var sequence int64
+var attempt int32
+var sequence int32
 
 func createGetServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
@@ -1181,15 +1179,13 @@ func createGetServer(t *testing.T) *httptest.Server {
 			} else if r.URL.Path == "/mypage2" {
 				_, _ = w.Write([]byte("TestGet: text response from mypage2"))
 			} else if r.URL.Path == "/set-retrycount-test" {
-				mc.Lock()
-				defer mc.Unlock()
-				attempt++
-				if attempt != 3 {
+				attp := atomic.AddInt32(&attempt, 1)
+				if attp <= 3 {
 					time.Sleep(time.Second * 6)
 				}
 				_, _ = w.Write([]byte("TestClientRetry page"))
 			} else if r.URL.Path == "/set-timeout-test-with-sequence" {
-				seq := atomic.AddInt64(&sequence, 1)
+				seq := atomic.AddInt32(&sequence, 1)
 				time.Sleep(time.Second * 2)
 				_, _ = fmt.Fprintf(w, "%d", seq)
 			} else if r.URL.Path == "/set-timeout-test" {

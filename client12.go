@@ -20,5 +20,6 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	}
 	c.transport.ResponseHeaderTimeout = timeout
 	c.httpClient.Transport = c.transport
+
 	return c
 }
