@@ -25,18 +25,29 @@ type Response struct {
 // Body method returns HTTP response as []byte array for the executed request.
 // Note: `Response.Body` might be nil, if `Request.SetOutput` is used.
 func (r *Response) Body() []byte {
+	if r.RawResponse == nil {
+		return []byte{}
+	}
 	return r.body
 }
 
 // Status method returns the HTTP status string for the executed request.
 //	Example: 200 OK
 func (r *Response) Status() string {
+	if r.RawResponse == nil {
+		return ""
+	}
+
 	return r.RawResponse.Status
 }
 
 // StatusCode method returns the HTTP status code for the executed request.
 //	Example: 200
 func (r *Response) StatusCode() int {
+	if r.RawResponse == nil {
+		return 0
+	}
+
 	return r.RawResponse.StatusCode
 }
 
@@ -52,11 +63,19 @@ func (r *Response) Error() interface{} {
 
 // Header method returns the response headers
 func (r *Response) Header() http.Header {
+	if r.RawResponse == nil {
+		return http.Header{}
+	}
+
 	return r.RawResponse.Header
 }
 
 // Cookies method to access all the response cookies
 func (r *Response) Cookies() []*http.Cookie {
+	if r.RawResponse == nil {
+		return make([]*http.Cookie, 0)
+	}
+
 	return r.RawResponse.Cookies()
 }
 

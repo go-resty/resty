@@ -170,7 +170,13 @@ func TestClientRetryGet(t *testing.T) {
 		SetTimeout(time.Duration(time.Second * 3)).
 		SetRetryCount(3)
 
-	_, err := c.R().Get(ts.URL + "/set-retrycount-test")
+	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")
+	assertEqual(t, "", resp.Status())
+	assertEqual(t, 0, resp.StatusCode())
+	assertEqual(t, 0, len(resp.Cookies()))
+	assertEqual(t, true, resp.Body() != nil)
+	assertEqual(t, 0, len(resp.Header()))
+
 	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test"))
 }
 
