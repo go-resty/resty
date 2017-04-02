@@ -1163,10 +1163,10 @@ func getTestDataPath() string {
 	return pwd + "/test-data"
 }
 
-var attempt int32
-var sequence int32
-
 func createGetServer(t *testing.T) *httptest.Server {
+	var attempt int32
+	var sequence int32
+	var lastRequest time.Time
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
@@ -1184,6 +1184,19 @@ func createGetServer(t *testing.T) *httptest.Server {
 					time.Sleep(time.Second * 6)
 				}
 				_, _ = w.Write([]byte("TestClientRetry page"))
+			} else if r.URL.Path == "/set-retrywaittime-test" {
+				// Returns time.Duration since last request here
+				// or 0 for the very first request
+				if atomic.LoadInt32(&attempt) == 0 {
+					lastRequest = time.Now()
+					_, _ = fmt.Fprint(w, "0")
+				} else {
+					now := time.Now()
+					sinceLastRequest := now.Sub(lastRequest)
+					lastRequest = now
+					_, _ = fmt.Fprintf(w, "%d", uint64(sinceLastRequest))
+				}
+				atomic.AddInt32(&attempt, 1)
 			} else if r.URL.Path == "/set-timeout-test-with-sequence" {
 				seq := atomic.AddInt32(&sequence, 1)
 				time.Sleep(time.Second * 2)

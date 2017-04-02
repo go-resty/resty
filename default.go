@@ -24,18 +24,20 @@ func New() *Client {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 
 	c := &Client{
-		HostURL:    "",
-		QueryParam: url.Values{},
-		FormData:   url.Values{},
-		Header:     http.Header{},
-		UserInfo:   nil,
-		Token:      "",
-		Cookies:    make([]*http.Cookie, 0),
-		Debug:      false,
-		Log:        getLogger(os.Stderr),
-		RetryCount: 0,
-		httpClient: &http.Client{Jar: cookieJar},
-		transport:  &http.Transport{},
+		HostURL:          "",
+		QueryParam:       url.Values{},
+		FormData:         url.Values{},
+		Header:           http.Header{},
+		UserInfo:         nil,
+		Token:            "",
+		Cookies:          make([]*http.Cookie, 0),
+		Debug:            false,
+		Log:              getLogger(os.Stderr),
+		RetryCount:       0,
+		RetryWaitTime:    defaultWaitTime,
+		RetryMaxWaitTime: defaultMaxWaitTime,
+		httpClient:       &http.Client{Jar: cookieJar},
+		transport:        &http.Transport{},
 	}
 
 	c.httpClient.Transport = c.transport
