@@ -102,6 +102,9 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 		temp := math.Min(capLevel, base*math.Exp2(float64(attempt)))
 		sleepDuration := time.Duration(int(temp/2) + rand.Intn(int(temp/2)))
 
+		if sleepDuration < opts.waitTime {
+			sleepDuration = opts.waitTime
+		}
 		time.Sleep(sleepDuration)
 	}
 
