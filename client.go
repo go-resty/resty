@@ -417,14 +417,16 @@ func (c *Client) SetRetryCount(count int) *Client {
 }
 
 // SetRetryWaitTime method sets default wait time to sleep before retrying
-// request
+// request.
+// Default is 100 milliseconds.
 func (c *Client) SetRetryWaitTime(waitTime time.Duration) *Client {
 	c.RetryWaitTime = waitTime
 	return c
 }
 
 // SetRetryMaxWaitTime method sets max wait time to sleep before retrying
-// request
+// request.
+// Default is 2 seconds.
 func (c *Client) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
 	c.RetryMaxWaitTime = maxWaitTime
 	return c
