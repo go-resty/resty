@@ -53,7 +53,7 @@ resty tested with Go `v1.2` and above.
     * FlexibleRedirectPolicy
     * DomainCheckRedirectPolicy
     * etc. [more info](redirect.go)
-  * Retry Mechanism [how to use](retry_test.go)
+  * Retry Mechanism [how to use](#retries)
     * Backoff Retry
     * Conditional Retry
   * SRV Record based request instead of Host URL [how to use](resty_test.go#L1412)
@@ -447,6 +447,50 @@ resp, err := c.R().
     SetProxy("http://sampleproxy:8888").
     Get("http://httpbin.org/get")
 ```
+
+#### Retries
+
+Resty uses [backoff](http://www.awsarchitectureblog.com/2015/03/backoff.html)
+to increase retry intervals after each attempt.
+
+Usage example:
+```go
+// Retries are configured per client
+resty.DefaultClient.
+    // Set retry count to non zero to enable retries
+    SetRetryCount(3).
+    // You can override initial retry wait time.
+    // Default is 100 milliseconds.
+    SetRetryWaitTime(5 * time.Second).
+    // MaxWaitTime can be overridden as well.
+    // Default is 2 seconds.
+    SetRetryMaxWaitTime(20 * time.Second)
+```
+
+Above setup will result in resty retrying requests returned non nil error up to
+3 times with delay increased after each attempt.
+
+You can optionally provide client with custom retry conditions:
+
+```go
+resty.DefaultClient.
+    AddRetryCondition(
+        // Condition function will be provided with *resty.Response as a
+        // parameter. It is expected to return (bool, error) pair. Resty will retry
+        // in case condition returns true or non nil error.
+        func(r *resty.Response) (bool, error) {
+            return r.StatusCode() == http.StatusTooManyRequests, nil
+        }
+    )
+```
+
+Above example will make resty retry requests ended with `429 Too Many Requests`
+status code.
+
+Multiple retry conditions can be added.
+
+It is also possible to use `resty.Backoff(...)` to get arbitrary retry scenarios
+implemented. [Reference](retry_test.go).
 
 #### Choose REST or HTTP mode
 ```go

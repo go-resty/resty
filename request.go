@@ -411,23 +411,29 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 	var resp *Response
 	attempt := 0
-	_ = Backoff(func() (*Response, error) {
-		attempt++
+	_ = Backoff(
+		func() (*Response, error) {
+			attempt++
 
-		r.URL = r.selectAddr(addrs, url, attempt)
+			r.URL = r.selectAddr(addrs, url, attempt)
 
-		resp, err = r.client.execute(r)
-		if err != nil {
-			r.client.Log.Printf("ERROR [%v] Attempt [%v]", err, attempt)
-			if r.isContextCancelledIfAvailable() {
-				// stop Backoff from retrying request if request has been
-				// canceled by context
-				return resp, nil
+			resp, err = r.client.execute(r)
+			if err != nil {
+				r.client.Log.Printf("ERROR [%v] Attempt [%v]", err, attempt)
+				if r.isContextCancelledIfAvailable() {
+					// stop Backoff from retrying request if request has been
+					// canceled by context
+					return resp, nil
+				}
 			}
-		}
 
-		return resp, err
-	}, Retries(r.client.RetryCount), RetryConditions(r.client.RetryConditions))
+			return resp, err
+		},
+		Retries(r.client.RetryCount),
+		WaitTime(r.client.RetryWaitTime),
+		MaxWaitTime(r.client.RetryMaxWaitTime),
+		RetryConditions(r.client.RetryConditions),
+	)
 
 	return resp, err
 }

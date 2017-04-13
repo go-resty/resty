@@ -68,19 +68,21 @@ var (
 // Client type is used for HTTP/RESTful global values
 // for all request raised from the client
 type Client struct {
-	HostURL         string
-	QueryParam      url.Values
-	FormData        url.Values
-	Header          http.Header
-	UserInfo        *User
-	Token           string
-	Cookies         []*http.Cookie
-	Error           reflect.Type
-	Debug           bool
-	DisableWarn     bool
-	Log             *log.Logger
-	RetryCount      int
-	RetryConditions []RetryConditionFunc
+	HostURL          string
+	QueryParam       url.Values
+	FormData         url.Values
+	Header           http.Header
+	UserInfo         *User
+	Token            string
+	Cookies          []*http.Cookie
+	Error            reflect.Type
+	Debug            bool
+	DisableWarn      bool
+	Log              *log.Logger
+	RetryCount       int
+	RetryWaitTime    time.Duration
+	RetryMaxWaitTime time.Duration
+	RetryConditions  []RetryConditionFunc
 
 	httpClient       *http.Client
 	transport        *http.Transport
@@ -411,6 +413,22 @@ func (c *Client) SetRedirectPolicy(policies ...interface{}) *Client {
 // to set no. of retry count. Resty uses a Backoff mechanism.
 func (c *Client) SetRetryCount(count int) *Client {
 	c.RetryCount = count
+	return c
+}
+
+// SetRetryWaitTime method sets default wait time to sleep before retrying
+// request.
+// Default is 100 milliseconds.
+func (c *Client) SetRetryWaitTime(waitTime time.Duration) *Client {
+	c.RetryWaitTime = waitTime
+	return c
+}
+
+// SetRetryMaxWaitTime method sets max wait time to sleep before retrying
+// request.
+// Default is 2 seconds.
+func (c *Client) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
+	c.RetryMaxWaitTime = maxWaitTime
 	return c
 }
 
