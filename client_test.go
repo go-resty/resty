@@ -220,6 +220,17 @@ func TestSetScheme(t *testing.T) {
 	assertEqual(t, true, DefaultClient.scheme == "http")
 }
 
+func TestSetCookieJar(t *testing.T) {
+	DefaultClient = dc()
+	backupJar := DefaultClient.httpClient.Jar
+
+	SetCookieJar(nil)
+	assertEqual(t, true, DefaultClient.httpClient.Jar == nil)
+
+	SetCookieJar(backupJar)
+	assertEqual(t, true, DefaultClient.httpClient.Jar == backupJar)
+}
+
 func TestClientOptions(t *testing.T) {
 	SetHTTPMode().SetContentLength(true)
 	assertEqual(t, Mode(), "http")
