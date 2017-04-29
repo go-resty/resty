@@ -150,6 +150,17 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 	return c
 }
 
+// SetCookieJar method sets custom http.CookieJar in the resty client. Its way to override default.
+// Example: sometimes we don't want to save cookies in api contacting, we can remove the default
+// CookieJar in resty client.
+//
+//		resty.SetCookieJar(nil)
+//
+func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
+	c.httpClient.Jar = jar
+	return c
+}
+
 // SetCookie method sets a single cookie in the client instance.
 // These cookies will be added to all the request raised from this client instance.
 // 		resty.SetCookie(&http.Cookie{
