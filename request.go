@@ -54,6 +54,32 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 	return r
 }
 
+// SetParam method sets single url paramater and its value in the current request.
+// It will be formed as query string for the request.
+// Example: `/user/:id` will become `/user/123`
+// 		resty.R().
+//			SetParam("id", "123").
+// Also you can override query params value, which was set at client instance level
+//
+func (r *Request) SetParam(name, value string) *Request {
+	r.Param[name] = value
+	return r
+}
+
+// SetParams method sets multiple url paramaters and its value in the current request.
+// It will be formed as query string for the request.
+// Example: `/user/:id/posts/:postId` will become `/user/123/post/321`
+// 		resty.R().
+//			SetParams(map[string]string{"id":"123", "postId": "321"}).
+// Also you can override query params value, which was set at client instance level
+//
+func (r *Request) SetParams(params map[string]string) *Request {
+	for k, v := range params {
+		r.Param[k] = v
+	}
+	return r
+}
+
 // SetQueryParam method sets single paramater and its value in the current request.
 // It will be formed as query string for the request.
 // Example: `search=kitchen%20papers&size=large` in the URL after `?` mark.

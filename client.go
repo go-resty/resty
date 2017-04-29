@@ -293,6 +293,7 @@ func (c *Client) R() *Request {
 	r := &Request{
 		URL:            "",
 		Method:         "",
+		Param:          make(map[string]string),
 		QueryParam:     url.Values{},
 		FormData:       url.Values{},
 		Header:         http.Header{},

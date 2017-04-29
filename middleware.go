@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 )
 
@@ -43,6 +44,15 @@ func parseRequestURL(c *Client, r *Request) error {
 			return err
 		}
 	}
+
+	path := reqURL.Path
+	for k, v := range r.Param {
+		re, err := regexp.Compile(`:` + k + `\b`)
+		if err == nil {
+			path = re.ReplaceAllString(path, v)
+		}
+	}
+	reqURL.Path = path
 
 	// Adding Query Param
 	query := reqURL.Query()
