@@ -89,7 +89,7 @@ func SetHeaders(headers map[string]string) *Client {
 	return DefaultClient.SetHeaders(headers)
 }
 
-// SetCookieJa sets custom http.CookieJar. See `Client.SetCookieJar` for more information.
+// SetCookieJar sets custom http.CookieJar. See `Client.SetCookieJar` for more information.
 func SetCookieJar(jar http.CookieJar) *Client {
 	return DefaultClient.SetCookieJar(jar)
 }
