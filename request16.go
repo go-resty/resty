@@ -23,6 +23,7 @@ import (
 type Request struct {
 	URL        string
 	Method     string
+	Param      map[string]string
 	QueryParam url.Values
 	FormData   url.Values
 	Header     http.Header
