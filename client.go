@@ -236,7 +236,7 @@ func (c *Client) SetQueryParam(param, value string) *Client {
 //
 func (c *Client) SetQueryParams(params map[string]string) *Client {
 	for p, v := range params {
-		c.QueryParam.Set(p, v)
+		c.SetQueryParam(p, v)
 	}
 
 	return c
