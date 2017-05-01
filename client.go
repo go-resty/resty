@@ -161,7 +161,7 @@ func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
 	return c
 }
 
-// SetCookie method sets a single cookie in the client instance.
+// SetCookie method appends a single cookie in the client instance.
 // These cookies will be added to all the request raised from this client instance.
 // 		resty.SetCookie(&http.Cookie{
 // 					Name:"go-resty",
@@ -210,7 +210,7 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 	return c
 }
 
-// SetQueryParam method sets single paramater and its value in the client instance.
+// SetQueryParam method sets single parameter and its value in the client instance.
 // It will be formed as query string for the request. For example: `search=kitchen%20papers&size=large`
 // in the URL after `?` mark. These query params will be added to all the request raised from
 // this client instance. Also it can be overridden at request level Query Param options,
@@ -220,11 +220,11 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 //			SetQueryParam("size", "large")
 //
 func (c *Client) SetQueryParam(param, value string) *Client {
-	c.QueryParam.Add(param, value)
+	c.QueryParam.Set(param, value)
 	return c
 }
 
-// SetQueryParams method sets multiple parameters and its values at one go in the client instance.
+// SetQueryParams method sets multiple parameters and their values at one go in the client instance.
 // It will be formed as query string for the request. For example: `search=kitchen%20papers&size=large`
 // in the URL after `?` mark. These query params will be added to all the request raised from this
 // client instance. Also it can be overridden at request level Query Param options,
@@ -236,13 +236,13 @@ func (c *Client) SetQueryParam(param, value string) *Client {
 //
 func (c *Client) SetQueryParams(params map[string]string) *Client {
 	for p, v := range params {
-		c.QueryParam.Add(p, v)
+		c.SetQueryParam(p, v)
 	}
 
 	return c
 }
 
-// SetFormData method sets Form parameters and its values in the client instance.
+// SetFormData method sets Form parameters and their values in the client instance.
 // It's applicable only HTTP method `POST` and `PUT` and requets content type would be set as
 // `application/x-www-form-urlencoded`. These form data will be added to all the request raised from
 // this client instance. Also it can be overridden at request level form data, see `resty.R().SetFormData`.
@@ -253,7 +253,7 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 //
 func (c *Client) SetFormData(data map[string]string) *Client {
 	for k, v := range data {
-		c.FormData.Add(k, v)
+		c.FormData.Set(k, v)
 	}
 
 	return c
@@ -308,7 +308,7 @@ func (c *Client) R() *Request {
 	return r
 }
 
-// OnBeforeRequest method sets request middleware into the before request chain.
+// OnBeforeRequest method appends request middleware into the before request chain.
 // Its gets applied after default `go-resty` request middlewares and before request
 // been sent from `go-resty` to host server.
 // 		resty.OnBeforeRequest(func(c *resty.Client, r *resty.Request) error {
@@ -323,7 +323,7 @@ func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
 	return c
 }
 
-// OnAfterResponse method sets response middleware into the after response chain.
+// OnAfterResponse method appends response middleware into the after response chain.
 // Once we receive response from host server, default `go-resty` response middleware
 // gets applied and then user assigened response middlewares applied.
 // 		resty.OnAfterResponse(func(c *resty.Client, r *resty.Response) error {

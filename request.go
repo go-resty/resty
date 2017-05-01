@@ -48,13 +48,13 @@ func (r *Request) SetHeader(header, value string) *Request {
 //
 func (r *Request) SetHeaders(headers map[string]string) *Request {
 	for h, v := range headers {
-		r.Header.Set(h, v)
+		r.SetHeader(h, v)
 	}
 
 	return r
 }
 
-// SetQueryParam method sets single paramater and its value in the current request.
+// SetQueryParam method sets single parameter and its value in the current request.
 // It will be formed as query string for the request.
 // Example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
 // 		resty.R().
@@ -63,7 +63,7 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 // Also you can override query params value, which was set at client instance level
 //
 func (r *Request) SetQueryParam(param, value string) *Request {
-	r.QueryParam.Add(param, value)
+	r.QueryParam.Set(param, value)
 	return r
 }
 
@@ -79,13 +79,13 @@ func (r *Request) SetQueryParam(param, value string) *Request {
 //
 func (r *Request) SetQueryParams(params map[string]string) *Request {
 	for p, v := range params {
-		r.QueryParam.Add(p, v)
+		r.SetQueryParam(p, v)
 	}
 
 	return r
 }
 
-// SetMultiValueQueryParams method sets multiple parameters with multi-value
+// SetMultiValueQueryParams method appends multiple parameters with multi-value
 // at one go in the current request. It will be formed as query string for the request.
 // Example: `status=pending&status=approved&status=open` in the URL after `?` mark.
 // 		resty.R().
@@ -122,8 +122,8 @@ func (r *Request) SetQueryString(query string) *Request {
 	return r
 }
 
-// SetFormData method sets Form parameters and its values in the current request.
-// It's applicable only HTTP method `POST` and `PUT` and requets content type would be set as
+// SetFormData method sets Form parameters and their values in the current request.
+// It's applicable only HTTP method `POST` and `PUT` and requests content type would be set as
 // `application/x-www-form-urlencoded`.
 // 		resty.R().
 // 			SetFormData(map[string]string{
@@ -134,13 +134,13 @@ func (r *Request) SetQueryString(query string) *Request {
 //
 func (r *Request) SetFormData(data map[string]string) *Request {
 	for k, v := range data {
-		r.FormData.Add(k, v)
+		r.FormData.Set(k, v)
 	}
 
 	return r
 }
 
-// SetMultiValueFormData method sets multiple form parameters with multi-value
+// SetMultiValueFormData method appends multiple form parameters with multi-value
 // at one go in the current request.
 // 		resty.R().
 //			SetMultiValueFormData(url.Values{

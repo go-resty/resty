@@ -257,7 +257,7 @@ func TestPostJSONMapSuccess(t *testing.T) {
 	logResponse(t, resp)
 }
 
-func TestPostJSONMapInvaildResponseJson(t *testing.T) {
+func TestPostJSONMapInvalidResponseJson(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
@@ -369,7 +369,7 @@ func TestPostXMLStructInvalidLogin(t *testing.T) {
 	logResponse(t, resp)
 }
 
-func TestPostXMLStructInvaildResponseXml(t *testing.T) {
+func TestPostXMLStructInvalidResponseXml(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
@@ -779,7 +779,7 @@ func TestNoAutoRedirect(t *testing.T) {
 	assertEqual(t, "Get /redirect-2: Auto redirect is disabled", err.Error())
 }
 
-func TestHTTPAutoRedirectUpto10(t *testing.T) {
+func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
 
@@ -994,7 +994,7 @@ func TestDetectContentTypeForSlice(t *testing.T) {
 	logResponse(t, resp)
 }
 
-func TestMuliParamQueryString(t *testing.T) {
+func TestMultiParamsQueryString(t *testing.T) {
 	ts1 := createGetServer(t)
 	defer ts1.Close()
 
@@ -1004,14 +1004,18 @@ func TestMuliParamQueryString(t *testing.T) {
 	client.SetQueryParam("status", "open")
 
 	_, _ = req1.SetQueryParam("status", "pending").
-		SetQueryParam("status", "approved").
 		Get(ts1.URL)
 
 	assertEqual(t, true, strings.Contains(req1.URL, "status=pending"))
-	assertEqual(t, true, strings.Contains(req1.URL, "status=approved"))
-
-	// because it's removed by key
+	// pending overrides open
 	assertEqual(t, false, strings.Contains(req1.URL, "status=open"))
+
+	_, _ = req1.SetQueryParam("status", "approved").
+		Get(ts1.URL)
+
+	assertEqual(t, true, strings.Contains(req1.URL, "status=approved"))
+	// approved overrides pending
+	assertEqual(t, false, strings.Contains(req1.URL, "status=pending"))
 
 	ts2 := createGetServer(t)
 	defer ts2.Close()
@@ -1537,14 +1541,14 @@ func createRedirectServer(t *testing.T) *httptest.Server {
 					if cnt >= 5 {
 						http.Redirect(w, r, "http://httpbin.org/get", http.StatusTemporaryRedirect)
 					} else {
-						http.Redirect(w, r, fmt.Sprintf("/redirect-host-check-%d", (cnt+1)), http.StatusTemporaryRedirect)
+						http.Redirect(w, r, fmt.Sprintf("/redirect-host-check-%d", (cnt + 1)), http.StatusTemporaryRedirect)
 					}
 				}
 			} else if strings.HasPrefix(r.URL.Path, "/redirect-") {
 				cntStr := strings.SplitAfter(r.URL.Path, "-")[1]
 				cnt, _ := strconv.Atoi(cntStr)
 
-				http.Redirect(w, r, fmt.Sprintf("/redirect-%d", (cnt+1)), http.StatusTemporaryRedirect)
+				http.Redirect(w, r, fmt.Sprintf("/redirect-%d", (cnt + 1)), http.StatusTemporaryRedirect)
 			}
 		}
 	})

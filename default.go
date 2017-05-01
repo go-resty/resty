@@ -104,7 +104,7 @@ func SetCookies(cs []*http.Cookie) *Client {
 	return DefaultClient.SetCookies(cs)
 }
 
-// SetQueryParam method sets single paramater and its value. See `Client.SetQueryParam` for more information.
+// SetQueryParam method sets single parameter and its value. See `Client.SetQueryParam` for more information.
 func SetQueryParam(param, value string) *Client {
 	return DefaultClient.SetQueryParam(param, value)
 }
