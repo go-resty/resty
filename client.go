@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -88,7 +89,6 @@ type Client struct {
 	RetryConditions  []RetryConditionFunc
 
 	httpClient       *http.Client
-	transport        *http.Transport
 	setContentLength bool
 	isHTTPMode       bool
 	outputDirectory  string
@@ -538,8 +538,12 @@ func (c *Client) Mode() string {
 // Note: This method overwrites existing `TLSClientConfig`.
 //
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
-	c.transport.TLSClientConfig = config
-	c.httpClient.Transport = c.transport
+	transport, err := c.getHttpTransport()
+	if err != nil {
+		c.Log.Printf("ERROR [%v]", err)
+		return c
+	}
+	transport.TLSClientConfig = config
 	return c
 }
 
@@ -550,10 +554,14 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 // you can also set Proxy via environment variable. By default `Go` uses setting from `HTTP_PROXY`.
 //
 func (c *Client) SetProxy(proxyURL string) *Client {
+	transport, err := c.getHttpTransport()
+	if err != nil {
+		c.Log.Printf("ERROR [%v]", err)
+		return c
+	}
 	if pURL, err := url.Parse(proxyURL); err == nil {
 		c.proxyURL = pURL
-		c.transport.Proxy = http.ProxyURL(c.proxyURL)
-		c.httpClient.Transport = c.transport
+		transport.Proxy = http.ProxyURL(c.proxyURL)
 	} else {
 		c.Log.Printf("ERROR [%v]", err)
 		c.RemoveProxy()
@@ -566,17 +574,24 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 //		resty.RemoveProxy()
 //
 func (c *Client) RemoveProxy() *Client {
+	transport, err := c.getHttpTransport()
+	if err != nil {
+		c.Log.Printf("ERROR [%v]", err)
+		return c
+	}
 	c.proxyURL = nil
-	c.transport.Proxy = nil
-	c.httpClient.Transport = c.transport
-
+	transport.Proxy = nil
 	return c
 }
 
 // SetCertificates method helps to set client certificates into resty conveniently.
 //
 func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
-	config := c.getTLSConfig()
+	config, err := c.getTLSConfig()
+	if err != nil {
+		c.Log.Printf("ERROR [%v]", err)
+		return c
+	}
 	config.Certificates = append(config.Certificates, certs...)
 	return c
 }
@@ -591,7 +606,11 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 		return c
 	}
 
-	config := c.getTLSConfig()
+	config, err := c.getTLSConfig()
+	if err != nil {
+		c.Log.Printf("ERROR [%v]", err)
+		return c
+	}
 	if config.RootCAs == nil {
 		config.RootCAs = x509.NewCertPool()
 	}
@@ -629,12 +648,10 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 //
 //		resty.SetTransport(transport)
 //
-func (c *Client) SetTransport(transport *http.Transport) *Client {
+func (c *Client) SetTransport(transport http.RoundTripper) *Client {
 	if transport != nil {
-		c.transport = transport
-		c.httpClient.Transport = c.transport
+		c.httpClient.Transport = transport
 	}
-
 	return c
 }
 
@@ -737,12 +754,25 @@ func (c *Client) disableLogPrefix() {
 }
 
 // getting TLS client config if not exists then create one
-func (c *Client) getTLSConfig() *tls.Config {
-	if c.transport.TLSClientConfig == nil {
-		c.transport.TLSClientConfig = &tls.Config{}
-		c.httpClient.Transport = c.transport
+func (c *Client) getTLSConfig() (*tls.Config, error) {
+	transport, err := c.getHttpTransport()
+	if err != nil {
+		return nil, err
 	}
-	return c.transport.TLSClientConfig
+	if transport.TLSClientConfig == nil {
+		transport.TLSClientConfig = &tls.Config{}
+	}
+	return transport.TLSClientConfig, nil
+}
+
+// returns `*http.Transport` currently in use or error
+// in case currently used `transport` is not an `*http.Transport`
+func (c *Client) getHttpTransport() (*http.Transport, error) {
+	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
+		return transport, nil
+	} else {
+		return nil, errors.New("Current transport is not an *http.Transport")
+	}
 }
 
 //
