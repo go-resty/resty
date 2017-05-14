@@ -144,9 +144,19 @@ func SetDebug(d bool) *Client {
 	return DefaultClient.SetDebug(d)
 }
 
-// SetRetryCount method set the retry count. See `Client.SetRetryCount` for more information.
+// SetRetryCount method sets the retry count. See `Client.SetRetryCount` for more information.
 func SetRetryCount(count int) *Client {
 	return DefaultClient.SetRetryCount(count)
+}
+
+// SetRetryWaitTime method sets the retry wait time. See `Client.SetRetryWaitTime` for more information.
+func SetRetryWaitTime(waitTime time.Duration) *Client {
+	return DefaultClient.SetRetryWaitTime(waitTime)
+}
+
+// SetRetryMaxWaitTime method sets the retry max wait time. See `Client.SetRetryMaxWaitTime` for more information.
+func SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
+	return DefaultClient.SetRetryMaxWaitTime(maxWaitTime)
 }
 
 // AddRetryCondition method appends check function for retry. See `Client.AddRetryCondition` for more information.
