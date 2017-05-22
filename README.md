@@ -1,8 +1,8 @@
-# resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty) [![codecov](https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg)](https://codecov.io/gh/go-resty/resty/branch/master)  [![GoReport](https://goreportcard.com/badge/go-resty/resty)](https://goreportcard.com/report/go-resty/resty)  [![Version](https://img.shields.io/badge/version-0.11-blue.svg)](https://github.com/go-resty/resty/releases/latest)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty) [![License](https://img.shields.io/github/license/go-resty/resty.svg)](LICENSE)
+# resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty) [![codecov](https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg)](https://codecov.io/gh/go-resty/resty/branch/master)  [![GoReport](https://goreportcard.com/badge/go-resty/resty)](https://goreportcard.com/report/go-resty/resty)  [![Version](https://img.shields.io/badge/version-0.12-blue.svg)](https://github.com/go-resty/resty/releases/latest)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty) [![License](https://img.shields.io/github/license/go-resty/resty.svg)](LICENSE)
 
 Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty capabilities.
 
-***v0.11 [released](https://github.com/go-resty/resty/releases/latest) and tagged on Mar 20, 2017.***
+***v0.12 [released](https://github.com/go-resty/resty/releases/latest) and tagged on May 22, 2017.***
 
 *Since Go v1.6 HTTP/2 & HTTP/1.1 protocol is used transparently. `Resty` works fine with HTTP/2 and HTTP/1.1.*
 
@@ -21,6 +21,9 @@ Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very h
   * Know your `response.Time()` and when we `response.ReceivedAt()`
 * Automatic marshal and unmarshal for `JSON` and `XML` content type
   * Default is `JSON`, if you supply `struct/map` without header `Content-Type`
+  * For auto-unmarshal, refer to -
+      - Success scenario [Request.SetResult()](https://godoc.org/gopkg.in/resty.v0#Request.SetResult) and [Response.Result()](https://godoc.org/gopkg.in/resty.v0#Response.Result).
+      - Error scenario [Request.SetError()](https://godoc.org/gopkg.in/resty.v0#Request.SetError) and [Response.Error()](https://godoc.org/gopkg.in/resty.v0#Response.Error).
 * Easy to upload one or more file(s) via `multipart/form-data`
 * Backoff Retry Mechanism with retry condition function [reference](retry_test.go)
 * resty client HTTP & REST [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middlewares
@@ -38,14 +41,14 @@ Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very h
 * resty design
   * Have client level settings & options and also override at Request level if you want to
   * Request and Response middlewares
-  * Create Multiple clients if want to `resty.New()`
+  * Create Multiple clients if you want to `resty.New()`
   * goroutine concurrent safe
   * REST and HTTP modes
   * Debug mode - clean and informative logging presentation
   * Gzip - I'm not doing anything here. Go does it automatically
 * Well tested client library
 
-resty tested with Go `v1.2` and above.
+resty tested with Go `v1.3` and above.
 
 #### Included Batteries
   * Redirect Policies - see [how to use](#redirect-policy)
@@ -71,6 +74,13 @@ go get -u gopkg.in/resty.v0
 # install the latest & greatest library
 go get -u github.com/go-resty/resty
 ```
+
+## It might interest you :)
+
+Resty author also published following projects to Go Community.
+
+  * [aah framework](https://aahframework.org) - Web and API framework for Go.
+  * [go-model](https://github.com/jeevatkm/go-model) - Robust & Easy to use model mapper and utility methods for Go `struct`.
 
 ## Usage
 The following samples will assist you to become as comfortable as possible with resty library. Resty comes with ready to use DefaultClient.
