@@ -137,17 +137,9 @@ func TestPostJSONStringSuccess(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
 	logResponse(t, resp)
-}
 
-func TestPostJSONStringError(t *testing.T) {
-	ts := createPostServer(t)
-	defer ts.Close()
-
-	c := dc()
-	c.SetHeader(hdrContentTypeKey, jsonContentType).
-		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1", hdrAcceptKey: jsonContentType})
-
-	resp, err := c.R().
+	// PostJSONStringError
+	resp, err = c.R().
 		SetBody(`{"username":"testuser" "password":"testpass"}`).
 		Post(ts.URL + "/login")
 
@@ -876,20 +868,6 @@ func TestProxySetting(t *testing.T) {
 	assertEqual(t, true, (DefaultClient.transport.Proxy == nil))
 }
 
-func TestClientProxyOverride(t *testing.T) {
-	ts := createGetServer(t)
-	defer ts.Close()
-
-	c := dc()
-	c.SetTimeout(1 * time.Second)
-	c.SetProxy("http://sampleproxy:8888")
-
-	resp, err := c.R().
-		Get(ts.URL)
-	assertEqual(t, true, resp != nil)
-	assertEqual(t, true, err != nil)
-}
-
 func TestIncorrectURL(t *testing.T) {
 	_, err := R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
 	assertEqual(t, true, strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
@@ -1048,13 +1026,8 @@ func TestSetQueryStringTypical(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
 	assertEqual(t, "TestGet: text response", resp.String())
-}
 
-func TestSetQueryStringTypicalError(t *testing.T) {
-	ts := createGetServer(t)
-	defer ts.Close()
-
-	resp, err := dclr().
+	resp, err = dclr().
 		SetQueryString("&%%amp;").
 		Get(ts.URL)
 
@@ -1541,14 +1514,14 @@ func createRedirectServer(t *testing.T) *httptest.Server {
 					if cnt >= 5 {
 						http.Redirect(w, r, "http://httpbin.org/get", http.StatusTemporaryRedirect)
 					} else {
-						http.Redirect(w, r, fmt.Sprintf("/redirect-host-check-%d", (cnt + 1)), http.StatusTemporaryRedirect)
+						http.Redirect(w, r, fmt.Sprintf("/redirect-host-check-%d", (cnt+1)), http.StatusTemporaryRedirect)
 					}
 				}
 			} else if strings.HasPrefix(r.URL.Path, "/redirect-") {
 				cntStr := strings.SplitAfter(r.URL.Path, "-")[1]
 				cnt, _ := strconv.Atoi(cntStr)
 
-				http.Redirect(w, r, fmt.Sprintf("/redirect-%d", (cnt + 1)), http.StatusTemporaryRedirect)
+				http.Redirect(w, r, fmt.Sprintf("/redirect-%d", (cnt+1)), http.StatusTemporaryRedirect)
 			}
 		}
 	})

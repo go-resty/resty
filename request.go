@@ -5,7 +5,6 @@
 package resty
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -448,36 +447,37 @@ func (r *Request) fmtBodyString() (body string) {
 		}
 
 		// request body data
-		if r.Body != nil {
-			var prtBodyBytes []byte
-			var err error
+		if r.Body == nil {
+			return
+		}
+		var prtBodyBytes []byte
+		var err error
 
-			contentType := r.Header.Get(hdrContentTypeKey)
-			kind := kindOf(r.Body)
-			if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map) {
-				prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
-			} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-				prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
-			} else if b, ok := r.Body.(string); ok {
-				if IsJSONType(contentType) {
-					bodyBytes := []byte(b)
-					var out bytes.Buffer
-					if err = json.Indent(&out, bodyBytes, "", "   "); err == nil {
-						prtBodyBytes = out.Bytes()
-					}
-				} else {
-					body = b
-					return
+		contentType := r.Header.Get(hdrContentTypeKey)
+		kind := kindOf(r.Body)
+		if canJSONMarshal(contentType, kind) {
+			prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
+		} else if IsXMLType(contentType) && (kind == reflect.Struct) {
+			prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
+		} else if b, ok := r.Body.(string); ok {
+			if IsJSONType(contentType) {
+				bodyBytes := []byte(b)
+				out := getBuffer()
+				defer putBuffer(out)
+				if err = json.Indent(out, bodyBytes, "", "   "); err == nil {
+					prtBodyBytes = out.Bytes()
 				}
-			} else if b, ok := r.Body.([]byte); ok {
-				body = base64.StdEncoding.EncodeToString(b)
+			} else {
+				body = b
+				return
 			}
-
-			if prtBodyBytes != nil && err == nil {
-				body = string(prtBodyBytes)
-			}
+		} else if b, ok := r.Body.([]byte); ok {
+			body = base64.StdEncoding.EncodeToString(b)
 		}
 
+		if prtBodyBytes != nil && err == nil {
+			body = string(prtBodyBytes)
+		}
 	}
 
 	return

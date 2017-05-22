@@ -5,7 +5,6 @@
 package resty
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -112,8 +111,9 @@ func (r *Response) fmtBodyString() string {
 	if r.body != nil {
 		ct := r.Header().Get(hdrContentTypeKey)
 		if IsJSONType(ct) {
-			var out bytes.Buffer
-			if err := json.Indent(&out, r.body, "", "   "); err == nil {
+			out := getBuffer()
+			defer putBuffer(out)
+			if err := json.Indent(out, r.body, "", "   "); err == nil {
 				bodyStr = string(out.Bytes())
 			}
 		} else {

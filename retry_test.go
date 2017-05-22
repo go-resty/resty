@@ -21,7 +21,7 @@ func TestBackoffSuccess(t *testing.T) {
 	retryErr := Backoff(func() (*Response, error) {
 		externalCounter++
 		if externalCounter < attempts {
-			return nil, errors.New("Not yet got the number we're after...")
+			return nil, errors.New("not yet got the number we're after")
 		}
 
 		return nil, nil
@@ -37,7 +37,7 @@ func TestBackoffTenAttemptsSuccess(t *testing.T) {
 	retryErr := Backoff(func() (*Response, error) {
 		externalCounter++
 		if externalCounter < attempts {
-			return nil, errors.New("Not yet got the number we're after...")
+			return nil, errors.New("not yet got the number we're after")
 		}
 		return nil, nil
 	}, Retries(attempts), WaitTime(5), MaxWaitTime(500))
@@ -206,7 +206,7 @@ func TestClientRetryWait(t *testing.T) {
 				return true, nil
 			},
 		)
-	c.R().Get(ts.URL + "/set-retrywaittime-test")
+	_, _ = c.R().Get(ts.URL + "/set-retrywaittime-test")
 
 	// 5 attempts were made
 	assertEqual(t, attempt, 5)

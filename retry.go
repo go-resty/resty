@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2016 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2017 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -16,19 +16,21 @@ const (
 	defaultMaxWaitTime = time.Duration(2000) * time.Millisecond
 )
 
-// Option is to create convenient retry options like wait time, max retries, etc.
-type Option func(*Options)
+type (
+	// Option is to create convenient retry options like wait time, max retries, etc.
+	Option func(*Options)
 
-// RetryConditionFunc type is for retry condition function
-type RetryConditionFunc func(*Response) (bool, error)
+	// RetryConditionFunc type is for retry condition function
+	RetryConditionFunc func(*Response) (bool, error)
 
-// Options to hold go-resty retry values
-type Options struct {
-	maxRetries      int
-	waitTime        time.Duration
-	maxWaitTime     time.Duration
-	retryConditions []RetryConditionFunc
-}
+	// Options to hold go-resty retry values
+	Options struct {
+		maxRetries      int
+		waitTime        time.Duration
+		maxWaitTime     time.Duration
+		retryConditions []RetryConditionFunc
+	}
+)
 
 // Retries sets the max number of retries
 func Retries(value int) Option {

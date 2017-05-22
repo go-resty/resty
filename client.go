@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -22,6 +23,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -63,6 +65,7 @@ var (
 	xmlCheck  = regexp.MustCompile("(?i:[application|text]/xml)")
 
 	hdrUserAgentValue = "go-resty v%s - https://github.com/go-resty/resty"
+	bufPool           = &sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 )
 
 // Client type is used for HTTP/RESTful global values
@@ -345,7 +348,7 @@ func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
 // Note: Only one pre-request hook can be registered. Use `resty.OnBeforeRequest` for mutilple.
 func (c *Client) SetPreRequestHook(h func(*Client, *Request) error) *Client {
 	if c.preReqHook != nil {
-		c.Log.Printf("Overwriting an existing pre-request hook")
+		c.Log.Printf("Overwriting an existing pre-request hook: %s", functionName(h))
 	}
 	c.preReqHook = h
 	return c
@@ -416,14 +419,13 @@ func (c *Client) SetRedirectPolicy(policies ...interface{}) *Client {
 	for _, p := range policies {
 		if _, ok := p.(RedirectPolicy); !ok {
 			c.Log.Printf("ERORR: %v does not implement resty.RedirectPolicy (missing Apply method)",
-				runtime.FuncForPC(reflect.ValueOf(p).Pointer()).Name())
+				functionName(p))
 		}
 	}
 
 	c.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		for _, p := range policies {
-			err := p.(RedirectPolicy).Apply(req, via)
-			if err != nil {
+			if err := p.(RedirectPolicy).Apply(req, via); err != nil {
 				return err
 			}
 		}
@@ -486,6 +488,7 @@ func (c *Client) SetRESTMode() *Client {
 //		resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
 //
 func (c *Client) SetMode(mode string) *Client {
+	// HTTP
 	if mode == "http" {
 		c.isHTTPMode = true
 		c.SetRedirectPolicy(FlexibleRedirectPolicy(10))
@@ -493,16 +496,17 @@ func (c *Client) SetMode(mode string) *Client {
 			responseLogger,
 			saveResponseIntoFile,
 		}
-	} else { // RESTful
-		c.isHTTPMode = false
-		c.SetRedirectPolicy(NoRedirectPolicy())
-		c.afterResponse = []func(*Client, *Response) error{
-			responseLogger,
-			parseResponseBody,
-			saveResponseIntoFile,
-		}
+		return c
 	}
 
+	// RESTful
+	c.isHTTPMode = false
+	c.SetRedirectPolicy(NoRedirectPolicy())
+	c.afterResponse = []func(*Client, *Response) error{
+		responseLogger,
+		parseResponseBody,
+		saveResponseIntoFile,
+	}
 	return c
 }
 
@@ -512,7 +516,6 @@ func (c *Client) Mode() string {
 	if c.isHTTPMode {
 		return "http"
 	}
-
 	return "rest"
 }
 
@@ -529,7 +532,6 @@ func (c *Client) Mode() string {
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	c.transport.TLSClientConfig = config
 	c.httpClient.Transport = c.transport
-
 	return c
 }
 
@@ -632,7 +634,7 @@ func (c *Client) SetTransport(transport *http.Transport) *Client {
 // 		resty.SetScheme("http")
 //
 func (c *Client) SetScheme(scheme string) *Client {
-	if len(strings.TrimSpace(scheme)) > 0 {
+	if !IsStringEmpty(scheme) {
 		c.scheme = scheme
 	}
 
@@ -653,22 +655,21 @@ func (c *Client) IsProxySet() bool {
 
 // executes the given `Request` object and returns response
 func (c *Client) execute(req *Request) (*Response, error) {
+	defer putBuffer(req.bodyBuf)
 	// Apply Request middleware
 	var err error
 
 	// user defined on before request methods
 	// to modify the *resty.Request object
 	for _, f := range c.udBeforeRequest {
-		err = f(c, req)
-		if err != nil {
+		if err = f(c, req); err != nil {
 			return nil, err
 		}
 	}
 
 	// resty middlewares
 	for _, f := range c.beforeRequest {
-		err = f(c, req)
-		if err != nil {
+		if err = f(c, req); err != nil {
 			return nil, err
 		}
 	}
@@ -697,8 +698,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		defer func() {
 			_ = resp.Body.Close()
 		}()
-		response.body, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
+
+		if response.body, err = ioutil.ReadAll(resp.Body); err != nil {
 			return response, err
 		}
 
@@ -707,8 +708,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	// Apply Response middleware
 	for _, f := range c.afterResponse {
-		err = f(c, response)
-		if err != nil {
+		if err = f(c, response); err != nil {
 			break
 		}
 	}
@@ -872,4 +872,23 @@ func createDirectory(dir string) (err error) {
 		}
 	}
 	return
+}
+
+func canJSONMarshal(contentType string, kind reflect.Kind) bool {
+	return IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map)
+}
+
+func functionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
+func getBuffer() *bytes.Buffer {
+	return bufPool.Get().(*bytes.Buffer)
+}
+
+func putBuffer(buf *bytes.Buffer) {
+	if buf != nil {
+		buf.Reset()
+		bufPool.Put(buf)
+	}
 }
