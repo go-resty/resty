@@ -395,6 +395,14 @@ func (c *Client) SetContentLength(l bool) *Client {
 	return c
 }
 
+// SetTimeout method sets timeout for request raised from client.
+//		resty.SetTimeout(time.Duration(1 * time.Minute))
+//
+func (c *Client) SetTimeout(timeout time.Duration) *Client {
+	c.httpClient.Timeout = timeout
+	return c
+}
+
 // SetError method is to register the global or client common `Error` object into go-resty.
 // It is used for automatic unmarshalling if response status code is greater than 399 and
 // content type either JSON or XML. Can be pointer or non-pointer.
