@@ -94,6 +94,7 @@ type Client struct {
 	closeConnection  bool
 	beforeRequest    []func(*Client, *Request) error
 	udBeforeRequest  []func(*Client, *Request) error
+	preReqHook       func(*Client, *Request) error
 	afterResponse    []func(*Client, *Response) error
 }
 
@@ -335,6 +336,18 @@ func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
 //
 func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
 	c.afterResponse = append(c.afterResponse, m)
+	return c
+}
+
+// SetPreRequestHook method sets the given pre-request function into resty client.
+// It is called right before the request is fired.
+//
+// Note: Only one pre-request hook can be registered. Use `resty.OnBeforeRequest` for mutilple.
+func (c *Client) SetPreRequestHook(h func(*Client, *Request) error) *Client {
+	if c.preReqHook != nil {
+		c.Log.Printf("Overwriting an existing pre-request hook")
+	}
+	c.preReqHook = h
 	return c
 }
 
@@ -656,6 +669,13 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	for _, f := range c.beforeRequest {
 		err = f(c, req)
 		if err != nil {
+			return nil, err
+		}
+	}
+
+	// call pre-request if defined
+	if c.preReqHook != nil {
+		if err = c.preReqHook(c, req); err != nil {
 			return nil, err
 		}
 	}

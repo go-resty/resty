@@ -330,3 +330,15 @@ func TestClientOptions(t *testing.T) {
 
 	SetLogger(ioutil.Discard)
 }
+
+func TestClientPreRequestHook(t *testing.T) {
+	SetPreRequestHook(func(c *Client, r *Request) error {
+		c.Log.Println("I'm in Pre-Request Hook")
+		return nil
+	})
+
+	SetPreRequestHook(func(c *Client, r *Request) error {
+		c.Log.Println("I'm Overwriting existing Pre-Request Hook")
+		return nil
+	})
+}

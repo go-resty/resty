@@ -139,6 +139,11 @@ func OnAfterResponse(m func(*Client, *Response) error) *Client {
 	return DefaultClient.OnAfterResponse(m)
 }
 
+// SetPreRequestHook method sets the pre-request hook. See `Client.SetPreRequestHook` for more information.
+func SetPreRequestHook(h func(*Client, *Request) error) *Client {
+	return DefaultClient.SetPreRequestHook(h)
+}
+
 // SetDebug method enables the debug mode. See `Client.SetDebug` for more information.
 func SetDebug(d bool) *Client {
 	return DefaultClient.SetDebug(d)
