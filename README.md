@@ -620,6 +620,28 @@ r.R().Get("/index.html")
 
 ```
 
+#### Mock Transport 
+
+```go
+type MockedTransport struct {
+}
+// Implement RoundTripper interface 
+func (t *MockedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+  // Your mocking code here, HTTP mocking pacakge like httpmock can be used as well
+  return httpmock.DefaultTransport.RoundTrip(req)
+}
+
+// Create a Go's ITransport so we can set it in resty.
+transport := &MockedTransport{}
+
+// Set the mocked transport that we created.
+r := resty.SetTransport(transport)
+
+// No need to write the host's URL on the request, just the path.
+r.New().R().Get("/index.html")
+
+```
+
 ## Versioning
 resty releases versions according to [Semantic Versioning](http://semver.org)
 

@@ -849,23 +849,24 @@ func TestRawFileUploadByBody(t *testing.T) {
 
 func TestProxySetting(t *testing.T) {
 	c := dc()
+	transport := c.transport.(*Transport)
 
-	assertEqual(t, false, c.IsProxySet())
-	assertEqual(t, true, (c.transport.Proxy == nil))
+	assertEqual(t, false, c.transport.IsProxySet())
+	assertEqual(t, true, (c.transport.GetProxy() == nil))
 
 	c.SetProxy("http://sampleproxy:8888")
 	assertEqual(t, true, c.IsProxySet())
-	assertEqual(t, false, (c.transport.Proxy == nil))
+	assertEqual(t, false, (c.transport.GetProxy() == nil))
 
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
-	assertEqual(t, false, c.IsProxySet())
-	assertEqual(t, true, (c.transport.Proxy == nil))
+	assertEqual(t, false, c.transport.IsProxySet())
+	assertEqual(t, true, (c.transport.GetProxy() == nil))
 
 	SetProxy("http://sampleproxy:8888")
 	assertEqual(t, true, IsProxySet())
 	RemoveProxy()
-	assertEqual(t, true, (DefaultClient.proxyURL == nil))
-	assertEqual(t, true, (DefaultClient.transport.Proxy == nil))
+	assertEqual(t, true, (DefaultClient.transport.GetProxy() == nil))
+	assertEqual(t, true, (transport.proxyURL == nil))
 }
 
 func TestIncorrectURL(t *testing.T) {
@@ -1536,6 +1537,11 @@ func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest
 func dc() *Client {
 	DefaultClient = New()
 	return DefaultClient
+}
+
+func dt() ITransport {
+	DefaultTransport = &Transport{transport: &http.Transport{}}
+	return DefaultTransport
 }
 
 func dcr() *Request {

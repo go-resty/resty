@@ -152,21 +152,21 @@ func TestSetCertificates(t *testing.T) {
 	DefaultClient = dc()
 	SetCertificates(tls.Certificate{})
 
-	assertEqual(t, 1, len(DefaultClient.transport.TLSClientConfig.Certificates))
+	assertEqual(t, 1, len(DefaultClient.transport.GetTLSClientConfig().Certificates))
 }
 
 func TestSetRootCertificate(t *testing.T) {
 	DefaultClient = dc()
 	SetRootCertificate(getTestDataPath() + "/sample-root.pem")
 
-	assertEqual(t, true, DefaultClient.transport.TLSClientConfig.RootCAs != nil)
+	assertEqual(t, true, DefaultClient.transport.GetTLSClientConfig().RootCAs != nil)
 }
 
 func TestSetRootCertificateNotExists(t *testing.T) {
 	DefaultClient = dc()
 	SetRootCertificate(getTestDataPath() + "/not-exists-sample-root.pem")
 
-	assertEqual(t, true, DefaultClient.transport.TLSClientConfig == nil)
+	assertEqual(t, true, DefaultClient.transport.GetTLSClientConfig() == nil)
 }
 
 func TestOnBeforeRequestModification(t *testing.T) {
@@ -195,11 +195,12 @@ func TestSetTransport(t *testing.T) {
 	defer ts.Close()
 	DefaultClient = dc()
 
-	transport := &http.Transport{
+	transport := &Transport{transport: &http.Transport{
 		// somthing like Proxying to httptest.Server, etc...
 		Proxy: func(req *http.Request) (*url.URL, error) {
 			return url.Parse(ts.URL)
 		},
+	},
 	}
 	SetTransport(transport)
 
@@ -296,7 +297,7 @@ func TestClientOptions(t *testing.T) {
 	}
 
 	SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	assertEqual(t, true, DefaultClient.transport.TLSClientConfig.InsecureSkipVerify)
+	assertEqual(t, true, DefaultClient.transport.GetTLSClientConfig().InsecureSkipVerify)
 
 	OnBeforeRequest(func(c *Client, r *Request) error {
 		c.Log.Println("I'm in Request middleware")

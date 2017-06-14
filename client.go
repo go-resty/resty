@@ -88,12 +88,11 @@ type Client struct {
 	RetryConditions  []RetryConditionFunc
 
 	httpClient       *http.Client
-	transport        *http.Transport
+	transport        ITransport
 	setContentLength bool
 	isHTTPMode       bool
 	outputDirectory  string
 	scheme           string
-	proxyURL         *url.URL
 	closeConnection  bool
 	beforeRequest    []func(*Client, *Request) error
 	udBeforeRequest  []func(*Client, *Request) error
@@ -538,7 +537,7 @@ func (c *Client) Mode() string {
 // Note: This method overwrites existing `TLSClientConfig`.
 //
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
-	c.transport.TLSClientConfig = config
+	c.transport.SetTLSClientConfig(config)
 	c.httpClient.Transport = c.transport
 	return c
 }
@@ -550,15 +549,9 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 // you can also set Proxy via environment variable. By default `Go` uses setting from `HTTP_PROXY`.
 //
 func (c *Client) SetProxy(proxyURL string) *Client {
-	if pURL, err := url.Parse(proxyURL); err == nil {
-		c.proxyURL = pURL
-		c.transport.Proxy = http.ProxyURL(c.proxyURL)
-		c.httpClient.Transport = c.transport
-	} else {
+	if err := c.transport.SetProxy(proxyURL); err != nil {
 		c.Log.Printf("ERROR [%v]", err)
-		c.RemoveProxy()
 	}
-
 	return c
 }
 
@@ -566,8 +559,7 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 //		resty.RemoveProxy()
 //
 func (c *Client) RemoveProxy() *Client {
-	c.proxyURL = nil
-	c.transport.Proxy = nil
+	c.transport.RemoveProxy()
 	c.httpClient.Transport = c.transport
 
 	return c
@@ -617,22 +609,23 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 	return c
 }
 
-// SetTransport method sets custom *http.Transport in the resty client. Its way to override default.
+// SetTransport method sets custom ITransport (which inherit http.RoundTripper) in the resty client. Its way to override default.
 //
 // **Note:** It overwrites the default resty transport instance and its configurations.
-//		transport := &http.Transport{
-//			// somthing like Proxying to httptest.Server, etc...
-//			Proxy: func(req *http.Request) (*url.URL, error) {
+//		transport := &Transport{transport: &http.Transport{
+//				// somthing like Proxying to httptest.Server, etc...
+//				Proxy: func(req *http.Request) (*url.URL, error) {
 //				return url.Parse(server.URL)
+//				},
 //			},
 //		}
 //
 //		resty.SetTransport(transport)
 //
-func (c *Client) SetTransport(transport *http.Transport) *Client {
+func (c *Client) SetTransport(transport ITransport) *Client {
 	if transport != nil {
 		c.transport = transport
-		c.httpClient.Transport = c.transport
+		c.httpClient.Transport = transport
 	}
 
 	return c
@@ -658,7 +651,7 @@ func (c *Client) SetCloseConnection(close bool) *Client {
 
 // IsProxySet method returns the true if proxy is set on client otherwise false.
 func (c *Client) IsProxySet() bool {
-	return c.proxyURL != nil
+	return c.transport.IsProxySet()
 }
 
 // executes the given `Request` object and returns response
@@ -738,11 +731,7 @@ func (c *Client) disableLogPrefix() {
 
 // getting TLS client config if not exists then create one
 func (c *Client) getTLSConfig() *tls.Config {
-	if c.transport.TLSClientConfig == nil {
-		c.transport.TLSClientConfig = &tls.Config{}
-		c.httpClient.Transport = c.transport
-	}
-	return c.transport.TLSClientConfig
+	return c.transport.GetTLSClientConfig()
 }
 
 //
