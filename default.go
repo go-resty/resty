@@ -19,6 +19,9 @@ import (
 // DefaultClient of resty
 var DefaultClient *Client
 
+// DefaultTransport ...
+var DefaultTransport ITransport
+
 // New method creates a new go-resty client
 func New() *Client {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
@@ -37,7 +40,7 @@ func New() *Client {
 		RetryWaitTime:    defaultWaitTime,
 		RetryMaxWaitTime: defaultMaxWaitTime,
 		httpClient:       &http.Client{Jar: cookieJar},
-		transport:        &http.Transport{},
+		transport:        DefaultTransport,
 	}
 
 	c.httpClient.Transport = c.transport
@@ -236,9 +239,10 @@ func SetOutputDirectory(dirPath string) *Client {
 	return DefaultClient.SetOutputDirectory(dirPath)
 }
 
-// SetTransport method sets custom *http.Transport in the resty client.
+// SetTransport method sets custom ITransport in the resty client.
 // See `Client.SetTransport` for more information.
-func SetTransport(transport *http.Transport) *Client {
+func SetTransport(transport ITransport) *Client {
+	DefaultTransport = transport
 	return DefaultClient.SetTransport(transport)
 }
 
@@ -261,5 +265,6 @@ func IsProxySet() bool {
 }
 
 func init() {
+	DefaultTransport = &Transport{transport: &http.Transport{}}
 	DefaultClient = New()
 }
