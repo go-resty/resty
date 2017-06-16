@@ -288,6 +288,14 @@ func TestClientOptions(t *testing.T) {
 
 	SetRetryCount(3)
 	assertEqual(t, 3, DefaultClient.RetryCount)
+	
+	rwt := time.Duration(1000) * time.Millisecond
+	SetRetryWaitTime(rwt)
+	assertEqual(t, rwt, DefaultClient.RetryWaitTime)
+
+	mrwt := time.Duration(2) * time.Second
+	SetRetryMaxWaitTime(mrwt)
+	assertEqual(t, mrwt, DefaultClient.RetryMaxWaitTime)
 
 	err := &AuthError{}
 	SetError(err)
