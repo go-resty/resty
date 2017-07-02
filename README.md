@@ -602,7 +602,7 @@ resty.SetError(&Error{})    // or resty.SetError(Error{})
 #### Unix Socket
 
 ```go
-unixSocket := "unix:///var/run/my_socket.sock"
+unixSocket := "/var/run/my_socket.sock"
 
 // Create a Go's http.Transport so we can set it in resty.
 transport := http.Transport{
@@ -613,7 +613,7 @@ transport := http.Transport{
 
 // Set the previous transport that we created, set the scheme of the communication to the
 // socket and set the unixSocket as the HostURL.
-r := resty.New().SetTransport(transport).SetScheme("http").SetHostURL(unixSocket)
+r := resty.New().SetTransport(&transport).SetScheme("http").SetHostURL(unixSocket)
 
 // No need to write the host's URL on the request, just the path.
 r.R().Get("/index.html")
