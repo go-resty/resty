@@ -38,6 +38,7 @@ Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very h
 * Cookies for your request and CookieJar support
 * SRV Record based request instead of Host URL
 * Client settings like `Timeout`, `RedirectPolicy`, `Proxy`, `TLSClientConfig`, `Transport`, etc.
+* Optionally allows GET request with payload, see [SetAllowGetMethodPayload](https://godoc.org/github.com/go-resty/resty#Client.SetOutputDirectory#Client.SetAllowGetMethodPayload)
 * resty design
   * Have client level settings & options and also override at Request level if you want to
   * Request and Response middlewares
@@ -47,7 +48,6 @@ Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very h
   * Debug mode - clean and informative logging presentation
   * Gzip - I'm not doing anything here. Go does it automatically
 * Well tested client library
-* Support GET request includes payload
 
 resty tested with Go `v1.3` and above.
 
@@ -512,6 +512,12 @@ resty.SetRESTMode()
 resty.SetHTTPMode()
 ```
 
+#### Allow GET request with Payload
+```go
+// Allow GET request with Payload. This is disabled by default.
+resty.SetAllowGetMethodPayload(true)
+```
+
 #### Wanna Multiple Clients
 ```go
 // Here you go!
@@ -619,12 +625,6 @@ r := resty.New().SetTransport(&transport).SetScheme("http").SetHostURL(unixSocke
 // No need to write the host's URL on the request, just the path.
 r.R().Get("/index.html")
 
-```
-
-#### Allow payload in GET request
-```go
-// Allow the request with GET method includes payload. This is disabled by default.
-resty.SetAllowGetMethodPayload(true)
 ```
 
 ## Versioning
