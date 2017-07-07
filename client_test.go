@@ -347,18 +347,3 @@ func TestClientPreRequestHook(t *testing.T) {
 		return nil
 	})
 }
-
-func TestClientAllowsGetMethodPayload(t *testing.T) {
-	ts := createGetServer(t)
-	defer ts.Close()
-
-	c := dc()
-	c.SetAllowGetMethodPayload(true)
-
-	payload := "test-payload"
-	resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
-
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, payload, resp.String())
-}

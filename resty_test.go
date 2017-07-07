@@ -1135,6 +1135,21 @@ func TestSRVInvalidService(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err.Error(), "no such host"))
 }
 
+func TestAllowsGetMethodPayload(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetAllowGetMethodPayload(true)
+
+	payload := "test-payload"
+	resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, payload, resp.String())
+}
+
 func getTestDataPath() string {
 	pwd, _ := os.Getwd()
 	return pwd + "/test-data"
