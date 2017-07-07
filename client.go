@@ -861,19 +861,8 @@ func getPointer(v interface{}) interface{} {
 	return reflect.New(vv.Type()).Interface()
 }
 
-func isPayloadSupported(allowGetMethodPayload bool, m string) bool {
-	methods := []string{MethodPost, MethodPut, MethodDelete, MethodPatch}
-
-	if allowGetMethodPayload {
-		methods = append(methods, MethodGet)
-	}
-
-	for _, method := range methods {
-		if m == method {
-			return true
-		}
-	}
-	return false
+func isPayloadSupported(m string, allowMethodGet bool) bool {
+	return (m == MethodPost || m == MethodPut || m == MethodDelete || m == MethodPatch || (allowMethodGet && m == MethodGet))
 }
 
 func typeOf(i interface{}) reflect.Type {

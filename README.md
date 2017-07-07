@@ -47,6 +47,7 @@ Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very h
   * Debug mode - clean and informative logging presentation
   * Gzip - I'm not doing anything here. Go does it automatically
 * Well tested client library
+* Support GET request includes payload
 
 resty tested with Go `v1.3` and above.
 
@@ -618,6 +619,12 @@ r := resty.New().SetTransport(&transport).SetScheme("http").SetHostURL(unixSocke
 // No need to write the host's URL on the request, just the path.
 r.R().Get("/index.html")
 
+```
+
+#### Allow payload in GET request
+```go
+// Allow the request with GET method includes payload. This is disabled by default.
+resty.SetAllowGetMethodPayload(true)
 ```
 
 ## Versioning
