@@ -288,7 +288,7 @@ func TestClientOptions(t *testing.T) {
 
 	SetRetryCount(3)
 	assertEqual(t, 3, DefaultClient.RetryCount)
-	
+
 	rwt := time.Duration(1000) * time.Millisecond
 	SetRetryWaitTime(rwt)
 	assertEqual(t, rwt, DefaultClient.RetryWaitTime)
@@ -324,6 +324,9 @@ func TestClientOptions(t *testing.T) {
 	SetDebug(true)
 	assertEqual(t, DefaultClient.Debug, true)
 
+	SetAllowGetMethodPayload(true)
+	assertEqual(t, DefaultClient.AllowGetMethodPayload, true)
+
 	SetScheme("http")
 	assertEqual(t, DefaultClient.scheme, "http")
 
@@ -343,4 +346,20 @@ func TestClientPreRequestHook(t *testing.T) {
 		c.Log.Println("I'm Overwriting existing Pre-Request Hook")
 		return nil
 	})
+}
+
+func TestClientAllowsGetMethodPayload(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetAllowGetMethodPayload(true)
+	c.SetPreRequestHook(func(*Client, *Request) error { return nil }) // for coverage
+
+	payload := "test-payload"
+	resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, payload, resp.String())
 }

@@ -149,6 +149,11 @@ func SetDebug(d bool) *Client {
 	return DefaultClient.SetDebug(d)
 }
 
+// SetAllowGetMethodPayload method allows the GET method with payload. See `Client.SetAllowGetMethodPayload` for more information.
+func SetAllowGetMethodPayload(a bool) *Client {
+	return DefaultClient.SetAllowGetMethodPayload(a)
+}
+
 // SetRetryCount method sets the retry count. See `Client.SetRetryCount` for more information.
 func SetRetryCount(count int) *Client {
 	return DefaultClient.SetRetryCount(count)

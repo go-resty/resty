@@ -71,21 +71,22 @@ var (
 // Client type is used for HTTP/RESTful global values
 // for all request raised from the client
 type Client struct {
-	HostURL          string
-	QueryParam       url.Values
-	FormData         url.Values
-	Header           http.Header
-	UserInfo         *User
-	Token            string
-	Cookies          []*http.Cookie
-	Error            reflect.Type
-	Debug            bool
-	DisableWarn      bool
-	Log              *log.Logger
-	RetryCount       int
-	RetryWaitTime    time.Duration
-	RetryMaxWaitTime time.Duration
-	RetryConditions  []RetryConditionFunc
+	HostURL               string
+	QueryParam            url.Values
+	FormData              url.Values
+	Header                http.Header
+	UserInfo              *User
+	Token                 string
+	Cookies               []*http.Cookie
+	Error                 reflect.Type
+	Debug                 bool
+	DisableWarn           bool
+	AllowGetMethodPayload bool
+	Log                   *log.Logger
+	RetryCount            int
+	RetryWaitTime         time.Duration
+	RetryMaxWaitTime      time.Duration
+	RetryConditions       []RetryConditionFunc
 
 	httpClient       *http.Client
 	transport        *http.Transport
@@ -370,6 +371,15 @@ func (c *Client) SetDebug(d bool) *Client {
 //
 func (c *Client) SetDisableWarn(d bool) *Client {
 	c.DisableWarn = d
+	return c
+}
+
+// SetAllowGetMethodPayload method allows the GET method with payload on `go-resty` client.
+// For example: go-resty allows the user sends request with a payload on HTTP GET method.
+//		resty.SetAllowGetMethodPayload(true)
+//
+func (c *Client) SetAllowGetMethodPayload(a bool) *Client {
+	c.AllowGetMethodPayload = a
 	return c
 }
 
@@ -851,8 +861,8 @@ func getPointer(v interface{}) interface{} {
 	return reflect.New(vv.Type()).Interface()
 }
 
-func isPayloadSupported(m string) bool {
-	return (m == MethodPost || m == MethodPut || m == MethodDelete || m == MethodPatch)
+func isPayloadSupported(m string, allowMethodGet bool) bool {
+	return (m == MethodPost || m == MethodPut || m == MethodDelete || m == MethodPatch || (allowMethodGet && m == MethodGet))
 }
 
 func typeOf(i interface{}) reflect.Type {

@@ -91,8 +91,7 @@ func parseRequestHeader(c *Client, r *Request) error {
 }
 
 func parseRequestBody(c *Client, r *Request) (err error) {
-	if isPayloadSupported(r.Method) {
-
+	if isPayloadSupported(r.Method, c.AllowGetMethodPayload) {
 		// Handling Multipart
 		if r.isMultiPart && !(r.Method == MethodPatch) {
 			if err = handleMultipart(c, r); err != nil {
