@@ -1187,6 +1187,12 @@ func createGetServer(t *testing.T) *httptest.Server {
 				w.Header().Set("Content-Type", "image/png")
 				w.Header().Set("Content-Length", strconv.Itoa(len(fileBytes)))
 				_, _ = w.Write(fileBytes)
+			} else if r.URL.Path == "/get-method-payload-test" {
+				body, err := ioutil.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("Error: could not read get body: %s", err.Error())
+				}
+				_, _ = w.Write(body)
 			}
 		}
 	})
