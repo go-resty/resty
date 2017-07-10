@@ -1135,6 +1135,23 @@ func TestSRVInvalidService(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err.Error(), "no such host"))
 }
 
+func TestDeprecatedCodeCovergae(t *testing.T) {
+	var user1 User
+	err := Unmarshal("application/json",
+		[]byte(`{"username":"testuser", "password":"testpass"}`), &user1)
+	assertError(t, err)
+	assertEqual(t, "testuser", user1.Username)
+	assertEqual(t, "testpass", user1.Password)
+
+	var user2 User
+	err = Unmarshal("application/xml",
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username><Password>testpass</Password></User>`),
+		&user2)
+	assertError(t, err)
+	assertEqual(t, "testuser", user1.Username)
+	assertEqual(t, "testpass", user1.Password)
+}
+
 func getTestDataPath() string {
 	pwd, _ := os.Getwd()
 	return pwd + "/test-data"

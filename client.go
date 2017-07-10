@@ -87,6 +87,8 @@ type Client struct {
 	RetryWaitTime         time.Duration
 	RetryMaxWaitTime      time.Duration
 	RetryConditions       []RetryConditionFunc
+	JSONMarshal           func(v interface{}) ([]byte, error)
+	JSONUnmarshal         func(data []byte, v interface{}) error
 
 	httpClient       *http.Client
 	transport        *http.Transport
@@ -811,9 +813,21 @@ func IsXMLType(ct string) bool {
 }
 
 // Unmarshal content into object from JSON or XML
+// Deprecated: kept for backward compatibility
 func Unmarshal(ct string, b []byte, d interface{}) (err error) {
 	if IsJSONType(ct) {
 		err = json.Unmarshal(b, d)
+	} else if IsXMLType(ct) {
+		err = xml.Unmarshal(b, d)
+	}
+
+	return
+}
+
+// Unmarshalc content into object from JSON or XML
+func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
+	if IsJSONType(ct) {
+		err = c.JSONUnmarshal(b, d)
 	} else if IsXMLType(ct) {
 		err = xml.Unmarshal(b, d)
 	}
