@@ -6,4 +6,4 @@
 package resty
 
 // Version # of resty
-const Version = "0.13"
+const Version = "1.0-dev"

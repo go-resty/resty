@@ -16,9 +16,9 @@ go:
   - 1.8
   - tip
 
-install:
-  - go get -v -t ./...
-  - go get -v golang.org/x/tools/cmd/cover
+# install:
+#   - go get -v -t ./...
+#   - go get -v golang.org/x/tools/cmd/cover
 
 script:
   - go test ./... -coverprofile=coverage.txt -covermode=atomic
