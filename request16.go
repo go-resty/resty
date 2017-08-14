@@ -43,6 +43,7 @@ type Request struct {
 	isSaveResponse   bool
 	outputFile       string
 	multipartFiles   []*File
+	notParseResponse bool
 }
 
 func (r *Request) addContextIfAvailable() {

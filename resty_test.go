@@ -1123,7 +1123,9 @@ func TestSRV(t *testing.T) {
 
 	resp, err := r.Get("/")
 	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
+	if err == nil {
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+	}
 }
 
 func TestSRVInvalidService(t *testing.T) {
@@ -1134,6 +1136,46 @@ func TestSRVInvalidService(t *testing.T) {
 	assertEqual(t, true, (err != nil))
 	assertEqual(t, true, strings.Contains(err.Error(), "no such host"))
 }
+
+func TestRequestDoNotParseResponse(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dc().R().
+		SetDoNotParseResponse(true).
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+		Get(ts.URL + "/")
+
+	assertError(t, err)
+
+	buf := getBuffer()
+	defer putBuffer(buf)
+	defer func() {
+		_ = resp.RawBody().Close()
+	}()
+	_, _ = io.Copy(buf, resp.RawBody())
+
+	assertEqual(t, "TestGet: text response", buf.String())
+
+	// Manually setting RawResponse as nil
+	resp, err = dc().R().
+		SetDoNotParseResponse(true).
+		Get(ts.URL + "/")
+
+	assertError(t, err)
+
+	resp.RawResponse = nil
+	assertEqual(t, true, resp.RawBody() == nil)
+
+	// just set test part
+	SetDoNotParseResponse(true)
+	assertEqual(t, true, DefaultClient.notParseResponse)
+	SetDoNotParseResponse(false)
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Testing Unexported methods
+//___________________________________
 
 func getTestDataPath() string {
 	pwd, _ := os.Getwd()
