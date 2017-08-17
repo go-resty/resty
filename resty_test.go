@@ -850,22 +850,26 @@ func TestRawFileUploadByBody(t *testing.T) {
 func TestProxySetting(t *testing.T) {
 	c := dc()
 
+	transport, err := c.getHttpTransport()
+
+	assertNil(t, err)
+
 	assertEqual(t, false, c.IsProxySet())
-	assertEqual(t, true, (c.transport.Proxy == nil))
+	assertEqual(t, true, (transport.Proxy == nil))
 
 	c.SetProxy("http://sampleproxy:8888")
 	assertEqual(t, true, c.IsProxySet())
-	assertEqual(t, false, (c.transport.Proxy == nil))
+	assertEqual(t, false, (transport.Proxy == nil))
 
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
 	assertEqual(t, false, c.IsProxySet())
-	assertEqual(t, true, (c.transport.Proxy == nil))
+	assertEqual(t, true, (transport.Proxy == nil))
 
 	SetProxy("http://sampleproxy:8888")
 	assertEqual(t, true, IsProxySet())
 	RemoveProxy()
 	assertEqual(t, true, (DefaultClient.proxyURL == nil))
-	assertEqual(t, true, (DefaultClient.transport.Proxy == nil))
+	assertEqual(t, true, (transport.Proxy == nil))
 }
 
 func TestIncorrectURL(t *testing.T) {
@@ -1612,6 +1616,12 @@ func dclr() *Request {
 	c.SetLogger(ioutil.Discard)
 
 	return c.R()
+}
+
+func assertNil(t *testing.T, x interface{}) {
+	if x != nil {
+		t.Errorf("[%v] was expected to be nil", x)
+	}
 }
 
 func assertError(t *testing.T, err error) {
