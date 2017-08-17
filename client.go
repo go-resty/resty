@@ -98,6 +98,7 @@ type Client struct {
 	scheme           string
 	proxyURL         *url.URL
 	closeConnection  bool
+	notParseResponse bool
 	beforeRequest    []func(*Client, *Request) error
 	udBeforeRequest  []func(*Client, *Request) error
 	preReqHook       func(*Client, *Request) error
@@ -108,6 +109,10 @@ type Client struct {
 type User struct {
 	Username, Password string
 }
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Client methods
+//___________________________________
 
 // SetHostURL method is to set Host URL in the client instance. It will be used with request
 // raised from this client with relative URL
@@ -661,10 +666,21 @@ func (c *Client) SetScheme(scheme string) *Client {
 	return c
 }
 
-// SetCloseConnection method sets variable Close in http request struct with the given
+// SetCloseConnection method sets variable `Close` in http request struct with the given
 // value. More info: https://golang.org/src/net/http/request.go
 func (c *Client) SetCloseConnection(close bool) *Client {
 	c.closeConnection = close
+	return c
+}
+
+// SetDoNotParseResponse method instructs `Resty` not to parse the response body automatically.
+// Resty exposes the raw response body as `io.ReadCloser`. Also do not forget to close the body,
+// otherwise you might get into connection leaks, no connection reuse.
+//
+// Please Note: Response middlewares are not applicable, if you use this option. Basically you have
+// taken over the control of response parsing from `Resty`.
+func (c *Client) SetDoNotParseResponse(parse bool) *Client {
+	c.notParseResponse = parse
 	return c
 }
 
@@ -672,6 +688,10 @@ func (c *Client) SetCloseConnection(close bool) *Client {
 func (c *Client) IsProxySet() bool {
 	return c.proxyURL != nil
 }
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Client Unexported methods
+//___________________________________
 
 // executes the given `Request` object and returns response
 func (c *Client) execute(req *Request) (*Response, error) {
@@ -710,7 +730,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		receivedAt:  time.Now(),
 	}
 
-	if err != nil {
+	if err != nil || req.notParseResponse || c.notParseResponse {
 		return response, err
 	}
 
