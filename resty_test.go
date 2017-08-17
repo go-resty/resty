@@ -1123,7 +1123,8 @@ func TestSRV(t *testing.T) {
 
 	resp, err := r.Get("/")
 	assertError(t, err)
-	if err == nil {
+	assertEqual(t, true, (resp != nil))
+	if resp != nil {
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 	}
 }
@@ -1135,6 +1136,23 @@ func TestSRVInvalidService(t *testing.T) {
 
 	assertEqual(t, true, (err != nil))
 	assertEqual(t, true, strings.Contains(err.Error(), "no such host"))
+}
+
+func TestDeprecatedCodeCovergae(t *testing.T) {
+	var user1 User
+	err := Unmarshal("application/json",
+		[]byte(`{"username":"testuser", "password":"testpass"}`), &user1)
+	assertError(t, err)
+	assertEqual(t, "testuser", user1.Username)
+	assertEqual(t, "testpass", user1.Password)
+
+	var user2 User
+	err = Unmarshal("application/xml",
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username><Password>testpass</Password></User>`),
+		&user2)
+	assertError(t, err)
+	assertEqual(t, "testuser", user1.Username)
+	assertEqual(t, "testpass", user1.Password)
 }
 
 func TestRequestDoNotParseResponse(t *testing.T) {
@@ -1150,12 +1168,10 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 
 	buf := getBuffer()
 	defer putBuffer(buf)
-	defer func() {
-		_ = resp.RawBody().Close()
-	}()
 	_, _ = io.Copy(buf, resp.RawBody())
 
 	assertEqual(t, "TestGet: text response", buf.String())
+	_ = resp.RawBody().Close()
 
 	// Manually setting RawResponse as nil
 	resp, err = dc().R().
