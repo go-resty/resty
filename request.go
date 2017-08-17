@@ -343,6 +343,17 @@ func (r *Request) SetSRV(srv *SRVRecord) *Request {
 	return r
 }
 
+// SetDoNotParseResponse method instructs `Resty` not to parse the response body automatically.
+// Resty exposes the raw response body as `io.ReadCloser`. Also do not forget to close the body,
+// otherwise you might get into connection leaks, no connection reuse.
+//
+// Please Note: Response middlewares are not applicable, if you use this option. Basically you have
+// taken over the control of response parsing from `Resty`.
+func (r *Request) SetDoNotParseResponse(parse bool) *Request {
+	r.notParseResponse = parse
+	return r
+}
+
 //
 // HTTP verb method starts here
 //

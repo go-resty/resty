@@ -272,6 +272,12 @@ func SetCloseConnection(close bool) *Client {
 	return DefaultClient.SetCloseConnection(close)
 }
 
+// SetDoNotParseResponse method instructs `Resty` not to parse the response body automatically.
+// See `Client.SetDoNotParseResponse` for more information.
+func SetDoNotParseResponse(parse bool) *Client {
+	return DefaultClient.SetDoNotParseResponse(parse)
+}
+
 // IsProxySet method returns the true if proxy is set on client otherwise false.
 // See `Client.IsProxySet` for more information.
 func IsProxySet() bool {

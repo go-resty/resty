@@ -1123,7 +1123,10 @@ func TestSRV(t *testing.T) {
 
 	resp, err := r.Get("/")
 	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, (resp != nil))
+	if resp != nil {
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+	}
 }
 
 func TestSRVInvalidService(t *testing.T) {
@@ -1151,6 +1154,44 @@ func TestDeprecatedCodeCovergae(t *testing.T) {
 	assertEqual(t, "testuser", user1.Username)
 	assertEqual(t, "testpass", user1.Password)
 }
+
+func TestRequestDoNotParseResponse(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dc().R().
+		SetDoNotParseResponse(true).
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+		Get(ts.URL + "/")
+
+	assertError(t, err)
+
+	buf := getBuffer()
+	defer putBuffer(buf)
+	_, _ = io.Copy(buf, resp.RawBody())
+
+	assertEqual(t, "TestGet: text response", buf.String())
+	_ = resp.RawBody().Close()
+
+	// Manually setting RawResponse as nil
+	resp, err = dc().R().
+		SetDoNotParseResponse(true).
+		Get(ts.URL + "/")
+
+	assertError(t, err)
+
+	resp.RawResponse = nil
+	assertEqual(t, true, resp.RawBody() == nil)
+
+	// just set test part
+	SetDoNotParseResponse(true)
+	assertEqual(t, true, DefaultClient.notParseResponse)
+	SetDoNotParseResponse(false)
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Testing Unexported methods
+//___________________________________
 
 func getTestDataPath() string {
 	pwd, _ := os.Getwd()
