@@ -462,8 +462,8 @@ func (r *Request) fmtBodyString() (body string) {
 		} else if b, ok := r.Body.(string); ok {
 			if IsJSONType(contentType) {
 				bodyBytes := []byte(b)
-				out := getBuffer()
-				defer putBuffer(out)
+				out := acquireBuffer()
+				defer releaseBuffer(out)
 				if err = json.Indent(out, bodyBytes, "", "   "); err == nil {
 					prtBodyBytes = out.Bytes()
 				}
