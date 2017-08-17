@@ -555,7 +555,7 @@ func (c *Client) Mode() string {
 // Note: This method overwrites existing `TLSClientConfig`.
 //
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
-	transport, err := c.getHttpTransport()
+	transport, err := c.getTransport()
 	if err != nil {
 		c.Log.Printf("ERROR [%v]", err)
 		return c
@@ -571,7 +571,7 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 // you can also set Proxy via environment variable. By default `Go` uses setting from `HTTP_PROXY`.
 //
 func (c *Client) SetProxy(proxyURL string) *Client {
-	transport, err := c.getHttpTransport()
+	transport, err := c.getTransport()
 	if err != nil {
 		c.Log.Printf("ERROR [%v]", err)
 		return c
@@ -591,7 +591,7 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 //		resty.RemoveProxy()
 //
 func (c *Client) RemoveProxy() *Client {
-	transport, err := c.getHttpTransport()
+	transport, err := c.getTransport()
 	if err != nil {
 		c.Log.Printf("ERROR [%v]", err)
 		return c
@@ -653,9 +653,16 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 	return c
 }
 
-// SetTransport method sets custom *http.Transport in the resty client. Its way to override default.
+// SetTransport method sets custom `*http.Transport` or any `http.RoundTripper`
+// compatible interface implementation in the resty client.
 //
-// **Note:** It overwrites the default resty transport instance and its configurations.
+// Please Note:
+//
+// - If transport is not type of `*http.Transport` then you may not be able to
+// take advantage of some of the `resty` client settings.
+//
+// - It overwrites the resty client transport instance and it's configurations.
+//
 //		transport := &http.Transport{
 //			// somthing like Proxying to httptest.Server, etc...
 //			Proxy: func(req *http.Request) (*url.URL, error) {
@@ -787,7 +794,7 @@ func (c *Client) disableLogPrefix() {
 
 // getting TLS client config if not exists then create one
 func (c *Client) getTLSConfig() (*tls.Config, error) {
-	transport, err := c.getHttpTransport()
+	transport, err := c.getTransport()
 	if err != nil {
 		return nil, err
 	}
@@ -799,12 +806,11 @@ func (c *Client) getTLSConfig() (*tls.Config, error) {
 
 // returns `*http.Transport` currently in use or error
 // in case currently used `transport` is not an `*http.Transport`
-func (c *Client) getHttpTransport() (*http.Transport, error) {
+func (c *Client) getTransport() (*http.Transport, error) {
 	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
 		return transport, nil
-	} else {
-		return nil, errors.New("Current transport is not an *http.Transport")
 	}
+	return nil, errors.New("current transport is not an *http.Transport instance")
 }
 
 //

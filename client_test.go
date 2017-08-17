@@ -136,49 +136,49 @@ func TestClientProxy(t *testing.T) {
 	c.SetProxy("http://sampleproxy:8888")
 
 	resp, err := c.R().Get(ts.URL)
-	assertEqual(t, true, resp != nil)
-	assertEqual(t, true, err != nil)
+	assertNotNil(t, resp)
+	assertNotNil(t, err)
 
 	// Error
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
 
 	resp, err = c.R().
 		Get(ts.URL)
-	assertEqual(t, true, err == nil)
-	assertEqual(t, false, resp == nil)
+	assertNil(t, err)
+	assertNil(t, resp)
 }
 
-func TestSetCertificates(t *testing.T) {
+func TestClientSetCertificates(t *testing.T) {
 	DefaultClient = dc()
 	SetCertificates(tls.Certificate{})
 
-	transport, err := DefaultClient.getHttpTransport()
+	transport, err := DefaultClient.getTransport()
 
 	assertNil(t, err)
 	assertEqual(t, 1, len(transport.TLSClientConfig.Certificates))
 }
 
-func TestSetRootCertificate(t *testing.T) {
+func TestClientSetRootCertificate(t *testing.T) {
 	DefaultClient = dc()
 	SetRootCertificate(getTestDataPath() + "/sample-root.pem")
 
-	transport, err := DefaultClient.getHttpTransport()
+	transport, err := DefaultClient.getTransport()
 
 	assertNil(t, err)
-	assertEqual(t, true, transport.TLSClientConfig.RootCAs != nil)
+	assertNotNil(t, transport.TLSClientConfig.RootCAs)
 }
 
-func TestSetRootCertificateNotExists(t *testing.T) {
+func TestClientSetRootCertificateNotExists(t *testing.T) {
 	DefaultClient = dc()
 	SetRootCertificate(getTestDataPath() + "/not-exists-sample-root.pem")
 
-	transport, err := DefaultClient.getHttpTransport()
+	transport, err := DefaultClient.getTransport()
 
 	assertNil(t, err)
-	assertEqual(t, true, transport.TLSClientConfig == nil)
+	assertNil(t, transport.TLSClientConfig)
 }
 
-func TestOnBeforeRequestModification(t *testing.T) {
+func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := New()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
 		r.SetAuthToken("This is test auth token")
@@ -193,13 +193,13 @@ func TestOnBeforeRequestModification(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertEqual(t, true, resp.Body() != nil)
+	assertNotNil(t, resp.Body())
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
 }
 
-func TestSetTransport(t *testing.T) {
+func TestClientSetTransport(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 	DefaultClient = dc()
@@ -212,14 +212,14 @@ func TestSetTransport(t *testing.T) {
 	}
 	SetTransport(transport)
 
-	transportInUse, err := DefaultClient.getHttpTransport()
+	transportInUse, err := DefaultClient.getTransport()
 
 	assertNil(t, err)
 
 	assertEqual(t, true, transport == transportInUse)
 }
 
-func TestSetScheme(t *testing.T) {
+func TestClientSetScheme(t *testing.T) {
 	DefaultClient = dc()
 
 	SetScheme("http")
@@ -227,12 +227,12 @@ func TestSetScheme(t *testing.T) {
 	assertEqual(t, true, DefaultClient.scheme == "http")
 }
 
-func TestSetCookieJar(t *testing.T) {
+func TestClientSetCookieJar(t *testing.T) {
 	DefaultClient = dc()
 	backupJar := DefaultClient.httpClient.Jar
 
 	SetCookieJar(nil)
-	assertEqual(t, true, DefaultClient.httpClient.Jar == nil)
+	assertNil(t, DefaultClient.httpClient.Jar)
 
 	SetCookieJar(backupJar)
 	assertEqual(t, true, DefaultClient.httpClient.Jar == backupJar)
@@ -317,7 +317,7 @@ func TestClientOptions(t *testing.T) {
 	}
 
 	SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	transport, transportErr := DefaultClient.getHttpTransport()
+	transport, transportErr := DefaultClient.getTransport()
 
 	assertNil(t, transportErr)
 	assertEqual(t, true, transport.TLSClientConfig.InsecureSkipVerify)
@@ -378,4 +378,31 @@ func TestClientAllowsGetMethodPayload(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, payload, resp.String())
+}
+
+func TestClientRoundTripper(t *testing.T) {
+	c := New()
+
+	rt := &CustomRoundTripper{}
+	c.SetTransport(rt)
+
+	ct, err := c.getTransport()
+	assertNotNil(t, err)
+	assertNil(t, ct)
+	assertEqual(t, "current transport is not an *http.Transport instance", err.Error())
+
+	c.SetTLSClientConfig(&tls.Config{})
+	c.SetProxy("http://localhost:9090")
+	c.RemoveProxy()
+	c.SetCertificates(tls.Certificate{})
+	c.SetRootCertificate(getTestDataPath() + "/sample-root.pem")
+}
+
+// CustomRoundTripper just for test
+type CustomRoundTripper struct {
+}
+
+// RoundTrip just for test
+func (rt *CustomRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return &http.Response{}, nil
 }

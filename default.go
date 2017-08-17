@@ -254,7 +254,8 @@ func SetOutputDirectory(dirPath string) *Client {
 	return DefaultClient.SetOutputDirectory(dirPath)
 }
 
-// SetTransport method sets custom http.RoundTripper in the resty client.
+// SetTransport method sets custom `*http.Transport` or any `http.RoundTripper`
+// compatible interface implementation in the resty client.
 // See `Client.SetTransport` for more information.
 func SetTransport(transport http.RoundTripper) *Client {
 	return DefaultClient.SetTransport(transport)
