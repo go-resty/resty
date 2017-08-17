@@ -266,7 +266,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 }
 
 func handleMultipart(c *Client, r *Request) (err error) {
-	r.bodyBuf = getBuffer()
+	r.bodyBuf = acquireBuffer()
 	w := multipart.NewWriter(r.bodyBuf)
 
 	for k, v := range c.FormData {
@@ -347,7 +347,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	r.bodyBuf = nil
 
 	if reader, ok := r.Body.(io.Reader); ok {
-		r.bodyBuf = getBuffer()
+		r.bodyBuf = acquireBuffer()
 		_, err = r.bodyBuf.ReadFrom(reader)
 	} else if b, ok := r.Body.([]byte); ok {
 		bodyBytes = b
@@ -371,7 +371,8 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 
 	// []byte into Buffer
 	if bodyBytes != nil && r.bodyBuf == nil {
-		r.bodyBuf = bytes.NewBuffer(bodyBytes)
+		r.bodyBuf = acquireBuffer()
+		_, _ = r.bodyBuf.Write(bodyBytes)
 	}
 
 	return

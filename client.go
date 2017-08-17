@@ -695,7 +695,7 @@ func (c *Client) IsProxySet() bool {
 
 // executes the given `Request` object and returns response
 func (c *Client) execute(req *Request) (*Response, error) {
-	defer putBuffer(req.bodyBuf)
+	defer releaseBuffer(req.bodyBuf)
 	// Apply Request middleware
 	var err error
 
@@ -934,11 +934,11 @@ func functionName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
-func getBuffer() *bytes.Buffer {
+func acquireBuffer() *bytes.Buffer {
 	return bufPool.Get().(*bytes.Buffer)
 }
 
-func putBuffer(buf *bytes.Buffer) {
+func releaseBuffer(buf *bytes.Buffer) {
 	if buf != nil {
 		buf.Reset()
 		bufPool.Put(buf)

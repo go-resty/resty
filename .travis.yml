@@ -2,10 +2,10 @@ language: go
 
 sudo: false
 
-branches:
-  only:
-    - master
-    - integration
+# branches:
+#   only:
+#     - master
+#     - integration
 
 go:
   - 1.3
@@ -16,9 +16,8 @@ go:
   - 1.8
   - tip
 
-# install:
-#   - go get -v -t ./...
-#   - go get -v golang.org/x/tools/cmd/cover
+install:
+  - go get -v -t ./...
 
 script:
   - go test ./... -coverprofile=coverage.txt -covermode=atomic

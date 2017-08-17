@@ -124,8 +124,8 @@ func (r *Response) fmtBodyString() string {
 	if r.body != nil {
 		ct := r.Header().Get(hdrContentTypeKey)
 		if IsJSONType(ct) {
-			out := getBuffer()
-			defer putBuffer(out)
+			out := acquireBuffer()
+			defer releaseBuffer(out)
 			if err := json.Indent(out, r.body, "", "   "); err == nil {
 				bodyStr = string(out.Bytes())
 			}
