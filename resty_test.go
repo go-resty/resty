@@ -1166,8 +1166,8 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 
 	assertError(t, err)
 
-	buf := getBuffer()
-	defer putBuffer(buf)
+	buf := acquireBuffer()
+	defer releaseBuffer(buf)
 	_, _ = io.Copy(buf, resp.RawBody())
 
 	assertEqual(t, "TestGet: text response", buf.String())
