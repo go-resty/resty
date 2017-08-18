@@ -45,7 +45,7 @@ func TestGet(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertEqual(t, true, resp.Body() != nil)
+	assertNotNil(t, resp.Body())
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
@@ -791,7 +791,7 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 
 	_, err := c.R().Get(ts.URL + "/redirect-host-check-1")
 
-	assertEqual(t, true, err != nil)
+	assertNotNil(t, err)
 	assertEqual(t, true, strings.Contains(err.Error(), "Redirect is not allowed as per DomainCheckRedirectPolicy"))
 }
 
@@ -850,22 +850,26 @@ func TestRawFileUploadByBody(t *testing.T) {
 func TestProxySetting(t *testing.T) {
 	c := dc()
 
+	transport, err := c.getTransport()
+
+	assertNil(t, err)
+
 	assertEqual(t, false, c.IsProxySet())
-	assertEqual(t, true, (c.transport.Proxy == nil))
+	assertNil(t, transport.Proxy)
 
 	c.SetProxy("http://sampleproxy:8888")
 	assertEqual(t, true, c.IsProxySet())
-	assertEqual(t, false, (c.transport.Proxy == nil))
+	assertNotNil(t, transport.Proxy)
 
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
 	assertEqual(t, false, c.IsProxySet())
-	assertEqual(t, true, (c.transport.Proxy == nil))
+	assertNil(t, transport.Proxy)
 
 	SetProxy("http://sampleproxy:8888")
 	assertEqual(t, true, IsProxySet())
 	RemoveProxy()
-	assertEqual(t, true, (DefaultClient.proxyURL == nil))
-	assertEqual(t, true, (DefaultClient.transport.Proxy == nil))
+	assertNil(t, DefaultClient.proxyURL)
+	assertNil(t, transport.Proxy)
 }
 
 func TestIncorrectURL(t *testing.T) {
@@ -1123,7 +1127,7 @@ func TestSRV(t *testing.T) {
 
 	resp, err := r.Get("/")
 	assertError(t, err)
-	assertEqual(t, true, (resp != nil))
+	assertNotNil(t, resp)
 	if resp != nil {
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 	}
@@ -1134,7 +1138,7 @@ func TestSRVInvalidService(t *testing.T) {
 		SetSRV(&SRVRecord{"nonexistantservice", "sampledomain"}).
 		Get("/")
 
-	assertEqual(t, true, (err != nil))
+	assertNotNil(t, err)
 	assertEqual(t, true, strings.Contains(err.Error(), "no such host"))
 }
 
@@ -1181,7 +1185,7 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 	assertError(t, err)
 
 	resp.RawResponse = nil
-	assertEqual(t, true, resp.RawBody() == nil)
+	assertNil(t, resp.RawBody())
 
 	// just set test part
 	SetDoNotParseResponse(true)
@@ -1614,6 +1618,18 @@ func dclr() *Request {
 	return c.R()
 }
 
+func assertNil(t *testing.T, v interface{}) {
+	if !isNil(v) {
+		t.Errorf("[%v] was expected to be nil", v)
+	}
+}
+
+func assertNotNil(t *testing.T, v interface{}) {
+	if isNil(v) {
+		t.Errorf("[%v] was expected to be non-nil", v)
+	}
+}
+
 func assertError(t *testing.T, err error) {
 	if err != nil {
 		t.Errorf("Error occurred [%v]", err)
@@ -1621,8 +1637,7 @@ func assertError(t *testing.T, err error) {
 }
 
 func assertEqual(t *testing.T, e, g interface{}) (r bool) {
-	r = compare(e, g)
-	if !r {
+	if !equal(e, g) {
 		t.Errorf("Expected [%v], got [%v]", e, g)
 	}
 
@@ -1630,7 +1645,7 @@ func assertEqual(t *testing.T, e, g interface{}) (r bool) {
 }
 
 func assertNotEqual(t *testing.T, e, g interface{}) (r bool) {
-	if compare(e, g) {
+	if equal(e, g) {
 		t.Errorf("Expected [%v], got [%v]", e, g)
 	} else {
 		r = true
@@ -1639,28 +1654,22 @@ func assertNotEqual(t *testing.T, e, g interface{}) (r bool) {
 	return
 }
 
-func compare(e, g interface{}) (r bool) {
-	ev := reflect.ValueOf(e)
-	gv := reflect.ValueOf(g)
+func equal(expected, got interface{}) bool {
+	return reflect.DeepEqual(expected, got)
+}
 
-	if ev.Kind() != gv.Kind() {
-		return
+func isNil(v interface{}) bool {
+	if v == nil {
+		return true
 	}
 
-	switch ev.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		r = (ev.Int() == gv.Int())
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		r = (ev.Uint() == gv.Uint())
-	case reflect.Float32, reflect.Float64:
-		r = (ev.Float() == gv.Float())
-	case reflect.String:
-		r = (ev.String() == gv.String())
-	case reflect.Bool:
-		r = (ev.Bool() == gv.Bool())
+	rv := reflect.ValueOf(v)
+	kind := rv.Kind()
+	if kind >= reflect.Chan && kind <= reflect.Slice && rv.IsNil() {
+		return true
 	}
 
-	return
+	return false
 }
 
 func logResponse(t *testing.T, resp *Response) {

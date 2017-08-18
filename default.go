@@ -40,10 +40,10 @@ func New() *Client {
 		JSONMarshal:      json.Marshal,
 		JSONUnmarshal:    json.Unmarshal,
 		httpClient:       &http.Client{Jar: cookieJar},
-		transport:        &http.Transport{},
 	}
 
-	c.httpClient.Transport = c.transport
+	// Default transport
+	c.SetTransport(&http.Transport{})
 
 	// Default redirect policy
 	c.SetRedirectPolicy(NoRedirectPolicy())
@@ -254,9 +254,10 @@ func SetOutputDirectory(dirPath string) *Client {
 	return DefaultClient.SetOutputDirectory(dirPath)
 }
 
-// SetTransport method sets custom *http.Transport in the resty client.
+// SetTransport method sets custom `*http.Transport` or any `http.RoundTripper`
+// compatible interface implementation in the resty client.
 // See `Client.SetTransport` for more information.
-func SetTransport(transport *http.Transport) *Client {
+func SetTransport(transport http.RoundTripper) *Client {
 	return DefaultClient.SetTransport(transport)
 }
 

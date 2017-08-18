@@ -120,7 +120,7 @@ func TestConditionalGet(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertEqual(t, true, resp.Body() != nil)
+	assertNotNil(t, resp.Body())
 	assertEqual(t, "TestGet: text response", resp.String())
 	assertEqual(t, externalCounter, attemptCount)
 
@@ -154,7 +154,7 @@ func TestConditionalGetDefaultClient(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertEqual(t, true, resp.Body() != nil)
+	assertNotNil(t, resp.Body())
 	assertEqual(t, "TestGet: text response", resp.String())
 	assertEqual(t, externalCounter, attemptCount)
 
@@ -174,7 +174,7 @@ func TestClientRetryGet(t *testing.T) {
 	assertEqual(t, "", resp.Status())
 	assertEqual(t, 0, resp.StatusCode())
 	assertEqual(t, 0, len(resp.Cookies()))
-	assertEqual(t, true, resp.Body() != nil)
+	assertNotNil(t, resp.Body())
 	assertEqual(t, 0, len(resp.Header()))
 
 	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test"))
