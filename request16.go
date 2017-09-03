@@ -35,15 +35,16 @@ type Request struct {
 	RawRequest *http.Request
 	SRV        *SRVRecord
 
-	client           *Client
-	bodyBuf          *bytes.Buffer
-	isMultiPart      bool
-	isFormData       bool
-	setContentLength bool
-	isSaveResponse   bool
-	outputFile       string
-	multipartFiles   []*File
-	notParseResponse bool
+	client              *Client
+	bodyBuf             *bytes.Buffer
+	isMultiPart         bool
+	isFormData          bool
+	setContentLength    bool
+	isSaveResponse      bool
+	outputFile          string
+	multipartFiles      []*File
+	notParseResponse    bool
+	fallbackContentType string
 }
 
 func (r *Request) addContextIfAvailable() {
