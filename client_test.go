@@ -398,6 +398,19 @@ func TestClientRoundTripper(t *testing.T) {
 	c.SetRootCertificate(getTestDataPath() + "/sample-root.pem")
 }
 
+func TestClientNewRequest(t *testing.T) {
+	c := New()
+	request := c.NewRequest()
+
+	assertNotNil(t, request)
+}
+
+func TestNewRequest(t *testing.T) {
+	request := NewRequest()
+
+	assertNotNil(t, request)
+}
+
 // CustomRoundTripper just for test
 type CustomRoundTripper struct {
 }

@@ -320,6 +320,12 @@ func (c *Client) R() *Request {
 	return r
 }
 
+// NewRequest is an alias for R(). Creates a request instance, its used for
+// Get, Post, Put, Delete, Patch, Head and Options.
+func (c *Client) NewRequest() *Request {
+	return c.R()
+}
+
 // OnBeforeRequest method appends request middleware into the before request chain.
 // Its gets applied after default `go-resty` request middlewares and before request
 // been sent from `go-resty` to host server.

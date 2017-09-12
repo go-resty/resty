@@ -77,6 +77,12 @@ func R() *Request {
 	return DefaultClient.R()
 }
 
+// NewRequest is an alias for R(). Creates a new resty request object, it is used form a HTTP/RESTful request
+// such as GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS.
+func NewRequest() *Request {
+	return R()
+}
+
 // SetHostURL sets Host URL. See `Client.SetHostURL for more information.
 func SetHostURL(url string) *Client {
 	return DefaultClient.SetHostURL(url)
