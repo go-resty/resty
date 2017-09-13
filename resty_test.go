@@ -1111,7 +1111,6 @@ func TestContextInternal(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-
 }
 
 func TestSRV(t *testing.T) {
@@ -1191,6 +1190,28 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 	SetDoNotParseResponse(true)
 	assertEqual(t, true, DefaultClient.notParseResponse)
 	SetDoNotParseResponse(false)
+}
+
+type noCtTest struct {
+	Response string `json:"response"`
+}
+
+func TestRequestExpectContentTypeTest(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	c := dc()
+	resp, err := c.R().
+		SetResult(noCtTest{}).
+		ExpectContentType("application/json").
+		Get(ts.URL + "/json-no-set")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertNotNil(t, resp.Result())
+	assertEqual(t, "json response no content type set", resp.Result().(*noCtTest).Response)
+
+	assertEqual(t, "", firstNonEmpty("", ""))
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -1541,6 +1562,16 @@ func createGenServer(t *testing.T) *httptest.Server {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 
+		if r.Method == MethodGet {
+			if r.URL.Path == "/json-no-set" {
+				// Set empty header value for testing, since Go server sets to
+				// text/plain; charset=utf-8
+				w.Header().Set(hdrContentTypeKey, "")
+				_, _ = w.Write([]byte(`{"response":"json response no content type set"}`))
+			}
+			return
+		}
+
 		if r.Method == MethodPut {
 			if r.URL.Path == "/plaintext" {
 				_, _ = w.Write([]byte("TestPut: plain text response"))
@@ -1551,6 +1582,7 @@ func createGenServer(t *testing.T) *httptest.Server {
 				w.Header().Set(hdrContentTypeKey, "application/xml")
 				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Response>XML response</Response>`))
 			}
+			return
 		}
 
 		if r.Method == MethodOptions && r.URL.Path == "/options" {
@@ -1558,10 +1590,12 @@ func createGenServer(t *testing.T) *httptest.Server {
 			w.Header().Set("Access-Control-Allow-Methods", "PUT, PATCH")
 			w.Header().Set("Access-Control-Expose-Headers", "x-go-resty-id")
 			w.WriteHeader(http.StatusOK)
+			return
 		}
 
 		if r.Method == MethodPatch && r.URL.Path == "/patch" {
 			w.WriteHeader(http.StatusOK)
+			return
 		}
 	})
 

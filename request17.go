@@ -36,16 +36,17 @@ type Request struct {
 	RawRequest *http.Request
 	SRV        *SRVRecord
 
-	client           *Client
-	bodyBuf          *bytes.Buffer
-	isMultiPart      bool
-	isFormData       bool
-	setContentLength bool
-	isSaveResponse   bool
-	outputFile       string
-	multipartFiles   []*File
-	notParseResponse bool
-	ctx              context.Context
+	client              *Client
+	bodyBuf             *bytes.Buffer
+	isMultiPart         bool
+	isFormData          bool
+	setContentLength    bool
+	isSaveResponse      bool
+	outputFile          string
+	multipartFiles      []*File
+	notParseResponse    bool
+	ctx                 context.Context
+	fallbackContentType string
 }
 
 // SetContext method sets the context.Context for current Request. It allows
