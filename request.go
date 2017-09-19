@@ -456,7 +456,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Unexported methods
+// Request Unexported methods
 //___________________________________
 
 func (r *Request) fmtBodyString() (body string) {

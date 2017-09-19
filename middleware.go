@@ -17,11 +17,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 )
 
-//
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Request Middleware(s)
-//
+//___________________________________
 
 func parseRequestURL(c *Client, r *Request) error {
 	// Parsing request URL
@@ -70,10 +71,10 @@ func parseRequestURL(c *Client, r *Request) error {
 func parseRequestHeader(c *Client, r *Request) error {
 	hdr := http.Header{}
 	for k := range c.Header {
-		hdr.Set(k, c.Header.Get(k))
+		hdr[k] = append(hdr[k], c.Header[k]...)
 	}
 	for k := range r.Header {
-		hdr.Set(k, r.Header.Get(k))
+		hdr[k] = append(hdr[k], r.Header[k]...)
 	}
 
 	if IsStringEmpty(hdr.Get(hdrUserAgentKey)) {
@@ -217,7 +218,7 @@ func responseLogger(c *Client, res *Response) error {
 		c.disableLogPrefix()
 		c.Log.Println("---------------------- RESPONSE LOG -----------------------")
 		c.Log.Printf("STATUS 		: %s", res.Status())
-		c.Log.Printf("RECEIVED AT	: %v", res.ReceivedAt())
+		c.Log.Printf("RECEIVED AT	: %v", res.ReceivedAt().Format(time.RFC3339Nano))
 		c.Log.Printf("RESPONSE TIME	: %v", res.Time())
 		c.Log.Println("HEADERS:")
 		for h, v := range res.Header() {
