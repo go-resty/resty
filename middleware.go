@@ -115,8 +115,6 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 				return
 			}
 		}
-	} else {
-		r.Header.Del(hdrContentTypeKey)
 	}
 
 CL:
