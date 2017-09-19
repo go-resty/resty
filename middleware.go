@@ -90,6 +90,8 @@ func parseRequestHeader(c *Client, r *Request) error {
 }
 
 func parseRequestBody(c *Client, r *Request) (err error) {
+	originalContentType := r.Header[hdrContentTypeKey]
+
 	if isPayloadSupported(r.Method, c.AllowGetMethodPayload) {
 		// Handling Multipart
 		if r.isMultiPart && !(r.Method == MethodPatch) {
@@ -118,6 +120,10 @@ func parseRequestBody(c *Client, r *Request) (err error) {
 	}
 
 CL:
+	// if content type have been manually specified we need to keep it
+	if len(originalContentType) > 0 {
+		r.Header.Set(hdrContentTypeKey, originalContentType[0])
+	}
 	// by default resty won't set content length, you can if you want to :)
 	if (c.setContentLength || r.setContentLength) && r.bodyBuf != nil {
 		r.Header.Set(hdrContentLengthKey, fmt.Sprintf("%d", r.bodyBuf.Len()))
