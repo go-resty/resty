@@ -8,7 +8,7 @@ Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#fea
 
 #### v1.0 Released
 
-Resty first version released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two year; `v1.0` released on Sep 25, 2017. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
+Resty first version released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years; `v1.0` released on Sep 25, 2017. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
 
 #### Features
   * GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS
