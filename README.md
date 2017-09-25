@@ -1,15 +1,14 @@
-# resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty) [![codecov](https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg)](https://codecov.io/gh/go-resty/resty/branch/master)  [![GoReport](https://goreportcard.com/badge/go-resty/resty)](https://goreportcard.com/report/go-resty/resty)  [![Version](https://img.shields.io/badge/version-0.13-blue.svg)](https://github.com/go-resty/resty/releases/latest)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty) [![License](https://img.shields.io/github/license/go-resty/resty.svg)](LICENSE)
+# Resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty) [![codecov](https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg)](https://codecov.io/gh/go-resty/resty/branch/master)  [![GoReport](https://goreportcard.com/badge/go-resty/resty)](https://goreportcard.com/report/go-resty/resty)  [![Version](https://img.shields.io/badge/version-1.0-blue.svg)](https://github.com/go-resty/resty/releases/latest)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty) [![License](https://img.shields.io/github/license/go-resty/resty.svg)](LICENSE)
 
-Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about resty capabilities.
+Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about Resty capabilities.
 
-***v0.13 [released](https://github.com/go-resty/resty/releases/latest) and tagged on Jun 22, 2017.***
+***v1.0 [released](https://github.com/go-resty/resty/releases/latest) and tagged on Sep 25, 2017.***
 
 *Since Go v1.6 HTTP/2 & HTTP/1.1 protocol is used transparently. `Resty` works fine with HTTP/2 and HTTP/1.1.*
 
-#### Roadmap
-***v1.0***
+#### v1.0 Released
 
-Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very handy and helpful library of HTTP & REST Client in the golang community. I'm planning to freeze API and make v1.0 release.
+Resty first version released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two year; `v1.0` released on Sep 25, 2017. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
 
 #### Features
   * GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS
@@ -22,8 +21,8 @@ Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very h
   * Automatic marshal and unmarshal for `JSON` and `XML` content type
     * Default is `JSON`, if you supply `struct/map` without header `Content-Type`
     * For auto-unmarshal, refer to -
-        - Success scenario [Request.SetResult()](https://godoc.org/gopkg.in/resty.v0#Request.SetResult) and [Response.Result()](https://godoc.org/gopkg.in/resty.v0#Response.Result).
-        - Error scenario [Request.SetError()](https://godoc.org/gopkg.in/resty.v0#Request.SetError) and [Response.Error()](https://godoc.org/gopkg.in/resty.v0#Response.Error).
+        - Success scenario [Request.SetResult()](https://godoc.org/github.com/go-resty/resty#Request.SetResult) and [Response.Result()](https://godoc.org/github.com/go-resty/resty#Response.Result).
+        - Error scenario [Request.SetError()](https://godoc.org/github.com/go-resty/resty#Request.SetError) and [Response.Error()](https://godoc.org/github.com/go-resty/resty#Response.Error).
   * Easy to upload one or more file(s) via `multipart/form-data`
   * Backoff Retry Mechanism with retry condition function [reference](retry_test.go)
   * resty client HTTP & REST [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middlewares
@@ -41,8 +40,8 @@ Go Resty first released on Sep 15, 2015 then go-resty grew gradually as a very h
   * Optionally allows GET request with payload, see [SetAllowGetMethodPayload](https://godoc.org/github.com/go-resty/resty#Client.SetAllowGetMethodPayload)
   * Supports registering external JSON library into resty, see [how to use](https://github.com/go-resty/resty/issues/76#issuecomment-314015250)
   * Exposes Response reader without reading response (no auto-unmarshaling) if need be, see [how to use](https://github.com/go-resty/resty/issues/87#issuecomment-322100604)
-  * Option to specify expected `Content-Type` when response `Content-Type` header missing. Refer [#92](https://github.com/go-resty/resty/issues/92)
-  * resty design
+  * Option to specify expected `Content-Type` when response `Content-Type` header missing. Refer to [#92](https://github.com/go-resty/resty/issues/92)
+  * Resty design
     * Have client level settings & options and also override at Request level if you want to
     * Request and Response middlewares
     * Create Multiple clients if you want to `resty.New()`
@@ -72,7 +71,7 @@ resty tested with Go `v1.3` and above.
 Please refer section [Versioning](#versioning) for detailed info.
 ```sh
 # install the library
-go get -u gopkg.in/resty.v0
+go get -u gopkg.in/resty.v1
 ```
 #### Latest Version - Development Edge
 ```sh
@@ -92,9 +91,7 @@ The following samples will assist you to become as comfortable as possible with 
 
 Import resty into your code and refer it as `resty`.
 ```go
-import (
-  "gopkg.in/resty.v0"
-)
+import "gopkg.in/resty.v1"
 ```
 
 #### Simple GET
@@ -107,7 +104,7 @@ fmt.Printf("\nError: %v", err)
 fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
 fmt.Printf("\nResponse Status: %v", resp.Status())
 fmt.Printf("\nResponse Time: %v", resp.Time())
-fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
+fmt.Printf("\nResponse Received At: %v", resp.ReceivedAt())
 fmt.Printf("\nResponse Body: %v", resp)     // or resp.String() or string(resp.Body())
 // more...
 
@@ -116,7 +113,7 @@ Error: <nil>
 Response Status Code: 200
 Response Status: 200 OK
 Response Time: 644.290186ms
-Response Recevied At: 2015-09-15 12:05:28.922780103 -0700 PDT
+Response Received At: 2015-09-15 12:05:28.922780103 -0700 PDT
 Response Body: {
   "args": {},
   "headers": {
@@ -636,17 +633,16 @@ resty releases versions according to [Semantic Versioning](http://semver.org)
 
 `gopkg.in/resty.vX` points to appropriate tag versions; `X` denotes version number and it's a stable release. It's recommended to use version, for eg. `gopkg.in/resty.v0`. Development takes place at the master branch. Although the code in master should always compile and test successfully, it might break API's. We aim to maintain backwards compatibility, but API's and behaviour might be changed to fix a bug.
 
-
 ## Contributing
 Welcome! If you find any improvement or issue you want to fix, feel free to send a pull request, I like pull requests that include test cases for fix/enhancement. I have done my best to bring pretty good code coverage. Feel free to write tests.
 
-BTW, I'd like to know what you think about go-resty. Kindly open an issue or send me an email; it'd mean a lot to me.
+BTW, I'd like to know what you think about `Resty`. Kindly open an issue or send me an email; it'd mean a lot to me.
 
 ## Author
-Jeevanandam M. - jeeva@myjeeva.com
+[Jeevanandam M.](https://github.com/jeevatkm) (jeeva@myjeeva.com)
 
 ## Contributors
 Have a look on [Contributors](https://github.com/go-resty/resty/graphs/contributors) page.
 
 ## License
-resty released under MIT license, refer [LICENSE](LICENSE) file.
+Resty released under MIT license, refer [LICENSE](LICENSE) file.
