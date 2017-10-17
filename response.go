@@ -120,19 +120,22 @@ func (r *Response) RawBody() io.ReadCloser {
 }
 
 func (r *Response) fmtBodyString() string {
-	bodyStr := "***** NO CONTENT *****"
 	if r.body != nil {
+		if len(r.body) > 1000000 {
+			return "***** RESPONSE TOO LARGE *****"
+		}
 		ct := r.Header().Get(hdrContentTypeKey)
 		if IsJSONType(ct) {
 			out := acquireBuffer()
 			defer releaseBuffer(out)
-			if err := json.Indent(out, r.body, "", "   "); err == nil {
-				bodyStr = string(out.Bytes())
+			err := json.Indent(out, r.body, "", "   ")
+			if err == nil {
+				return out.String()
 			}
-		} else {
-			bodyStr = r.String()
+			return "unexpected error: " + err.Error()
 		}
+		return r.String()
 	}
 
-	return bodyStr
+	return "***** NO CONTENT *****"
 }
