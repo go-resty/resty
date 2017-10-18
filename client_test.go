@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"bytes"
 	"crypto/tls"
 	"errors"
 	"io/ioutil"
@@ -340,6 +341,10 @@ func TestClientOptions(t *testing.T) {
 	SetDebug(true)
 	assertEqual(t, DefaultClient.Debug, true)
 
+	var sl int64 = 1000000
+	SetDebugBodyLimit(sl)
+	assertEqual(t, DefaultClient.debugBodySizeLimit, sl)
+
 	SetAllowGetMethodPayload(true)
 	assertEqual(t, DefaultClient.AllowGetMethodPayload, true)
 
@@ -409,6 +414,42 @@ func TestNewRequest(t *testing.T) {
 	request := NewRequest()
 
 	assertNotNil(t, request)
+}
+
+func TestDebugBodySizeLimit(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	var lgr bytes.Buffer
+	c := dc()
+	c.SetDebug(true)
+	c.SetLogger(&lgr)
+	c.SetDebugBodyLimit(30)
+
+	testcases := []struct{ url, want string }{
+		// Text, does not exceed limit.
+		{ts.URL, "TestGet: text response"},
+		// Empty response.
+		{ts.URL + "/no-content", "***** NO CONTENT *****"},
+		// JSON, does not exceed limit.
+		{ts.URL + "/json", "{\n   \"TestGet\": \"JSON response\"\n}"},
+		// Invalid JSON, does not exceed limit.
+		{ts.URL + "/json-invalid", "TestGet: Invalid JSON"},
+		// Text, exceeds limit.
+		{ts.URL + "/long-text", "RESPONSE TOO LARGE"},
+		// JSON, exceeds limit.
+		{ts.URL + "/long-json", "RESPONSE TOO LARGE"},
+	}
+
+	for _, tc := range testcases {
+		_, err := c.R().Get(tc.url)
+		assertError(t, err)
+		debugLog := lgr.String()
+		if !strings.Contains(debugLog, tc.want) {
+			t.Errorf("Expected logs to contain [%v], got [\n%v]", tc.want, debugLog)
+		}
+		lgr.Reset()
+	}
 }
 
 // CustomRoundTripper just for test

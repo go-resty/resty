@@ -1232,19 +1232,33 @@ func createGetServer(t *testing.T) *httptest.Server {
 		t.Logf("Path: %v", r.URL.Path)
 
 		if r.Method == MethodGet {
-			if r.URL.Path == "/" {
+			switch r.URL.Path {
+			case "/":
 				_, _ = w.Write([]byte("TestGet: text response"))
-			} else if r.URL.Path == "/mypage" {
+			case "/no-content":
+				_, _ = w.Write([]byte(""))
+			case "/json":
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"TestGet": "JSON response"}`))
+			case "/json-invalid":
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte("TestGet: Invalid JSON"))
+			case "/long-text":
+				_, _ = w.Write([]byte("TestGet: text response with size > 30"))
+			case "/long-json":
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"TestGet": "JSON response with size > 30"}`))
+			case "/mypage":
 				w.WriteHeader(http.StatusBadRequest)
-			} else if r.URL.Path == "/mypage2" {
+			case "/mypage2":
 				_, _ = w.Write([]byte("TestGet: text response from mypage2"))
-			} else if r.URL.Path == "/set-retrycount-test" {
+			case "/set-retrycount-test":
 				attp := atomic.AddInt32(&attempt, 1)
 				if attp <= 3 {
 					time.Sleep(time.Second * 6)
 				}
 				_, _ = w.Write([]byte("TestClientRetry page"))
-			} else if r.URL.Path == "/set-retrywaittime-test" {
+			case "/set-retrywaittime-test":
 				// Returns time.Duration since last request here
 				// or 0 for the very first request
 				if atomic.LoadInt32(&attempt) == 0 {
@@ -1257,20 +1271,19 @@ func createGetServer(t *testing.T) *httptest.Server {
 					_, _ = fmt.Fprintf(w, "%d", uint64(sinceLastRequest))
 				}
 				atomic.AddInt32(&attempt, 1)
-			} else if r.URL.Path == "/set-timeout-test-with-sequence" {
+			case "/set-timeout-test-with-sequence":
 				seq := atomic.AddInt32(&sequence, 1)
 				time.Sleep(time.Second * 2)
 				_, _ = fmt.Fprintf(w, "%d", seq)
-			} else if r.URL.Path == "/set-timeout-test" {
+			case "/set-timeout-test":
 				time.Sleep(time.Second * 6)
 				_, _ = w.Write([]byte("TestClientTimeout page"))
-
-			} else if r.URL.Path == "/my-image.png" {
+			case "/my-image.png":
 				fileBytes, _ := ioutil.ReadFile(getTestDataPath() + "/test-img.png")
 				w.Header().Set("Content-Type", "image/png")
 				w.Header().Set("Content-Length", strconv.Itoa(len(fileBytes)))
 				_, _ = w.Write(fileBytes)
-			} else if r.URL.Path == "/get-method-payload-test" {
+			case "/get-method-payload-test":
 				body, err := ioutil.ReadAll(r.Body)
 				if err != nil {
 					t.Errorf("Error: could not read get body: %s", err.Error())

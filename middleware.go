@@ -227,7 +227,7 @@ func responseLogger(c *Client, res *Response) error {
 		if res.Request.isSaveResponse {
 			c.Log.Printf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****")
 		} else {
-			c.Log.Printf("BODY   :\n%v", res.fmtBodyString())
+			c.Log.Printf("BODY   :\n%v", res.fmtBodyString(c.debugBodySizeLimit))
 		}
 		c.Log.Println("----------------------------------------------------------")
 		c.enableLogPrefix()
