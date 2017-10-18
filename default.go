@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -25,21 +26,22 @@ func New() *Client {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 
 	c := &Client{
-		HostURL:          "",
-		QueryParam:       url.Values{},
-		FormData:         url.Values{},
-		Header:           http.Header{},
-		UserInfo:         nil,
-		Token:            "",
-		Cookies:          make([]*http.Cookie, 0),
-		Debug:            false,
-		Log:              getLogger(os.Stderr),
-		RetryCount:       0,
-		RetryWaitTime:    defaultWaitTime,
-		RetryMaxWaitTime: defaultMaxWaitTime,
-		JSONMarshal:      json.Marshal,
-		JSONUnmarshal:    json.Unmarshal,
-		httpClient:       &http.Client{Jar: cookieJar},
+		HostURL:            "",
+		QueryParam:         url.Values{},
+		FormData:           url.Values{},
+		Header:             http.Header{},
+		UserInfo:           nil,
+		Token:              "",
+		Cookies:            make([]*http.Cookie, 0),
+		Debug:              false,
+		Log:                getLogger(os.Stderr),
+		RetryCount:         0,
+		RetryWaitTime:      defaultWaitTime,
+		RetryMaxWaitTime:   defaultMaxWaitTime,
+		JSONMarshal:        json.Marshal,
+		JSONUnmarshal:      json.Unmarshal,
+		httpClient:         &http.Client{Jar: cookieJar},
+		debugBodySizeLimit: math.MaxInt32,
 	}
 
 	// Default transport
@@ -156,6 +158,11 @@ func SetPreRequestHook(h func(*Client, *Request) error) *Client {
 // SetDebug method enables the debug mode. See `Client.SetDebug` for more information.
 func SetDebug(d bool) *Client {
 	return DefaultClient.SetDebug(d)
+}
+
+// SetDebugBodyLimit method sets the response body limit for debug mode. See `Client.SetDebugBodyLimit` for more information.
+func SetDebugBodyLimit(sl int64) *Client {
+	return DefaultClient.SetDebugBodyLimit(sl)
 }
 
 // SetAllowGetMethodPayload method allows the GET method with payload. See `Client.SetAllowGetMethodPayload` for more information.

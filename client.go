@@ -85,18 +85,19 @@ type Client struct {
 	JSONMarshal           func(v interface{}) ([]byte, error)
 	JSONUnmarshal         func(data []byte, v interface{}) error
 
-	httpClient       *http.Client
-	setContentLength bool
-	isHTTPMode       bool
-	outputDirectory  string
-	scheme           string
-	proxyURL         *url.URL
-	closeConnection  bool
-	notParseResponse bool
-	beforeRequest    []func(*Client, *Request) error
-	udBeforeRequest  []func(*Client, *Request) error
-	preReqHook       func(*Client, *Request) error
-	afterResponse    []func(*Client, *Response) error
+	httpClient         *http.Client
+	setContentLength   bool
+	isHTTPMode         bool
+	outputDirectory    string
+	scheme             string
+	proxyURL           *url.URL
+	closeConnection    bool
+	notParseResponse   bool
+	debugBodySizeLimit int64
+	beforeRequest      []func(*Client, *Request) error
+	udBeforeRequest    []func(*Client, *Request) error
+	preReqHook         func(*Client, *Request) error
+	afterResponse      []func(*Client, *Response) error
 }
 
 // User type is to hold an username and password information
@@ -369,6 +370,14 @@ func (c *Client) SetPreRequestHook(h func(*Client, *Request) error) *Client {
 //
 func (c *Client) SetDebug(d bool) *Client {
 	c.Debug = d
+	return c
+}
+
+// SetDebugBodyLimit sets the maximum size for which the response body will be logged in debug mode.
+//		resty.SetDebugBodyLimit(1000000)
+//
+func (c *Client) SetDebugBodyLimit(sl int64) *Client {
+	c.debugBodySizeLimit = sl
 	return c
 }
 

@@ -6,6 +6,7 @@ package resty
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -119,20 +120,18 @@ func (r *Response) RawBody() io.ReadCloser {
 	return r.RawResponse.Body
 }
 
-func (r *Response) fmtBodyString() string {
+func (r *Response) fmtBodyString(sl int64) string {
 	if r.body != nil {
-		if len(r.body) > 1000000 {
-			return "***** RESPONSE TOO LARGE *****"
+		if int64(len(r.body)) > sl {
+			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", len(r.body))
 		}
 		ct := r.Header().Get(hdrContentTypeKey)
 		if IsJSONType(ct) {
 			out := acquireBuffer()
 			defer releaseBuffer(out)
-			err := json.Indent(out, r.body, "", "   ")
-			if err == nil {
+			if err := json.Indent(out, r.body, "", "   "); err == nil {
 				return out.String()
 			}
-			return "unexpected error: " + err.Error()
 		}
 		return r.String()
 	}
