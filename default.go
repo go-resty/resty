@@ -21,56 +21,15 @@ import (
 // DefaultClient of resty
 var DefaultClient *Client
 
-// New method creates a new go-resty client
+// New method creates a new go-resty client.
 func New() *Client {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	return createClient(&http.Client{Jar: cookieJar})
+}
 
-	c := &Client{
-		HostURL:            "",
-		QueryParam:         url.Values{},
-		FormData:           url.Values{},
-		Header:             http.Header{},
-		UserInfo:           nil,
-		Token:              "",
-		Cookies:            make([]*http.Cookie, 0),
-		Debug:              false,
-		Log:                getLogger(os.Stderr),
-		RetryCount:         0,
-		RetryWaitTime:      defaultWaitTime,
-		RetryMaxWaitTime:   defaultMaxWaitTime,
-		JSONMarshal:        json.Marshal,
-		JSONUnmarshal:      json.Unmarshal,
-		httpClient:         &http.Client{Jar: cookieJar},
-		debugBodySizeLimit: math.MaxInt32,
-	}
-
-	// Default transport
-	c.SetTransport(&http.Transport{})
-
-	// Default redirect policy
-	c.SetRedirectPolicy(NoRedirectPolicy())
-
-	// default before request middlewares
-	c.beforeRequest = []func(*Client, *Request) error{
-		parseRequestURL,
-		parseRequestHeader,
-		parseRequestBody,
-		createHTTPRequest,
-		addCredentials,
-		requestLogger,
-	}
-
-	// user defined request middlewares
-	c.udBeforeRequest = []func(*Client, *Request) error{}
-
-	// default after response middlewares
-	c.afterResponse = []func(*Client, *Response) error{
-		responseLogger,
-		parseResponseBody,
-		saveResponseIntoFile,
-	}
-
-	return c
+// NewWithClient method create a new go-resty client with given `http.Client`.
+func NewWithClient(hc *http.Client) *Client {
+	return createClient(hc)
 }
 
 // R creates a new resty request object, it is used form a HTTP/RESTful request
@@ -296,6 +255,59 @@ func SetDoNotParseResponse(parse bool) *Client {
 // See `Client.IsProxySet` for more information.
 func IsProxySet() bool {
 	return DefaultClient.IsProxySet()
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Unexported methods
+//___________________________________
+
+func createClient(hc *http.Client) *Client {
+	c := &Client{
+		HostURL:            "",
+		QueryParam:         url.Values{},
+		FormData:           url.Values{},
+		Header:             http.Header{},
+		UserInfo:           nil,
+		Token:              "",
+		Cookies:            make([]*http.Cookie, 0),
+		Debug:              false,
+		Log:                getLogger(os.Stderr),
+		RetryCount:         0,
+		RetryWaitTime:      defaultWaitTime,
+		RetryMaxWaitTime:   defaultMaxWaitTime,
+		JSONMarshal:        json.Marshal,
+		JSONUnmarshal:      json.Unmarshal,
+		httpClient:         hc,
+		debugBodySizeLimit: math.MaxInt32,
+	}
+
+	// Default transport
+	c.SetTransport(&http.Transport{})
+
+	// Default redirect policy
+	c.SetRedirectPolicy(NoRedirectPolicy())
+
+	// default before request middlewares
+	c.beforeRequest = []func(*Client, *Request) error{
+		parseRequestURL,
+		parseRequestHeader,
+		parseRequestBody,
+		createHTTPRequest,
+		addCredentials,
+		requestLogger,
+	}
+
+	// user defined request middlewares
+	c.udBeforeRequest = []func(*Client, *Request) error{}
+
+	// default after response middlewares
+	c.afterResponse = []func(*Client, *Response) error{
+		responseLogger,
+		parseResponseBody,
+		saveResponseIntoFile,
+	}
+
+	return c
 }
 
 func init() {
