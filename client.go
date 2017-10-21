@@ -716,6 +716,11 @@ func (c *Client) IsProxySet() bool {
 	return c.proxyURL != nil
 }
 
+// GetClient method returns the current http.Client used by the resty client.
+func (c *Client) GetClient() *http.Client {
+	return c.httpClient
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Client Unexported methods
 //___________________________________

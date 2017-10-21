@@ -872,6 +872,21 @@ func TestProxySetting(t *testing.T) {
 	assertNil(t, transport.Proxy)
 }
 
+func TestGetClient(t *testing.T) {
+	client := GetClient()
+	custom := New()
+	customClient := custom.GetClient()
+
+	assertNotNil(t, client)
+	assertNotNil(t, customClient)
+
+	assertNotEqual(t, client, http.DefaultClient)
+	assertNotEqual(t, customClient, http.DefaultClient)
+	assertNotEqual(t, client, customClient)
+
+	assertEqual(t, DefaultClient.httpClient, client)
+}
+
 func TestIncorrectURL(t *testing.T) {
 	_, err := R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
 	assertEqual(t, true, strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
