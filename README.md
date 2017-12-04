@@ -452,14 +452,6 @@ resty.SetProxy("http://proxyserver:8888")
 // Want to remove proxy setting
 resty.RemoveProxy()
 ```
-**Request Level Proxy** settings, gives control to override at individal request level
-```go
-// Set proxy for current request
-resp, err := c.R().
-    SetProxy("http://sampleproxy:8888").
-    Get("http://httpbin.org/get")
-```
-
 #### Retries
 
 Resty uses [backoff](http://www.awsarchitectureblog.com/2015/03/backoff.html)
