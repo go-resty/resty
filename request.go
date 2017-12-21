@@ -262,6 +262,24 @@ func (r *Request) SetFiles(files map[string]string) *Request {
 	return r
 }
 
+// SetFileReaderWithContenttype method is to set single file using io.Reader for multipart upload.
+//	resty.R().
+//		SetFileReader("profile_img", "my-profile-img.png", bytes.NewReader(profileImgBytes), "image/png").
+//		SetFileReader("notes", "user-notes.txt", bytes.NewReader(notesBytes), "plain/text")
+//
+func (r *Request) SetFileReaderWithContenttype(param, fileName string, reader io.Reader, contenttype string) *Request {
+	r.isMultiPart = true
+
+	r.multipartFiles = append(r.multipartFiles, &File{
+		Name:        fileName,
+		ParamName:   param,
+		ContentType: contenttype,
+		Reader:      reader,
+	})
+
+	return r
+}
+
 // SetFileReader method is to set single file using io.Reader for multipart upload.
 //	resty.R().
 //		SetFileReader("profile_img", "my-profile-img.png", bytes.NewReader(profileImgBytes)).
@@ -271,9 +289,10 @@ func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Reque
 	r.isMultiPart = true
 
 	r.multipartFiles = append(r.multipartFiles, &File{
-		Name:      fileName,
-		ParamName: param,
-		Reader:    reader,
+		Name:        fileName,
+		ParamName:   param,
+		ContentType: "application/octet-stream",
+		Reader:      reader,
 	})
 
 	return r

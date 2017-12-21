@@ -85,19 +85,18 @@ type Client struct {
 	JSONMarshal           func(v interface{}) ([]byte, error)
 	JSONUnmarshal         func(data []byte, v interface{}) error
 
-	httpClient         *http.Client
-	setContentLength   bool
-	isHTTPMode         bool
-	outputDirectory    string
-	scheme             string
-	proxyURL           *url.URL
-	closeConnection    bool
-	notParseResponse   bool
-	debugBodySizeLimit int64
-	beforeRequest      []func(*Client, *Request) error
-	udBeforeRequest    []func(*Client, *Request) error
-	preReqHook         func(*Client, *Request) error
-	afterResponse      []func(*Client, *Response) error
+	httpClient       *http.Client
+	setContentLength bool
+	isHTTPMode       bool
+	outputDirectory  string
+	scheme           string
+	proxyURL         *url.URL
+	closeConnection  bool
+	notParseResponse bool
+	beforeRequest    []func(*Client, *Request) error
+	udBeforeRequest  []func(*Client, *Request) error
+	preReqHook       func(*Client, *Request) error
+	afterResponse    []func(*Client, *Response) error
 }
 
 // User type is to hold an username and password information
@@ -370,14 +369,6 @@ func (c *Client) SetPreRequestHook(h func(*Client, *Request) error) *Client {
 //
 func (c *Client) SetDebug(d bool) *Client {
 	c.Debug = d
-	return c
-}
-
-// SetDebugBodyLimit sets the maximum size for which the response body will be logged in debug mode.
-//		resty.SetDebugBodyLimit(1000000)
-//
-func (c *Client) SetDebugBodyLimit(sl int64) *Client {
-	c.debugBodySizeLimit = sl
 	return c
 }
 
@@ -716,11 +707,6 @@ func (c *Client) IsProxySet() bool {
 	return c.proxyURL != nil
 }
 
-// GetClient method returns the current http.Client used by the resty client.
-func (c *Client) GetClient() *http.Client {
-	return c.httpClient
-}
-
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Client Unexported methods
 //___________________________________
@@ -827,12 +813,13 @@ func (c *Client) getTransport() (*http.Transport, error) {
 
 // File represent file information for multipart request
 type File struct {
-	Name      string
-	ParamName string
+	Name        string
+	ParamName   string
+	ContentType string
 	io.Reader
 }
 
 // String returns string value of current file details
 func (f *File) String() string {
-	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
+	return fmt.Sprintf("ParamName: %v; FileName: %v; ContentType: %v", f.ParamName, f.Name, f.ContentType)
 }
