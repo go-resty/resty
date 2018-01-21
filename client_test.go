@@ -466,4 +466,9 @@ func TestSetLogPrefix(t *testing.T) {
 	c.SetLogPrefix("CUSTOM ")
 	assertEqual(t, "CUSTOM ", c.logPrefix)
 	assertEqual(t, "CUSTOM ", c.Log.Prefix())
+
+	c.disableLogPrefix()
+	c.enableLogPrefix()
+	assertEqual(t, "CUSTOM ", c.logPrefix)
+	assertEqual(t, "CUSTOM ", c.Log.Prefix())
 }
