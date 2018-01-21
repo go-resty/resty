@@ -94,6 +94,7 @@ type Client struct {
 	closeConnection    bool
 	notParseResponse   bool
 	debugBodySizeLimit int64
+	logPrefix          string
 	beforeRequest      []func(*Client, *Request) error
 	udBeforeRequest    []func(*Client, *Request) error
 	preReqHook         func(*Client, *Request) error
@@ -711,6 +712,13 @@ func (c *Client) SetDoNotParseResponse(parse bool) *Client {
 	return c
 }
 
+// SetLogPrefix method sets the Resty logger prefix value.
+func (c *Client) SetLogPrefix(prefix string) *Client {
+	c.logPrefix = prefix
+	c.Log.SetPrefix(prefix)
+	return c
+}
+
 // IsProxySet method returns the true if proxy is set on client otherwise false.
 func (c *Client) IsProxySet() bool {
 	return c.proxyURL != nil
@@ -791,7 +799,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 // enables a log prefix
 func (c *Client) enableLogPrefix() {
 	c.Log.SetFlags(log.LstdFlags)
-	c.Log.SetPrefix("RESTY ")
+	c.Log.SetPrefix(c.logPrefix)
 }
 
 // disables a log prefix
