@@ -1140,9 +1140,9 @@ func TestSRV(t *testing.T) {
 	assertEqual(t, "google.com", r.SRV.Domain)
 
 	resp, err := r.Get("/")
-	assertError(t, err)
-	assertNotNil(t, resp)
-	if resp != nil {
+	if err == nil {
+		assertError(t, err)
+		assertNotNil(t, resp)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 	}
 }
