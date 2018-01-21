@@ -460,3 +460,15 @@ type CustomRoundTripper struct {
 func (rt *CustomRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
 	return &http.Response{}, nil
 }
+
+func TestSetLogPrefix(t *testing.T) {
+	c := New()
+	c.SetLogPrefix("CUSTOM ")
+	assertEqual(t, "CUSTOM ", c.logPrefix)
+	assertEqual(t, "CUSTOM ", c.Log.Prefix())
+
+	c.disableLogPrefix()
+	c.enableLogPrefix()
+	assertEqual(t, "CUSTOM ", c.logPrefix)
+	assertEqual(t, "CUSTOM ", c.Log.Prefix())
+}

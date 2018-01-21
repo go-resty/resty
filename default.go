@@ -259,7 +259,7 @@ func IsProxySet() bool {
 
 // GetClient method returns the current `http.Client` used by the default resty client.
 func GetClient() *http.Client {
-    return DefaultClient.httpClient
+	return DefaultClient.httpClient
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -284,6 +284,7 @@ func createClient(hc *http.Client) *Client {
 		JSONUnmarshal:      json.Unmarshal,
 		httpClient:         hc,
 		debugBodySizeLimit: math.MaxInt32,
+		logPrefix:          "RESTY ",
 	}
 
 	// Default transport
