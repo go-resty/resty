@@ -8,10 +8,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -116,8 +118,25 @@ func addFile(w *multipart.Writer, fieldName, path string) error {
 	return err
 }
 
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+func escapeQuotes(s string) string {
+	return quoteEscaper.Replace(s)
+}
+
+// CreateFormFileWithContenttype is a convenience wrapper around CreatePart. It creates
+// a new form-data header with the provided field name and file name plus content-type.
+func CreateFormFileWithContenttype(w *multipart.Writer, fieldname, filename string, contenttype string) (io.Writer, error) {
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition",
+		fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
+			escapeQuotes(fieldname), escapeQuotes(filename)))
+	h.Set("Content-Type", contenttype)
+	return w.CreatePart(h)
+}
+
 func addFileReader(w *multipart.Writer, f *File) error {
-	part, err := w.CreateFormFile(f.ParamName, f.Name)
+	part, err := CreateFormFileWithContenttype(w, f.ParamName, f.Name, f.ContentType)
 	if err != nil {
 		return err
 	}

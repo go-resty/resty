@@ -837,10 +837,11 @@ func (c *Client) getTransport() (*http.Transport, error) {
 type File struct {
 	Name      string
 	ParamName string
+	ContentType string
 	io.Reader
 }
 
 // String returns string value of current file details
 func (f *File) String() string {
-	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
+	return fmt.Sprintf("ParamName: %v; FileName: %v; Content-Type: %v", f.ParamName, f.Name, f.ContentType)
 }
