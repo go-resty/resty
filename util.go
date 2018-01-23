@@ -109,38 +109,26 @@ func escapeQuotes(s string) string {
 func writeMultipartFormFile(w *multipart.Writer, fieldName, fileName string, r io.Reader) error {
 	// Auto detect actual multipart content type
 	cbuf := make([]byte, 512)
-	if _, err := r.Read(cbuf); err != nil {
+	size, err := r.Read(cbuf)
+	if err != nil {
 		return err
 	}
-	contentType := http.DetectContentType(cbuf)
 
 	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition",
-		fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
-			escapeQuotes(fieldName), escapeQuotes(fileName)))
-	h.Set("Content-Type", contentType)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
+		escapeQuotes(fieldName), escapeQuotes(fileName)))
+	h.Set("Content-Type", http.DetectContentType(cbuf))
 	partWriter, err := w.CreatePart(h)
 	if err != nil {
 		return err
 	}
 
-	size, err := partWriter.Write(cbuf)
-	if err != nil {
+	if _, err = partWriter.Write(cbuf[:size]); err != nil {
 		return err
 	}
 
-	for {
-		size, err = r.Read(cbuf)
-		if size == 0 || err == io.EOF {
-			break
-		}
-		_, err = partWriter.Write(cbuf)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	_, err = io.Copy(partWriter, r)
+	return err
 }
 
 func addFile(w *multipart.Writer, fieldName, path string) error {
