@@ -45,6 +45,7 @@ type Request struct {
 	multipartFiles      []*File
 	notParseResponse    bool
 	fallbackContentType string
+	pathParams          map[string]string
 }
 
 func (r *Request) addContextIfAvailable() {

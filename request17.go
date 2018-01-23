@@ -47,6 +47,7 @@ type Request struct {
 	notParseResponse    bool
 	ctx                 context.Context
 	fallbackContentType string
+	pathParams          map[string]string
 }
 
 // SetContext method sets the context.Context for current Request. It allows
