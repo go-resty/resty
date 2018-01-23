@@ -8,10 +8,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -98,6 +100,49 @@ func getLogger(w io.Writer) *log.Logger {
 	return log.New(w, "RESTY ", log.LstdFlags)
 }
 
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+func escapeQuotes(s string) string {
+	return quoteEscaper.Replace(s)
+}
+
+func writeMultipartFormFile(w *multipart.Writer, fieldName, fileName string, r io.Reader) error {
+	// Auto detect actual multipart content type
+	cbuf := make([]byte, 512)
+	if _, err := r.Read(cbuf); err != nil {
+		return err
+	}
+	contentType := http.DetectContentType(cbuf)
+
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition",
+		fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
+			escapeQuotes(fieldName), escapeQuotes(fileName)))
+	h.Set("Content-Type", contentType)
+	partWriter, err := w.CreatePart(h)
+	if err != nil {
+		return err
+	}
+
+	size, err := partWriter.Write(cbuf)
+	if err != nil {
+		return err
+	}
+
+	for {
+		size, err = r.Read(cbuf)
+		if size == 0 || err == io.EOF {
+			break
+		}
+		_, err = partWriter.Write(cbuf)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func addFile(w *multipart.Writer, fieldName, path string) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -107,23 +152,11 @@ func addFile(w *multipart.Writer, fieldName, path string) error {
 		_ = file.Close()
 	}()
 
-	part, err := w.CreateFormFile(fieldName, filepath.Base(path))
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(part, file)
-
-	return err
+	return writeMultipartFormFile(w, fieldName, filepath.Base(path), file)
 }
 
 func addFileReader(w *multipart.Writer, f *File) error {
-	part, err := w.CreateFormFile(f.ParamName, f.Name)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(part, f.Reader)
-
-	return err
+	return writeMultipartFormFile(w, f.ParamName, f.Name, f.Reader)
 }
 
 func getPointer(v interface{}) interface{} {
