@@ -354,6 +354,25 @@ func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 	return r
 }
 
+// SetPathParams method sets multiple URL path key-value pairs at one go in the
+// resty current request instance.
+// 		resty.R().SetPathParams(map[string]string{
+// 		   "userId": "sample@sample.com",
+// 		   "subAccountId": "100002",
+// 		})
+//
+// 		Result:
+// 		   URL - /v1/users/{userId}/{subAccountId}/details
+// 		   Composed URL - /v1/users/sample@sample.com/100002/details
+// It replace the value of the key while composing request URL. Also you can
+// override Path Params value, which was set at client instance level.
+func (r *Request) SetPathParams(params map[string]string) *Request {
+	for p, v := range params {
+		r.pathParams[p] = v
+	}
+	return r
+}
+
 // ExpectContentType method allows to provide fallback `Content-Type` for automatic unmarshalling
 // when `Content-Type` response header is unavailable.
 func (r *Request) ExpectContentType(contentType string) *Request {

@@ -95,6 +95,7 @@ type Client struct {
 	notParseResponse   bool
 	debugBodySizeLimit int64
 	logPrefix          string
+	pathParams         map[string]string
 	beforeRequest      []func(*Client, *Request) error
 	udBeforeRequest    []func(*Client, *Request) error
 	preReqHook         func(*Client, *Request) error
@@ -311,6 +312,7 @@ func (c *Client) R() *Request {
 		client:         c,
 		bodyBuf:        nil,
 		multipartFiles: []*File{},
+		pathParams:     make(map[string]string),
 	}
 
 	return r
@@ -716,6 +718,25 @@ func (c *Client) SetDoNotParseResponse(parse bool) *Client {
 func (c *Client) SetLogPrefix(prefix string) *Client {
 	c.logPrefix = prefix
 	c.Log.SetPrefix(prefix)
+	return c
+}
+
+// SetPathParams method sets multiple URL path key-value pairs at one go in the
+// resty client instance.
+// 		resty.SetPathParams(map[string]string{
+// 		   "userId": "sample@sample.com",
+// 		   "subAccountId": "100002",
+// 		})
+//
+// 		Result:
+// 		   URL - /v1/users/{userId}/{subAccountId}/details
+// 		   Composed URL - /v1/users/sample@sample.com/100002/details
+// It replace the value of the key while composing request URL. Also it can be
+// overridden at request level Path Params options, see `Request.SetPathParams`.
+func (c *Client) SetPathParams(params map[string]string) *Client {
+	for p, v := range params {
+		c.pathParams[p] = v
+	}
 	return c
 }
 

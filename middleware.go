@@ -31,14 +31,13 @@ func parseRequestURL(c *Client, r *Request) error {
 		return err
 	}
 
+	// GitHub #103 Path Params
+	reqURL.Path = composeRequestURL(reqURL.Path, c, r)
+
 	// If Request.Url is relative path then added c.HostUrl into
 	// the request URL otherwise Request.Url will be used as-is
 	if !reqURL.IsAbs() {
-		if !strings.HasPrefix(r.URL, "/") {
-			r.URL = "/" + r.URL
-		}
-
-		reqURL, err = url.Parse(c.HostURL + r.URL)
+		reqURL, err = url.Parse(c.HostURL + reqURL.Path)
 		if err != nil {
 			return err
 		}

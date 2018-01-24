@@ -251,6 +251,12 @@ func SetDoNotParseResponse(parse bool) *Client {
 	return DefaultClient.SetDoNotParseResponse(parse)
 }
 
+// SetPathParams method sets the Request path parameter key-value pairs. See
+// `Client.SetPathParams` for more information.
+func SetPathParams(params map[string]string) *Client {
+	return DefaultClient.SetPathParams(params)
+}
+
 // IsProxySet method returns the true if proxy is set on client otherwise false.
 // See `Client.IsProxySet` for more information.
 func IsProxySet() bool {
@@ -284,8 +290,11 @@ func createClient(hc *http.Client) *Client {
 		JSONUnmarshal:      json.Unmarshal,
 		httpClient:         hc,
 		debugBodySizeLimit: math.MaxInt32,
-		logPrefix:          "RESTY ",
+		pathParams:         make(map[string]string),
 	}
+
+	// Log Prefix
+	c.SetLogPrefix("RESTY ")
 
 	// Default transport
 	c.SetTransport(&http.Transport{})
