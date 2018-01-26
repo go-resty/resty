@@ -211,6 +211,11 @@ func composeRequestURL(pathURL string, c *Client, r *Request) string {
 		pathURL = "/" + pathURL
 	}
 
+	hasTrailingSlash := false
+	if strings.HasSuffix(pathURL, "/") && len(pathURL) > 1 {
+		hasTrailingSlash = true
+	}
+
 	reqURL := "/"
 	for _, segment := range strings.Split(pathURL, "/") {
 		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
@@ -227,6 +232,10 @@ func composeRequestURL(pathURL string, c *Client, r *Request) string {
 		}
 
 		reqURL = path.Join(reqURL, segment)
+	}
+
+	if hasTrailingSlash {
+		reqURL = reqURL + "/"
 	}
 
 	return reqURL
