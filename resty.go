@@ -6,4 +6,4 @@
 package resty
 
 // Version # of resty
-const Version = "1.2-edge"
+const Version = "1.2"
