@@ -421,6 +421,14 @@ func createGenServer(t *testing.T) *httptest.Server {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+
+		if r.Method == "REPORT" && r.URL.Path == "/report" {
+			body, _ := ioutil.ReadAll(r.Body)
+			if len(body) == 0 {
+				w.WriteHeader(http.StatusOK)
+			}
+			return
+		}
 	})
 
 	return ts
