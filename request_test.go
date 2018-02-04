@@ -1254,9 +1254,26 @@ func TestReportMethodSupportsPayload(t *testing.T) {
 	c := dc()
 	resp, err := c.R().
 		SetBody("body").
-		Execute("REPORT", ts.URL + "/report")
+		Execute("REPORT", ts.URL+"/report")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
+}
+
+func TestRequestQueryStringOrder(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := New().R().
+		SetQueryString("productId=232&template=fresh-sample&cat=resty&source=google&kw=buy a lot more").
+		Get(ts.URL + "/?UniqueId=ead1d0ed-XXX-XXX-XXX-abb7612b3146&Translate=false&tempauth=eyJ0eXAiOiJKV1QiLC...HZEhwVnJ1d0NSUGVLaUpSaVNLRG5scz0&ApiVersion=2.0")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "200 OK", resp.Status())
+	assertNotNil(t, resp.Body())
+	assertEqual(t, "TestGet: text response", resp.String())
+
+	logResponse(t, resp)
 }

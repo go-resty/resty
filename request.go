@@ -110,10 +110,12 @@ func (r *Request) SetMultiValueQueryParams(params url.Values) *Request {
 //			SetQueryString("productId=232&template=fresh-sample&cat=resty&source=google&kw=buy a lot more")
 //
 func (r *Request) SetQueryString(query string) *Request {
-	values, err := url.ParseQuery(strings.TrimSpace(query))
+	params, err := url.ParseQuery(strings.TrimSpace(query))
 	if err == nil {
-		for k := range values {
-			r.QueryParam.Add(k, values.Get(k))
+		for p, v := range params {
+			for _, pv := range v {
+				r.QueryParam.Add(p, pv)
+			}
 		}
 	} else {
 		r.client.Log.Printf("ERROR [%v]", err)

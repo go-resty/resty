@@ -44,7 +44,7 @@ func parseRequestURL(c *Client, r *Request) error {
 	}
 
 	// Adding Query Param
-	query := reqURL.Query()
+	query := make(url.Values)
 	for k, v := range c.QueryParam {
 		for _, iv := range v {
 			query.Add(k, iv)
@@ -61,7 +61,16 @@ func parseRequestURL(c *Client, r *Request) error {
 		}
 	}
 
-	reqURL.RawQuery = query.Encode()
+	// GitHub #123 Preserve query string order partially.
+	// Since not feasible in `SetQuery*` resty methods, because
+	// standrad package `url.Encode(...)` sorts the query params
+	// alphabetically
+	if IsStringEmpty(reqURL.RawQuery) {
+		reqURL.RawQuery = query.Encode()
+	} else {
+		reqURL.RawQuery = reqURL.RawQuery + "&" + query.Encode()
+	}
+
 	r.URL = reqURL.String()
 
 	return nil
