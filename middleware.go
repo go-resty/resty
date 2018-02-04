@@ -76,6 +76,11 @@ func parseRequestHeader(c *Client, r *Request) error {
 		hdr[k] = append(hdr[k], r.Header[k]...)
 	}
 
+	// Allow the Request to override the Authorization header set by the Client
+	if !IsStringEmpty(r.Header.Get(hdrAuthorizationKey)) {
+		hdr.Set(hdrAuthorizationKey, r.Header.Get(hdrAuthorizationKey))
+	}
+
 	if IsStringEmpty(hdr.Get(hdrUserAgentKey)) {
 		hdr.Set(hdrUserAgentKey, fmt.Sprintf(hdrUserAgentValue, Version))
 	}
