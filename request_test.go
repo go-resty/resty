@@ -1246,3 +1246,17 @@ func TestGetPathParams(t *testing.T) {
 		"userId": "sample@sample.com",
 	})
 }
+
+func TestReportMethodSupportsPayload(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	c := dc()
+	resp, err := c.R().
+		SetBody("body").
+		Execute("REPORT", ts.URL + "/report")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+}

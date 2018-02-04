@@ -157,7 +157,7 @@ func getPointer(v interface{}) interface{} {
 }
 
 func isPayloadSupported(m string, allowMethodGet bool) bool {
-	return (m == MethodPost || m == MethodPut || m == MethodDelete || m == MethodPatch || (allowMethodGet && m == MethodGet))
+	return !(m == MethodHead || m == MethodOptions || (m == MethodGet && !allowMethodGet))
 }
 
 func typeOf(i interface{}) reflect.Type {
