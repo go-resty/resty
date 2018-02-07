@@ -81,7 +81,9 @@ func parseRequestHeader(c *Client, r *Request) error {
 	for k := range c.Header {
 		hdr[k] = append(hdr[k], c.Header[k]...)
 	}
+
 	for k := range r.Header {
+		hdr.Del(k)
 		hdr[k] = append(hdr[k], r.Header[k]...)
 	}
 

@@ -1277,3 +1277,20 @@ func TestRequestQueryStringOrder(t *testing.T) {
 
 	logResponse(t, resp)
 }
+
+func TestRequestOverridesClientAuthorizationHeader(t *testing.T) {
+	ts := createAuthServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+		SetHeader("Authorization", "some token")
+	SetHostURL(ts.URL + "/")
+
+	resp, err := c.R().
+		SetHeader("Authorization", "Bearer 004DDB79-6801-4587-B976-F093E6AC44FF").
+		Get("/profile")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
