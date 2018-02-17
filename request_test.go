@@ -380,7 +380,7 @@ func TestPostXMLMapNotSupported(t *testing.T) {
 		SetBody(map[string]interface{}{"Username": "testuser", "Password": "testpass"}).
 		Post(ts.URL + "/login")
 
-	assertEqual(t, "Unsupported 'Body' type/value", err.Error())
+	assertEqual(t, "unsupported 'Body' type/value", err.Error())
 }
 
 func TestRequestBasicAuth(t *testing.T) {
@@ -604,13 +604,13 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 		SetFile("profile_img", basePath+"/test-img.png").
 		Get(ts.URL + "/upload")
 
-	assertEqual(t, "Multipart content is not allowed in HTTP verb [GET]", err.Error())
+	assertEqual(t, "multipart content is not allowed in HTTP verb [GET]", err.Error())
 
 	_, err = dclr().
 		SetFile("profile_img", basePath+"/test-img.png").
 		Delete(ts.URL + "/upload")
 
-	assertEqual(t, "Multipart content is not allowed in HTTP verb [DELETE]", err.Error())
+	assertEqual(t, "multipart content is not allowed in HTTP verb [DELETE]", err.Error())
 }
 
 func TestGetWithCookie(t *testing.T) {
@@ -760,7 +760,7 @@ func TestNoAutoRedirect(t *testing.T) {
 
 	_, err := R().Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, "Get /redirect-2: Auto redirect is disabled", err.Error())
+	assertEqual(t, "Get /redirect-2: auto redirect is disabled", err.Error())
 }
 
 func TestHTTPAutoRedirectUpTo10(t *testing.T) {
@@ -771,7 +771,7 @@ func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 	c.SetHTTPMode()
 	_, err := c.R().Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, "Get /redirect-11: Stopped after 10 redirects", err.Error())
+	assertEqual(t, "Get /redirect-11: stopped after 10 redirects", err.Error())
 }
 
 func TestHostCheckRedirectPolicy(t *testing.T) {
@@ -784,7 +784,7 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 	_, err := c.R().Get(ts.URL + "/redirect-host-check-1")
 
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), "Redirect is not allowed as per DomainCheckRedirectPolicy"))
+	assertEqual(t, true, strings.Contains(err.Error(), "redirect is not allowed as per DomainCheckRedirectPolicy"))
 }
 
 func TestHeadMethod(t *testing.T) {
