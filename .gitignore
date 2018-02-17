@@ -25,3 +25,5 @@ _testmain.go
 
 coverage.out
 coverage.txt
+
+vendor
