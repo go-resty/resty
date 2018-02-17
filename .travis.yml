@@ -1,15 +1,12 @@
 language: go
-sudo: false
 go:
-  - 1.7.x
-  - 1.8.x
-  - tip
-env:
-  - DEP_VERSION=0.4.1
+ - 1.8
+ - 1.9
+ - tip
 
-before_install:
-  - curl -fsSL -o $GOPATH/bin/dep https://github.com/golang/dep/releases/download/v$DEP_VERSION/dep-linux-amd64
-  -	chmod +x $GOPATH/bin/dep
+install:
+  - curl -fsSL -o $GOPATH/bin/dep https://github.com/golang/dep/releases/download/v0.4.1/dep-linux-amd64
+  - chmod +x $GOPATH/bin/dep
   - dep ensure
 
 script:
