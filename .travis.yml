@@ -1,19 +1,9 @@
 language: go
-
 sudo: false
-
-# branches:
-#   only:
-#     - master
-#     - integration
-
-language: go
-
 go:
-  - 1.8
-  - 1.9
+  - 1.7.x
+  - 1.8.x
   - tip
-
 env:
   - DEP_VERSION=0.4.1
 
