@@ -28,7 +28,7 @@ import (
 
 // IsStringEmpty method tells whether given string is empty or not
 func IsStringEmpty(str string) bool {
-	return (len(strings.TrimSpace(str)) == 0)
+	return len(strings.TrimSpace(str)) == 0
 }
 
 // DetectContentType method is used to figure out `Request.Body` content type for request header
