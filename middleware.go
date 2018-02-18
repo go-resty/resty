@@ -77,7 +77,7 @@ func parseRequestURL(c *Client, r *Request) error {
 }
 
 func parseRequestHeader(c *Client, r *Request) error {
-	var hdr = make(http.Header, len(c.Header))
+	hdr := make(http.Header)
 	for k := range c.Header {
 		hdr[k] = append(hdr[k], c.Header[k]...)
 	}
