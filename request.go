@@ -430,7 +430,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	var err error
 
 	if r.isMultiPart && !(method == MethodPost || method == MethodPut) {
-		return nil, fmt.Errorf("Multipart content is not allowed in HTTP verb [%v]", method)
+		return nil, fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
 	}
 
 	if r.SRV != nil {

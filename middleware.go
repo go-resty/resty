@@ -63,7 +63,7 @@ func parseRequestURL(c *Client, r *Request) error {
 
 	// GitHub #123 Preserve query string order partially.
 	// Since not feasible in `SetQuery*` resty methods, because
-	// standrad package `url.Encode(...)` sorts the query params
+	// standard package `url.Encode(...)` sorts the query params
 	// alphabetically
 	if IsStringEmpty(reqURL.RawQuery) {
 		reqURL.RawQuery = query.Encode()
@@ -77,7 +77,7 @@ func parseRequestURL(c *Client, r *Request) error {
 }
 
 func parseRequestHeader(c *Client, r *Request) error {
-	hdr := http.Header{}
+	hdr := make(http.Header)
 	for k := range c.Header {
 		hdr[k] = append(hdr[k], c.Header[k]...)
 	}
@@ -370,7 +370,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	}
 
 	if bodyBytes == nil && r.bodyBuf == nil {
-		err = errors.New("Unsupported 'Body' type/value")
+		err = errors.New("unsupported 'Body' type/value")
 	}
 
 	// if any errors during body bytes handling, return it

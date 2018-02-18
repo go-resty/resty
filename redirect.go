@@ -36,7 +36,7 @@ func (f RedirectPolicyFunc) Apply(req *http.Request, via []*http.Request) error 
 // 		resty.SetRedirectPolicy(NoRedirectPolicy())
 func NoRedirectPolicy() RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
-		return errors.New("Auto redirect is disabled")
+		return errors.New("auto redirect is disabled")
 	})
 }
 
@@ -45,7 +45,7 @@ func NoRedirectPolicy() RedirectPolicy {
 func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		if len(via) >= noOfRedirect {
-			return fmt.Errorf("Stopped after %d redirects", noOfRedirect)
+			return fmt.Errorf("stopped after %d redirects", noOfRedirect)
 		}
 
 		checkHostAndAddHeaders(req, via[0])
@@ -65,7 +65,7 @@ func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 
 	fn := RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		if ok := hosts[getHostname(req.URL.Host)]; !ok {
-			return errors.New("Redirect is not allowed as per DomainCheckRedirectPolicy")
+			return errors.New("redirect is not allowed as per DomainCheckRedirectPolicy")
 		}
 
 		return nil
@@ -83,7 +83,7 @@ func getHostname(host string) (hostname string) {
 }
 
 // By default Golang will not redirect request headers
-// after go throughing various discussion commments from thread
+// after go throughing various discussion comments from thread
 // https://github.com/golang/go/issues/4800
 // go-resty will add all the headers during a redirect for the same host
 func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {

@@ -84,7 +84,7 @@ func TestClientRedirectPolicy(t *testing.T) {
 
 	_, err := c.R().Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, "Get /redirect-21: Stopped after 20 redirects", err.Error())
+	assertEqual(t, "Get /redirect-21: stopped after 20 redirects", err.Error())
 }
 
 func TestClientTimeout(t *testing.T) {
