@@ -107,6 +107,24 @@ func escapeQuotes(s string) string {
 	return quoteEscaper.Replace(s)
 }
 
+func writeMultipartFormCustomData(w *multipart.Writer, params map[string]string, contentType string, r io.Reader) error {
+	h := make(textproto.MIMEHeader)
+	var bufContDisp bytes.Buffer
+	bufContDisp.WriteString("form-data;")
+	for k, v := range params {
+		bufContDisp.WriteString(fmt.Sprintf(` %s="%s";`, k, escapeQuotes(v)))
+	}
+	h.Set("Content-Disposition", bufContDisp.String())
+	h.Set("Content-Type", contentType)
+	partWriter, err := w.CreatePart(h)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(partWriter, r)
+	return err
+}
+
 func writeMultipartFormFile(w *multipart.Writer, fieldName, fileName string, r io.Reader) error {
 	// Auto detect actual multipart content type
 	cbuf := make([]byte, 512)
@@ -146,6 +164,10 @@ func addFile(w *multipart.Writer, fieldName, path string) error {
 
 func addFileReader(w *multipart.Writer, f *File) error {
 	return writeMultipartFormFile(w, f.ParamName, f.Name, f.Reader)
+}
+
+func addCustomDataReader(w *multipart.Writer, cd *MultipartCustomData) error {
+	return writeMultipartFormCustomData(w, cd.Params, cd.ContentType, cd.Reader)
 }
 
 func getPointer(v interface{}) interface{} {

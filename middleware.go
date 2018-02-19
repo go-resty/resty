@@ -300,6 +300,16 @@ func handleMultipart(c *Client, r *Request) (err error) {
 		}
 	}
 
+	// adding custom data support
+	if len(r.multipartCustomData) > 0 {
+		for _, cd := range r.multipartCustomData {
+			err = addCustomDataReader(w, cd)
+			if err != nil {
+				return
+			}
+		}
+	}
+
 	r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
 	err = w.Close()
 

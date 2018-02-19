@@ -279,6 +279,19 @@ func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Reque
 	return r
 }
 
+// SetCustomData method is to set custom data using io.Reader for multipart upload.
+func (r *Request) SetCustomData(params map[string]string, contentType string, reader io.Reader) *Request {
+	r.isMultiPart = true
+
+	r.multipartCustomData = append(r.multipartCustomData, &MultipartCustomData{
+		Params:      params,
+		ContentType: contentType,
+		Reader:      reader,
+	})
+
+	return r
+}
+
 // SetContentLength method sets the HTTP header `Content-Length` value for current request.
 // By default go-resty won't set `Content-Length`. Also you have an option to enable for every
 // request. See `resty.SetContentLength`

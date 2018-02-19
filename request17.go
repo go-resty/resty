@@ -44,6 +44,7 @@ type Request struct {
 	isSaveResponse      bool
 	outputFile          string
 	multipartFiles      []*File
+	multipartCustomData []*MultipartCustomData
 	notParseResponse    bool
 	ctx                 context.Context
 	fallbackContentType string
