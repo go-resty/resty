@@ -201,18 +201,18 @@ func addCredentials(c *Client, r *Request) error {
 func requestLogger(c *Client, r *Request) error {
 	if c.Debug {
 		rr := r.RawRequest
-		c.Log.Println()
-		c.disableLogPrefix()
-		c.Log.Println("---------------------- REQUEST LOG -----------------------")
-		c.Log.Printf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto)
-		c.Log.Printf("HOST   : %s", rr.URL.Host)
-		c.Log.Println("HEADERS:")
+		reqLog := "\n---------------------- REQUEST LOG -----------------------\n" +
+			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
+			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
+			fmt.Sprintf("HEADERS:\n")
+
 		for h, v := range rr.Header {
-			c.Log.Printf("%25s: %v", h, strings.Join(v, ", "))
+			reqLog += fmt.Sprintf("%25s: %v\n", h, strings.Join(v, ", "))
 		}
-		c.Log.Printf("BODY   :\n%v", r.fmtBodyString())
-		c.Log.Println("----------------------------------------------------------")
-		c.enableLogPrefix()
+		reqLog += fmt.Sprintf("BODY   :\n%v\n", r.fmtBodyString()) +
+			"----------------------------------------------------------\n"
+
+		c.Log.Print(reqLog)
 	}
 
 	return nil
@@ -224,23 +224,23 @@ func requestLogger(c *Client, r *Request) error {
 
 func responseLogger(c *Client, res *Response) error {
 	if c.Debug {
-		c.Log.Println()
-		c.disableLogPrefix()
-		c.Log.Println("---------------------- RESPONSE LOG -----------------------")
-		c.Log.Printf("STATUS 		: %s", res.Status())
-		c.Log.Printf("RECEIVED AT	: %v", res.ReceivedAt().Format(time.RFC3339Nano))
-		c.Log.Printf("RESPONSE TIME	: %v", res.Time())
-		c.Log.Println("HEADERS:")
+		resLog := "\n---------------------- RESPONSE LOG -----------------------\n" +
+			fmt.Sprintf("STATUS 		: %s\n", res.Status()) +
+			fmt.Sprintf("RECEIVED AT	: %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
+			fmt.Sprintf("RESPONSE TIME	: %v\n", res.Time()) +
+			"HEADERS:\n"
+
 		for h, v := range res.Header() {
-			c.Log.Printf("%30s: %v", h, strings.Join(v, ", "))
+			resLog += fmt.Sprintf("%30s: %v\n", h, strings.Join(v, ", "))
 		}
 		if res.Request.isSaveResponse {
-			c.Log.Printf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****")
+			resLog += fmt.Sprintf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****\n")
 		} else {
-			c.Log.Printf("BODY   :\n%v", res.fmtBodyString(c.debugBodySizeLimit))
+			resLog += fmt.Sprintf("BODY   :\n%v\n", res.fmtBodyString(c.debugBodySizeLimit))
 		}
-		c.Log.Println("----------------------------------------------------------")
-		c.enableLogPrefix()
+		resLog += "----------------------------------------------------------\n"
+
+		c.Log.Print(resLog)
 	}
 
 	return nil
