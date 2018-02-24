@@ -300,19 +300,20 @@ func (c *Client) SetAuthToken(token string) *Client {
 // R method creates a request instance, its used for Get, Post, Put, Delete, Patch, Head and Options.
 func (c *Client) R() *Request {
 	r := &Request{
-		URL:            "",
-		Method:         "",
-		QueryParam:     url.Values{},
-		FormData:       url.Values{},
-		Header:         http.Header{},
-		Body:           nil,
-		Result:         nil,
-		Error:          nil,
-		RawRequest:     nil,
-		client:         c,
-		bodyBuf:        nil,
-		multipartFiles: []*File{},
-		pathParams:     make(map[string]string),
+		URL:             "",
+		Method:          "",
+		QueryParam:      url.Values{},
+		FormData:        url.Values{},
+		Header:          http.Header{},
+		Body:            nil,
+		Result:          nil,
+		Error:           nil,
+		RawRequest:      nil,
+		client:          c,
+		bodyBuf:         nil,
+		multipartFiles:  []*File{},
+		multipartFields: []*multipartField{},
+		pathParams:      make(map[string]string),
 	}
 
 	return r
@@ -864,4 +865,12 @@ type File struct {
 // String returns string value of current file details
 func (f *File) String() string {
 	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
+}
+
+// multipartField represent custom data part for multipart request
+type multipartField struct {
+	Param string
+	FileName string
+	ContentType string
+	io.Reader
 }

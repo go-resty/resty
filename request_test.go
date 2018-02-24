@@ -613,6 +613,25 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 	assertEqual(t, "multipart content is not allowed in HTTP verb [DELETE]", err.Error())
 }
 
+func TestMultiPartMultipartField(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	defer cleanupFiles("test-data/upload")
+
+	jsonBytes := []byte(`{"input": {"name": "Uploaded document", "_filename" : ["file.txt"]}}`)
+
+	resp, err := dclr().
+		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
+		SetMultipartField("uploadManifest", "upload-file.json", "application/json", bytes.NewReader(jsonBytes)).
+		Post(ts.URL + "/upload")
+
+	responseStr := resp.String()
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(responseStr, "upload-file.json"))
+}
+
 func TestGetWithCookie(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()

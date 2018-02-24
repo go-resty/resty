@@ -311,6 +311,15 @@ func handleMultipart(c *Client, r *Request) (err error) {
 		}
 	}
 
+	// GitHub #130 adding multipart field support with content type
+	if len(r.multipartFields) > 0 {
+		for _, mf := range r.multipartFields {
+			if err = addMultipartFormField(w, mf); err != nil {
+				return
+			}
+		}
+	}
+
 	r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
 	err = w.Close()
 
