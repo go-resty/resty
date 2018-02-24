@@ -616,7 +616,7 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 func TestMultiPartMultipartField(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
-	defer cleaupFiles("test-data/upload")
+	defer cleanupFiles("test-data/upload")
 
 	jsonBytes := []byte(`{"input": {"name": "Uploaded document", "_filename" : ["file.txt"]}}`)
 
