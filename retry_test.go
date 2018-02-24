@@ -68,7 +68,7 @@ func TestConditionalBackoffConditionError(t *testing.T) {
 	counter := 0
 	check := RetryConditionFunc(func(*Response) (bool, error) {
 		if attempts != counter {
-			return false, errors.New("Attempts not equal Counter")
+			return false, errors.New("attempts not equal Counter")
 		}
 		return false, nil
 	})
@@ -107,7 +107,7 @@ func TestConditionalGet(t *testing.T) {
 	check := RetryConditionFunc(func(*Response) (bool, error) {
 		externalCounter++
 		if attemptCount != externalCounter {
-			return false, errors.New("Attempts not equal Counter")
+			return false, errors.New("attempts not equal Counter")
 		}
 		return false, nil
 	})
@@ -138,7 +138,7 @@ func TestConditionalGetDefaultClient(t *testing.T) {
 	check := RetryConditionFunc(func(*Response) (bool, error) {
 		externalCounter++
 		if attemptCount != externalCounter {
-			return false, errors.New("Attempts not equal Counter")
+			return false, errors.New("attempts not equal Counter")
 		}
 		return false, nil
 	})

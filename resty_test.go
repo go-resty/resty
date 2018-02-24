@@ -421,6 +421,14 @@ func createGenServer(t *testing.T) *httptest.Server {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+
+		if r.Method == "REPORT" && r.URL.Path == "/report" {
+			body, _ := ioutil.ReadAll(r.Body)
+			if len(body) == 0 {
+				w.WriteHeader(http.StatusOK)
+			}
+			return
+		}
 	})
 
 	return ts
@@ -440,14 +448,14 @@ func createRedirectServer(t *testing.T) *httptest.Server {
 					if cnt >= 5 {
 						http.Redirect(w, r, "http://httpbin.org/get", http.StatusTemporaryRedirect)
 					} else {
-						http.Redirect(w, r, fmt.Sprintf("/redirect-host-check-%d", (cnt+1)), http.StatusTemporaryRedirect)
+						http.Redirect(w, r, fmt.Sprintf("/redirect-host-check-%d", cnt+1), http.StatusTemporaryRedirect)
 					}
 				}
 			} else if strings.HasPrefix(r.URL.Path, "/redirect-") {
 				cntStr := strings.SplitAfter(r.URL.Path, "-")[1]
 				cnt, _ := strconv.Atoi(cntStr)
 
-				http.Redirect(w, r, fmt.Sprintf("/redirect-%d", (cnt+1)), http.StatusTemporaryRedirect)
+				http.Redirect(w, r, fmt.Sprintf("/redirect-%d", cnt+1), http.StatusTemporaryRedirect)
 			}
 		}
 	})
@@ -538,7 +546,7 @@ func logResponse(t *testing.T, resp *Response) {
 	t.Logf("Response Body: %v", resp)
 }
 
-func cleaupFiles(files ...string) {
+func cleanupFiles(files ...string) {
 	pwd, _ := os.Getwd()
 
 	for _, f := range files {

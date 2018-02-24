@@ -28,7 +28,7 @@ import (
 
 // IsStringEmpty method tells whether given string is empty or not
 func IsStringEmpty(str string) bool {
-	return (len(strings.TrimSpace(str)) == 0)
+	return len(strings.TrimSpace(str)) == 0
 }
 
 // DetectContentType method is used to figure out `Request.Body` content type for request header
@@ -171,7 +171,7 @@ func getPointer(v interface{}) interface{} {
 }
 
 func isPayloadSupported(m string, allowMethodGet bool) bool {
-	return (m == MethodPost || m == MethodPut || m == MethodDelete || m == MethodPatch || (allowMethodGet && m == MethodGet))
+	return !(m == MethodHead || m == MethodOptions || (m == MethodGet && !allowMethodGet))
 }
 
 func typeOf(i interface{}) reflect.Type {
