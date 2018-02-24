@@ -279,12 +279,13 @@ func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Reque
 	return r
 }
 
-// SetMultipartData method is to set custom data using io.Reader for multipart upload.
-func (r *Request) SetMultipartData(params map[string]string, contentType string, reader io.Reader) *Request {
+// SetMultipartField method is to set custom data using io.Reader for multipart upload.
+func (r *Request) SetMultipartField(param, fileName, contentType string, reader io.Reader) *Request {
 	r.isMultiPart = true
 
-	r.multipartCustomData = append(r.multipartCustomData, &MultipartCustomData{
-		Params:      params,
+	r.multipartFields = append(r.multipartFields, &multipartField{
+		Param:       param,
+		FileName:    fileName,
 		ContentType: contentType,
 		Reader:      reader,
 	})

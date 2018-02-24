@@ -43,7 +43,7 @@ type Request struct {
 	isSaveResponse      bool
 	outputFile          string
 	multipartFiles      []*File
-	multipartCustomData []*MultipartCustomData
+	multipartFields     []*multipartField
 	notParseResponse    bool
 	fallbackContentType string
 	pathParams          map[string]string

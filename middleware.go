@@ -300,11 +300,10 @@ func handleMultipart(c *Client, r *Request) (err error) {
 		}
 	}
 
-	// adding custom data support
-	if len(r.multipartCustomData) > 0 {
-		for _, cd := range r.multipartCustomData {
-			err = addCustomDataReader(w, cd)
-			if err != nil {
+	// GitHub #130 adding multipart field support with content type
+	if len(r.multipartFields) > 0 {
+		for _, mf := range r.multipartFields {
+			if err = addMultipartFormField(w, mf); err != nil {
 				return
 			}
 		}
