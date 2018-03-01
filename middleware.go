@@ -37,7 +37,7 @@ func parseRequestURL(c *Client, r *Request) error {
 	// If Request.Url is relative path then added c.HostUrl into
 	// the request URL otherwise Request.Url will be used as-is
 	if !reqURL.IsAbs() {
-		reqURL, err = url.Parse(c.HostURL + reqURL.Path)
+		reqURL, err = url.Parse(c.HostURL + reqURL.String())
 		if err != nil {
 			return err
 		}
@@ -65,10 +65,12 @@ func parseRequestURL(c *Client, r *Request) error {
 	// Since not feasible in `SetQuery*` resty methods, because
 	// standard package `url.Encode(...)` sorts the query params
 	// alphabetically
-	if IsStringEmpty(reqURL.RawQuery) {
-		reqURL.RawQuery = query.Encode()
-	} else {
-		reqURL.RawQuery = reqURL.RawQuery + "&" + query.Encode()
+	if len(query) > 0 {
+		if IsStringEmpty(reqURL.RawQuery) {
+			reqURL.RawQuery = query.Encode()
+		} else {
+			reqURL.RawQuery = reqURL.RawQuery + "&" + query.Encode()
+		}
 	}
 
 	r.URL = reqURL.String()
