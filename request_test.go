@@ -214,8 +214,32 @@ func TestPostJSONStructInvalidLogin(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
-	assertEqual(t, resp.Header().Get("Www-Authenticate"), "Protected Realm")
 
+	authError := resp.Error().(*AuthError)
+	assertEqual(t, "unauthorized", authError.ID)
+	assertEqual(t, "Invalid credentials", authError.Message)
+	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+
+	logResponse(t, resp)
+}
+
+func TestPostJSONErrorRFC7807(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dc()
+	resp, err := c.R().
+		SetHeader(hdrContentTypeKey, jsonContentType).
+		SetBody(User{Username: "testuser", Password: "testpass1"}).
+		SetError(AuthError{}).
+		Post(ts.URL + "/login?ct=problem")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
+
+	authError := resp.Error().(*AuthError)
+	assertEqual(t, "unauthorized", authError.ID)
+	assertEqual(t, "Invalid credentials", authError.Message)
 	t.Logf("Result Error: %q", resp.Error().(*AuthError))
 
 	logResponse(t, resp)
@@ -252,6 +276,10 @@ func TestPostJSONMapInvalidResponseJson(t *testing.T) {
 
 	assertEqual(t, "invalid character '}' looking for beginning of object key string", err.Error())
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	authSuccess := resp.Result().(*AuthSuccess)
+	assertEqual(t, "", authSuccess.ID)
+	assertEqual(t, "", authSuccess.Message)
 
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
 

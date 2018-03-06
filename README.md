@@ -23,6 +23,7 @@ Resty first version released on Sep 15, 2015 then it grew gradually as a very ha
     * For auto-unmarshal, refer to -
         - Success scenario [Request.SetResult()](https://godoc.org/github.com/go-resty/resty#Request.SetResult) and [Response.Result()](https://godoc.org/github.com/go-resty/resty#Response.Result).
         - Error scenario [Request.SetError()](https://godoc.org/github.com/go-resty/resty#Request.SetError) and [Response.Error()](https://godoc.org/github.com/go-resty/resty#Response.Error).
+        - Supports [RFC7807](https://tools.ietf.org/html/rfc7807) - `application/problem+json` & `application/problem+xml`
   * Easy to upload one or more file(s) via `multipart/form-data`
     * Auto detects file content type
   * Request URL [Path Params](https://godoc.org/github.com/go-resty/resty#Request.SetPathParams)

@@ -56,8 +56,8 @@ var (
 	jsonContentType = "application/json; charset=utf-8"
 	formContentType = "application/x-www-form-urlencoded"
 
-	jsonCheck = regexp.MustCompile("(?i:[application|text]/json)")
-	xmlCheck  = regexp.MustCompile("(?i:[application|text]/xml)")
+	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(problem\+json|json))`)
+	xmlCheck  = regexp.MustCompile(`(?i:(application|text)/(problem\+xml|xml))`)
 
 	hdrUserAgentValue = "go-resty v%s - https://github.com/go-resty/resty"
 	bufPool           = &sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
@@ -869,8 +869,8 @@ func (f *File) String() string {
 
 // multipartField represent custom data part for multipart request
 type multipartField struct {
-	Param string
-	FileName string
+	Param       string
+	FileName    string
 	ContentType string
 	io.Reader
 }
