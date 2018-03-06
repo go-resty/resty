@@ -497,6 +497,11 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 func (r *Request) fmtBodyString() (body string) {
 	body = "***** NO CONTENT *****"
 	if isPayloadSupported(r.Method, r.client.AllowGetMethodPayload) {
+		if _, ok := r.Body.(io.Reader); ok {
+			body = "***** BODY IS io.Reader *****"
+			return
+		}
+
 		// multipart or form-data
 		if r.isMultiPart || r.isFormData {
 			body = string(r.bodyBuf.Bytes())
