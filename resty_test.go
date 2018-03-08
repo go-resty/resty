@@ -115,7 +115,12 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 		if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
 			jd := json.NewDecoder(r.Body)
 			err := jd.Decode(user)
-			w.Header().Set(hdrContentTypeKey, jsonContentType)
+			if r.URL.Query().Get("ct") == "problem" {
+				w.Header().Set(hdrContentTypeKey, "application/problem+json; charset=utf-8")
+			} else {
+				w.Header().Set(hdrContentTypeKey, jsonContentType)
+			}
+
 			if err != nil {
 				t.Logf("Error: %#v", err)
 				w.WriteHeader(http.StatusBadRequest)
@@ -128,7 +133,6 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 			} else if user.Username == "testuser" && user.Password == "invalidjson" {
 				_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful", }`))
 			} else {
-				w.Header().Set("Www-Authenticate", "Protected Realm")
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
 			}
