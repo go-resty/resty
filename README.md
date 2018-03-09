@@ -15,6 +15,7 @@ Resty first version released on Sep 15, 2015 then it grew gradually as a very ha
   * Simple and chainable methods for settings and request
   * Request Body can be `string`, `[]byte`, `struct`, `map`, `slice` and `io.Reader` too
     * Auto detects `Content-Type`
+    * Buffer less processing for `io.Reader`
   * [Response](https://godoc.org/github.com/go-resty/resty#Response) object gives you more possibility
     * Access as `[]byte` array - `response.Body()` OR Access as `string` - `response.String()`
     * Know your `response.Time()` and when we `response.ReceivedAt()`
