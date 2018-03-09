@@ -1357,4 +1357,17 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully"))
+
+	file, _ = os.Open(getTestDataPath() + "/test-img.png")
+	defer file.Close()
+
+	resp, err = dclr().
+		SetBody(file).
+		SetHeader("Content-Type", "image/png").
+		SetContentLength(true).
+		Post(ts.URL + "/upload")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully"))
 }

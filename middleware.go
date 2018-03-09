@@ -370,9 +370,14 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	kind := kindOf(r.Body)
 	r.bodyBuf = nil
 
-	if _, ok := r.Body.(io.Reader); ok {
-		// buffer less processing for `io.Reader`, sounds good.
-		return
+	if reader, ok := r.Body.(io.Reader); ok {
+		if c.setContentLength || r.setContentLength { // keep backward compability
+			r.bodyBuf = acquireBuffer()
+			_, err = r.bodyBuf.ReadFrom(reader)
+		} else {
+			// Otherwise buffer less processing for `io.Reader`, sounds good.
+			return
+		}
 	} else if b, ok := r.Body.([]byte); ok {
 		bodyBytes = b
 	} else if s, ok := r.Body.(string); ok {
