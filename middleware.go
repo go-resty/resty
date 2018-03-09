@@ -376,6 +376,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 		if c.setContentLength || r.setContentLength { // keep backward compability
 			r.bodyBuf = acquireBuffer()
 			_, err = r.bodyBuf.ReadFrom(reader)
+			r.Body = nil
 		} else {
 			// Otherwise buffer less processing for `io.Reader`, sounds good.
 			return
