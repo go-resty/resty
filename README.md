@@ -1,8 +1,9 @@
-# Resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty) [![codecov](https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg)](https://codecov.io/gh/go-resty/resty/branch/master)  [![GoReport](https://goreportcard.com/badge/go-resty/resty)](https://goreportcard.com/report/go-resty/resty)  [![Version](https://img.shields.io/badge/version-1.3-blue.svg)](https://github.com/go-resty/resty/releases/latest)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty) [![License](https://img.shields.io/github/license/go-resty/resty.svg)](LICENSE)
+# Resty  [![Build Status](https://travis-ci.org/go-resty/resty.svg?branch=master)](https://travis-ci.org/go-resty/resty) [![codecov](https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg)](https://codecov.io/gh/go-resty/resty/branch/master)  [![GoReport](https://goreportcard.com/badge/go-resty/resty)](https://goreportcard.com/report/go-resty/resty)  [![Version](https://img.shields.io/badge/version-1.4-blue.svg)](https://github.com/go-resty/resty/releases/latest)  [![GoDoc](https://godoc.org/github.com/go-resty/resty?status.svg)](https://godoc.org/github.com/go-resty/resty) [![License](https://img.shields.io/github/license/go-resty/resty.svg)](LICENSE)
+
 
 Simple HTTP and REST client for Go inspired by Ruby rest-client. [Features](#features) section describes in detail about Resty capabilities.
 
-***v1.3 [released](https://github.com/go-resty/resty/releases/latest) and tagged on Mar 01, 2018.***
+***v1.4 [released](https://github.com/go-resty/resty/releases/latest) and tagged on Apr 04, 2018.***
 
 *Since Go v1.6 HTTP/2 & HTTP/1.1 protocol is used transparently. `Resty` works fine with HTTP/2 and HTTP/1.1.*
 
@@ -56,7 +57,7 @@ Resty first version released on Sep 15, 2015 then it grew gradually as a very ha
     * Gzip - I'm not doing anything here. Go does it automatically
   * Well tested client library
 
-resty tested with Go `v1.3` and above.
+Resty works with `go1.3` and above.
 
 #### Included Batteries
   * Redirect Policies - see [how to use](#redirect-policy)
@@ -83,11 +84,11 @@ go get -u gopkg.in/resty.v1
 go get -u github.com/go-resty/resty
 ```
 
-## It might interest you :)
+## It might be beneficial for your project :smile:
 
 Resty author also published following projects for Go Community.
 
-  * [aah framework](https://aahframework.org) - A scalable, performant, rapid development - Web framework for Go.
+  * [aah framework](https://aahframework.org) - A secure, flexible, rapid Go web framework.
   * [go-model](https://github.com/jeevatkm/go-model) - Robust & Easy to use model mapper and utility methods for Go `struct`.
 
 ## Usage
@@ -478,7 +479,7 @@ to increase retry intervals after each attempt.
 Usage example:
 ```go
 // Retries are configured per client
-resty.DefaultClient.
+resty.
     // Set retry count to non zero to enable retries
     SetRetryCount(3).
     // You can override initial retry wait time.
@@ -495,15 +496,14 @@ Above setup will result in resty retrying requests returned non nil error up to
 You can optionally provide client with custom retry conditions:
 
 ```go
-resty.DefaultClient.
-    AddRetryCondition(
-        // Condition function will be provided with *resty.Response as a
-        // parameter. It is expected to return (bool, error) pair. Resty will retry
-        // in case condition returns true or non nil error.
-        func(r *resty.Response) (bool, error) {
-            return r.StatusCode() == http.StatusTooManyRequests, nil
-        }
-    )
+resty.AddRetryCondition(
+    // Condition function will be provided with *resty.Response as a
+    // parameter. It is expected to return (bool, error) pair. Resty will retry
+    // in case condition returns true or non nil error.
+    func(r *resty.Response) (bool, error) {
+        return r.StatusCode() == http.StatusTooManyRequests, nil
+    },
+)
 ```
 
 Above example will make resty retry requests ended with `429 Too Many Requests`
