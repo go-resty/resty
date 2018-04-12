@@ -635,7 +635,15 @@ r := resty.New().SetTransport(&transport).SetScheme("http").SetHostURL(unixSocke
 
 // No need to write the host's URL on the request, just the path.
 r.R().Get("/index.html")
+```
 
+#### Bazel support
+
+Resty can be built, tested and depended upon via [Bazel](https://bazel.build).
+For example, to run all tests:
+
+```shell
+bazel test :go_default_test
 ```
 
 ## Versioning
