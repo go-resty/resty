@@ -1198,7 +1198,6 @@ func TestSRVInvalidService(t *testing.T) {
 
 	assertNotNil(t, err)
 	assertType(t, net.DNSError{}, err)
-	fmt.Printf("%#v\n", err)
 }
 
 func TestDeprecatedCodeCoverage(t *testing.T) {
