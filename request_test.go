@@ -9,9 +9,11 @@ import (
 	"crypto/tls"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -540,7 +542,7 @@ func TestMultiPartUploadFile(t *testing.T) {
 	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
 
 	resp, err := c.R().
-		SetFile("profile_img", basePath+"/test-img.png").
+		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
 		SetContentLength(true).
 		Post(ts.URL + "/upload")
 
@@ -559,7 +561,7 @@ func TestMultiPartUploadFileError(t *testing.T) {
 	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
 
 	resp, err := c.R().
-		SetFile("profile_img", basePath+"/test-img-not-exists.png").
+		SetFile("profile_img", filepath.Join(basePath, "test-img-not-exists.png")).
 		Post(ts.URL + "/upload")
 
 	if err == nil {
@@ -579,7 +581,7 @@ func TestMultiPartUploadFiles(t *testing.T) {
 
 	resp, err := dclr().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
-		SetFiles(map[string]string{"profile_img": basePath + "/test-img.png", "notes": basePath + "/text-file.txt"}).
+		SetFiles(map[string]string{"profile_img": filepath.Join(basePath, "test-img.png"), "notes": filepath.Join(basePath, "text-file.txt")}).
 		Post(ts.URL + "/upload")
 
 	responseStr := resp.String()
@@ -596,8 +598,8 @@ func TestMultiPartIoReaderFiles(t *testing.T) {
 	defer cleanupFiles("test-data/upload")
 
 	basePath := getTestDataPath()
-	profileImgBytes, _ := ioutil.ReadFile(basePath + "/test-img.png")
-	notesBytes, _ := ioutil.ReadFile(basePath + "/text-file.txt")
+	profileImgBytes, _ := ioutil.ReadFile(filepath.Join(basePath, "test-img.png"))
+	notesBytes, _ := ioutil.ReadFile(filepath.Join(basePath, "text-file.txt"))
 
 	// Just info values
 	file := File{
@@ -629,13 +631,13 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 	basePath := getTestDataPath()
 
 	_, err := dclr().
-		SetFile("profile_img", basePath+"/test-img.png").
+		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
 		Get(ts.URL + "/upload")
 
 	assertEqual(t, "multipart content is not allowed in HTTP verb [GET]", err.Error())
 
 	_, err = dclr().
-		SetFile("profile_img", basePath+"/test-img.png").
+		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
 		Delete(ts.URL + "/upload")
 
 	assertEqual(t, "multipart content is not allowed in HTTP verb [DELETE]", err.Error())
@@ -872,8 +874,10 @@ func TestRawFileUploadByBody(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	file, _ := os.Open(getTestDataPath() + "/test-img.png")
-	fileBytes, _ := ioutil.ReadAll(file)
+	file, err := os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
+	assertNil(t, err)
+	fileBytes, err := ioutil.ReadAll(file)
+	assertNil(t, err)
 
 	resp, err := dclr().
 		SetBody(fileBytes).
@@ -1102,7 +1106,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 
 	DefaultClient = dc()
 	SetRedirectPolicy(FlexibleRedirectPolicy(10))
-	SetOutputDirectory(getTestDataPath() + "/dir-sample")
+	SetOutputDirectory(filepath.Join(getTestDataPath(), "dir-sample"))
 	SetDebug(true)
 
 	resp, err := R().
@@ -1115,7 +1119,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 
 func TestOutputFileWithBaseDirError(t *testing.T) {
 	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10)).
-		SetOutputDirectory(getTestDataPath() + `/go-resty\0`)
+		SetOutputDirectory(filepath.Join(getTestDataPath(), `go-resty\0`))
 
 	_ = c
 }
@@ -1123,11 +1127,11 @@ func TestOutputFileWithBaseDirError(t *testing.T) {
 func TestOutputPathDirNotExists(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
-	defer cleanupFiles("test-data/not-exists-dir")
+	defer cleanupFiles(filepath.Join("test-data", "not-exists-dir"))
 
 	DefaultClient = dc()
 	SetRedirectPolicy(FlexibleRedirectPolicy(10))
-	SetOutputDirectory(getTestDataPath() + "/not-exists-dir")
+	SetOutputDirectory(filepath.Join(getTestDataPath(), "not-exists-dir"))
 
 	resp, err := R().
 		SetOutput("test-img-success.png").
@@ -1140,10 +1144,10 @@ func TestOutputPathDirNotExists(t *testing.T) {
 func TestOutputFileAbsPath(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
-	defer cleanupFiles("test-data/go-resty")
+	defer cleanupFiles(filepath.Join("test-data", "go-resty"))
 
 	_, err := dcr().
-		SetOutput(getTestDataPath() + "/go-resty/test-img-success-2.png").
+		SetOutput(filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")).
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1192,7 +1196,7 @@ func TestSRVInvalidService(t *testing.T) {
 		Get("/")
 
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), "no such host"))
+	assertType(t, net.DNSError{}, err)
 }
 
 func TestDeprecatedCodeCoverage(t *testing.T) {
@@ -1346,7 +1350,7 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 	ts := createFilePostServer(t)
 	defer ts.Close()
 
-	file, _ := os.Open(getTestDataPath() + "/test-img.png")
+	file, _ := os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
 	defer file.Close()
 
 	resp, err := dclr().
@@ -1358,7 +1362,7 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully"))
 
-	file, _ = os.Open(getTestDataPath() + "/test-img.png")
+	file, _ = os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
 	defer file.Close()
 
 	resp, err = dclr().
