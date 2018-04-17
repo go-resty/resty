@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -161,7 +162,7 @@ func TestClientSetCertificates(t *testing.T) {
 
 func TestClientSetRootCertificate(t *testing.T) {
 	DefaultClient = dc()
-	SetRootCertificate(getTestDataPath() + "/sample-root.pem")
+	SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
 	transport, err := DefaultClient.getTransport()
 
@@ -171,7 +172,7 @@ func TestClientSetRootCertificate(t *testing.T) {
 
 func TestClientSetRootCertificateNotExists(t *testing.T) {
 	DefaultClient = dc()
-	SetRootCertificate(getTestDataPath() + "/not-exists-sample-root.pem")
+	SetRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
 	transport, err := DefaultClient.getTransport()
 
@@ -400,7 +401,7 @@ func TestClientRoundTripper(t *testing.T) {
 	c.SetProxy("http://localhost:9090")
 	c.RemoveProxy()
 	c.SetCertificates(tls.Certificate{})
-	c.SetRootCertificate(getTestDataPath() + "/sample-root.pem")
+	c.SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
 }
 
 func TestClientNewRequest(t *testing.T) {

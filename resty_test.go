@@ -29,7 +29,7 @@ import (
 
 func getTestDataPath() string {
 	pwd, _ := os.Getwd()
-	return pwd + "/test-data"
+	return filepath.Join(pwd, "test-data")
 }
 
 func createGetServer(t *testing.T) *httptest.Server {
@@ -88,7 +88,7 @@ func createGetServer(t *testing.T) *httptest.Server {
 				time.Sleep(time.Second * 6)
 				_, _ = w.Write([]byte("TestClientTimeout page"))
 			case "/my-image.png":
-				fileBytes, _ := ioutil.ReadFile(getTestDataPath() + "/test-img.png")
+				fileBytes, _ := ioutil.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
 				w.Header().Set("Content-Type", "image/png")
 				w.Header().Set("Content-Length", strconv.Itoa(len(fileBytes)))
 				_, _ = w.Write(fileBytes)
@@ -294,7 +294,7 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				t.Logf("FirstName: %v", r.FormValue("first_name"))
 				t.Logf("LastName: %v", r.FormValue("last_name"))
 
-				targetPath := getTestDataPath() + "/upload"
+				targetPath := filepath.Join(getTestDataPath(), "upload")
 				_ = os.MkdirAll(targetPath, 0700)
 
 				for _, fhdrs := range r.MultipartForm.File {
@@ -307,7 +307,7 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 						t.Logf("Write name: %v", fname)
 
 						infile, _ := hdr.Open()
-						f, err := os.OpenFile(targetPath+"/"+fname, os.O_WRONLY|os.O_CREATE, 0666)
+						f, err := os.OpenFile(filepath.Join(targetPath, fname), os.O_WRONLY|os.O_CREATE, 0666)
 						if err != nil {
 							t.Logf("Error: %v", err)
 							return
@@ -534,6 +534,12 @@ func assertNil(t *testing.T, v interface{}) {
 func assertNotNil(t *testing.T, v interface{}) {
 	if isNil(v) {
 		t.Errorf("[%v] was expected to be non-nil", v)
+	}
+}
+
+func assertType(t *testing.T, typ, v interface{}) {
+	if reflect.DeepEqual(reflect.TypeOf(typ), reflect.TypeOf(v)) {
+		t.Errorf("Expected type %t, got %t", typ, v)
 	}
 }
 
