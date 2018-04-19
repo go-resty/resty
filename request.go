@@ -504,7 +504,7 @@ func (r *Request) fmtBodyString() (body string) {
 
 		// multipart or form-data
 		if r.isMultiPart || r.isFormData {
-			body = string(r.bodyBuf.Bytes())
+			body = r.bodyBuf.String()
 			return
 		}
 
