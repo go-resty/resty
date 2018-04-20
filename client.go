@@ -845,6 +845,10 @@ func (c *Client) getTLSConfig() (*tls.Config, error) {
 // returns `*http.Transport` currently in use or error
 // in case currently used `transport` is not an `*http.Transport`
 func (c *Client) getTransport() (*http.Transport, error) {
+	if c.httpClient.Transport == nil {
+		c.SetTransport(new(http.Transport))
+	}
+
 	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
 		return transport, nil
 	}
