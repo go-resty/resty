@@ -473,3 +473,22 @@ func TestSetLogPrefix(t *testing.T) {
 	assertEqual(t, "CUSTOM ", c.logPrefix)
 	assertEqual(t, "CUSTOM ", c.Log.Prefix())
 }
+
+func TestAutoGzip(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	c := New()
+
+	resp, err := c.R().
+		SetHeader("Accept-Encoding", "gzip").
+		Get(ts.URL + "/gzip-test")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "200 OK", resp.Status())
+	assertNotNil(t, resp.Body())
+	assertEqual(t, "This is Gzip response testing", resp.String())
+
+	logResponse(t, resp)
+}

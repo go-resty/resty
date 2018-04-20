@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -433,6 +434,12 @@ func createGenServer(t *testing.T) *httptest.Server {
 				// text/plain; charset=utf-8
 				w.Header().Set(hdrContentTypeKey, "")
 				_, _ = w.Write([]byte(`{"response":"json response no content type set"}`))
+			} else if r.URL.Path == "/gzip-test" {
+				w.Header().Set(hdrContentTypeKey, plainTextType)
+				w.Header().Set(hdrContentEncodingKey, "gzip")
+				zw := gzip.NewWriter(w)
+				zw.Write([]byte("This is Gzip response testing"))
+				zw.Close()
 			}
 			return
 		}
