@@ -6,6 +6,7 @@ package resty
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -46,11 +47,12 @@ const (
 )
 
 var (
-	hdrUserAgentKey     = http.CanonicalHeaderKey("User-Agent")
-	hdrAcceptKey        = http.CanonicalHeaderKey("Accept")
-	hdrContentTypeKey   = http.CanonicalHeaderKey("Content-Type")
-	hdrContentLengthKey = http.CanonicalHeaderKey("Content-Length")
-	hdrAuthorizationKey = http.CanonicalHeaderKey("Authorization")
+	hdrUserAgentKey       = http.CanonicalHeaderKey("User-Agent")
+	hdrAcceptKey          = http.CanonicalHeaderKey("Accept")
+	hdrContentTypeKey     = http.CanonicalHeaderKey("Content-Type")
+	hdrContentLengthKey   = http.CanonicalHeaderKey("Content-Length")
+	hdrContentEncodingKey = http.CanonicalHeaderKey("Content-Encoding")
+	hdrAuthorizationKey   = http.CanonicalHeaderKey("Authorization")
 
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json; charset=utf-8"
@@ -797,11 +799,23 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if !req.isSaveResponse {
+		body := resp.Body
+
+		// GitHub #142
+		if strings.EqualFold(resp.Header.Get(hdrContentEncodingKey), "gzip") {
+			if _, ok := body.(*gzip.Reader); !ok {
+				body, err = gzip.NewReader(body)
+				if err != nil {
+					return response, err
+				}
+			}
+		}
+
 		defer func() {
-			_ = resp.Body.Close()
+			_ = body.Close()
 		}()
 
-		if response.body, err = ioutil.ReadAll(resp.Body); err != nil {
+		if response.body, err = ioutil.ReadAll(body); err != nil {
 			return response, err
 		}
 
