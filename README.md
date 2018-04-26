@@ -646,6 +646,18 @@ For example, to run all tests:
 bazel test :go_default_test
 ```
 
+#### Mocking http requests using [httpmock](https://github.com/jarcoal/httpmock) library
+
+In order to mock the http requests when testing your application you
+could use the `httpmock` library.
+
+When using the default resty client, you should pass the client to the library as follow:
+```go
+httpmock.ActivateNonDefault(resty.DefaultClient.GetClient())
+```
+
+More detailed example of mocking resty http requests using ginko could be found [here](https://github.com/jarcoal/httpmock#ginkgo--resty-example).
+
 ## Versioning
 resty releases versions according to [Semantic Versioning](http://semver.org)
 
