@@ -61,7 +61,7 @@ func TestOnAfterMiddleware(t *testing.T) {
 	c := dc()
 	c.OnAfterResponse(func(c *Client, res *Response) error {
 		t.Logf("Request sent at: %v", res.Request.Time)
-		t.Logf("Response Recevied at: %v", res.ReceivedAt())
+		t.Logf("Response Received at: %v", res.ReceivedAt())
 
 		return nil
 	})
@@ -94,7 +94,7 @@ func TestClientTimeout(t *testing.T) {
 
 	c := dc()
 	c.SetHTTPMode().
-		SetTimeout(time.Duration(time.Second * 3))
+		SetTimeout(time.Second * 3)
 
 	_, err := c.R().Get(ts.URL + "/set-timeout-test")
 	assertEqual(t, true, strings.Contains(strings.ToLower(err.Error()), "timeout"))
@@ -106,7 +106,7 @@ func TestClientTimeoutWithinThreshold(t *testing.T) {
 
 	c := dc()
 	c.SetHTTPMode().
-		SetTimeout(time.Duration(time.Second * 3))
+		SetTimeout(time.Second * 3)
 
 	resp, err := c.R().Get(ts.URL + "/set-timeout-test-with-sequence")
 	assertError(t, err)
@@ -124,7 +124,7 @@ func TestClientTimeoutWithinThreshold(t *testing.T) {
 func TestClientTimeoutInternalError(t *testing.T) {
 	c := dc()
 	c.SetHTTPMode()
-	c.SetTimeout(time.Duration(time.Second * 1))
+	c.SetTimeout(time.Second * 1)
 
 	_, _ = c.R().Get("http://localhost:9000/set-timeout-test")
 }
@@ -333,7 +333,7 @@ func TestClientOptions(t *testing.T) {
 		return nil // if it success
 	})
 
-	SetTimeout(time.Duration(5 * time.Second))
+	SetTimeout(5 * time.Second)
 	SetRedirectPolicy(FlexibleRedirectPolicy(10), func(req *http.Request, via []*http.Request) error {
 		return errors.New("sample test redirect")
 	})

@@ -167,7 +167,7 @@ func TestClientRetryGet(t *testing.T) {
 
 	c := dc()
 	c.SetHTTPMode().
-		SetTimeout(time.Duration(time.Second * 3)).
+		SetTimeout(time.Second * 3).
 		SetRetryCount(3)
 
 	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")

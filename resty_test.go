@@ -284,7 +284,7 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				return
 			} else if r.URL.Path == "/search" {
 				formEncodedData := r.Form.Encode()
-				t.Logf("Recevied Form Encoded values: %v", formEncodedData)
+				t.Logf("Received Form Encoded values: %v", formEncodedData)
 
 				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=pencil"))
 				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=glass"))

@@ -564,7 +564,7 @@ resty.SetTLSClientConfig(&tls.Config{ RootCAs: roots })
 resty.SetTLSClientConfig(&tls.Config{ InsecureSkipVerify: true })
 
 // Set client timeout as per your need
-resty.SetTimeout(time.Duration(1 * time.Minute))
+resty.SetTimeout(1 * time.Minute)
 
 
 // You can override all below settings and options at request level if you want to

@@ -50,7 +50,7 @@ func Example_get() {
 	fmt.Printf("\nResponse Status: %v", resp.Status())
 	fmt.Printf("\nResponse Body: %v", resp)
 	fmt.Printf("\nResponse Time: %v", resp.Time())
-	fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
+	fmt.Printf("\nResponse Received At: %v", resp.ReceivedAt())
 }
 
 func Example_enhancedGet() {
@@ -196,7 +196,7 @@ func ExampleClient_SetCertificates() {
 //
 
 func Example_socks5Proxy() {
-	// create a dailer
+	// create a dialer
 	dialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9150", nil, proxy.Direct)
 	if err != nil {
 		log.Fatalf("Unable to obtain proxy dialer: %v\n", err)
