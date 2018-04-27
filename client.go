@@ -506,21 +506,21 @@ func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 	return c
 }
 
-// SetHTTPMode method sets go-resty mode into HTTP
+// SetHTTPMode method sets go-resty mode to 'http'
 func (c *Client) SetHTTPMode() *Client {
 	return c.SetMode("http")
 }
 
-// SetRESTMode method sets go-resty mode into RESTful
+// SetRESTMode method sets go-resty mode to 'rest'
 func (c *Client) SetRESTMode() *Client {
 	return c.SetMode("rest")
 }
 
 // SetMode method sets go-resty client mode to given value such as 'http' & 'rest'.
-// 	RESTful:
+//	'rest':
 //		- No Redirect
 //		- Automatic response unmarshal if it is JSON or XML
-//	HTML:
+//	'http':
 //		- Up to 10 Redirects
 //		- No automatic unmarshall. Response will be treated as `response.String()`
 //
