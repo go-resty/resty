@@ -14,7 +14,7 @@
 
 ## Features
 
-  * GET, POST, PUT, DELETE, HEAD, PATCH and OPTIONS
+  * GET, POST, PUT, DELETE, HEAD, PATCH, OPTIONS, ...
   * Simple and chainable methods for settings and request
   * Request Body can be `string`, `[]byte`, `struct`, `map`, `slice` and `io.Reader` too
     * Auto detects `Content-Type`
