@@ -799,6 +799,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if !req.isSaveResponse {
+		defer closeq(resp.Body)
 		body := resp.Body
 
 		// GitHub #142
@@ -808,12 +809,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 				if err != nil {
 					return response, err
 				}
+				defer closeq(body)
 			}
 		}
-
-		defer func() {
-			_ = body.Close()
-		}()
 
 		if response.body, err = ioutil.ReadAll(body); err != nil {
 			return response, err
