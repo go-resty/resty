@@ -101,6 +101,8 @@ func createGetServer(t *testing.T) *httptest.Server {
 				_, _ = w.Write(body)
 			case "/v1/users/sample@sample.com/100002/details":
 				_, _ = w.Write([]byte("TestPathParams: text response"))
+			case "/host-header":
+				_, _ = w.Write([]byte(r.Host))
 			}
 		}
 	})

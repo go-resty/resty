@@ -785,6 +785,10 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
+	if hostHeader := req.Header.Get("Host"); hostHeader != "" {
+		req.RawRequest.Host = hostHeader
+	}
+
 	req.Time = time.Now()
 	resp, err := c.httpClient.Do(req.RawRequest)
 
