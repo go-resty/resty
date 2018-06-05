@@ -1375,3 +1375,20 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully"))
 }
+
+func TestHostHeaderOverride(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := R().
+		SetHeader("Host", "myhostname").
+		Get(ts.URL + "/host-header")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "200 OK", resp.Status())
+	assertNotNil(t, resp.Body())
+	assertEqual(t, "myhostname", resp.String())
+
+	logResponse(t, resp)
+}
