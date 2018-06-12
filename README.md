@@ -581,7 +581,7 @@ client1.R().Get("http://httpbin.org")
 
 // Client 2
 client2 := resty.New()
-client1.R().Head("http://httpbin.org")
+client2.R().Head("http://httpbin.org")
 // ...
 
 // Bend it as per your need!!!
