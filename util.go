@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/textproto"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -218,41 +217,6 @@ func releaseBuffer(buf *bytes.Buffer) {
 		buf.Reset()
 		bufPool.Put(buf)
 	}
-}
-
-func composeRequestURL(pathURL string, c *Client, r *Request) string {
-	if !strings.HasPrefix(pathURL, "/") {
-		pathURL = "/" + pathURL
-	}
-
-	hasTrailingSlash := false
-	if strings.HasSuffix(pathURL, "/") && len(pathURL) > 1 {
-		hasTrailingSlash = true
-	}
-
-	reqURL := "/"
-	for _, segment := range strings.Split(pathURL, "/") {
-		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
-			key := segment[1 : len(segment)-1]
-			if val, found := r.pathParams[key]; found {
-				reqURL = path.Join(reqURL, val)
-				continue
-			}
-
-			if val, found := c.pathParams[key]; found {
-				reqURL = path.Join(reqURL, val)
-				continue
-			}
-		}
-
-		reqURL = path.Join(reqURL, segment)
-	}
-
-	if hasTrailingSlash {
-		reqURL = reqURL + "/"
-	}
-
-	return reqURL
 }
 
 func closeq(v interface{}) {

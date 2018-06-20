@@ -1285,11 +1285,12 @@ func TestGetPathParams(t *testing.T) {
 	resp, err := c.R().SetPathParams(map[string]string{
 		"subAccountId": "100002",
 	}).
-		Get("v1/users/{userId}/{subAccountId}/details")
+		Get("/v1/users/{userId}/{subAccountId}/details")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, "TestPathParams: text response", resp.String())
+	assertEqual(t, true, strings.Contains(resp.String(), "TestGetPathParams: text response"))
+	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/details"))
 
 	logResponse(t, resp)
 
@@ -1389,6 +1390,30 @@ func TestHostHeaderOverride(t *testing.T) {
 	assertEqual(t, "200 OK", resp.Status())
 	assertNotNil(t, resp.Body())
 	assertEqual(t, "myhostname", resp.String())
+
+	logResponse(t, resp)
+}
+
+func TestPathParamURLInput(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetHostURL(ts.URL).
+		SetPathParams(map[string]string{
+			"userId": "sample@sample.com",
+		})
+
+	resp, err := c.R().
+		SetPathParams(map[string]string{
+			"subAccountId": "100002",
+			"website":      "https://example.com",
+		}).Get("/v1/users/{userId}/{subAccountId}/{website}")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
+	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/https://example.com"))
 
 	logResponse(t, resp)
 }

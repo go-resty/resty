@@ -25,19 +25,33 @@ import (
 //___________________________________
 
 func parseRequestURL(c *Client, r *Request) error {
+	// GitHub #103 Path Params
+	if len(r.pathParams) > 0 {
+		for p, v := range r.pathParams {
+			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+		}
+	}
+	if len(c.pathParams) > 0 {
+		for p, v := range c.pathParams {
+			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+		}
+	}
+
 	// Parsing request URL
 	reqURL, err := url.Parse(r.URL)
 	if err != nil {
 		return err
 	}
 
-	// GitHub #103 Path Params
-	reqURL.Path = composeRequestURL(reqURL.Path, c, r)
-
-	// If Request.Url is relative path then added c.HostUrl into
-	// the request URL otherwise Request.Url will be used as-is
+	// If Request.URL is relative path then added c.HostURL into
+	// the request URL otherwise Request.URL will be used as-is
 	if !reqURL.IsAbs() {
-		reqURL, err = url.Parse(c.HostURL + reqURL.String())
+		r.URL = reqURL.String()
+		if len(r.URL) > 0 && r.URL[0] != '/' {
+			r.URL = "/" + r.URL
+		}
+
+		reqURL, err = url.Parse(c.HostURL + r.URL)
 		if err != nil {
 			return err
 		}

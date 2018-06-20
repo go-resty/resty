@@ -99,11 +99,19 @@ func createGetServer(t *testing.T) *httptest.Server {
 					t.Errorf("Error: could not read get body: %s", err.Error())
 				}
 				_, _ = w.Write(body)
-			case "/v1/users/sample@sample.com/100002/details":
-				_, _ = w.Write([]byte("TestPathParams: text response"))
 			case "/host-header":
 				_, _ = w.Write([]byte(r.Host))
 			}
+
+			switch {
+			case strings.HasPrefix(r.URL.Path, "/v1/users/sample@sample.com/100002"):
+				if strings.HasSuffix(r.URL.Path, "details") {
+					_, _ = w.Write([]byte("TestGetPathParams: text response: " + r.URL.String()))
+				} else {
+					_, _ = w.Write([]byte("TestPathParamURLInput: text response: " + r.URL.String()))
+				}
+			}
+
 		}
 	})
 
