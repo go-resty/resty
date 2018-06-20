@@ -118,7 +118,7 @@ func (r *Request) SetQueryString(query string) *Request {
 			}
 		}
 	} else {
-		r.client.Log.Printf("ERROR [%v]", err)
+		r.client.Log.Printf("ERROR %v", err)
 	}
 	return r
 }
@@ -471,7 +471,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 			resp, err = r.client.execute(r)
 			if err != nil {
-				r.client.Log.Printf("ERROR [%v] Attempt [%v]", err, attempt)
+				r.client.Log.Printf("ERROR %v, Attempt %v", err, attempt)
 				if r.isContextCancelledIfAvailable() {
 					// stop Backoff from retrying request if request has been
 					// canceled by context

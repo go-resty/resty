@@ -226,12 +226,9 @@ func requestLogger(c *Client, r *Request) error {
 		reqLog := "\n---------------------- REQUEST LOG -----------------------\n" +
 			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
 			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
-			fmt.Sprintf("HEADERS:\n")
-
-		for h, v := range rr.Header {
-			reqLog += fmt.Sprintf("%25s: %v\n", h, strings.Join(v, ", "))
-		}
-		reqLog += fmt.Sprintf("BODY   :\n%v\n", r.fmtBodyString()) +
+			fmt.Sprintf("HEADERS:\n") +
+			composeHeaders(rr.Header) + "\n" +
+			fmt.Sprintf("BODY   :\n%v\n", r.fmtBodyString()) +
 			"----------------------------------------------------------\n"
 
 		c.Log.Print(reqLog)
@@ -250,11 +247,9 @@ func responseLogger(c *Client, res *Response) error {
 			fmt.Sprintf("STATUS 		: %s\n", res.Status()) +
 			fmt.Sprintf("RECEIVED AT	: %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
 			fmt.Sprintf("RESPONSE TIME	: %v\n", res.Time()) +
-			"HEADERS:\n"
+			"HEADERS:\n" +
+			composeHeaders(res.Header()) + "\n"
 
-		for h, v := range res.Header() {
-			resLog += fmt.Sprintf("%30s: %v\n", h, strings.Join(v, ", "))
-		}
 		if res.Request.isSaveResponse {
 			resLog += fmt.Sprintf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****\n")
 		} else {
@@ -441,14 +436,11 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 		if err != nil {
 			return err
 		}
-		defer func() {
-			_ = outFile.Close()
-		}()
+		defer closeq(outFile)
 
 		// io.Copy reads maximum 32kb size, it is perfect for large file download too
-		defer func() {
-			_ = res.RawResponse.Body.Close()
-		}()
+		defer closeq(res.RawResponse.Body)
+
 		written, err := io.Copy(outFile, res.RawResponse.Body)
 		if err != nil {
 			return err

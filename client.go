@@ -302,20 +302,14 @@ func (c *Client) SetAuthToken(token string) *Client {
 // R method creates a request instance, its used for Get, Post, Put, Delete, Patch, Head and Options.
 func (c *Client) R() *Request {
 	r := &Request{
-		URL:             "",
-		Method:          "",
-		QueryParam:      url.Values{},
-		FormData:        url.Values{},
-		Header:          http.Header{},
-		Body:            nil,
-		Result:          nil,
-		Error:           nil,
-		RawRequest:      nil,
+		QueryParam: url.Values{},
+		FormData:   url.Values{},
+		Header:     http.Header{},
+
 		client:          c,
-		bodyBuf:         nil,
 		multipartFiles:  []*File{},
 		multipartFields: []*multipartField{},
-		pathParams:      make(map[string]string),
+		pathParams:      map[string]string{},
 	}
 
 	return r
@@ -572,7 +566,7 @@ func (c *Client) Mode() string {
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	transport, err := c.getTransport()
 	if err != nil {
-		c.Log.Printf("ERROR [%v]", err)
+		c.Log.Printf("ERROR %v", err)
 		return c
 	}
 	transport.TLSClientConfig = config
@@ -588,17 +582,17 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 func (c *Client) SetProxy(proxyURL string) *Client {
 	transport, err := c.getTransport()
 	if err != nil {
-		c.Log.Printf("ERROR [%v]", err)
+		c.Log.Printf("ERROR %v", err)
 		return c
 	}
+
 	if pURL, err := url.Parse(proxyURL); err == nil {
 		c.proxyURL = pURL
 		transport.Proxy = http.ProxyURL(c.proxyURL)
 	} else {
-		c.Log.Printf("ERROR [%v]", err)
+		c.Log.Printf("ERROR %v", err)
 		c.RemoveProxy()
 	}
-
 	return c
 }
 
@@ -608,7 +602,7 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 func (c *Client) RemoveProxy() *Client {
 	transport, err := c.getTransport()
 	if err != nil {
-		c.Log.Printf("ERROR [%v]", err)
+		c.Log.Printf("ERROR %v", err)
 		return c
 	}
 	c.proxyURL = nil
@@ -621,7 +615,7 @@ func (c *Client) RemoveProxy() *Client {
 func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 	config, err := c.getTLSConfig()
 	if err != nil {
-		c.Log.Printf("ERROR [%v]", err)
+		c.Log.Printf("ERROR %v", err)
 		return c
 	}
 	config.Certificates = append(config.Certificates, certs...)
@@ -634,13 +628,13 @@ func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	rootPemData, err := ioutil.ReadFile(pemFilePath)
 	if err != nil {
-		c.Log.Printf("ERROR [%v]", err)
+		c.Log.Printf("ERROR %v", err)
 		return c
 	}
 
 	config, err := c.getTLSConfig()
 	if err != nil {
-		c.Log.Printf("ERROR [%v]", err)
+		c.Log.Printf("ERROR %v", err)
 		return c
 	}
 	if config.RootCAs == nil {
@@ -665,7 +659,7 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 // SetTransport method sets custom `*http.Transport` or any `http.RoundTripper`
 // compatible interface implementation in the resty client.
 //
-// Please Note:
+// NOTE:
 //
 // - If transport is not type of `*http.Transport` then you may not be able to
 // take advantage of some of the `resty` client settings.
