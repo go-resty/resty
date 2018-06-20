@@ -1,6 +1,6 @@
 <p align="center">
 <h1 align="center">Resty</h1>
-<p align="center">Simple HTTP and REST client library for Go</p>
+<p align="center">Simple REST and HTTP client library for Go (inspired by Ruby rest-client)</p>
 <p align="center"><a href="#features">Features</a> section describes in detail about Resty capabilities</p>
 </p>
 <p align="center">
@@ -14,7 +14,7 @@
 
 ## Features
 
-  * GET, POST, PUT, DELETE, HEAD, PATCH, OPTIONS, ...
+  * GET, POST, PUT, DELETE, HEAD, PATCH, OPTIONS, etc.
   * Simple and chainable methods for settings and request
   * Request Body can be `string`, `[]byte`, `struct`, `map`, `slice` and `io.Reader` too
     * Auto detects `Content-Type`
@@ -30,7 +30,7 @@
         - Supports [RFC7807](https://tools.ietf.org/html/rfc7807) - `application/problem+json` & `application/problem+xml`
   * Easy to upload one or more file(s) via `multipart/form-data`
     * Auto detects file content type
-  * Request URL [Path Params](https://godoc.org/github.com/go-resty/resty#Request.SetPathParams)
+  * Request URL [Path Params (aka URI Params)](https://godoc.org/github.com/go-resty/resty#Request.SetPathParams)
   * Backoff Retry Mechanism with retry condition function [reference](retry_test.go)
   * resty client HTTP & REST [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middlewares
   * `Request.SetContext` supported `go1.7` and above
@@ -83,14 +83,20 @@ Resty works with `go1.3` and above.
 
 Please refer section [Versioning](#versioning) for detailed info.
 
-```sh
-# install the library
+##### go.mod
+
+```bash
+require github.com/go-resty/resty v1.6
+```
+
+##### go get
+```bash
 go get -u gopkg.in/resty.v1
 ```
 
 #### Latest Version - Development Edge
 
-```sh
+```bash
 # install the latest & greatest library
 go get -u github.com/go-resty/resty
 ```
