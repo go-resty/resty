@@ -479,16 +479,22 @@ func TestAutoGzip(t *testing.T) {
 	defer ts.Close()
 
 	c := New()
+	testcases := []struct{ url, want string }{
+		{ts.URL + "/gzip-test", "This is Gzip response testing"},
+		{ts.URL + "/gzip-test-gziped-empty-body", ""},
+		{ts.URL + "/gzip-test-no-gziped-body", ""},
+	}
+	for _, tc := range testcases {
+		resp, err := c.R().
+			SetHeader("Accept-Encoding", "gzip").
+			Get(tc.url)
 
-	resp, err := c.R().
-		SetHeader("Accept-Encoding", "gzip").
-		Get(ts.URL + "/gzip-test")
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "200 OK", resp.Status())
+		assertNotNil(t, resp.Body())
+		assertEqual(t, tc.want, resp.String())
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.Body())
-	assertEqual(t, "This is Gzip response testing", resp.String())
-
-	logResponse(t, resp)
+		logResponse(t, resp)
+	}
 }

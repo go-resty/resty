@@ -450,7 +450,19 @@ func createGenServer(t *testing.T) *httptest.Server {
 				zw := gzip.NewWriter(w)
 				zw.Write([]byte("This is Gzip response testing"))
 				zw.Close()
+			} else if r.URL.Path == "/gzip-test-gziped-empty-body" {
+				w.Header().Set(hdrContentTypeKey, plainTextType)
+				w.Header().Set(hdrContentEncodingKey, "gzip")
+				zw := gzip.NewWriter(w)
+				// write gziped empty body
+				zw.Write([]byte(""))
+				zw.Close()
+			} else if r.URL.Path == "/gzip-test-no-gziped-body" {
+				w.Header().Set(hdrContentTypeKey, plainTextType)
+				w.Header().Set(hdrContentEncodingKey, "gzip")
+				// don't write body
 			}
+
 			return
 		}
 
