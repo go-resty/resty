@@ -801,7 +801,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		body := resp.Body
 
 		// GitHub #142
-		if strings.EqualFold(resp.Header.Get(hdrContentEncodingKey), "gzip") {
+		if strings.EqualFold(resp.Header.Get(hdrContentEncodingKey), "gzip") && resp.ContentLength > 0 {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
