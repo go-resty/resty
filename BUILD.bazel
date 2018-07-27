@@ -31,7 +31,6 @@ go_test(
     embed = [":go_default_library"],
     importpath = "gopkg.in/resty.v1",
     deps = [
-        "@com_github_go_resty_resty//:go_default_library",
         "@org_golang_x_net//proxy:go_default_library",
     ],
 )
