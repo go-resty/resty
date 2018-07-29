@@ -267,16 +267,16 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 	// Handles only JSON or XML content type
 	ct := firstNonEmpty(res.Header().Get(hdrContentTypeKey), res.Request.fallbackContentType)
 	if IsJSONType(ct) || IsXMLType(ct) {
-		// Considered as Result
-		if res.StatusCode() > 199 && res.StatusCode() < 300 {
+		// HTTP status code > 199 and < 300, considered as Result
+		if res.IsSuccess() {
 			if res.Request.Result != nil {
 				err = Unmarshalc(c, ct, res.body, res.Request.Result)
 				return
 			}
 		}
 
-		// Considered as Error
-		if res.StatusCode() > 399 {
+		// HTTP status code > 399, considered as Error
+		if res.IsError() {
 			// global error interface
 			if res.Request.Error == nil && c.Error != nil {
 				res.Request.Error = reflect.New(c.Error).Interface()

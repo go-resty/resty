@@ -120,6 +120,16 @@ func (r *Response) RawBody() io.ReadCloser {
 	return r.RawResponse.Body
 }
 
+// IsSuccess method returns true if HTTP status code >= 200 and <= 299 otherwise false.
+func (r *Response) IsSuccess() bool {
+	return r.StatusCode() > 199 && r.StatusCode() < 300
+}
+
+// IsError method returns true if HTTP status code >= 400 otherwise false.
+func (r *Response) IsError() bool {
+	return r.StatusCode() > 399
+}
+
 func (r *Response) fmtBodyString(sl int64) string {
 	if r.body != nil {
 		if int64(len(r.body)) > sl {
