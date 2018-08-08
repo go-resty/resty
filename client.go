@@ -58,7 +58,7 @@ var (
 	jsonContentType = "application/json; charset=utf-8"
 	formContentType = "application/x-www-form-urlencoded"
 
-	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(problem\+json|json))`)
+	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(problem\+json|hal\+json|json))`)
 	xmlCheck  = regexp.MustCompile(`(?i:(application|text)/(problem\+xml|xml))`)
 
 	hdrUserAgentValue = "go-resty v%s - https://github.com/go-resty/resty"
