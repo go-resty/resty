@@ -17,6 +17,9 @@ func TestIsJSONType(t *testing.T) {
 		{"application/xml+json", true},
 		{"application/vnd.foo+json", true},
 
+		{"application/json; charset=utf-8", true},
+		{"application/vnd.foo+json; charset=utf-8", true},
+
 		{"text/json", true},
 		{"text/xml+json", true},
 		{"text/vnd.foo+json", true},
@@ -49,6 +52,9 @@ func TestIsXMLType(t *testing.T) {
 		{"application/xml", true},
 		{"application/json+xml", true},
 		{"application/vnd.foo+xml", true},
+
+		{"application/xml; charset=utf-8", true},
+		{"application/vnd.foo+xml; charset=utf-8", true},
 
 		{"text/xml", true},
 		{"text/json+xml", true},
