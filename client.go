@@ -58,8 +58,8 @@ var (
 	jsonContentType = "application/json; charset=utf-8"
 	formContentType = "application/x-www-form-urlencoded"
 
-	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(problem\+json|hal\+json|json))`)
-	xmlCheck  = regexp.MustCompile(`(?i:(application|text)/(problem\+xml|xml))`)
+	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(json|.*\+json)(;|$))`)
+	xmlCheck  = regexp.MustCompile(`(?i:(application|text)/(xml|.*\+xml)(;|$))`)
 
 	hdrUserAgentValue = "go-resty v%s - https://github.com/go-resty/resty"
 	bufPool           = &sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
