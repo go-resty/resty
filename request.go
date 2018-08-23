@@ -396,6 +396,14 @@ func (r *Request) ExpectContentType(contentType string) *Request {
 	return r
 }
 
+// SetJSONEscapeHTML method is to enable/disable the HTML escape on JSON marshal.
+//
+// NOTE: This option only applicable to standard JSON Marshaller.
+func (r *Request) SetJSONEscapeHTML(b bool) *Request {
+	r.jsonEscapeHTML = b
+	return r
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // HTTP verb method starts here
 //___________________________________

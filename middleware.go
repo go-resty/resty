@@ -396,7 +396,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 		bodyBytes = []byte(s)
 	} else if IsJSONType(contentType) &&
 		(kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
-		bodyBytes, err = c.JSONMarshal(r.Body)
+		bodyBytes, err = jsonMarshal(c, r, r.Body)
 	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
 		bodyBytes, err = xml.Marshal(r.Body)
 	}
