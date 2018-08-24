@@ -87,7 +87,7 @@ Please refer section [Versioning](#versioning) for detailed info.
 ##### go.mod
 
 ```bash
-require github.com/go-resty/resty v1.8.0
+require gopkg.in/resty.v1 v1.8.0
 ```
 
 ##### go get
