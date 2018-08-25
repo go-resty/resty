@@ -84,6 +84,16 @@ func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
 	return
 }
 
+// way to disable the HTML escape as opt-in
+func jsonMarshal(c *Client, r *Request, d interface{}) ([]byte, error) {
+	if !r.jsonEscapeHTML {
+		return noescapeJSONMarshal(d)
+	} else if !c.jsonEscapeHTML {
+		return noescapeJSONMarshal(d)
+	}
+	return c.JSONMarshal(d)
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Package Unexported methods
 //___________________________________

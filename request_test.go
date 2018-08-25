@@ -186,7 +186,7 @@ func TestPostJSONStructSuccess(t *testing.T) {
 
 	user := &User{Username: "testuser", Password: "testpass"}
 
-	c := dc()
+	c := dc().SetJSONEscapeHTML(false)
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, jsonContentType).
 		SetBody(user).
@@ -212,6 +212,7 @@ func TestPostJSONStructInvalidLogin(t *testing.T) {
 		SetHeader(hdrContentTypeKey, jsonContentType).
 		SetBody(User{Username: "testuser", Password: "testpass1"}).
 		SetError(AuthError{}).
+		SetJSONEscapeHTML(false).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
