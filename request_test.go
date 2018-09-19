@@ -535,7 +535,7 @@ func TestFormDataDisableWarn(t *testing.T) {
 func TestMultiPartUploadFile(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
-	defer cleanupFiles("test-data/upload")
+	defer cleanupFiles(".testdata/upload")
 
 	basePath := getTestDataPath()
 
@@ -554,7 +554,7 @@ func TestMultiPartUploadFile(t *testing.T) {
 func TestMultiPartUploadFileError(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
-	defer cleanupFiles("test-data/upload")
+	defer cleanupFiles(".testdata/upload")
 
 	basePath := getTestDataPath()
 
@@ -576,7 +576,7 @@ func TestMultiPartUploadFileError(t *testing.T) {
 func TestMultiPartUploadFiles(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
-	defer cleanupFiles("test-data/upload")
+	defer cleanupFiles(".testdata/upload")
 
 	basePath := getTestDataPath()
 
@@ -596,7 +596,7 @@ func TestMultiPartUploadFiles(t *testing.T) {
 func TestMultiPartIoReaderFiles(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
-	defer cleanupFiles("test-data/upload")
+	defer cleanupFiles(".testdata/upload")
 
 	basePath := getTestDataPath()
 	profileImgBytes, _ := ioutil.ReadFile(filepath.Join(basePath, "test-img.png"))
@@ -627,7 +627,7 @@ func TestMultiPartIoReaderFiles(t *testing.T) {
 func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
-	defer cleanupFiles("test-data/upload")
+	defer cleanupFiles(".testdata/upload")
 
 	basePath := getTestDataPath()
 
@@ -647,7 +647,7 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 func TestMultiPartMultipartField(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
-	defer cleanupFiles("test-data/upload")
+	defer cleanupFiles(".testdata/upload")
 
 	jsonBytes := []byte(`{"input": {"name": "Uploaded document", "_filename" : ["file.txt"]}}`)
 
@@ -1103,7 +1103,7 @@ func TestSetQueryStringTypical(t *testing.T) {
 func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
-	defer cleanupFiles("test-data/dir-sample")
+	defer cleanupFiles(".testdata/dir-sample")
 
 	DefaultClient = dc()
 	SetRedirectPolicy(FlexibleRedirectPolicy(10))
@@ -1129,7 +1129,7 @@ func TestOutputFileWithBaseDirError(t *testing.T) {
 func TestOutputPathDirNotExists(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
-	defer cleanupFiles(filepath.Join("test-data", "not-exists-dir"))
+	defer cleanupFiles(filepath.Join(".testdata", "not-exists-dir"))
 
 	DefaultClient = dc()
 	SetRedirectPolicy(FlexibleRedirectPolicy(10))
@@ -1146,7 +1146,7 @@ func TestOutputPathDirNotExists(t *testing.T) {
 func TestOutputFileAbsPath(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
-	defer cleanupFiles(filepath.Join("test-data", "go-resty"))
+	defer cleanupFiles(filepath.Join(".testdata", "go-resty"))
 
 	_, err := dcr().
 		SetOutput(filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")).
@@ -1415,7 +1415,7 @@ func TestPathParamURLInput(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
-	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/https://example.com"))
+	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/https:%2F%2Fexample.com"))
 
 	logResponse(t, resp)
 }

@@ -28,12 +28,12 @@ func parseRequestURL(c *Client, r *Request) error {
 	// GitHub #103 Path Params
 	if len(r.pathParams) > 0 {
 		for p, v := range r.pathParams {
-			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+			r.URL = strings.Replace(r.URL, "{"+p+"}", url.PathEscape(v), -1)
 		}
 	}
 	if len(c.pathParams) > 0 {
 		for p, v := range c.pathParams {
-			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+			r.URL = strings.Replace(r.URL, "{"+p+"}", url.PathEscape(v), -1)
 		}
 	}
 
