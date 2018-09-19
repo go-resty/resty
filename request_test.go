@@ -1109,6 +1109,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	SetRedirectPolicy(FlexibleRedirectPolicy(10))
 	SetOutputDirectory(filepath.Join(getTestDataPath(), "dir-sample"))
 	SetDebug(true)
+	SetLogger(ioutil.Discard)
 
 	resp, err := R().
 		SetOutput("go-resty/test-img-success.png").
@@ -1399,7 +1400,7 @@ func TestPathParamURLInput(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().SetDebug(true)
+	c := dc().SetDebug(true).SetLogger(ioutil.Discard)
 	c.SetHostURL(ts.URL).
 		SetPathParams(map[string]string{
 			"userId": "sample@sample.com",

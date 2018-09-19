@@ -539,6 +539,7 @@ func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest
 
 func dc() *Client {
 	DefaultClient = New()
+	DefaultClient.SetLogger(ioutil.Discard)
 	return DefaultClient
 }
 

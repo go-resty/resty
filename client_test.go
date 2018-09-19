@@ -388,6 +388,7 @@ func TestClientAllowsGetMethodPayload(t *testing.T) {
 
 func TestClientRoundTripper(t *testing.T) {
 	c := NewWithClient(&http.Client{})
+	c.SetLogger(ioutil.Discard)
 
 	rt := &CustomRoundTripper{}
 	c.SetTransport(rt)
