@@ -30,7 +30,7 @@ import (
 
 func getTestDataPath() string {
 	pwd, _ := os.Getwd()
-	return filepath.Join(pwd, "test-data")
+	return filepath.Join(pwd, ".testdata")
 }
 
 func createGetServer(t *testing.T) *httptest.Server {

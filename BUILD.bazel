@@ -27,7 +27,7 @@ go_test(
             ["*_test.go"],
             exclude = ["example_test.go"],
         ),
-    data = glob(["test-data/*"]),
+    data = glob([".testdata/*"]),
     embed = [":go_default_library"],
     importpath = "gopkg.in/resty.v1",
     deps = [
