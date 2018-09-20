@@ -832,8 +832,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		defer closeq(resp.Body)
 		body := resp.Body
 
-		// GitHub #142
-		if strings.EqualFold(resp.Header.Get(hdrContentEncodingKey), "gzip") && resp.ContentLength > 0 {
+		// GitHub #142 & #187
+		if strings.EqualFold(resp.Header.Get(hdrContentEncodingKey), "gzip") && resp.ContentLength != 0 {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
