@@ -84,6 +84,30 @@ func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
 	return
 }
 
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// RequestLog and ResponseLog type
+//___________________________________
+
+// RequestLog struct is used to collected information from resty request
+// instance for debug logging. It sent to request log callback before resty
+// actually logs the information.
+type RequestLog struct {
+	Header http.Header
+	Body   string
+}
+
+// ResponseLog struct is used to collected information from resty response
+// instance for debug logging. It sent to response log callback before resty
+// actually logs the information.
+type ResponseLog struct {
+	Header http.Header
+	Body   string
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Package Unexported methods
+//___________________________________
+
 // way to disable the HTML escape as opt-in
 func jsonMarshal(c *Client, r *Request, d interface{}) ([]byte, error) {
 	if !r.jsonEscapeHTML {
@@ -93,10 +117,6 @@ func jsonMarshal(c *Client, r *Request, d interface{}) ([]byte, error) {
 	}
 	return c.JSONMarshal(d)
 }
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Package Unexported methods
-//___________________________________
 
 func firstNonEmpty(v ...string) string {
 	for _, s := range v {
@@ -250,4 +270,12 @@ func sortHeaderKeys(hdrs http.Header) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func copyHeaders(hdrs http.Header) http.Header {
+	nh := http.Header{}
+	for k, v := range hdrs {
+		nh[k] = v
+	}
+	return nh
 }

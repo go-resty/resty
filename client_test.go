@@ -499,3 +499,56 @@ func TestAutoGzip(t *testing.T) {
 		logResponse(t, resp)
 	}
 }
+
+func TestLogCallbacks(t *testing.T) {
+	ts := createAuthServer(t)
+	defer ts.Close()
+
+	c := New().SetDebug(true)
+
+	var lgr bytes.Buffer
+	c.SetLogger(&lgr)
+
+	c.OnRequestLog(func(r *RequestLog) error {
+		// masking authorzation header
+		r.Header.Set("Authorization", "Bearer *******************************")
+		return nil
+	})
+	c.OnResponseLog(func(r *ResponseLog) error {
+		r.Header.Add("X-Debug-Resposne-Log", "Modified :)")
+		r.Body += "\nModified the response body content"
+		return nil
+	})
+
+	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF")
+
+	resp, err := c.R().
+		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
+		Get(ts.URL + "/profile")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	// Validating debug log updates
+	logInfo := lgr.String()
+	assertEqual(t, true, strings.Contains(logInfo, "Bearer *******************************"))
+	assertEqual(t, true, strings.Contains(logInfo, "X-Debug-Resposne-Log"))
+	assertEqual(t, true, strings.Contains(logInfo, "Modified the response body content"))
+
+	// Error scenario
+	c.OnRequestLog(func(r *RequestLog) error { return errors.New("request test error") })
+	resp, err = c.R().
+		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
+		Get(ts.URL + "/profile")
+	assertEqual(t, errors.New("request test error"), err)
+	assertNil(t, resp)
+
+	c.OnRequestLog(nil)
+	c.OnResponseLog(func(r *ResponseLog) error { return errors.New("response test error") })
+	resp, err = c.R().
+		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
+		Get(ts.URL + "/profile")
+	assertEqual(t, errors.New("response test error"), err)
+	assertNotNil(t, resp)
+}

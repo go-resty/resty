@@ -223,12 +223,19 @@ func addCredentials(c *Client, r *Request) error {
 func requestLogger(c *Client, r *Request) error {
 	if c.Debug {
 		rr := r.RawRequest
+		rl := &RequestLog{Header: copyHeaders(rr.Header), Body: r.fmtBodyString()}
+		if c.requestLog != nil {
+			if err := c.requestLog(rl); err != nil {
+				return err
+			}
+		}
+
 		reqLog := "\n---------------------- REQUEST LOG -----------------------\n" +
 			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
 			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
 			fmt.Sprintf("HEADERS:\n") +
-			composeHeaders(rr.Header) + "\n" +
-			fmt.Sprintf("BODY   :\n%v\n", r.fmtBodyString()) +
+			composeHeaders(rl.Header) + "\n" +
+			fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
 			"----------------------------------------------------------\n"
 
 		c.Log.Print(reqLog)
@@ -243,17 +250,23 @@ func requestLogger(c *Client, r *Request) error {
 
 func responseLogger(c *Client, res *Response) error {
 	if c.Debug {
+		rl := &ResponseLog{Header: copyHeaders(res.Header()), Body: res.fmtBodyString(c.debugBodySizeLimit)}
+		if c.responseLog != nil {
+			if err := c.responseLog(rl); err != nil {
+				return err
+			}
+		}
+
 		resLog := "\n---------------------- RESPONSE LOG -----------------------\n" +
 			fmt.Sprintf("STATUS 		: %s\n", res.Status()) +
 			fmt.Sprintf("RECEIVED AT	: %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
 			fmt.Sprintf("RESPONSE TIME	: %v\n", res.Time()) +
 			"HEADERS:\n" +
-			composeHeaders(res.Header()) + "\n"
-
+			composeHeaders(rl.Header) + "\n"
 		if res.Request.isSaveResponse {
 			resLog += fmt.Sprintf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****\n")
 		} else {
-			resLog += fmt.Sprintf("BODY   :\n%v\n", res.fmtBodyString(c.debugBodySizeLimit))
+			resLog += fmt.Sprintf("BODY   :\n%v\n", rl.Body)
 		}
 		resLog += "----------------------------------------------------------\n"
 
