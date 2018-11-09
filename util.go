@@ -229,7 +229,7 @@ func createDirectory(dir string) (err error) {
 }
 
 func canJSONMarshal(contentType string, kind reflect.Kind) bool {
-	return IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map)
+	return IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice)
 }
 
 func functionName(i interface{}) string {
