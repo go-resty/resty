@@ -306,14 +306,14 @@ resp, err := resty.R().
 profileImgBytes, _ := ioutil.ReadFile("/Users/jeeva/test-img.png")
 notesBytes, _ := ioutil.ReadFile("/Users/jeeva/text-file.txt")
 
-resp, err := dclr().
+resp, err := resty.R().
       SetFileReader("profile_img", "test-img.png", bytes.NewReader(profileImgBytes)).
       SetFileReader("notes", "text-file.txt", bytes.NewReader(notesBytes)).
       SetFormData(map[string]string{
           "first_name": "Jeevanandam",
           "last_name": "M",
       }).
-      Post(t"http://myapp.com/upload")
+      Post("http://myapp.com/upload")
 ```
 
 #### Using File directly from Path
