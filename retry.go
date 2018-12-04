@@ -102,7 +102,11 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 		// See the following article...
 		// http://www.awsarchitectureblog.com/2015/03/backoff.html
 		temp := math.Min(capLevel, base*math.Exp2(float64(attempt)))
-		sleepDuration := time.Duration(int(temp/2) + rand.Intn(int(temp/2)))
+		ri := int(temp / 2)
+		if ri <= 0 {
+			ri = 1<<31 - 1 // max int for arch 386
+		}
+		sleepDuration := time.Duration(math.Abs(float64(ri + rand.Intn(ri))))
 
 		if sleepDuration < opts.waitTime {
 			sleepDuration = opts.waitTime
