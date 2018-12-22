@@ -2,8 +2,8 @@
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-// Package resty provides simple HTTP and REST client for Go inspired by Ruby rest-client.
+// Package resty provides Simple HTTP and REST client library for Go.
 package resty
 
 // Version # of resty
-const Version = "1.10.3"
+const Version = "1.11.0"
