@@ -128,6 +128,8 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 			err := jd.Decode(user)
 			if r.URL.Query().Get("ct") == "problem" {
 				w.Header().Set(hdrContentTypeKey, "application/problem+json; charset=utf-8")
+			} else if r.URL.Query().Get("ct") == "rpc" {
+				w.Header().Set(hdrContentTypeKey, "application/json-rpc")
 			} else {
 				w.Header().Set(hdrContentTypeKey, jsonContentType)
 			}

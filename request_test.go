@@ -201,6 +201,28 @@ func TestPostJSONStructSuccess(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestPostJSONRPCStructSuccess(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	user := &User{Username: "testuser", Password: "testpass"}
+
+	c := dc().SetJSONEscapeHTML(false)
+	resp, err := c.R().
+		SetHeader(hdrContentTypeKey, "application/json-rpc").
+		SetBody(user).
+		SetResult(&AuthSuccess{}).
+		SetQueryParam("ct", "rpc").
+		Post(ts.URL + "/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+
+	logResponse(t, resp)
+}
+
 func TestPostJSONStructInvalidLogin(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
