@@ -55,6 +55,9 @@ type Request struct {
 // Context method returns the Context if its already set in request
 // otherwise it creates new one using `context.Background()`.
 func (r *Request) Context() context.Context {
+	if r.RawRequest != nil {
+		return r.RawRequest.Context()
+	}
 	if r.ctx == nil {
 		return context.Background()
 	}
@@ -67,6 +70,9 @@ func (r *Request) Context() context.Context {
 // documentation.
 func (r *Request) SetContext(ctx context.Context) *Request {
 	r.ctx = ctx
+	if r.RawRequest != nil {
+		r.addContextIfAvailable()
+	}
 	return r
 }
 
