@@ -9,10 +9,10 @@
 
 ## News
 
-  * [Collecting Inputs for Resty v2.0.0](https://github.com/go-resty/resty/issues/166)
+  * [Collecting Inputs for Resty v2.0.0](https://github.com/go-resty/resty/issues/166)  
   * v1.10.3 [released](https://github.com/go-resty/resty/releases/latest) and tagged on Dec 04, 2018.
   * v1.10.0 [released](https://github.com/go-resty/resty/releases/tag/v1.10.0) and tagged on Oct 22, 2018.
-  * v1.0 released - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years; `v1.0` was released on Sep 25, 2017. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
+  * v1.0 released and tagged on Sep 25, 2017. - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years since first release. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
 
 ## Features
 
