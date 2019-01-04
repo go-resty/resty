@@ -11,7 +11,16 @@ package resty
 import (
 	"context"
 	"net/url"
+	"testing"
 )
+
+func TestRequestContext(t *testing.T) {
+	r := NewRequest()
+	assertNotNil(t, r.Context())
+
+	r.SetContext(context.Background())
+	assertNotNil(t, r.Context())
+}
 
 func errIsContextCanceled(err error) bool {
 	ue, ok := err.(*url.Error)

@@ -815,6 +815,10 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		req.RawRequest.Host = hostHeader
 	}
 
+	if err = requestLogger(c, req); err != nil {
+		return nil, err
+	}
+
 	req.Time = time.Now()
 	resp, err := c.httpClient.Do(req.RawRequest)
 
