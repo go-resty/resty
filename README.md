@@ -9,6 +9,8 @@
 
 ## News
 
+[![Join the chat at https://gitter.im/goresty/community](https://badges.gitter.im/goresty/community.svg)](https://gitter.im/goresty/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
   * [Collecting Inputs for Resty v2.0.0](https://github.com/go-resty/resty/issues/166)  
   * v1.11.0 [released](https://github.com/go-resty/resty/releases/tag/v1.11.0) and tagged on Jan 06, 2019.
   * v1.10.3 [released](https://github.com/go-resty/resty/releases/tag/v1.10.3) and tagged on Dec 04, 2018.
