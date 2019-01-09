@@ -47,7 +47,7 @@ type Request struct {
 	client              *Client
 	bodyBuf             *bytes.Buffer
 	multipartFiles      []*File
-	multipartFields     []*multipartField
+	multipartFields     []*MultipartField
 }
 
 func (r *Request) addContextIfAvailable() {

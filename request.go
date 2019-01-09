@@ -287,12 +287,21 @@ func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Reque
 func (r *Request) SetMultipartField(param, fileName, contentType string, reader io.Reader) *Request {
 	r.isMultiPart = true
 
-	r.multipartFields = append(r.multipartFields, &multipartField{
+	r.multipartFields = append(r.multipartFields, &MultipartField{
 		Param:       param,
 		FileName:    fileName,
 		ContentType: contentType,
 		Reader:      reader,
 	})
+
+	return r
+}
+
+// SetMultipartFields method is to set multiple data fields using io.Reader for multipart upload.
+func (r *Request) SetMultipartFields(fields []*MultipartField) *Request {
+	r.isMultiPart = true
+
+	r.multipartFields = append(r.multipartFields, fields...)
 
 	return r
 }

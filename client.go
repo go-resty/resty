@@ -311,7 +311,7 @@ func (c *Client) R() *Request {
 
 		client:          c,
 		multipartFiles:  []*File{},
-		multipartFields: []*multipartField{},
+		multipartFields: []*MultipartField{},
 		pathParams:      map[string]string{},
 		jsonEscapeHTML:  true,
 	}
@@ -918,7 +918,7 @@ func (f *File) String() string {
 }
 
 // multipartField represent custom data part for multipart request
-type multipartField struct {
+type MultipartField struct {
 	Param       string
 	FileName    string
 	ContentType string
