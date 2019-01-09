@@ -917,7 +917,7 @@ func (f *File) String() string {
 	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
 }
 
-// multipartField represent custom data part for multipart request
+// MultipartField represent custom data part for multipart request
 type MultipartField struct {
 	Param       string
 	FileName    string
