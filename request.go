@@ -299,14 +299,14 @@ func (r *Request) SetMultipartField(param, fileName, contentType string, reader 
 
 // SetMultipartFields method is to set multiple data fields using io.Reader for multipart upload.
 // Example: set multiple json strings.
-//  fields := []*MultipartField{
-//		&MultipartField{
+//  fields := []*resty.MultipartField{
+//		&resty.MultipartField{
 //			Param:       "uploadManifest1",
 //			FileName:    "upload-file-1.json",
 //			ContentType: "application/json",
 //			Reader:      strings.NewReader(`{"input": {"name": "Uploaded document 1", "_filename" : ["file1.txt"]}}`),
 //		},
-//		&MultipartField{
+//		&resty.MultipartField{
 //			Param:       "uploadManifest2",
 //			FileName:    "upload-file-2.json",
 //			ContentType: "application/json",
