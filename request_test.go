@@ -690,21 +690,21 @@ func TestMultiPartMultipartFields(t *testing.T) {
 	defer ts.Close()
 	defer cleanupFiles(".testdata/upload")
 
-	jsonBytes1 := []byte(`{"input": {"name": "Uploaded document 1", "_filename" : ["file1.txt"]}}`)
-	jsonBytes2 := []byte(`{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`)
+	jsonStr1 := `{"input": {"name": "Uploaded document 1", "_filename" : ["file1.txt"]}}`
+	jsonStr2 := `{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`
 
 	fields := []*MultipartField{
 		&MultipartField{
 			Param:       "uploadManifest1",
 			FileName:    "upload-file-1.json",
 			ContentType: "application/json",
-			Reader:      bytes.NewReader(jsonBytes1),
+			Reader:      strings.NewReader(jsonStr1),
 		},
 		&MultipartField{
 			Param:       "uploadManifest2",
 			FileName:    "upload-file-2.json",
 			ContentType: "application/json",
-			Reader:      bytes.NewReader(jsonBytes2),
+			Reader:      strings.NewReader(jsonStr2),
 		},
 	}
 
