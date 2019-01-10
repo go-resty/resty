@@ -244,7 +244,6 @@ func (r *Request) SetError(err interface{}) *Request {
 func (r *Request) SetFile(param, filePath string) *Request {
 	r.isMultiPart = true
 	r.FormData.Set("@"+param, filePath)
-
 	return r
 }
 
@@ -273,27 +272,23 @@ func (r *Request) SetFiles(files map[string]string) *Request {
 //
 func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Request {
 	r.isMultiPart = true
-
 	r.multipartFiles = append(r.multipartFiles, &File{
 		Name:      fileName,
 		ParamName: param,
 		Reader:    reader,
 	})
-
 	return r
 }
 
 // SetMultipartField method is to set custom data using io.Reader for multipart upload.
 func (r *Request) SetMultipartField(param, fileName, contentType string, reader io.Reader) *Request {
 	r.isMultiPart = true
-
 	r.multipartFields = append(r.multipartFields, &MultipartField{
 		Param:       param,
 		FileName:    fileName,
 		ContentType: contentType,
 		Reader:      reader,
 	})
-
 	return r
 }
 
@@ -328,7 +323,6 @@ func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 //
 func (r *Request) SetContentLength(l bool) *Request {
 	r.setContentLength = true
-
 	return r
 }
 
