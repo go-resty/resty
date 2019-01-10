@@ -685,6 +685,42 @@ func TestMultiPartMultipartField(t *testing.T) {
 	assertEqual(t, true, strings.Contains(responseStr, "upload-file.json"))
 }
 
+func TestMultiPartMultipartFields(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
+
+	jsonStr1 := `{"input": {"name": "Uploaded document 1", "_filename" : ["file1.txt"]}}`
+	jsonStr2 := `{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`
+
+	fields := []*MultipartField{
+		&MultipartField{
+			Param:       "uploadManifest1",
+			FileName:    "upload-file-1.json",
+			ContentType: "application/json",
+			Reader:      strings.NewReader(jsonStr1),
+		},
+		&MultipartField{
+			Param:       "uploadManifest2",
+			FileName:    "upload-file-2.json",
+			ContentType: "application/json",
+			Reader:      strings.NewReader(jsonStr2),
+		},
+	}
+
+	resp, err := dclr().
+		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
+		SetMultipartFields(fields...).
+		Post(ts.URL + "/upload")
+
+	responseStr := resp.String()
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(responseStr, "upload-file-1.json"))
+	assertEqual(t, true, strings.Contains(responseStr, "upload-file-2.json"))
+}
+
 func TestGetWithCookie(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
