@@ -298,9 +298,9 @@ func (r *Request) SetMultipartField(param, fileName, contentType string, reader 
 }
 
 // SetMultipartFields method is to set multiple data fields using io.Reader for multipart upload.
-// Example: set multiple json strings.
-//  fields := []*resty.MultipartField{
-//		&resty.MultipartField{
+// Example:
+// 	resty.R().SetMultipartFields(
+// 		&resty.MultipartField{
 //			Param:       "uploadManifest1",
 //			FileName:    "upload-file-1.json",
 //			ContentType: "application/json",
@@ -311,9 +311,10 @@ func (r *Request) SetMultipartField(param, fileName, contentType string, reader 
 //			FileName:    "upload-file-2.json",
 //			ContentType: "application/json",
 //			Reader:      strings.NewReader(`{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`),
-//		},
-//	}
-//  resty.R().SetMultipartFields(fields...)
+//		})
+//
+// If you have slice already, then simply call-
+// 	resty.R().SetMultipartFields(fields...)
 func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 	r.isMultiPart = true
 	r.multipartFields = append(r.multipartFields, fields...)
