@@ -313,12 +313,10 @@ func (r *Request) SetMultipartField(param, fileName, contentType string, reader 
 //			Reader:      strings.NewReader(`{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`),
 //		},
 //	}
-//  resty.R().SetMultipartFields(fields)
-func (r *Request) SetMultipartFields(fields []*MultipartField) *Request {
+//  resty.R().SetMultipartFields(fields...)
+func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 	r.isMultiPart = true
-
 	r.multipartFields = append(r.multipartFields, fields...)
-
 	return r
 }
 

@@ -710,7 +710,7 @@ func TestMultiPartMultipartFields(t *testing.T) {
 
 	resp, err := dclr().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
-		SetMultipartFields(fields).
+		SetMultipartFields(fields...).
 		Post(ts.URL + "/upload")
 
 	responseStr := resp.String()
