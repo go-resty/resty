@@ -101,7 +101,7 @@ type Client struct {
 	pathParams         map[string]string
 	beforeRequest      []func(*Client, *Request) error
 	udBeforeRequest    []func(*Client, *Request) error
-	preReqHook         func(*Client, *Request) error
+	preReqHook         func(*Client, *http.Request) error
 	afterResponse      []func(*Client, *Response) error
 	requestLog         func(*RequestLog) error
 	responseLog        func(*ResponseLog) error
@@ -359,7 +359,7 @@ func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
 // It is called right before the request is fired.
 //
 // Note: Only one pre-request hook can be registered. Use `resty.OnBeforeRequest` for mutilple.
-func (c *Client) SetPreRequestHook(h func(*Client, *Request) error) *Client {
+func (c *Client) SetPreRequestHook(h func(*Client, *http.Request) error) *Client {
 	if c.preReqHook != nil {
 		c.Log.Printf("Overwriting an existing pre-request hook: %s", functionName(h))
 	}
@@ -806,7 +806,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	// call pre-request if defined
 	if c.preReqHook != nil {
-		if err = c.preReqHook(c, req); err != nil {
+		if err = c.preReqHook(c, req.RawRequest); err != nil {
 			return nil, err
 		}
 	}

@@ -110,7 +110,7 @@ func OnAfterResponse(m func(*Client, *Response) error) *Client {
 }
 
 // SetPreRequestHook method sets the pre-request hook. See `Client.SetPreRequestHook` for more information.
-func SetPreRequestHook(h func(*Client, *Request) error) *Client {
+func SetPreRequestHook(h func(*Client, *http.Request) error) *Client {
 	return DefaultClient.SetPreRequestHook(h)
 }
 
