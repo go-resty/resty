@@ -48,6 +48,7 @@ type Request struct {
 	bodyBuf             *bytes.Buffer
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
+	values              map[string]interface{}
 }
 
 func (r *Request) addContextIfAvailable() {

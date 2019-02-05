@@ -584,3 +584,9 @@ func (r *Request) selectAddr(addrs []*net.SRV, path string, attempt int) string 
 
 	return fmt.Sprintf("%s://%s:%d/%s", r.client.scheme, domain, addrs[idx].Port, path)
 }
+
+func (r *Request) initValuesMap() {
+	if r.values == nil {
+		r.values = make(map[string]interface{})
+	}
+}

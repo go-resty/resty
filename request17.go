@@ -50,6 +50,7 @@ type Request struct {
 	bodyBuf             *bytes.Buffer
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
+	values              map[string]interface{}
 }
 
 // Context method returns the Context if its already set in request
