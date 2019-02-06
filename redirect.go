@@ -94,6 +94,6 @@ func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {
 			cur.Header[key] = val
 		}
 	} else { // only library User-Agent header is added
-		cur.Header.Set(hdrUserAgentKey, fmt.Sprintf(hdrUserAgentValue, Version))
+		cur.Header.Set(hdrUserAgentKey, hdrUserAgentValue)
 	}
 }
