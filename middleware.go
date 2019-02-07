@@ -106,7 +106,7 @@ func parseRequestHeader(c *Client, r *Request) error {
 	}
 
 	if IsStringEmpty(hdr.Get(hdrUserAgentKey)) {
-		hdr.Set(hdrUserAgentKey, fmt.Sprintf(hdrUserAgentValue, Version))
+		hdr.Set(hdrUserAgentKey, hdrUserAgentValue)
 	}
 
 	ct := hdr.Get(hdrContentTypeKey)
