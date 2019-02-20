@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -26,6 +27,41 @@ type AuthSuccess struct {
 
 type AuthError struct {
 	ID, Message string
+}
+
+func TestRequestRace(t *testing.T) {
+	// Issue #225
+
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	req := R()
+
+	reqChan := make(chan int)
+	numReqs := 2
+
+	var wg sync.WaitGroup
+	wg.Add(numReqs)
+
+	for i := 0; i < numReqs; i++ {
+		go func() {
+			defer wg.Done()
+			for range reqChan {
+				resp, err := req.Get(ts.URL + "/")
+				assertError(t, err)
+				assertEqual(t, http.StatusOK, resp.StatusCode())
+			}
+		}()
+	}
+
+	go func() {
+		for i := 0; i < numReqs; i++ {
+			reqChan <- i
+		}
+		close(reqChan)
+	}()
+
+	wg.Wait()
 }
 
 func TestGet(t *testing.T) {
