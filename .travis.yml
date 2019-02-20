@@ -18,6 +18,7 @@ install:
   - go get -v -t ./...
 
 script:
+  - go test ./... -race
   - go test ./... -coverprofile=coverage.txt -covermode=atomic
 
 after_success:
