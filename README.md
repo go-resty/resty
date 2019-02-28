@@ -4,7 +4,7 @@
 <p align="center"><a href="#features">Features</a> section describes in detail about Resty capabilities</p>
 </p>
 <p align="center">
-<p align="center"><a href="https://travis-ci.org/go-resty/resty"><img src="https://travis-ci.org/go-resty/resty.svg?branch=master" alt="Build Status"></a> <a href="https://codecov.io/gh/go-resty/resty/branch/master"><img src="https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg" alt="Code Coverage"></a> <a href="https://goreportcard.com/report/go-resty/resty"><img src="https://goreportcard.com/badge/go-resty/resty" alt="Go Report Card"></a> <a href="https://github.com/go-resty/resty/releases/latest"><img src="https://img.shields.io/badge/version-1.11.0-blue.svg" alt="Release Version"></a> <a href="https://godoc.org/gopkg.in/resty.v1"><img src="https://godoc.org/gopkg.in/resty.v1?status.svg" alt="GoDoc"></a> <a href="LICENSE"><img src="https://img.shields.io/github/license/go-resty/resty.svg" alt="License"></a></p>
+<p align="center"><a href="https://travis-ci.org/go-resty/resty"><img src="https://travis-ci.org/go-resty/resty.svg?branch=master" alt="Build Status"></a> <a href="https://codecov.io/gh/go-resty/resty/branch/master"><img src="https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg" alt="Code Coverage"></a> <a href="https://goreportcard.com/report/go-resty/resty"><img src="https://goreportcard.com/badge/go-resty/resty" alt="Go Report Card"></a> <a href="https://github.com/go-resty/resty/releases/latest"><img src="https://img.shields.io/badge/version-1.12.0-blue.svg" alt="Release Version"></a> <a href="https://godoc.org/gopkg.in/resty.v1"><img src="https://godoc.org/gopkg.in/resty.v1?status.svg" alt="GoDoc"></a> <a href="LICENSE"><img src="https://img.shields.io/github/license/go-resty/resty.svg" alt="License"></a></p>
 </p>
 <p align="center">
 <h4 align="center">Resty Communication Channels</h4>
@@ -13,10 +13,10 @@
 
 ## News
 
-  * [Collecting Inputs for Resty v2.0.0](https://github.com/go-resty/resty/issues/166)  
+  * Resty `v2` development is in-progress :smile:
+  * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.
   * v1.11.0 [released](https://github.com/go-resty/resty/releases/tag/v1.11.0) and tagged on Jan 06, 2019.
   * v1.10.3 [released](https://github.com/go-resty/resty/releases/tag/v1.10.3) and tagged on Dec 04, 2018.
-  * v1.10.0 [released](https://github.com/go-resty/resty/releases/tag/v1.10.0) and tagged on Oct 22, 2018.
   * v1.0 released and tagged on Sep 25, 2017. - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years since first release. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
 
 ## Features
@@ -93,7 +93,7 @@ Please refer section [Versioning](#versioning) for detailed info.
 ##### go.mod
 
 ```bash
-require gopkg.in/resty.v1 v1.11.0
+require gopkg.in/resty.v1 v1.12.0
 ```
 
 ##### go get
