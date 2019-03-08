@@ -380,7 +380,7 @@ criteria := url.Values{
   "search_criteria": []string{"book", "glass", "pencil"},
 }
 resp, err := resty.R().
-      SetMultiValueFormData(criteria).
+      SetFormDataFromValues(criteria).
       Post("http://myapp.com/search")
 ```
 

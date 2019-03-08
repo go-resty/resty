@@ -84,16 +84,18 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 	return r
 }
 
-// SetMultiValueQueryParams method appends multiple parameters with multi-value
-// at one go in the current request. It will be formed as query string for the request.
+// SetQueryParamsFromValues method appends multiple parameters with multi-value
+// (`url.Values`) at one go in the current request. It will be formed as
+// query string for the request.
+//
 // Example: `status=pending&status=approved&status=open` in the URL after `?` mark.
 // 		resty.R().
-//			SetMultiValueQueryParams(url.Values{
+//			SetQueryParamsFromValues(url.Values{
 //				"status": []string{"pending", "approved", "open"},
 //			})
 // Also you can override query params value, which was set at client instance level
 //
-func (r *Request) SetMultiValueQueryParams(params url.Values) *Request {
+func (r *Request) SetQueryParamsFromValues(params url.Values) *Request {
 	for p, v := range params {
 		for _, pv := range v {
 			r.QueryParam.Add(p, pv)
@@ -141,16 +143,16 @@ func (r *Request) SetFormData(data map[string]string) *Request {
 	return r
 }
 
-// SetMultiValueFormData method appends multiple form parameters with multi-value
-// at one go in the current request.
+// SetFormDataFromValues method appends multiple form parameters with multi-value
+// (`url.Values`) at one go in the current request.
 // 		resty.R().
-//			SetMultiValueFormData(url.Values{
+//			SetFormDataFromValues(url.Values{
 //				"search_criteria": []string{"book", "glass", "pencil"},
 //			})
 // Also you can override form data value, which was set at client instance level
 //
-func (r *Request) SetMultiValueFormData(params url.Values) *Request {
-	for k, v := range params {
+func (r *Request) SetFormDataFromValues(data url.Values) *Request {
+	for k, v := range data {
 		for _, kv := range v {
 			r.FormData.Add(k, kv)
 		}

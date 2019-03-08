@@ -525,7 +525,7 @@ func TestMultiValueFormData(t *testing.T) {
 		SetLogger(ioutil.Discard)
 
 	resp, err := c.R().
-		SetMultiValueFormData(v).
+		SetQueryParamsFromValues(v).
 		Post(ts.URL + "/search")
 
 	assertError(t, err)
@@ -1125,7 +1125,7 @@ func TestMultiParamsQueryString(t *testing.T) {
 		"status": []string{"pending", "approved", "reject"},
 	}
 
-	_, _ = req2.SetMultiValueQueryParams(v).Get(ts2.URL)
+	_, _ = req2.SetQueryParamsFromValues(v).Get(ts2.URL)
 
 	assertEqual(t, true, strings.Contains(req2.URL, "status=pending"))
 	assertEqual(t, true, strings.Contains(req2.URL, "status=approved"))
