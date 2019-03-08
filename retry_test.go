@@ -50,7 +50,7 @@ func TestBackoffTenAttemptsSuccess(t *testing.T) {
 func TestConditionalBackoffCondition(t *testing.T) {
 	attempts := 3
 	counter := 0
-	check := RetryConditionFunc(func(*Response) (bool, error) {
+	check := RetryConditionFunc(func(*Response, error) (bool, error) {
 		return attempts != counter, nil
 	})
 	retryErr := Backoff(func() (*Response, error) {
@@ -66,7 +66,7 @@ func TestConditionalBackoffCondition(t *testing.T) {
 func TestConditionalBackoffConditionError(t *testing.T) {
 	attempts := 3
 	counter := 0
-	check := RetryConditionFunc(func(*Response) (bool, error) {
+	check := RetryConditionFunc(func(*Response, error) (bool, error) {
 		if attempts != counter {
 			return false, errors.New("attempts not equal Counter")
 		}
@@ -104,7 +104,7 @@ func TestConditionalGet(t *testing.T) {
 	externalCounter := 0
 
 	// This check should pass on first run, and let the response through
-	check := RetryConditionFunc(func(*Response) (bool, error) {
+	check := RetryConditionFunc(func(*Response, error) (bool, error) {
 		externalCounter++
 		if attemptCount != externalCounter {
 			return false, errors.New("attempts not equal Counter")
@@ -135,7 +135,7 @@ func TestConditionalGetDefaultClient(t *testing.T) {
 	externalCounter := 0
 
 	// This check should pass on first run, and let the response through
-	check := RetryConditionFunc(func(*Response) (bool, error) {
+	check := RetryConditionFunc(func(*Response, error) (bool, error) {
 		externalCounter++
 		if attemptCount != externalCounter {
 			return false, errors.New("attempts not equal Counter")
@@ -199,7 +199,7 @@ func TestClientRetryWait(t *testing.T) {
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		AddRetryCondition(
-			func(r *Response) (bool, error) {
+			func(r *Response, err error) (bool, error) {
 				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
@@ -237,7 +237,7 @@ func TestClientRetryPost(t *testing.T) {
 
 	c := dc()
 	c.SetRetryCount(3)
-	c.AddRetryCondition(RetryConditionFunc(func(r *Response) (bool, error) {
+	c.AddRetryCondition(RetryConditionFunc(func(r *Response, err error) (bool, error) {
 		if r.StatusCode() >= http.StatusInternalServerError {
 			return false, errors.New("error")
 		}
@@ -265,6 +265,6 @@ func TestClientRetryPost(t *testing.T) {
 	}
 }
 
-func filler(*Response) (bool, error) {
+func filler(*Response, error) (bool, error) {
 	return false, nil
 }

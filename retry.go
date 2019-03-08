@@ -21,7 +21,7 @@ type (
 	Option func(*Options)
 
 	// RetryConditionFunc type is for retry condition function
-	RetryConditionFunc func(*Response) (bool, error)
+	RetryConditionFunc func(*Response, error) (bool, error)
 
 	// Options to hold go-resty retry values
 	Options struct {
@@ -87,7 +87,7 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 		var needsRetry bool
 		var conditionErr error
 		for _, condition := range opts.retryConditions {
-			needsRetry, conditionErr = condition(resp)
+			needsRetry, conditionErr = condition(resp, err)
 			if needsRetry || conditionErr != nil {
 				break
 			}
