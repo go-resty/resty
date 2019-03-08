@@ -14,10 +14,12 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -600,8 +602,8 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 // SetProxy method sets the Proxy URL and Port for resty client.
 //		resty.SetProxy("http://proxyserver:8888")
 //
-// Alternatives: At request level proxy, see `Request.SetProxy`.  OR Without this `SetProxy` method,
-// you can also set Proxy via environment variable. By default `Go` uses setting from `HTTP_PROXY`.
+// OR Without this `SetProxy` method, you could also set Proxy via environment variable.
+// Refer to godoc `http.ProxyFromEnvironment`.
 //
 func (c *Client) SetProxy(proxyURL string) *Client {
 	transport, err := c.getTransport()
@@ -610,13 +612,14 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 		return c
 	}
 
-	if pURL, err := url.Parse(proxyURL); err == nil {
-		c.proxyURL = pURL
-		transport.Proxy = http.ProxyURL(c.proxyURL)
-	} else {
+	pURL, err := url.Parse(proxyURL)
+	if err != nil {
 		c.Log.Printf("ERROR %v", err)
-		c.RemoveProxy()
+		return c
 	}
+
+	c.proxyURL = pURL
+	transport.Proxy = http.ProxyURL(c.proxyURL)
 	return c
 }
 
@@ -769,7 +772,9 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 	return c
 }
 
-// IsProxySet method returns the true if proxy is set on client otherwise false.
+// IsProxySet method returns the true is proxy is set from resty client otherwise
+// false. By default proxy is set from environment, refer to `http.ProxyFromEnvironment`.
+//
 func (c *Client) IsProxySet() bool {
 	return c.proxyURL != nil
 }
@@ -892,7 +897,20 @@ func (c *Client) getTLSConfig() (*tls.Config, error) {
 // in case currently used `transport` is not an `*http.Transport`
 func (c *Client) getTransport() (*http.Transport, error) {
 	if c.httpClient.Transport == nil {
-		c.SetTransport(new(http.Transport))
+		transport := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			MaxIdleConnsPerHost:   runtime.GOMAXPROCS(0) + 1,
+		}
+		c.SetTransport(transport)
 	}
 
 	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {

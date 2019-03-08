@@ -146,7 +146,7 @@ func TestClientProxy(t *testing.T) {
 
 	resp, err = c.R().
 		Get(ts.URL)
-	assertNil(t, err)
+	assertNotNil(t, err)
 	assertNotNil(t, resp)
 }
 
