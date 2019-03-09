@@ -2,7 +2,7 @@ language: go
 
 sudo: false
 
-go:
+go: # use travis ci resource effectively
 #  - 1.3
 #  - 1.4
 #  - 1.5
@@ -12,13 +12,14 @@ go:
 #  - 1.9.x
   - 1.10.x
   - 1.11.x
+  - 1.12.x
   - tip
 
 install:
   - go get -v -t ./...
 
 script:
-  - go test ./... -coverprofile=coverage.txt -covermode=atomic
+  - go test ./... -race -coverprofile=coverage.txt -covermode=atomic
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
