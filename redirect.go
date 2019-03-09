@@ -47,9 +47,7 @@ func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 		if len(via) >= noOfRedirect {
 			return fmt.Errorf("stopped after %d redirects", noOfRedirect)
 		}
-
 		checkHostAndAddHeaders(req, via[0])
-
 		return nil
 	})
 }
@@ -73,6 +71,10 @@ func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 
 	return fn
 }
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Package Unexported methods
+//_______________________________________________________________________
 
 func getHostname(host string) (hostname string) {
 	if strings.Index(host, ":") > 0 {

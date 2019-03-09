@@ -6,7 +6,6 @@ package resty
 
 import (
 	"bytes"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -22,9 +21,9 @@ import (
 	"strings"
 )
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Package Helper methods
-//___________________________________
+//_______________________________________________________________________
 
 // IsStringEmpty method tells whether given string is empty or not
 func IsStringEmpty(str string) bool {
@@ -61,18 +60,6 @@ func IsXMLType(ct string) bool {
 	return xmlCheck.MatchString(ct)
 }
 
-// Unmarshal content into object from JSON or XML
-// Deprecated: kept for backward compatibility
-func Unmarshal(ct string, b []byte, d interface{}) (err error) {
-	if IsJSONType(ct) {
-		err = json.Unmarshal(b, d)
-	} else if IsXMLType(ct) {
-		err = xml.Unmarshal(b, d)
-	}
-
-	return
-}
-
 // Unmarshalc content into object from JSON or XML
 func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
 	if IsJSONType(ct) {
@@ -84,9 +71,9 @@ func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
 	return
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // RequestLog and ResponseLog type
-//___________________________________
+//_______________________________________________________________________
 
 // RequestLog struct is used to collected information from resty request
 // instance for debug logging. It sent to request log callback before resty
@@ -104,9 +91,9 @@ type ResponseLog struct {
 	Body   string
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Package Unexported methods
-//___________________________________
+//_______________________________________________________________________
 
 // way to disable the HTML escape as opt-in
 func jsonMarshal(c *Client, r *Request, d interface{}) ([]byte, error) {

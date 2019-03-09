@@ -5,21 +5,76 @@
 package resty
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 )
 
-// SRVRecord holds the data to query the SRV record for the following service
-type SRVRecord struct {
-	Service string
-	Domain  string
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Request struct and methods
+//_______________________________________________________________________
+
+// Request struct is used to compose and fire individual request from 
+// resty client. Request provides an options to override client level
+// settings and also an options for the request composition.
+type Request struct {
+	URL        string
+	Method     string
+	Token      string
+	QueryParam url.Values
+	FormData   url.Values
+	Header     http.Header
+	Time       time.Time
+	Body       interface{}
+	Result     interface{}
+	Error      interface{}
+	RawRequest *http.Request
+	SRV        *SRVRecord
+	UserInfo   *User
+
+	isMultiPart         bool
+	isFormData          bool
+	setContentLength    bool
+	isSaveResponse      bool
+	notParseResponse    bool
+	jsonEscapeHTML      bool
+	outputFile          string
+	fallbackContentType string
+	ctx                 context.Context
+	pathParams          map[string]string
+	client              *Client
+	bodyBuf             *bytes.Buffer
+	multipartFiles      []*File
+	multipartFields     []*MultipartField
+	values              map[string]interface{}
+}
+
+// Context method returns the Context if its already set in request
+// otherwise it creates new one using `context.Background()`.
+func (r *Request) Context() context.Context {
+	if r.ctx == nil {
+		return context.Background()
+	}
+	return r.ctx
+}
+
+// SetContext method sets the context.Context for current Request. It allows
+// to interrupt the request execution if ctx.Done() channel is closed.
+// See https://blog.golang.org/context article and the "context" package
+// documentation.
+func (r *Request) SetContext(ctx context.Context) *Request {
+	r.ctx = ctx
+	return r
 }
 
 // SetHeader method is to set a single header field and its value in the current request.
@@ -49,7 +104,6 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 	for h, v := range headers {
 		r.SetHeader(h, v)
 	}
-
 	return r
 }
 
@@ -80,7 +134,6 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 	for p, v := range params {
 		r.SetQueryParam(p, v)
 	}
-
 	return r
 }
 
@@ -101,7 +154,6 @@ func (r *Request) SetQueryParamsFromValues(params url.Values) *Request {
 			r.QueryParam.Add(p, pv)
 		}
 	}
-
 	return r
 }
 
@@ -139,7 +191,6 @@ func (r *Request) SetFormData(data map[string]string) *Request {
 	for k, v := range data {
 		r.FormData.Set(k, v)
 	}
-
 	return r
 }
 
@@ -157,7 +208,6 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 			r.FormData.Add(k, kv)
 		}
 	}
-
 	return r
 }
 
@@ -259,11 +309,9 @@ func (r *Request) SetFile(param, filePath string) *Request {
 //
 func (r *Request) SetFiles(files map[string]string) *Request {
 	r.isMultiPart = true
-
 	for f, fp := range files {
 		r.FormData.Set("@"+f, fp)
 	}
-
 	return r
 }
 
@@ -502,7 +550,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 			resp, err = r.client.execute(r)
 			if err != nil {
 				r.client.Log.Printf("ERROR %v, Attempt %v", err, attempt)
-				if r.isContextCancelledIfAvailable() {
+				if r.ctx != nil && r.ctx.Err() != nil {
 					// stop Backoff from retrying request if request has been
 					// canceled by context
 					return resp, nil
@@ -520,9 +568,19 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	return resp, err
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// SRVRecord struct
+//_______________________________________________________________________
+
+// SRVRecord holds the data to query the SRV record for the following service
+type SRVRecord struct {
+	Service string
+	Domain  string
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Request Unexported methods
-//___________________________________
+//_______________________________________________________________________
 
 func (r *Request) fmtBodyString() (body string) {
 	body = "***** NO CONTENT *****"
@@ -591,4 +649,13 @@ func (r *Request) initValuesMap() {
 	if r.values == nil {
 		r.values = make(map[string]interface{})
 	}
+}
+
+var noescapeJSONMarshal = func(v interface{}) ([]byte, error) {
+	buf := acquireBuffer()
+	defer releaseBuffer(buf)
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(v)
+	return buf.Bytes(), err
 }

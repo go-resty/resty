@@ -22,9 +22,9 @@ import (
 
 const debugRequestLogKey = "__restyDebugRequestLog"
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Request Middleware(s)
-//___________________________________
+//_______________________________________________________________________
 
 func parseRequestURL(c *Client, r *Request) error {
 	// GitHub #103 Path Params
@@ -190,7 +190,9 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	}
 
 	// Use context if it was specified
-	r.addContextIfAvailable()
+	if r.ctx != nil {
+		r.RawRequest = r.RawRequest.WithContext(r.ctx)
+	}
 
 	return
 }
@@ -247,9 +249,9 @@ func requestLogger(c *Client, r *Request) error {
 	return nil
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Response Middleware(s)
-//___________________________________
+//_______________________________________________________________________
 
 func responseLogger(c *Client, res *Response) error {
 	if c.Debug {

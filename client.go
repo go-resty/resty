@@ -9,14 +9,17 @@ import (
 	"compress/gzip"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -162,7 +165,6 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 	for h, v := range headers {
 		c.Header.Set(h, v)
 	}
-
 	return c
 }
 
@@ -254,7 +256,6 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 	for p, v := range params {
 		c.SetQueryParam(p, v)
 	}
-
 	return c
 }
 
@@ -271,7 +272,6 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 	for k, v := range data {
 		c.FormData.Set(k, v)
 	}
-
 	return c
 }
 
@@ -317,7 +317,6 @@ func (c *Client) R() *Request {
 		pathParams:      map[string]string{},
 		jsonEscapeHTML:  true,
 	}
-
 	return r
 }
 
@@ -526,59 +525,6 @@ func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 	return c
 }
 
-// SetHTTPMode method sets go-resty mode to 'http'
-func (c *Client) SetHTTPMode() *Client {
-	return c.SetMode("http")
-}
-
-// SetRESTMode method sets go-resty mode to 'rest'
-func (c *Client) SetRESTMode() *Client {
-	return c.SetMode("rest")
-}
-
-// SetMode method sets go-resty client mode to given value such as 'http' & 'rest'.
-//	'rest':
-//		- No Redirect
-//		- Automatic response unmarshal if it is JSON or XML
-//	'http':
-//		- Up to 10 Redirects
-//		- No automatic unmarshall. Response will be treated as `response.String()`
-//
-// If you want more redirects, use FlexibleRedirectPolicy
-//		resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
-//
-func (c *Client) SetMode(mode string) *Client {
-	// HTTP
-	if mode == "http" {
-		c.isHTTPMode = true
-		c.SetRedirectPolicy(FlexibleRedirectPolicy(10))
-		c.afterResponse = []func(*Client, *Response) error{
-			responseLogger,
-			saveResponseIntoFile,
-		}
-		return c
-	}
-
-	// RESTful
-	c.isHTTPMode = false
-	c.SetRedirectPolicy(NoRedirectPolicy())
-	c.afterResponse = []func(*Client, *Response) error{
-		responseLogger,
-		parseResponseBody,
-		saveResponseIntoFile,
-	}
-	return c
-}
-
-// Mode method returns the current client mode. Typically its a "http" or "rest".
-// Default is "rest"
-func (c *Client) Mode() string {
-	if c.isHTTPMode {
-		return "http"
-	}
-	return "rest"
-}
-
 // SetTLSClientConfig method sets TLSClientConfig for underling client Transport.
 //
 // Example:
@@ -669,7 +615,6 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	}
 
 	config.RootCAs.AppendCertsFromPEM(rootPemData)
-
 	return c
 }
 
@@ -716,7 +661,6 @@ func (c *Client) SetScheme(scheme string) *Client {
 	if !IsStringEmpty(scheme) {
 		c.scheme = scheme
 	}
-
 	return c
 }
 
@@ -784,9 +728,9 @@ func (c *Client) GetClient() *http.Client {
 	return c.httpClient
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Client Unexported methods
-//___________________________________
+//_______________________________________________________________________
 
 // executes the given `Request` object and returns response
 func (c *Client) execute(req *Request) (*Response, error) {
@@ -869,18 +813,6 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	return response, err
 }
 
-// enables a log prefix
-func (c *Client) enableLogPrefix() {
-	c.Log.SetFlags(log.LstdFlags)
-	c.Log.SetPrefix(c.logPrefix)
-}
-
-// disables a log prefix
-func (c *Client) disableLogPrefix() {
-	c.Log.SetFlags(0)
-	c.Log.SetPrefix("")
-}
-
 // getting TLS client config if not exists then create one
 func (c *Client) getTLSConfig() (*tls.Config, error) {
 	transport, err := c.getTransport()
@@ -919,9 +851,9 @@ func (c *Client) getTransport() (*http.Transport, error) {
 	return nil, errors.New("current transport is not an *http.Transport instance")
 }
 
-//
-// File
-//
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// File struct and its methods
+//_______________________________________________________________________
 
 // File represent file information for multipart request
 type File struct {
@@ -935,10 +867,60 @@ func (f *File) String() string {
 	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
 }
 
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// MultipartField struct
+//_______________________________________________________________________
+
 // MultipartField represent custom data part for multipart request
 type MultipartField struct {
 	Param       string
 	FileName    string
 	ContentType string
 	io.Reader
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Unexported package methods
+//_______________________________________________________________________
+
+func createClient(hc *http.Client) *Client {
+	c := &Client{ // not setting default values
+		QueryParam:         url.Values{},
+		FormData:           url.Values{},
+		Header:             http.Header{},
+		Cookies:            make([]*http.Cookie, 0),
+		Log:                getLogger(os.Stderr),
+		RetryWaitTime:      defaultWaitTime,
+		RetryMaxWaitTime:   defaultMaxWaitTime,
+		JSONMarshal:        json.Marshal,
+		JSONUnmarshal:      json.Unmarshal,
+		jsonEscapeHTML:     true,
+		httpClient:         hc,
+		debugBodySizeLimit: math.MaxInt32,
+		pathParams:         make(map[string]string),
+	}
+
+	// Log Prefix
+	c.SetLogPrefix("RESTY ")
+
+	// default before request middlewares
+	c.beforeRequest = []func(*Client, *Request) error{
+		parseRequestURL,
+		parseRequestHeader,
+		parseRequestBody,
+		createHTTPRequest,
+		addCredentials,
+	}
+
+	// user defined request middlewares
+	c.udBeforeRequest = []func(*Client, *Request) error{}
+
+	// default after response middlewares
+	c.afterResponse = []func(*Client, *Response) error{
+		responseLogger,
+		parseResponseBody,
+		saveResponseIntoFile,
+	}
+
+	return c
 }

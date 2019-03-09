@@ -144,9 +144,9 @@ func TestConditionalGetDefaultClient(t *testing.T) {
 	})
 
 	// Clear the default client.
-	_ = dc()
+	client := dc()
 	// Proceed to check.
-	client := AddRetryCondition(check).SetRetryCount(1)
+	client.AddRetryCondition(check).SetRetryCount(1)
 	resp, err := client.R().
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Get(ts.URL + "/")
@@ -165,8 +165,7 @@ func TestClientRetryGet(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc()
-	c.SetHTTPMode().
+	c := dc().
 		SetTimeout(time.Second * 3).
 		SetRetryCount(3)
 
@@ -193,8 +192,7 @@ func TestClientRetryWait(t *testing.T) {
 	retryWaitTime := time.Duration(3) * time.Second
 	retryMaxWaitTime := time.Duration(9) * time.Second
 
-	c := dc()
-	c.SetHTTPMode().
+	c := dc().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).

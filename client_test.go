@@ -79,24 +79,23 @@ func TestClientRedirectPolicy(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
 
-	c := dc()
-	c.SetHTTPMode().
-		SetRedirectPolicy(FlexibleRedirectPolicy(20))
-
+	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(20))
 	_, err := c.R().Get(ts.URL + "/redirect-1")
 
 	assertEqual(t, "Get /redirect-21: stopped after 20 redirects", err.Error())
+
+	c.SetRedirectPolicy(NoRedirectPolicy())
+	_, err = c.R().Get(ts.URL + "/redirect-1")
+	assertEqual(t, "Get /redirect-2: auto redirect is disabled", err.Error())
 }
 
 func TestClientTimeout(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc()
-	c.SetHTTPMode().
-		SetTimeout(time.Second * 3)
-
+	c := dc().SetTimeout(time.Second * 3)
 	_, err := c.R().Get(ts.URL + "/set-timeout-test")
+
 	assertEqual(t, true, strings.Contains(strings.ToLower(err.Error()), "timeout"))
 }
 
@@ -104,11 +103,9 @@ func TestClientTimeoutWithinThreshold(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc()
-	c.SetHTTPMode().
-		SetTimeout(time.Second * 3)
-
+	c := dc().SetTimeout(time.Second * 3)
 	resp, err := c.R().Get(ts.URL + "/set-timeout-test-with-sequence")
+
 	assertError(t, err)
 
 	seq1, _ := strconv.ParseInt(resp.String(), 10, 32)
@@ -122,10 +119,7 @@ func TestClientTimeoutWithinThreshold(t *testing.T) {
 }
 
 func TestClientTimeoutInternalError(t *testing.T) {
-	c := dc()
-	c.SetHTTPMode()
-	c.SetTimeout(time.Second * 1)
-
+	c := dc().SetTimeout(time.Second * 1)
 	_, _ = c.R().Get("http://localhost:9000/set-timeout-test")
 }
 
@@ -151,37 +145,37 @@ func TestClientProxy(t *testing.T) {
 }
 
 func TestClientSetCertificates(t *testing.T) {
-	DefaultClient = dc()
-	SetCertificates(tls.Certificate{})
+	client := dc()
+	client.SetCertificates(tls.Certificate{})
 
-	transport, err := DefaultClient.getTransport()
+	transport, err := client.getTransport()
 
 	assertNil(t, err)
 	assertEqual(t, 1, len(transport.TLSClientConfig.Certificates))
 }
 
 func TestClientSetRootCertificate(t *testing.T) {
-	DefaultClient = dc()
-	SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	client := dc()
+	client.SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
-	transport, err := DefaultClient.getTransport()
+	transport, err := client.getTransport()
 
 	assertNil(t, err)
 	assertNotNil(t, transport.TLSClientConfig.RootCAs)
 }
 
 func TestClientSetRootCertificateNotExists(t *testing.T) {
-	DefaultClient = dc()
-	SetRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
+	client := dc()
+	client.SetRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
-	transport, err := DefaultClient.getTransport()
+	transport, err := client.getTransport()
 
 	assertNil(t, err)
 	assertNil(t, transport.TLSClientConfig)
 }
 
 func TestClientOnBeforeRequestModification(t *testing.T) {
-	tc := New()
+	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
 		r.SetAuthToken("This is test auth token")
 		return nil
@@ -204,7 +198,7 @@ func TestClientOnBeforeRequestModification(t *testing.T) {
 func TestClientSetTransport(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
-	DefaultClient = dc()
+	client := dc()
 
 	transport := &http.Transport{
 		// something like Proxying to httptest.Server, etc...
@@ -212,53 +206,48 @@ func TestClientSetTransport(t *testing.T) {
 			return url.Parse(ts.URL)
 		},
 	}
-	SetTransport(transport)
-
-	transportInUse, err := DefaultClient.getTransport()
+	client.SetTransport(transport)
+	transportInUse, err := client.getTransport()
 
 	assertNil(t, err)
-
 	assertEqual(t, true, transport == transportInUse)
 }
 
 func TestClientSetScheme(t *testing.T) {
-	DefaultClient = dc()
+	client := dc()
 
-	SetScheme("http")
+	client.SetScheme("http")
 
-	assertEqual(t, true, DefaultClient.scheme == "http")
+	assertEqual(t, true, client.scheme == "http")
 }
 
 func TestClientSetCookieJar(t *testing.T) {
-	DefaultClient = dc()
-	backupJar := DefaultClient.httpClient.Jar
+	client := dc()
+	backupJar := client.httpClient.Jar
 
-	SetCookieJar(nil)
-	assertNil(t, DefaultClient.httpClient.Jar)
+	client.SetCookieJar(nil)
+	assertNil(t, client.httpClient.Jar)
 
-	SetCookieJar(backupJar)
-	assertEqual(t, true, DefaultClient.httpClient.Jar == backupJar)
+	client.SetCookieJar(backupJar)
+	assertEqual(t, true, client.httpClient.Jar == backupJar)
 }
 
 func TestClientOptions(t *testing.T) {
-	SetHTTPMode().SetContentLength(true)
-	assertEqual(t, Mode(), "http")
-	assertEqual(t, DefaultClient.setContentLength, true)
+	client := dc()
+	client.SetContentLength(true)
+	assertEqual(t, client.setContentLength, true)
 
-	SetRESTMode()
-	assertEqual(t, Mode(), "rest")
+	client.SetHostURL("http://httpbin.org")
+	assertEqual(t, "http://httpbin.org", client.HostURL)
 
-	SetHostURL("http://httpbin.org")
-	assertEqual(t, "http://httpbin.org", DefaultClient.HostURL)
-
-	SetHeader(hdrContentTypeKey, jsonContentType)
-	SetHeaders(map[string]string{
+	client.SetHeader(hdrContentTypeKey, jsonContentType)
+	client.SetHeaders(map[string]string{
 		hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1",
 		"X-Request-Id":  strconv.FormatInt(time.Now().UnixNano(), 10),
 	})
-	assertEqual(t, jsonContentType, DefaultClient.Header.Get(hdrContentTypeKey))
+	assertEqual(t, jsonContentType, client.Header.Get(hdrContentTypeKey))
 
-	SetCookie(&http.Cookie{
+	client.SetCookie(&http.Cookie{
 		Name:     "default-cookie",
 		Value:    "This is cookie default-cookie value",
 		Path:     "/",
@@ -267,7 +256,7 @@ func TestClientOptions(t *testing.T) {
 		HttpOnly: true,
 		Secure:   false,
 	})
-	assertEqual(t, "default-cookie", DefaultClient.Cookies[0].Name)
+	assertEqual(t, "default-cookie", client.Cookies[0].Name)
 
 	var cookies []*http.Cookie
 	cookies = append(cookies, &http.Cookie{
@@ -280,91 +269,92 @@ func TestClientOptions(t *testing.T) {
 		Value: "This is default-cookie 2 value",
 		Path:  "/",
 	})
-	SetCookies(cookies)
-	assertEqual(t, "default-cookie-1", DefaultClient.Cookies[1].Name)
-	assertEqual(t, "default-cookie-2", DefaultClient.Cookies[2].Name)
+	client.SetCookies(cookies)
+	assertEqual(t, "default-cookie-1", client.Cookies[1].Name)
+	assertEqual(t, "default-cookie-2", client.Cookies[2].Name)
 
-	SetQueryParam("test_param_1", "Param_1")
-	SetQueryParams(map[string]string{"test_param_2": "Param_2", "test_param_3": "Param_3"})
-	assertEqual(t, "Param_3", DefaultClient.QueryParam.Get("test_param_3"))
+	client.SetQueryParam("test_param_1", "Param_1")
+	client.SetQueryParams(map[string]string{"test_param_2": "Param_2", "test_param_3": "Param_3"})
+	assertEqual(t, "Param_3", client.QueryParam.Get("test_param_3"))
 
 	rTime := strconv.FormatInt(time.Now().UnixNano(), 10)
-	SetFormData(map[string]string{"r_time": rTime})
-	assertEqual(t, rTime, DefaultClient.FormData.Get("r_time"))
+	client.SetFormData(map[string]string{"r_time": rTime})
+	assertEqual(t, rTime, client.FormData.Get("r_time"))
 
-	SetBasicAuth("myuser", "mypass")
-	assertEqual(t, "myuser", DefaultClient.UserInfo.Username)
+	client.SetBasicAuth("myuser", "mypass")
+	assertEqual(t, "myuser", client.UserInfo.Username)
 
-	SetAuthToken("AC75BD37F019E08FBC594900518B4F7E")
-	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", DefaultClient.Token)
+	client.SetAuthToken("AC75BD37F019E08FBC594900518B4F7E")
+	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", client.Token)
 
-	SetDisableWarn(true)
-	assertEqual(t, DefaultClient.DisableWarn, true)
+	client.SetDisableWarn(true)
+	assertEqual(t, client.DisableWarn, true)
 
-	SetRetryCount(3)
-	assertEqual(t, 3, DefaultClient.RetryCount)
+	client.SetRetryCount(3)
+	assertEqual(t, 3, client.RetryCount)
 
 	rwt := time.Duration(1000) * time.Millisecond
-	SetRetryWaitTime(rwt)
-	assertEqual(t, rwt, DefaultClient.RetryWaitTime)
+	client.SetRetryWaitTime(rwt)
+	assertEqual(t, rwt, client.RetryWaitTime)
 
 	mrwt := time.Duration(2) * time.Second
-	SetRetryMaxWaitTime(mrwt)
-	assertEqual(t, mrwt, DefaultClient.RetryMaxWaitTime)
+	client.SetRetryMaxWaitTime(mrwt)
+	assertEqual(t, mrwt, client.RetryMaxWaitTime)
 
 	err := &AuthError{}
-	SetError(err)
-	if reflect.TypeOf(err) == DefaultClient.Error {
+	client.SetError(err)
+	if reflect.TypeOf(err) == client.Error {
 		t.Error("SetError failed")
 	}
 
-	SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	transport, transportErr := DefaultClient.getTransport()
+	client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	transport, transportErr := client.getTransport()
 
 	assertNil(t, transportErr)
 	assertEqual(t, true, transport.TLSClientConfig.InsecureSkipVerify)
 
-	OnBeforeRequest(func(c *Client, r *Request) error {
+	client.OnBeforeRequest(func(c *Client, r *Request) error {
 		c.Log.Println("I'm in Request middleware")
 		return nil // if it success
 	})
-	OnAfterResponse(func(c *Client, r *Response) error {
+	client.OnAfterResponse(func(c *Client, r *Response) error {
 		c.Log.Println("I'm in Response middleware")
 		return nil // if it success
 	})
 
-	SetTimeout(5 * time.Second)
-	SetRedirectPolicy(FlexibleRedirectPolicy(10), func(req *http.Request, via []*http.Request) error {
+	client.SetTimeout(5 * time.Second)
+	client.SetRedirectPolicy(FlexibleRedirectPolicy(10), func(req *http.Request, via []*http.Request) error {
 		return errors.New("sample test redirect")
 	})
-	SetContentLength(true)
+	client.SetContentLength(true)
 
-	SetDebug(true)
-	assertEqual(t, DefaultClient.Debug, true)
+	client.SetDebug(true)
+	assertEqual(t, client.Debug, true)
 
 	var sl int64 = 1000000
-	SetDebugBodyLimit(sl)
-	assertEqual(t, DefaultClient.debugBodySizeLimit, sl)
+	client.SetDebugBodyLimit(sl)
+	assertEqual(t, client.debugBodySizeLimit, sl)
 
-	SetAllowGetMethodPayload(true)
-	assertEqual(t, DefaultClient.AllowGetMethodPayload, true)
+	client.SetAllowGetMethodPayload(true)
+	assertEqual(t, client.AllowGetMethodPayload, true)
 
-	SetScheme("http")
-	assertEqual(t, DefaultClient.scheme, "http")
+	client.SetScheme("http")
+	assertEqual(t, client.scheme, "http")
 
-	SetCloseConnection(true)
-	assertEqual(t, DefaultClient.closeConnection, true)
+	client.SetCloseConnection(true)
+	assertEqual(t, client.closeConnection, true)
 
-	SetLogger(ioutil.Discard)
+	client.SetLogger(ioutil.Discard)
 }
 
 func TestClientPreRequestHook(t *testing.T) {
-	SetPreRequestHook(func(c *Client, r *http.Request) error {
+	client := dc()
+	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
 		c.Log.Println("I'm in Pre-Request Hook")
 		return nil
 	})
 
-	SetPreRequestHook(func(c *Client, r *http.Request) error {
+	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
 		c.Log.Println("I'm Overwriting existing Pre-Request Hook")
 		return nil
 	})
@@ -408,13 +398,6 @@ func TestClientRoundTripper(t *testing.T) {
 func TestClientNewRequest(t *testing.T) {
 	c := New()
 	request := c.NewRequest()
-
-	assertNotNil(t, request)
-}
-
-func TestNewRequest(t *testing.T) {
-	request := NewRequest()
-
 	assertNotNil(t, request)
 }
 
@@ -461,18 +444,6 @@ type CustomRoundTripper struct {
 // RoundTrip just for test
 func (rt *CustomRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
 	return &http.Response{}, nil
-}
-
-func TestSetLogPrefix(t *testing.T) {
-	c := New()
-	c.SetLogPrefix("CUSTOM ")
-	assertEqual(t, "CUSTOM ", c.logPrefix)
-	assertEqual(t, "CUSTOM ", c.Log.Prefix())
-
-	c.disableLogPrefix()
-	c.enableLogPrefix()
-	assertEqual(t, "CUSTOM ", c.logPrefix)
-	assertEqual(t, "CUSTOM ", c.Log.Prefix())
 }
 
 func TestAutoGzip(t *testing.T) {

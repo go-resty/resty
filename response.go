@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Response struct and methods
+//_______________________________________________________________________
+
 // Response is an object represents executed request and its values.
 type Response struct {
 	Request     *Request
@@ -38,7 +42,6 @@ func (r *Response) Status() string {
 	if r.RawResponse == nil {
 		return ""
 	}
-
 	return r.RawResponse.Status
 }
 
@@ -48,7 +51,6 @@ func (r *Response) StatusCode() int {
 	if r.RawResponse == nil {
 		return 0
 	}
-
 	return r.RawResponse.StatusCode
 }
 
@@ -67,7 +69,6 @@ func (r *Response) Header() http.Header {
 	if r.RawResponse == nil {
 		return http.Header{}
 	}
-
 	return r.RawResponse.Header
 }
 
@@ -76,7 +77,6 @@ func (r *Response) Cookies() []*http.Cookie {
 	if r.RawResponse == nil {
 		return make([]*http.Cookie, 0)
 	}
-
 	return r.RawResponse.Cookies()
 }
 
@@ -85,7 +85,6 @@ func (r *Response) String() string {
 	if r.body == nil {
 		return ""
 	}
-
 	return strings.TrimSpace(string(r.body))
 }
 
@@ -129,6 +128,10 @@ func (r *Response) IsSuccess() bool {
 func (r *Response) IsError() bool {
 	return r.StatusCode() > 399
 }
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Response Unexported methods
+//_______________________________________________________________________
 
 func (r *Response) fmtBodyString(sl int64) string {
 	if r.body != nil {

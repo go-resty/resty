@@ -43,7 +43,10 @@ type Error struct {
 //
 
 func Example_get() {
-	resp, err := resty.R().Get("http://httpbin.org/get")
+	// Create a resty client
+	client := resty.New()
+
+	resp, err := client.R().Get("http://httpbin.org/get")
 
 	fmt.Printf("\nError: %v", err)
 	fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
@@ -54,7 +57,10 @@ func Example_get() {
 }
 
 func Example_enhancedGet() {
-	resp, err := resty.R().
+	// Create a resty client
+	client := resty.New()
+
+	resp, err := client.R().
 		SetQueryParams(map[string]string{
 			"page_no": "1",
 			"limit":   "20",
@@ -70,9 +76,12 @@ func Example_enhancedGet() {
 }
 
 func Example_post() {
+	// Create a resty client
+	client := resty.New()
+
 	// POST JSON string
 	// No need to set content type, if you have client level setting
-	resp, err := resty.R().
+	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(`{"username":"testuser", "password":"testpass"}`).
 		SetResult(AuthSuccess{}). // or SetResult(&AuthSuccess{}).
@@ -82,7 +91,7 @@ func Example_post() {
 
 	// POST []byte array
 	// No need to set content type, if you have client level setting
-	resp1, err1 := resty.R().
+	resp1, err1 := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody([]byte(`{"username":"testuser", "password":"testpass"}`)).
 		SetResult(AuthSuccess{}). // or SetResult(&AuthSuccess{}).
@@ -91,7 +100,7 @@ func Example_post() {
 	printOutput(resp1, err1)
 
 	// POST Struct, default is JSON content type. No need to set one
-	resp2, err2 := resty.R().
+	resp2, err2 := client.R().
 		SetBody(resty.User{Username: "testuser", Password: "testpass"}).
 		SetResult(&AuthSuccess{}). // or SetResult(AuthSuccess{}).
 		SetError(&AuthError{}).    // or SetError(AuthError{}).
@@ -100,7 +109,7 @@ func Example_post() {
 	printOutput(resp2, err2)
 
 	// POST Map, default is JSON content type. No need to set one
-	resp3, err3 := resty.R().
+	resp3, err3 := client.R().
 		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
 		SetResult(&AuthSuccess{}). // or SetResult(AuthSuccess{}).
 		SetError(&AuthError{}).    // or SetError(AuthError{}).
@@ -115,8 +124,11 @@ func Example_dropboxUpload() {
 	file, _ := os.Open("/Users/jeeva/mydocument.pdf")
 	fileBytes, _ := ioutil.ReadAll(file)
 
+	// Create a resty client
+	client := resty.New()
+
 	// See we are not setting content-type header, since go-resty automatically detects Content-Type for you
-	resp, err := resty.R().
+	resp, err := client.R().
 		SetBody(fileBytes).     // resty autodetects content type
 		SetContentLength(true). // Dropbox expects this value
 		SetAuthToken("<your-auth-token>").
@@ -130,10 +142,13 @@ func Example_dropboxUpload() {
 }
 
 func Example_put() {
+	// Create a resty client
+	client := resty.New()
+
 	// Just one sample of PUT, refer POST for more combination
 	// request goes as JSON content type
 	// No need to set auth token, error, if you have client level settings
-	resp, err := resty.R().
+	resp, err := client.R().
 		SetBody(Article{
 			Title:   "go-resty",
 			Content: "This is my article content, oh ya!",
@@ -154,11 +169,16 @@ func Example_clientCertificates() {
 		log.Fatalf("ERROR client certificate: %s", err)
 	}
 
-	resty.SetCertificates(cert)
+	// Create a resty client
+	client := resty.New()
+
+	client.SetCertificates(cert)
 }
 
 func Example_customRootCertificate() {
-	resty.SetRootCertificate("/path/to/root/pemFile.pem")
+	// Create a resty client
+	client := resty.New()
+	client.SetRootCertificate("/path/to/root/pemFile.pem")
 }
 
 //
@@ -188,7 +208,10 @@ func ExampleClient_SetCertificates() {
 		log.Fatalf("ERROR client certificate: %s", err)
 	}
 
-	resty.SetCertificates(cert)
+	// Create a resty client
+	client := resty.New()
+
+	client.SetCertificates(cert)
 }
 
 //
@@ -205,10 +228,13 @@ func Example_socks5Proxy() {
 	// create a transport
 	ptransport := &http.Transport{Dial: dialer.Dial}
 
-	// set transport into resty
-	resty.SetTransport(ptransport)
+	// Create a resty client
+	client := resty.New()
 
-	resp, err := resty.R().Get("http://check.torproject.org")
+	// set transport into resty
+	client.SetTransport(ptransport)
+
+	resp, err := client.R().Get("http://check.torproject.org")
 	fmt.Println(err, resp)
 }
 
