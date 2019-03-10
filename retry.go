@@ -23,7 +23,7 @@ type (
 	// RetryConditionFunc type is for retry condition function
 	RetryConditionFunc func(*Response, error) (bool, error)
 
-	// Options to hold go-resty retry values
+	// Options to hold Resty retry values.
 	Options struct {
 		maxRetries      int
 		waitTime        time.Duration

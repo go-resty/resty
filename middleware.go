@@ -194,6 +194,12 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest = r.RawRequest.WithContext(r.ctx)
 	}
 
+	// Enable trace
+	if c.trace || r.trace {
+		r.clientTrace = &clientTrace{}
+		r.RawRequest = r.RawRequest.WithContext(r.clientTrace.createContext())
+	}
+
 	return
 }
 

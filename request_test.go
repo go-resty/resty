@@ -700,13 +700,13 @@ func TestMultiPartMultipartFields(t *testing.T) {
 	jsonStr2 := `{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`
 
 	fields := []*MultipartField{
-		&MultipartField{
+		{
 			Param:       "uploadManifest1",
 			FileName:    "upload-file-1.json",
 			ContentType: "application/json",
 			Reader:      strings.NewReader(jsonStr1),
 		},
-		&MultipartField{
+		{
 			Param:       "uploadManifest2",
 			FileName:    "upload-file-2.json",
 			ContentType: "application/json",
@@ -1420,8 +1420,8 @@ func TestPathParamURLInput(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().SetDebug(true).SetLogger(ioutil.Discard)
-	c.SetHostURL(ts.URL).
+	c := dc().SetDebug(true).
+		SetHostURL(ts.URL).
 		SetPathParams(map[string]string{
 			"userId": "sample@sample.com",
 		})
@@ -1438,4 +1438,44 @@ func TestPathParamURLInput(t *testing.T) {
 	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/https:%2F%2Fexample.com"))
 
 	logResponse(t, resp)
+}
+
+func TestTraceInfo(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	client := dc()
+	client.SetHostURL(ts.URL).EnableTrace()
+	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
+		resp, err := client.R().Get(u)
+		assertNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+		assertEqual(t, true, tr.DNSLookup >= 0)
+		assertEqual(t, true, tr.ConnTime > 0)
+		assertEqual(t, true, tr.TLSHandshake >= 0)
+		assertEqual(t, true, tr.ServerTime > 0)
+		assertEqual(t, true, tr.ResponseTime > 0)
+		assertEqual(t, true, tr.TotalTime > 0)
+	}
+
+	client.DisableTrace()
+
+	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
+		resp, err := client.R().EnableTrace().Get(u)
+		assertNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+		assertEqual(t, true, tr.DNSLookup >= 0)
+		assertEqual(t, true, tr.ConnTime > 0)
+		assertEqual(t, true, tr.TLSHandshake >= 0)
+		assertEqual(t, true, tr.ServerTime > 0)
+		assertEqual(t, true, tr.ResponseTime > 0)
+		assertEqual(t, true, tr.TotalTime > 0)
+	}
+
+	// for sake of hook funcs
+	_, _ = client.R().EnableTrace().Get("https://httpbin.org/get")
 }

@@ -87,7 +87,7 @@ func getHostname(host string) (hostname string) {
 // By default Golang will not redirect request headers
 // after go throughing various discussion comments from thread
 // https://github.com/golang/go/issues/4800
-// go-resty will add all the headers during a redirect for the same host
+// Resty will add all the headers during a redirect for the same host
 func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {
 	curHostname := getHostname(cur.URL.Host)
 	preHostname := getHostname(pre.URL.Host)

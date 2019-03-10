@@ -13,15 +13,15 @@ import (
 )
 
 // Version # of resty
-const Version = "2.0.0-alpha.1"
+const Version = "2.0.0-rc.1"
 
-// New method creates a new go-resty client.
+// New method creates a new Resty client.
 func New() *Client {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	return createClient(&http.Client{Jar: cookieJar})
 }
 
-// NewWithClient method create a new go-resty client with given `http.Client`.
+// NewWithClient method create a new Resty client with given `http.Client`.
 func NewWithClient(hc *http.Client) *Client {
 	return createClient(hc)
 }

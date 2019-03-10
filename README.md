@@ -8,7 +8,7 @@
 </p>
 <p align="center">
 <h4 align="center">Resty Communication Channels</h4>
-<p align="center"><a href="https://gitter.im/go_resty/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge"><img src="https://badges.gitter.im/go_resty/community.svg" alt="Chat on Gitter - Resty Community"></a> <a href="https://twitter.com/go_resty"><img src="https://img.shields.io/badge/twitter-@go_resty-55acee.svg" alt="Twitter @go__resty"></a></p>
+<p align="center"><a href="https://gitter.im/go_resty/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge"><img src="https://badges.gitter.im/go_resty/community.svg" alt="Chat on Gitter - Resty Community"></a> <a href="https://twitter.com/go_resty"><img src="https://img.shields.io/badge/twitter-@go__resty-55acee.svg" alt="Twitter @go_resty"></a></p>
 </p>
 
 ## News
@@ -56,7 +56,7 @@
     * Create Multiple clients if you want to `resty.New()`
     * Supports `http.RoundTripper` implementation, see [SetTransport](https://godoc.org/github.com/go-resty/resty#Client.SetTransport)
     * goroutine concurrent safe
-    * REST and HTTP modes
+    * Resty Client trace, see [Client.EnableTrace](https://godoc.org/github.com/go-resty/resty#Client.EnableTrace) and [Request.EnableTrace](https://godoc.org/github.com/go-resty/resty#Request.EnableTrace)
     * Debug mode - clean and informative logging presentation
     * Gzip - Go does it automatically also resty has fallback handling too
     * Works fine with `HTTP/2` and `HTTP/1.1`
@@ -118,37 +118,63 @@ import "github.com/go-resty/resty"
 
 ```go
 // Create a Resty Client
-client := resty.New()
+client := New()
 
-// GET request
-resp, err := client.R().Get("http://httpbin.org/get")
+// Fire GET request
+resp, err := client.R().EnableTrace().Get("https://httpbin.org/get")
 
-// explore response object
-fmt.Printf("\nError: %v", err)
-fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-fmt.Printf("\nResponse Status: %v", resp.Status())
-fmt.Printf("\nResponse Time: %v", resp.Time())
-fmt.Printf("\nResponse Received At: %v", resp.ReceivedAt())
-fmt.Printf("\nResponse Body: %v", resp)     // or resp.String() or string(resp.Body())
-// more...
+// Explore response object
+fmt.Println("Response Info:")
+fmt.Println("Error      :", err)
+fmt.Println("Status Code:", resp.StatusCode())
+fmt.Println("Status     :", resp.Status())
+fmt.Println("Time       :", resp.Time())
+fmt.Println("Received At:", resp.ReceivedAt())
+fmt.Println("Body       :\n", resp)
+fmt.Println()
+
+// Explore trace info
+fmt.Println("Request Trace Info:")
+ti := resp.Request.TraceInfo()
+fmt.Println("DNSLookup    :", ti.DNSLookup)
+fmt.Println("ConnTime     :", ti.ConnTime)
+fmt.Println("TLSHandshake :", ti.TLSHandshake)
+fmt.Println("ServerTime   :", ti.ServerTime)
+fmt.Println("ResponseTime :", ti.ResponseTime)
+fmt.Println("TotalTime    :", ti.TotalTime)
+fmt.Println("IsConnReused :", ti.IsConnReused)
+fmt.Println("IsConnWasIdle:", ti.IsConnWasIdle)
+fmt.Println("ConnIdleTime :", ti.ConnIdleTime)
 
 /* Output
-Error: <nil>
-Response Status Code: 200
-Response Status: 200 OK
-Response Time: 160.1151ms
-Response Received At: 2018-10-16 16:28:34.8595663 -0700 PDT m=+0.166119401
-Response Body: {
+Response Info:
+Error      : <nil>
+Status Code: 200
+Status     : 200 OK
+Time       : 465.301137ms
+Received At: 2019-03-10 01:52:33.772456 -0800 PST m=+0.466672260
+Body       :
+ {
   "args": {},
   "headers": {
     "Accept-Encoding": "gzip",
-    "Connection": "close",
     "Host": "httpbin.org",
-    "User-Agent": "go-resty/1.10.0 (https://github.com/go-resty/resty)"
+    "User-Agent": "go-resty/2.0.0-rc.1 (https://github.com/go-resty/resty)"
   },
   "origin": "0.0.0.0",
-  "url": "http://httpbin.org/get"
+  "url": "https://httpbin.org/get"
 }
+
+Request Trace Info:
+DNSLookup    : 2.21124ms
+ConnTime     : 393.875795ms
+TLSHandshake : 319.313546ms
+ServerTime   : 71.109256ms
+ResponseTime : 94.466µs
+TotalTime    : 465.301137ms
+IsConnReused : false
+IsConnWasIdle: false
+ConnIdleTime : 0s
 */
 ```
 
