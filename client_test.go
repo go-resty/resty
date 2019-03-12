@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -148,7 +149,7 @@ func TestClientSetCertificates(t *testing.T) {
 	client := dc()
 	client.SetCertificates(tls.Certificate{})
 
-	transport, err := client.getTransport()
+	transport, err := client.transport()
 
 	assertNil(t, err)
 	assertEqual(t, 1, len(transport.TLSClientConfig.Certificates))
@@ -158,7 +159,7 @@ func TestClientSetRootCertificate(t *testing.T) {
 	client := dc()
 	client.SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
-	transport, err := client.getTransport()
+	transport, err := client.transport()
 
 	assertNil(t, err)
 	assertNotNil(t, transport.TLSClientConfig.RootCAs)
@@ -168,7 +169,7 @@ func TestClientSetRootCertificateNotExists(t *testing.T) {
 	client := dc()
 	client.SetRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
-	transport, err := client.getTransport()
+	transport, err := client.transport()
 
 	assertNil(t, err)
 	assertNil(t, transport.TLSClientConfig)
@@ -207,7 +208,7 @@ func TestClientSetTransport(t *testing.T) {
 		},
 	}
 	client.SetTransport(transport)
-	transportInUse, err := client.getTransport()
+	transportInUse, err := client.transport()
 
 	assertNil(t, err)
 	assertEqual(t, true, transport == transportInUse)
@@ -308,7 +309,7 @@ func TestClientOptions(t *testing.T) {
 	}
 
 	client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	transport, transportErr := client.getTransport()
+	transport, transportErr := client.transport()
 
 	assertNil(t, transportErr)
 	assertEqual(t, true, transport.TLSClientConfig.InsecureSkipVerify)
@@ -383,7 +384,7 @@ func TestClientRoundTripper(t *testing.T) {
 	rt := &CustomRoundTripper{}
 	c.SetTransport(rt)
 
-	ct, err := c.getTransport()
+	ct, err := c.transport()
 	assertNotNil(t, err)
 	assertNil(t, ct)
 	assertEqual(t, "current transport is not an *http.Transport instance", err.Error())
@@ -522,4 +523,17 @@ func TestLogCallbacks(t *testing.T) {
 		Get(ts.URL + "/profile")
 	assertEqual(t, errors.New("response test error"), err)
 	assertNotNil(t, resp)
+}
+
+func TestNewWithLocalAddr(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	localAddress, _ := net.ResolveTCPAddr("tcp", "127.0.0.1")
+	client := NewWithLocalAddr(localAddress)
+	client.SetHostURL(ts.URL)
+
+	resp, err := client.R().Get("/")
+	assertNil(t, err)
+	assertEqual(t, resp.String(), "TestGet: text response")
 }

@@ -534,9 +534,10 @@ func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 //
 // 		// or One can disable security check (https)
 //		client.SetTLSClientConfig(&tls.Config{ InsecureSkipVerify: true })
+//
 // Note: This method overwrites existing `TLSClientConfig`.
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
-	transport, err := c.getTransport()
+	transport, err := c.transport()
 	if err != nil {
 		c.Log.Printf("ERROR %v", err)
 		return c
@@ -552,7 +553,7 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 //
 // Refer to godoc `http.ProxyFromEnvironment`.
 func (c *Client) SetProxy(proxyURL string) *Client {
-	transport, err := c.getTransport()
+	transport, err := c.transport()
 	if err != nil {
 		c.Log.Printf("ERROR %v", err)
 		return c
@@ -572,7 +573,7 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 // RemoveProxy method removes the proxy configuration from Resty client
 //		client.RemoveProxy()
 func (c *Client) RemoveProxy() *Client {
-	transport, err := c.getTransport()
+	transport, err := c.transport()
 	if err != nil {
 		c.Log.Printf("ERROR %v", err)
 		return c
@@ -584,7 +585,7 @@ func (c *Client) RemoveProxy() *Client {
 
 // SetCertificates method helps to set client certificates into Resty conveniently.
 func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
-	config, err := c.getTLSConfig()
+	config, err := c.tlsConfig()
 	if err != nil {
 		c.Log.Printf("ERROR %v", err)
 		return c
@@ -602,7 +603,7 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 		return c
 	}
 
-	config, err := c.getTLSConfig()
+	config, err := c.tlsConfig()
 	if err != nil {
 		c.Log.Printf("ERROR %v", err)
 		return c
@@ -838,8 +839,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 }
 
 // getting TLS client config if not exists then create one
-func (c *Client) getTLSConfig() (*tls.Config, error) {
-	transport, err := c.getTransport()
+func (c *Client) tlsConfig() (*tls.Config, error) {
+	transport, err := c.transport()
 	if err != nil {
 		return nil, err
 	}
@@ -849,26 +850,9 @@ func (c *Client) getTLSConfig() (*tls.Config, error) {
 	return transport.TLSClientConfig, nil
 }
 
-// returns `*http.Transport` currently in use or error
-// in case currently used `transport` is not an `*http.Transport`
-func (c *Client) getTransport() (*http.Transport, error) {
-	if c.httpClient.Transport == nil {
-		transport := &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			MaxIdleConnsPerHost:   runtime.GOMAXPROCS(0) + 1,
-		}
-		c.SetTransport(transport)
-	}
-
+// Transport method returns `*http.Transport` currently in use or error
+// in case currently used `transport` is not a `*http.Transport`.
+func (c *Client) transport() (*http.Transport, error) {
 	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
 		return transport, nil
 	}
@@ -908,7 +892,11 @@ type MultipartField struct {
 //_______________________________________________________________________
 
 func createClient(hc *http.Client) *Client {
-	c := &Client{ // not setting default values
+	if hc.Transport == nil {
+		hc.Transport = createTransport(nil)
+	}
+
+	c := &Client{ // not setting lang default values
 		QueryParam:         url.Values{},
 		FormData:           url.Values{},
 		Header:             http.Header{},
@@ -947,4 +935,24 @@ func createClient(hc *http.Client) *Client {
 	}
 
 	return c
+}
+
+func createTransport(localAddr net.Addr) *http.Transport {
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+		DualStack: true,
+	}
+	if localAddr != nil {
+		dialer.LocalAddr = localAddr
+	}
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConnsPerHost:   runtime.GOMAXPROCS(0) + 1,
+	}
 }
