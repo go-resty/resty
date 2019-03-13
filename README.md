@@ -118,7 +118,7 @@ import "github.com/go-resty/resty"
 
 ```go
 // Create a Resty Client
-client := New()
+client := resty.New()
 
 // Fire GET request
 resp, err := client.R().EnableTrace().Get("https://httpbin.org/get")
