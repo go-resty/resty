@@ -22,6 +22,45 @@ import (
 )
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Logger interface
+//_______________________________________________________________________
+
+// Logger interface is to abstract the logging from Resty. Gives control to
+// the Resty users, choice of the logger.
+type Logger interface {
+	Errorf(format string, v ...interface{})
+	Warnf(format string, v ...interface{})
+	Debugf(format string, v ...interface{})
+}
+
+func createLogger() *logger {
+	l := &logger{l: log.New(os.Stderr, "", log.Ldate|log.Lmicroseconds)}
+	return l
+}
+
+var _ Logger = (*logger)(nil)
+
+type logger struct {
+	l *log.Logger
+}
+
+func (l *logger) Errorf(format string, v ...interface{}) {
+	l.output("ERROR RESTY "+format, v...)
+}
+
+func (l *logger) Warnf(format string, v ...interface{}) {
+	l.output("WARN RESTY "+format, v...)
+}
+
+func (l *logger) Debugf(format string, v ...interface{}) {
+	l.output("DEBUG RESTY "+format, v...)
+}
+
+func (l *logger) output(format string, v ...interface{}) {
+	l.l.Printf(format, v...)
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Package Helper methods
 //_______________________________________________________________________
 
@@ -112,10 +151,6 @@ func firstNonEmpty(v ...string) string {
 		}
 	}
 	return ""
-}
-
-func getLogger(w io.Writer) *log.Logger {
-	return log.New(w, "RESTY ", log.LstdFlags)
 }
 
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")

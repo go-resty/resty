@@ -315,11 +315,11 @@ func TestClientOptions(t *testing.T) {
 	assertEqual(t, true, transport.TLSClientConfig.InsecureSkipVerify)
 
 	client.OnBeforeRequest(func(c *Client, r *Request) error {
-		c.Log.Println("I'm in Request middleware")
+		c.log.Debugf("I'm in Request middleware")
 		return nil // if it success
 	})
 	client.OnAfterResponse(func(c *Client, r *Response) error {
-		c.Log.Println("I'm in Response middleware")
+		c.log.Debugf("I'm in Response middleware")
 		return nil // if it success
 	})
 
@@ -344,19 +344,17 @@ func TestClientOptions(t *testing.T) {
 
 	client.SetCloseConnection(true)
 	assertEqual(t, client.closeConnection, true)
-
-	client.SetLogger(ioutil.Discard)
 }
 
 func TestClientPreRequestHook(t *testing.T) {
 	client := dc()
 	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
-		c.Log.Println("I'm in Pre-Request Hook")
+		c.log.Debugf("I'm in Pre-Request Hook")
 		return nil
 	})
 
 	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
-		c.Log.Println("I'm Overwriting existing Pre-Request Hook")
+		c.log.Debugf("I'm Overwriting existing Pre-Request Hook")
 		return nil
 	})
 }
@@ -379,7 +377,7 @@ func TestClientAllowsGetMethodPayload(t *testing.T) {
 
 func TestClientRoundTripper(t *testing.T) {
 	c := NewWithClient(&http.Client{})
-	c.SetLogger(ioutil.Discard)
+	c.outputLogTo(ioutil.Discard)
 
 	rt := &CustomRoundTripper{}
 	c.SetTransport(rt)
@@ -409,8 +407,8 @@ func TestDebugBodySizeLimit(t *testing.T) {
 	var lgr bytes.Buffer
 	c := dc()
 	c.SetDebug(true)
-	c.SetLogger(&lgr)
 	c.SetDebugBodyLimit(30)
+	c.outputLogTo(&lgr)
 
 	testcases := []struct{ url, want string }{
 		// Text, does not exceed limit.
@@ -479,7 +477,7 @@ func TestLogCallbacks(t *testing.T) {
 	c := New().SetDebug(true)
 
 	var lgr bytes.Buffer
-	c.SetLogger(&lgr)
+	c.outputLogTo(&lgr)
 
 	c.OnRequestLog(func(r *RequestLog) error {
 		// masking authorzation header

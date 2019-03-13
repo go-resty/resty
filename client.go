@@ -14,12 +14,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -87,7 +85,6 @@ type Client struct {
 	Debug                 bool
 	DisableWarn           bool
 	AllowGetMethodPayload bool
-	Log                   *log.Logger
 	RetryCount            int
 	RetryWaitTime         time.Duration
 	RetryMaxWaitTime      time.Duration
@@ -103,8 +100,8 @@ type Client struct {
 	debugBodySizeLimit int64
 	outputDirectory    string
 	scheme             string
-	logPrefix          string
 	pathParams         map[string]string
+	log                Logger
 	httpClient         *http.Client
 	proxyURL           *url.URL
 	beforeRequest      []func(*Client, *Request) error
@@ -368,7 +365,7 @@ func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
 // Note: Only one pre-request hook can be registered. Use `client.OnBeforeRequest` for mutilple.
 func (c *Client) SetPreRequestHook(h func(*Client, *http.Request) error) *Client {
 	if c.preReqHook != nil {
-		c.Log.Printf("Overwriting an existing pre-request hook: %s", functionName(h))
+		c.log.Warnf("Overwriting an existing pre-request hook: %s", functionName(h))
 	}
 	c.preReqHook = h
 	return c
@@ -394,7 +391,8 @@ func (c *Client) SetDebugBodyLimit(sl int64) *Client {
 // called before the resty actually logs the information.
 func (c *Client) OnRequestLog(rl func(*RequestLog) error) *Client {
 	if c.requestLog != nil {
-		c.Log.Printf("Overwriting an existing on-request-log callback from=%s to=%s", functionName(c.requestLog), functionName(rl))
+		c.log.Warnf("Overwriting an existing on-request-log callback from=%s to=%s",
+			functionName(c.requestLog), functionName(rl))
 	}
 	c.requestLog = rl
 	return c
@@ -404,7 +402,8 @@ func (c *Client) OnRequestLog(rl func(*RequestLog) error) *Client {
 // called before the resty actually logs the information.
 func (c *Client) OnResponseLog(rl func(*ResponseLog) error) *Client {
 	if c.responseLog != nil {
-		c.Log.Printf("Overwriting an existing on-response-log callback from=%s to=%s", functionName(c.responseLog), functionName(rl))
+		c.log.Warnf("Overwriting an existing on-response-log callback from=%s to=%s",
+			functionName(c.responseLog), functionName(rl))
 	}
 	c.responseLog = rl
 	return c
@@ -429,12 +428,10 @@ func (c *Client) SetAllowGetMethodPayload(a bool) *Client {
 }
 
 // SetLogger method sets given writer for logging Resty request and response details.
-// Defaults to os.Stderr.
-// 		file, _ := os.OpenFile("/Users/jeeva/go-resty.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 //
-//		client.SetLogger(file)
-func (c *Client) SetLogger(w io.Writer) *Client {
-	c.Log = getLogger(w)
+// Compliant to interface `resty.Logger`.
+func (c *Client) SetLogger(l Logger) *Client {
+	c.log = l
 	return c
 }
 
@@ -476,7 +473,7 @@ func (c *Client) SetError(err interface{}) *Client {
 func (c *Client) SetRedirectPolicy(policies ...interface{}) *Client {
 	for _, p := range policies {
 		if _, ok := p.(RedirectPolicy); !ok {
-			c.Log.Printf("ERORR: %v does not implement resty.RedirectPolicy (missing Apply method)",
+			c.log.Errorf("%v does not implement resty.RedirectPolicy (missing Apply method)",
 				functionName(p))
 		}
 	}
@@ -539,7 +536,7 @@ func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	transport, err := c.transport()
 	if err != nil {
-		c.Log.Printf("ERROR %v", err)
+		c.log.Errorf("%v", err)
 		return c
 	}
 	transport.TLSClientConfig = config
@@ -555,13 +552,13 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 func (c *Client) SetProxy(proxyURL string) *Client {
 	transport, err := c.transport()
 	if err != nil {
-		c.Log.Printf("ERROR %v", err)
+		c.log.Errorf("%v", err)
 		return c
 	}
 
 	pURL, err := url.Parse(proxyURL)
 	if err != nil {
-		c.Log.Printf("ERROR %v", err)
+		c.log.Errorf("%v", err)
 		return c
 	}
 
@@ -575,7 +572,7 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 func (c *Client) RemoveProxy() *Client {
 	transport, err := c.transport()
 	if err != nil {
-		c.Log.Printf("ERROR %v", err)
+		c.log.Errorf("%v", err)
 		return c
 	}
 	c.proxyURL = nil
@@ -587,7 +584,7 @@ func (c *Client) RemoveProxy() *Client {
 func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 	config, err := c.tlsConfig()
 	if err != nil {
-		c.Log.Printf("ERROR %v", err)
+		c.log.Errorf("%v", err)
 		return c
 	}
 	config.Certificates = append(config.Certificates, certs...)
@@ -599,13 +596,13 @@ func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	rootPemData, err := ioutil.ReadFile(pemFilePath)
 	if err != nil {
-		c.Log.Printf("ERROR %v", err)
+		c.log.Errorf("%v", err)
 		return c
 	}
 
 	config, err := c.tlsConfig()
 	if err != nil {
-		c.Log.Printf("ERROR %v", err)
+		c.log.Errorf("%v", err)
 		return c
 	}
 	if config.RootCAs == nil {
@@ -674,13 +671,6 @@ func (c *Client) SetCloseConnection(close bool) *Client {
 // taken over the control of response parsing from `Resty`.
 func (c *Client) SetDoNotParseResponse(parse bool) *Client {
 	c.notParseResponse = parse
-	return c
-}
-
-// SetLogPrefix method sets the Resty logger prefix value.
-func (c *Client) SetLogPrefix(prefix string) *Client {
-	c.logPrefix = prefix
-	c.Log.SetPrefix(prefix)
 	return c
 }
 
@@ -859,6 +849,11 @@ func (c *Client) transport() (*http.Transport, error) {
 	return nil, errors.New("current transport is not an *http.Transport instance")
 }
 
+// just an helper method
+func (c *Client) outputLogTo(w io.Writer) {
+	c.log.(*logger).l.SetOutput(w)
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // File struct and its methods
 //_______________________________________________________________________
@@ -901,7 +896,6 @@ func createClient(hc *http.Client) *Client {
 		FormData:           url.Values{},
 		Header:             http.Header{},
 		Cookies:            make([]*http.Cookie, 0),
-		Log:                getLogger(os.Stderr),
 		RetryWaitTime:      defaultWaitTime,
 		RetryMaxWaitTime:   defaultMaxWaitTime,
 		JSONMarshal:        json.Marshal,
@@ -912,8 +906,8 @@ func createClient(hc *http.Client) *Client {
 		pathParams:         make(map[string]string),
 	}
 
-	// Log Prefix
-	c.SetLogPrefix("RESTY ")
+	// Logger
+	c.SetLogger(createLogger())
 
 	// default before request middlewares
 	c.beforeRequest = []func(*Client, *Request) error{

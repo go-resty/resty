@@ -37,7 +37,7 @@
     * Auto detects file content type
   * Request URL [Path Params (aka URI Params)](https://godoc.org/github.com/go-resty/resty#Request.SetPathParams)
   * Backoff Retry Mechanism with retry condition function [reference](retry_test.go)
-  * resty client HTTP & REST [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middlewares
+  * Resty client HTTP & REST [Request](https://godoc.org/github.com/go-resty/resty#Client.OnBeforeRequest) and [Response](https://godoc.org/github.com/go-resty/resty#Client.OnAfterResponse) middlewares
   * `Request.SetContext` supported
   * Authorization option of `BasicAuth` and `Bearer` token
   * Set request `ContentLength` value for all request or particular request

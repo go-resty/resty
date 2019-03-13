@@ -216,7 +216,7 @@ func addCredentials(c *Client, r *Request) error {
 
 	if !c.DisableWarn {
 		if isBasicAuth && !strings.HasPrefix(r.URL, "https") {
-			c.Log.Println("WARNING - Using Basic Auth in HTTP mode is not secure.")
+			c.log.Warnf("Using Basic Auth in HTTP mode is not secure, use HTTPS")
 		}
 	}
 
@@ -281,7 +281,7 @@ func responseLogger(c *Client, res *Response) error {
 		}
 		debugLog += "==============================================================================\n"
 
-		c.Log.Print(debugLog)
+		c.log.Debugf(debugLog)
 	}
 
 	return nil

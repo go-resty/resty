@@ -69,8 +69,8 @@ func TestGetClientParamRequestParam(t *testing.T) {
 	c := dc()
 	c.SetQueryParam("client_param", "true").
 		SetQueryParams(map[string]string{"req_1": "jeeva", "req_3": "jeeva3"}).
-		SetDebug(true).
-		SetLogger(ioutil.Discard)
+		SetDebug(true)
+	c.outputLogTo(ioutil.Discard)
 
 	resp, err := c.R().
 		SetQueryParams(map[string]string{"req_1": "req 1 value", "req_2": "req 2 value"}).
@@ -498,8 +498,8 @@ func TestFormData(t *testing.T) {
 	c := dc()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
 		SetContentLength(true).
-		SetDebug(true).
-		SetLogger(ioutil.Discard)
+		SetDebug(true)
+	c.outputLogTo(ioutil.Discard)
 
 	resp, err := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
@@ -520,9 +520,8 @@ func TestMultiValueFormData(t *testing.T) {
 	}
 
 	c := dc()
-	c.SetContentLength(true).
-		SetDebug(true).
-		SetLogger(ioutil.Discard)
+	c.SetContentLength(true).SetDebug(true)
+	c.outputLogTo(ioutil.Discard)
 
 	resp, err := c.R().
 		SetQueryParamsFromValues(v).
@@ -541,8 +540,8 @@ func TestFormDataDisableWarn(t *testing.T) {
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
 		SetContentLength(true).
 		SetDebug(true).
-		SetLogger(ioutil.Discard).
 		SetDisableWarn(true)
+	c.outputLogTo(ioutil.Discard)
 
 	resp, err := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
@@ -820,7 +819,8 @@ func TestPutJSONString(t *testing.T) {
 		return nil
 	})
 
-	client.SetDebug(true).SetLogger(ioutil.Discard)
+	client.SetDebug(true)
+	client.outputLogTo(ioutil.Discard)
 
 	resp, err := client.R().
 		SetHeaders(map[string]string{hdrContentTypeKey: jsonContentType, hdrAcceptKey: jsonContentType}).
@@ -1159,8 +1159,8 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	client := dc().
 		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
 		SetOutputDirectory(filepath.Join(getTestDataPath(), "dir-sample")).
-		SetDebug(true).
-		SetLogger(ioutil.Discard)
+		SetDebug(true)
+	client.outputLogTo(ioutil.Discard)
 
 	resp, err := client.R().
 		SetOutput("go-resty/test-img-success.png").
