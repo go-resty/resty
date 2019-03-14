@@ -161,9 +161,19 @@ func escapeQuotes(s string) string {
 
 func createMultipartHeader(param, fileName, contentType string) textproto.MIMEHeader {
 	hdr := make(textproto.MIMEHeader)
-	hdr.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
-		escapeQuotes(param), escapeQuotes(fileName)))
-	hdr.Set("Content-Type", contentType)
+
+	var contentDispositionValue string
+	if IsStringEmpty(fileName) {
+		contentDispositionValue = fmt.Sprintf(`form-data; name="%s"`, param)
+	} else {
+		contentDispositionValue = fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
+			param, escapeQuotes(fileName))
+	}
+	hdr.Set("Content-Disposition", contentDispositionValue)
+
+	if !IsStringEmpty(contentType) {
+		hdr.Set(hdrContentTypeKey, contentType)
+	}
 	return hdr
 }
 
