@@ -89,6 +89,7 @@ type Client struct {
 	RetryWaitTime         time.Duration
 	RetryMaxWaitTime      time.Duration
 	RetryConditions       []RetryConditionFunc
+	RetryAfter            RetryAfterFunc
 	JSONMarshal           func(v interface{}) ([]byte, error)
 	JSONUnmarshal         func(data []byte, v interface{}) error
 
@@ -513,6 +514,13 @@ func (c *Client) SetRetryWaitTime(waitTime time.Duration) *Client {
 func (c *Client) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
 	c.RetryMaxWaitTime = maxWaitTime
 	return c
+}
+
+// SetRetryAfter sets callback to calculate wait time between retries.
+// Default (nil) implies exponential backoff with jitter
+func (c *Client) SetRetryAfter(callback RetryAfterFunc) *Client {
+       c.RetryAfter = callback
+       return c
 }
 
 // AddRetryCondition method adds a retry condition function to array of functions
