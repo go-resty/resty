@@ -50,29 +50,9 @@ func TestBackoffTenAttemptsSuccess(t *testing.T) {
 func TestConditionalBackoffCondition(t *testing.T) {
 	attempts := 3
 	counter := 0
-	check := RetryConditionFunc(func(*Response, error) (bool, error) {
-		return attempts != counter, nil
+	check := RetryConditionFunc(func(*Response, error) bool {
+		return attempts != counter
 	})
-	retryErr := Backoff(func() (*Response, error) {
-		counter++
-		return nil, nil
-	}, RetryConditions([]RetryConditionFunc{check}))
-
-	assertError(t, retryErr)
-	assertEqual(t, counter, attempts)
-}
-
-// Check to make sure that errors in the conditional cause a retry
-func TestConditionalBackoffConditionError(t *testing.T) {
-	attempts := 3
-	counter := 0
-	check := RetryConditionFunc(func(*Response, error) (bool, error) {
-		if attempts != counter {
-			return false, errors.New("attempts not equal Counter")
-		}
-		return false, nil
-	})
-
 	retryErr := Backoff(func() (*Response, error) {
 		counter++
 		return nil, nil
@@ -104,12 +84,9 @@ func TestConditionalGet(t *testing.T) {
 	externalCounter := 0
 
 	// This check should pass on first run, and let the response through
-	check := RetryConditionFunc(func(*Response, error) (bool, error) {
+	check := RetryConditionFunc(func(*Response, error) bool {
 		externalCounter++
-		if attemptCount != externalCounter {
-			return false, errors.New("attempts not equal Counter")
-		}
-		return false, nil
+		return attemptCount != externalCounter
 	})
 
 	client := dc().AddRetryCondition(check).SetRetryCount(1)
@@ -135,12 +112,9 @@ func TestConditionalGetDefaultClient(t *testing.T) {
 	externalCounter := 0
 
 	// This check should pass on first run, and let the response through
-	check := RetryConditionFunc(func(*Response, error) (bool, error) {
+	check := RetryConditionFunc(func(*Response, error) bool {
 		externalCounter++
-		if attemptCount != externalCounter {
-			return false, errors.New("attempts not equal Counter")
-		}
-		return false, nil
+		return attemptCount != externalCounter
 	})
 
 	// Clear the default client.
@@ -197,11 +171,11 @@ func TestClientRetryWait(t *testing.T) {
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		AddRetryCondition(
-			func(r *Response, err error) (bool, error) {
+			func(r *Response, _ error) bool {
 				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
-				return true, nil
+				return true
 			},
 		)
 	_, _ = c.R().Get(ts.URL + "/set-retrywaittime-test")
@@ -222,6 +196,286 @@ func TestClientRetryWait(t *testing.T) {
 	}
 }
 
+func TestClientRetryWaitMaxInfinite(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	attempt := 0
+
+	retryCount := 5
+	retryIntervals := make([]uint64, retryCount)
+
+	// Set retry wait times that do not intersect with default ones
+	retryWaitTime := time.Duration(3) * time.Second
+	retryMaxWaitTime := time.Duration(-1.0) // negative value
+
+	c := dc().
+		SetRetryCount(retryCount).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryMaxWaitTime).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				retryIntervals[attempt] = timeSlept
+				attempt++
+				return true
+			},
+		)
+	_, _ = c.R().Get(ts.URL + "/set-retrywaittime-test")
+
+	// 5 attempts were made
+	assertEqual(t, attempt, 5)
+
+	// Initial attempt has 0 time slept since last request
+	assertEqual(t, retryIntervals[0], uint64(0))
+
+	for i := 1; i < len(retryIntervals); i++ {
+		slept := time.Duration(retryIntervals[i])
+		// Ensure that client has slept some duration between
+		// waitTime and maxWaitTime for consequent requests
+		if slept < retryWaitTime {
+			t.Errorf("Client has slept %f seconds before retry %d", slept.Seconds(), i)
+		}
+	}
+}
+
+func TestClientRetryWaitCallbackError(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	attempt := 0
+
+	retryCount := 5
+	retryIntervals := make([]uint64, retryCount)
+
+	// Set retry wait times that do not intersect with default ones
+	retryWaitTime := 3 * time.Second
+	retryMaxWaitTime := 9 * time.Second
+
+	retryAfter := func(client *Client, resp *Response) (time.Duration, error) {
+		return 0, errors.New("quota exceeded")
+	}
+
+	c := dc().
+		SetRetryCount(retryCount).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryMaxWaitTime).
+		SetRetryAfter(retryAfter).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				retryIntervals[attempt] = timeSlept
+				attempt++
+				return true
+			},
+		)
+
+	_, err := c.R().Get(ts.URL + "/set-retrywaittime-test")
+
+	// 1 attempts were made
+	assertEqual(t, attempt, 1)
+
+	// non-nil error was returned
+	assertNotEqual(t, nil, err)
+}
+
+func TestClientRetryWaitCallback(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	attempt := 0
+
+	retryCount := 5
+	retryIntervals := make([]uint64, retryCount)
+
+	// Set retry wait times that do not intersect with default ones
+	retryWaitTime := 3 * time.Second
+	retryMaxWaitTime := 9 * time.Second
+
+	retryAfter := func(client *Client, resp *Response) (time.Duration, error) {
+		return 5 * time.Second, nil
+	}
+
+	c := dc().
+		SetRetryCount(retryCount).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryMaxWaitTime).
+		SetRetryAfter(retryAfter).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				retryIntervals[attempt] = timeSlept
+				attempt++
+				return true
+			},
+		)
+	_, _ = c.R().Get(ts.URL + "/set-retrywaittime-test")
+
+	// 5 attempts were made
+	assertEqual(t, attempt, 5)
+
+	// Initial attempt has 0 time slept since last request
+	assertEqual(t, retryIntervals[0], uint64(0))
+
+	for i := 1; i < len(retryIntervals); i++ {
+		slept := time.Duration(retryIntervals[i])
+		// Ensure that client has slept some duration between
+		// waitTime and maxWaitTime for consequent requests
+		if slept < 5*time.Second-5*time.Millisecond || 5*time.Second+5*time.Millisecond < slept {
+			t.Errorf("Client has slept %f seconds before retry %d", slept.Seconds(), i)
+		}
+	}
+}
+
+func TestClientRetryWaitCallbackTooShort(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	attempt := 0
+
+	retryCount := 5
+	retryIntervals := make([]uint64, retryCount)
+
+	// Set retry wait times that do not intersect with default ones
+	retryWaitTime := 3 * time.Second
+	retryMaxWaitTime := 9 * time.Second
+
+	retryAfter := func(client *Client, resp *Response) (time.Duration, error) {
+		return 2 * time.Second, nil // too short duration
+	}
+
+	c := dc().
+		SetRetryCount(retryCount).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryMaxWaitTime).
+		SetRetryAfter(retryAfter).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				retryIntervals[attempt] = timeSlept
+				attempt++
+				return true
+			},
+		)
+	_, _ = c.R().Get(ts.URL + "/set-retrywaittime-test")
+
+	// 5 attempts were made
+	assertEqual(t, attempt, 5)
+
+	// Initial attempt has 0 time slept since last request
+	assertEqual(t, retryIntervals[0], uint64(0))
+
+	for i := 1; i < len(retryIntervals); i++ {
+		slept := time.Duration(retryIntervals[i])
+		// Ensure that client has slept some duration between
+		// waitTime and maxWaitTime for consequent requests
+		if slept < retryWaitTime-5*time.Millisecond || retryWaitTime+5*time.Millisecond < slept {
+			t.Errorf("Client has slept %f seconds before retry %d", slept.Seconds(), i)
+		}
+	}
+}
+
+func TestClientRetryWaitCallbackTooLong(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	attempt := 0
+
+	retryCount := 5
+	retryIntervals := make([]uint64, retryCount)
+
+	// Set retry wait times that do not intersect with default ones
+	retryWaitTime := 1 * time.Second
+	retryMaxWaitTime := 3 * time.Second
+
+	retryAfter := func(client *Client, resp *Response) (time.Duration, error) {
+		return 4 * time.Second, nil // too long duration
+	}
+
+	c := dc().
+		SetRetryCount(retryCount).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryMaxWaitTime).
+		SetRetryAfter(retryAfter).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				retryIntervals[attempt] = timeSlept
+				attempt++
+				return true
+			},
+		)
+	_, _ = c.R().Get(ts.URL + "/set-retrywaittime-test")
+
+	// 5 attempts were made
+	assertEqual(t, attempt, 5)
+
+	// Initial attempt has 0 time slept since last request
+	assertEqual(t, retryIntervals[0], uint64(0))
+
+	for i := 1; i < len(retryIntervals); i++ {
+		slept := time.Duration(retryIntervals[i])
+		// Ensure that client has slept some duration between
+		// waitTime and maxWaitTime for consequent requests
+		if slept < retryMaxWaitTime-5*time.Millisecond || retryMaxWaitTime+5*time.Millisecond < slept {
+			t.Errorf("Client has slept %f seconds before retry %d", slept.Seconds(), i)
+		}
+	}
+}
+
+func TestClientRetryWaitCallbackSwitchToDefault(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	attempt := 0
+
+	retryCount := 5
+	retryIntervals := make([]uint64, retryCount)
+
+	// Set retry wait times that do not intersect with default ones
+	retryWaitTime := 1 * time.Second
+	retryMaxWaitTime := 3 * time.Second
+
+	retryAfter := func(client *Client, resp *Response) (time.Duration, error) {
+		return 0, nil // use default algorithm to determine retry-after time
+	}
+
+	c := dc().
+		SetRetryCount(retryCount).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryMaxWaitTime).
+		SetRetryAfter(retryAfter).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				retryIntervals[attempt] = timeSlept
+				attempt++
+				return true
+			},
+		)
+	_, _ = c.R().Get(ts.URL + "/set-retrywaittime-test")
+
+	// 5 attempts were made
+	assertEqual(t, attempt, 5)
+
+	// Initial attempt has 0 time slept since last request
+	assertEqual(t, retryIntervals[0], uint64(0))
+
+	for i := 1; i < len(retryIntervals); i++ {
+		slept := time.Duration(retryIntervals[i])
+		expected := (1 << (uint(i-1))) * time.Second
+		if expected > retryMaxWaitTime {
+			expected = retryMaxWaitTime
+		}
+
+		// Ensure that client has slept some duration between
+		// waitTime and maxWaitTime for consequent requests
+		if slept < expected/2 - 5*time.Millisecond || expected + 5*time.Millisecond < slept {
+			t.Errorf("Client has slept %f seconds before retry %d", slept.Seconds(), i)
+		}
+	}
+}
+
 func TestClientRetryPost(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
@@ -235,11 +489,8 @@ func TestClientRetryPost(t *testing.T) {
 
 	c := dc()
 	c.SetRetryCount(3)
-	c.AddRetryCondition(RetryConditionFunc(func(r *Response, err error) (bool, error) {
-		if r.StatusCode() >= http.StatusInternalServerError {
-			return false, errors.New("error")
-		}
-		return true, nil
+	c.AddRetryCondition(RetryConditionFunc(func(r *Response, _ error) bool {
+		return r.StatusCode() >= http.StatusInternalServerError
 	}))
 
 	resp, _ := c.R().
@@ -263,6 +514,6 @@ func TestClientRetryPost(t *testing.T) {
 	}
 }
 
-func filler(*Response, error) (bool, error) {
-	return false, nil
+func filler(*Response, error) bool {
+	return false
 }

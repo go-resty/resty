@@ -566,7 +566,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 	var resp *Response
 	attempt := 0
-	_ = Backoff(
+	err = Backoff(
 		func() (*Response, error) {
 			attempt++
 
@@ -575,11 +575,6 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 			resp, err = r.client.execute(r)
 			if err != nil {
 				r.client.log.Errorf("%v, Attempt %v", err, attempt)
-				if r.ctx != nil && r.ctx.Err() != nil {
-					// stop Backoff from retrying request if request has been
-					// canceled by context
-					return resp, nil
-				}
 			}
 
 			return resp, err
