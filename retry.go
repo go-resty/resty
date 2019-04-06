@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"context"
 	"math"
 	"math/rand"
 	"time"
@@ -89,7 +90,11 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 
 	for attempt := 0; attempt < opts.maxRetries; attempt++ {
 		resp, err = operation()
-		if resp != nil && resp.Request.ctx != nil && resp.Request.ctx.Err() != nil {
+		ctx := context.Background()
+		if resp != nil && resp.Request.ctx != nil {
+			ctx = resp.Request.ctx
+		}
+		if ctx.Err() != nil {
 			return err
 		}
 
@@ -113,7 +118,12 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 			}
 			return err
 		}
-		time.Sleep(waitTime)
+
+		select {
+		case <-time.After(waitTime):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
 	return err

@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -473,6 +474,49 @@ func TestClientRetryWaitCallbackSwitchToDefault(t *testing.T) {
 		if slept < expected/2 - 5*time.Millisecond || expected + 5*time.Millisecond < slept {
 			t.Errorf("Client has slept %f seconds before retry %d", slept.Seconds(), i)
 		}
+	}
+}
+
+func TestClientRetryCancel(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	attempt := 0
+
+	retryCount := 5
+	retryIntervals := make([]uint64, retryCount)
+
+	// Set retry wait times that do not intersect with default ones
+	retryWaitTime := time.Duration(10) * time.Second
+	retryMaxWaitTime := time.Duration(20) * time.Second
+
+	c := dc().
+		SetRetryCount(retryCount).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryMaxWaitTime).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				retryIntervals[attempt] = timeSlept
+				attempt++
+				return true
+			},
+		)
+
+	timeout := 2*time.Second
+
+	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	_, _ = c.R().SetContext(ctx).Get(ts.URL + "/set-retrywaittime-test")
+
+	// 2 attempts were made
+	assertEqual(t, attempt, 1)
+
+	// Initial attempt has 0 time slept since last request
+	assertEqual(t, retryIntervals[0], uint64(0))
+
+	// Second attempt should be interrupted on context timeout
+	if time.Duration(retryIntervals[1]) > timeout {
+		t.Errorf("Client didn't awake on context cancel")
 	}
 }
 
