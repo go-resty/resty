@@ -711,6 +711,11 @@ func TestMultiPartMultipartFields(t *testing.T) {
 			ContentType: "application/json",
 			Reader:      strings.NewReader(jsonStr2),
 		},
+		{
+			Param:       "uploadManifest3",
+			ContentType: "application/json",
+			Reader:      strings.NewReader(jsonStr2),
+		},
 	}
 
 	resp, err := dclr().
