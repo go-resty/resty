@@ -546,7 +546,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	var addrs []*net.SRV
 	var err error
 
-	if r.isMultiPart && !(method == MethodPost || method == MethodPut) {
+	if r.isMultiPart && !(method == MethodPost || method == MethodPut || method == MethodPatch) {
 		return nil, fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
 	}
 
