@@ -519,8 +519,8 @@ func (c *Client) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
 // SetRetryAfter sets callback to calculate wait time between retries.
 // Default (nil) implies exponential backoff with jitter
 func (c *Client) SetRetryAfter(callback RetryAfterFunc) *Client {
-       c.RetryAfter = callback
-       return c
+	c.RetryAfter = callback
+	return c
 }
 
 // AddRetryCondition method adds a retry condition function to array of functions

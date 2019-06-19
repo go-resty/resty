@@ -464,14 +464,14 @@ func TestClientRetryWaitCallbackSwitchToDefault(t *testing.T) {
 
 	for i := 1; i < len(retryIntervals); i++ {
 		slept := time.Duration(retryIntervals[i])
-		expected := (1 << (uint(i-1))) * time.Second
+		expected := (1 << (uint(i - 1))) * time.Second
 		if expected > retryMaxWaitTime {
 			expected = retryMaxWaitTime
 		}
 
 		// Ensure that client has slept some duration between
 		// waitTime and maxWaitTime for consequent requests
-		if slept < expected/2 - 5*time.Millisecond || expected + 5*time.Millisecond < slept {
+		if slept < expected/2-5*time.Millisecond || expected+5*time.Millisecond < slept {
 			t.Errorf("Client has slept %f seconds before retry %d", slept.Seconds(), i)
 		}
 	}
@@ -503,9 +503,9 @@ func TestClientRetryCancel(t *testing.T) {
 			},
 		)
 
-	timeout := 2*time.Second
+	timeout := 2 * time.Second
 
-	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
 	_, _ = c.R().SetContext(ctx).Get(ts.URL + "/set-retrywaittime-test")
 
 	// 2 attempts were made
@@ -518,6 +518,7 @@ func TestClientRetryCancel(t *testing.T) {
 	if time.Duration(retryIntervals[1]) > timeout {
 		t.Errorf("Client didn't awake on context cancel")
 	}
+	cancelFunc()
 }
 
 func TestClientRetryPost(t *testing.T) {

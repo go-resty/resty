@@ -32,6 +32,7 @@ type (
 	// (0, nil) is a special result means 'use default algorithm'
 	RetryAfterFunc func(*Client, *Response) (time.Duration, error)
 
+	// Options struct is used to hold retry settings.
 	Options struct {
 		maxRetries      int
 		waitTime        time.Duration
@@ -130,7 +131,7 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 }
 
 func sleepDuration(resp *Response, min, max time.Duration, attempt int) (time.Duration, error) {
-	const maxInt = 1<<31 -1 // max int for arch 386
+	const maxInt = 1<<31 - 1 // max int for arch 386
 
 	if max < 0 {
 		max = maxInt
