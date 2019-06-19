@@ -64,7 +64,7 @@
   * Easily mock Resty for testing, [for e.g.](#mocking-http-requests-using-httpmock-library)
   * Well tested client library
 
-Resty supports with `go1.8` and above.
+Resty supports with `go1.9.7` and above.
 
 ### Included Batteries
 
