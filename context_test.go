@@ -1,5 +1,3 @@
-// +build go1.7
-
 // Copyright (c) 2015-2019 Jeevanandam M (jeeva@myjeeva.com)
 // 2016 Andrew Grigorev (https://github.com/ei-grad)
 // All rights reserved.
@@ -11,6 +9,7 @@ package resty
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -21,7 +20,7 @@ func TestSetContext(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := R().
+	resp, err := dc().R().
 		SetContext(context.Background()).
 		Get(ts.URL + "/")
 
@@ -72,7 +71,7 @@ func TestSetContextCancel(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := R().
+	_, err := dc().R().
 		SetContext(ctx).
 		Get(ts.URL + "/")
 
@@ -111,8 +110,7 @@ func TestSetContextCancelRetry(t *testing.T) {
 		cancel()
 	}()
 
-	c := dc()
-	c.SetHTTPMode().
+	c := dc().
 		SetTimeout(time.Second * 3).
 		SetRetryCount(3)
 
@@ -159,7 +157,7 @@ func TestSetContextCancelWithError(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := R().
+	_, err := dc().R().
 		SetContext(ctx).
 		Get(ts.URL + "/")
 
@@ -186,8 +184,7 @@ func TestClientRetryWithSetContext(t *testing.T) {
 	})
 	defer ts.Close()
 
-	c := dc()
-	c.SetHTTPMode().
+	c := dc().
 		SetTimeout(time.Second * 1).
 		SetRetryCount(3)
 
@@ -196,4 +193,21 @@ func TestClientRetryWithSetContext(t *testing.T) {
 		Get(ts.URL + "/")
 
 	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/"))
+}
+
+func TestRequestContext(t *testing.T) {
+	client := dc()
+	r := client.NewRequest()
+	assertNotNil(t, r.Context())
+
+	r.SetContext(context.Background())
+	assertNotNil(t, r.Context())
+}
+
+func errIsContextCanceled(err error) bool {
+	ue, ok := err.(*url.Error)
+	if !ok {
+		return false
+	}
+	return ue.Err == context.Canceled
 }

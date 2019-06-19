@@ -20,9 +20,11 @@ import (
 	"time"
 )
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+const debugRequestLogKey = "__restyDebugRequestLog"
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Request Middleware(s)
-//___________________________________
+//_______________________________________________________________________
 
 func parseRequestURL(c *Client, r *Request) error {
 	// GitHub #103 Path Params
@@ -104,7 +106,7 @@ func parseRequestHeader(c *Client, r *Request) error {
 	}
 
 	if IsStringEmpty(hdr.Get(hdrUserAgentKey)) {
-		hdr.Set(hdrUserAgentKey, fmt.Sprintf(hdrUserAgentValue, Version))
+		hdr.Set(hdrUserAgentKey, hdrUserAgentValue)
 	}
 
 	ct := hdr.Get(hdrContentTypeKey)
@@ -188,7 +190,15 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	}
 
 	// Use context if it was specified
-	r.addContextIfAvailable()
+	if r.ctx != nil {
+		r.RawRequest = r.RawRequest.WithContext(r.ctx)
+	}
+
+	// Enable trace
+	if c.trace || r.trace {
+		r.clientTrace = &clientTrace{}
+		r.RawRequest = r.RawRequest.WithContext(r.clientTrace.createContext())
+	}
 
 	return
 }
@@ -206,7 +216,7 @@ func addCredentials(c *Client, r *Request) error {
 
 	if !c.DisableWarn {
 		if isBasicAuth && !strings.HasPrefix(r.URL, "https") {
-			c.Log.Println("WARNING - Using Basic Auth in HTTP mode is not secure.")
+			c.log.Warnf("Using Basic Auth in HTTP mode is not secure, use HTTPS")
 		}
 	}
 
@@ -230,23 +240,24 @@ func requestLogger(c *Client, r *Request) error {
 			}
 		}
 
-		reqLog := "\n---------------------- REQUEST LOG -----------------------\n" +
+		reqLog := "\n==============================================================================\n" +
 			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
 			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
 			fmt.Sprintf("HEADERS:\n") +
 			composeHeaders(rl.Header) + "\n" +
 			fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
-			"----------------------------------------------------------\n"
+			"------------------------------------------------------------------------------\n"
 
-		c.Log.Print(reqLog)
+		r.initValuesMap()
+		r.values[debugRequestLogKey] = reqLog
 	}
 
 	return nil
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Response Middleware(s)
-//___________________________________
+//_______________________________________________________________________
 
 func responseLogger(c *Client, res *Response) error {
 	if c.Debug {
@@ -257,20 +268,20 @@ func responseLogger(c *Client, res *Response) error {
 			}
 		}
 
-		resLog := "\n---------------------- RESPONSE LOG -----------------------\n" +
-			fmt.Sprintf("STATUS 		: %s\n", res.Status()) +
+		debugLog := res.Request.values[debugRequestLogKey].(string)
+		debugLog += fmt.Sprintf("STATUS 		: %s\n", res.Status()) +
 			fmt.Sprintf("RECEIVED AT	: %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
 			fmt.Sprintf("RESPONSE TIME	: %v\n", res.Time()) +
 			"HEADERS:\n" +
 			composeHeaders(rl.Header) + "\n"
 		if res.Request.isSaveResponse {
-			resLog += fmt.Sprintf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****\n")
+			debugLog += fmt.Sprintf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****\n")
 		} else {
-			resLog += fmt.Sprintf("BODY   :\n%v\n", rl.Body)
+			debugLog += fmt.Sprintf("BODY   :\n%v\n", rl.Body)
 		}
-		resLog += "----------------------------------------------------------\n"
+		debugLog += "==============================================================================\n"
 
-		c.Log.Print(resLog)
+		c.log.Debugf(debugLog)
 	}
 
 	return nil
