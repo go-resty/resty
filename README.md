@@ -13,7 +13,7 @@
 
 ## News
 
-  * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on TBD
+  * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on Jun 19, 2019.
   * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.  
   * v1.0 released and tagged on Sep 25, 2017. - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years since first release. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
 
@@ -120,8 +120,9 @@ import "github.com/go-resty/resty"
 // Create a Resty Client
 client := resty.New()
 
-// Fire GET request
-resp, err := client.R().EnableTrace().Get("https://httpbin.org/get")
+resp, err := client.R().
+		EnableTrace().
+		Get("https://httpbin.org/get")
 
 // Explore response object
 fmt.Println("Response Info:")
@@ -606,7 +607,12 @@ client.
     SetRetryWaitTime(5 * time.Second).
     // MaxWaitTime can be overridden as well.
     // Default is 2 seconds.
-    SetRetryMaxWaitTime(20 * time.Second)
+    SetRetryMaxWaitTime(20 * time.Second).
+    // SetRetryAfter sets callback to calculate wait time between retries.
+    // Default (nil) implies exponential backoff with jitter
+    SetRetryAfter(func(client *Client, resp *Response) (time.Duration, error) {
+        return 0, errors.New("quota exceeded")
+    })
 ```
 
 Above setup will result in resty retrying requests returned non nil error up to
@@ -619,11 +625,10 @@ You can optionally provide client with custom retry conditions:
 client := resty.New()
 
 client.AddRetryCondition(
-    // Condition function will be provided with *resty.Response as a
-    // parameter. It is expected to return (bool, error) pair. Resty will retry
-    // in case condition returns true or non nil error.
-    func(r *resty.Response, err error) (bool, error) {
-        return r.StatusCode() == http.StatusTooManyRequests, nil
+    // RetryConditionFunc type is for retry condition function
+	  // input: non-nil Response OR request execution error
+    func(r *resty.Response, err error) bool {
+        return r.StatusCode() == http.StatusTooManyRequests
     },
 )
 ```
@@ -673,10 +678,6 @@ client := resty.New()
 //--------------------------------
 // Enable debug mode
 client.SetDebug(true)
-
-// Using you custom log writer
-logFile, _ := os.OpenFile("/Users/jeeva/go-resty.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-client.SetLogger(logFile)
 
 // Assign Client TLSClientConfig
 // One can set custom root-certificate. Refer: http://golang.org/pkg/crypto/tls/#example_Dial
@@ -792,6 +793,7 @@ More detailed example of mocking resty http requests using ginko could be found 
 
 Resty releases versions according to [Semantic Versioning](http://semver.org)
 
+  * Resty v2 does not use `gopkg.in` service for library versioning.
   * Resty fully adapted to `go mod` capabilities since `v1.10.0` release. 
   * Resty v1 series was using `gopkg.in` to provide versioning. `gopkg.in/resty.vX` points to appropriate tagged versions; `X` denotes version series number and it's a stable release for production use. For e.g. `gopkg.in/resty.v0`.
   * Development takes place at the master branch. Although the code in master should always compile and test successfully, it might break API's. I aim to maintain backwards compatibility, but sometimes API's and behavior might be changed to fix a bug.
