@@ -13,7 +13,7 @@
 
 ## News
 
-  * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on Jun 19, 2019.
+  * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on Jul 16, 2019.
   * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.  
   * v1.0 released and tagged on Sep 25, 2017. - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years since first release. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
 
@@ -64,8 +64,6 @@
   * Easily mock Resty for testing, [for e.g.](#mocking-http-requests-using-httpmock-library)
   * Well tested client library
 
-Resty supports with `go1.8` and above.
-
 ### Included Batteries
 
   * Redirect Policies - see [how to use](#redirect-policy)
@@ -79,22 +77,17 @@ Resty supports with `go1.8` and above.
   * SRV Record based request instead of Host URL [how to use](resty_test.go#L1412)
   * etc (upcoming - throw your idea's [here](https://github.com/go-resty/resty/issues)).
 
-## Installation
 
-#### Stable Version - Production Ready
+#### Supported Go Versions
 
-Please refer section [Versioning](#versioning) for detailed info.
+Initially Resty started supporting `go modules` since `v1.10.0` release. 
 
-##### go.mod
+Starting Resty v2 and higher versions, it fully embraces [go modules](https://github.com/golang/go/wiki/Modules) package release. It requires a Go version capable of understanding `/vN` suffixed imports:
 
-```bash
-require github.com/go-resty/resty v2.0.0
-```
+- 1.9.7+
+- 1.10.3+
+- 1.11+
 
-##### go get
-```bash
-go get -u github.com/go-resty/resty
-```
 
 ## It might be beneficial for your project :smile:
 
@@ -104,14 +97,21 @@ Resty author also published following projects for Go Community.
   * [THUMBAI](https://thumbai.app) - Go Mod Repository, Go Vanity Service and Simple Proxy Server.
   * [go-model](https://github.com/jeevatkm/go-model) - Robust & Easy to use model mapper and utility methods for Go `struct`.
 
+
+## Installation
+
+```bash
+# Go Modules
+require github.com/go-resty/resty/v2 v2.0.0
+```
+
 ## Usage
 
-The following samples will assist you to become as comfortable as possible with resty library. Resty comes with ready to use DefaultClient.
-
-Import resty into your code and refer it as `resty`.
+The following samples will assist you to become as comfortable as possible with resty library.
 
 ```go
-import "github.com/go-resty/resty"
+// Import resty into your code and refer it as `resty`.
+import "github.com/go-resty/resty/v2"
 ```
 
 #### Simple GET
