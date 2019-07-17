@@ -450,14 +450,14 @@ func createGenServer(t *testing.T) *httptest.Server {
 				w.Header().Set(hdrContentTypeKey, plainTextType)
 				w.Header().Set(hdrContentEncodingKey, "gzip")
 				zw := gzip.NewWriter(w)
-				zw.Write([]byte("This is Gzip response testing"))
+				_, _ = zw.Write([]byte("This is Gzip response testing"))
 				zw.Close()
 			} else if r.URL.Path == "/gzip-test-gziped-empty-body" {
 				w.Header().Set(hdrContentTypeKey, plainTextType)
 				w.Header().Set(hdrContentEncodingKey, "gzip")
 				zw := gzip.NewWriter(w)
 				// write gziped empty body
-				zw.Write([]byte(""))
+				_, _ = zw.Write([]byte(""))
 				zw.Close()
 			} else if r.URL.Path == "/gzip-test-no-gziped-body" {
 				w.Header().Set(hdrContentTypeKey, plainTextType)
@@ -540,9 +540,9 @@ func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest
 }
 
 func dc() *Client {
-	DefaultClient = New()
-	DefaultClient.SetLogger(ioutil.Discard)
-	return DefaultClient
+	c := New()
+	c.outputLogTo(ioutil.Discard)
+	return c
 }
 
 func dcr() *Request {
@@ -552,8 +552,7 @@ func dcr() *Request {
 func dclr() *Request {
 	c := dc()
 	c.SetDebug(true)
-	c.SetLogger(ioutil.Discard)
-
+	c.outputLogTo(ioutil.Discard)
 	return c.R()
 }
 

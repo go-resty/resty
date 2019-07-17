@@ -32,7 +32,7 @@ func TestGet(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := R().
+	resp, err := dc().R().
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Get(ts.URL + "/")
 
@@ -69,8 +69,8 @@ func TestGetClientParamRequestParam(t *testing.T) {
 	c := dc()
 	c.SetQueryParam("client_param", "true").
 		SetQueryParams(map[string]string{"req_1": "jeeva", "req_3": "jeeva3"}).
-		SetDebug(true).
-		SetLogger(ioutil.Discard)
+		SetDebug(true)
+	c.outputLogTo(ioutil.Discard)
 
 	resp, err := c.R().
 		SetQueryParams(map[string]string{"req_1": "req 1 value", "req_2": "req 2 value"}).
@@ -498,8 +498,8 @@ func TestFormData(t *testing.T) {
 	c := dc()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
 		SetContentLength(true).
-		SetDebug(true).
-		SetLogger(ioutil.Discard)
+		SetDebug(true)
+	c.outputLogTo(ioutil.Discard)
 
 	resp, err := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
@@ -520,12 +520,11 @@ func TestMultiValueFormData(t *testing.T) {
 	}
 
 	c := dc()
-	c.SetContentLength(true).
-		SetDebug(true).
-		SetLogger(ioutil.Discard)
+	c.SetContentLength(true).SetDebug(true)
+	c.outputLogTo(ioutil.Discard)
 
 	resp, err := c.R().
-		SetMultiValueFormData(v).
+		SetQueryParamsFromValues(v).
 		Post(ts.URL + "/search")
 
 	assertError(t, err)
@@ -541,8 +540,8 @@ func TestFormDataDisableWarn(t *testing.T) {
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
 		SetContentLength(true).
 		SetDebug(true).
-		SetLogger(ioutil.Discard).
 		SetDisableWarn(true)
+	c.outputLogTo(ioutil.Discard)
 
 	resp, err := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
@@ -603,7 +602,10 @@ func TestMultiPartUploadFiles(t *testing.T) {
 	basePath := getTestDataPath()
 
 	resp, err := dclr().
-		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
+		SetFormDataFromValues(url.Values{
+			"first_name": []string{"Jeevanandam"},
+			"last_name":  []string{"M"},
+		}).
 		SetFiles(map[string]string{"profile_img": filepath.Join(basePath, "test-img.png"), "notes": filepath.Join(basePath, "text-file.txt")}).
 		Post(ts.URL + "/upload")
 
@@ -674,7 +676,10 @@ func TestMultiPartMultipartField(t *testing.T) {
 	jsonBytes := []byte(`{"input": {"name": "Uploaded document", "_filename" : ["file.txt"]}}`)
 
 	resp, err := dclr().
-		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
+		SetFormDataFromValues(url.Values{
+			"first_name": []string{"Jeevanandam"},
+			"last_name":  []string{"M"},
+		}).
 		SetMultipartField("uploadManifest", "upload-file.json", "application/json", bytes.NewReader(jsonBytes)).
 		Post(ts.URL + "/upload")
 
@@ -694,15 +699,20 @@ func TestMultiPartMultipartFields(t *testing.T) {
 	jsonStr2 := `{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`
 
 	fields := []*MultipartField{
-		&MultipartField{
+		{
 			Param:       "uploadManifest1",
 			FileName:    "upload-file-1.json",
 			ContentType: "application/json",
 			Reader:      strings.NewReader(jsonStr1),
 		},
-		&MultipartField{
+		{
 			Param:       "uploadManifest2",
 			FileName:    "upload-file-2.json",
+			ContentType: "application/json",
+			Reader:      strings.NewReader(jsonStr2),
+		},
+		{
+			Param:       "uploadManifest3",
 			ContentType: "application/json",
 			Reader:      strings.NewReader(jsonStr2),
 		},
@@ -789,7 +799,7 @@ func TestPutPlainString(t *testing.T) {
 	ts := createGenServer(t)
 	defer ts.Close()
 
-	resp, err := R().
+	resp, err := dc().R().
 		SetBody("This is plain text body to server").
 		Put(ts.URL + "/plaintext")
 
@@ -802,19 +812,22 @@ func TestPutJSONString(t *testing.T) {
 	ts := createGenServer(t)
 	defer ts.Close()
 
-	DefaultClient.OnBeforeRequest(func(c *Client, r *Request) error {
+	client := dc()
+
+	client.OnBeforeRequest(func(c *Client, r *Request) error {
 		r.SetHeader("X-Custom-Request-Middleware", "OnBeforeRequest middleware")
 		return nil
 	})
-	DefaultClient.OnBeforeRequest(func(c *Client, r *Request) error {
+	client.OnBeforeRequest(func(c *Client, r *Request) error {
 		c.SetContentLength(true)
 		r.SetHeader("X-ContentLength", "OnBeforeRequest ContentLength set")
 		return nil
 	})
 
-	DefaultClient.SetDebug(true).SetLogger(ioutil.Discard)
+	client.SetDebug(true)
+	client.outputLogTo(ioutil.Discard)
 
-	resp, err := R().
+	resp, err := client.R().
 		SetHeaders(map[string]string{hdrContentTypeKey: jsonContentType, hdrAcceptKey: jsonContentType}).
 		SetBody(`{"content":"json content sending to server"}`).
 		Put(ts.URL + "/json")
@@ -828,7 +841,7 @@ func TestPutXMLString(t *testing.T) {
 	ts := createGenServer(t)
 	defer ts.Close()
 
-	resp, err := R().
+	resp, err := dc().R().
 		SetHeaders(map[string]string{hdrContentTypeKey: "application/xml", hdrAcceptKey: "application/xml"}).
 		SetBody(`<?xml version="1.0" encoding="UTF-8"?><Request>XML Content sending to server</Request>`).
 		Put(ts.URL + "/xml")
@@ -862,22 +875,11 @@ func TestOnBeforeMiddleware(t *testing.T) {
 	assertEqual(t, "TestPut: plain text response", resp.String())
 }
 
-func TestNoAutoRedirect(t *testing.T) {
-	ts := createRedirectServer(t)
-	defer ts.Close()
-
-	_, err := R().Get(ts.URL + "/redirect-1")
-
-	assertEqual(t, "Get /redirect-2: auto redirect is disabled", err.Error())
-}
-
 func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
 
-	c := dc()
-	c.SetHTTPMode()
-	_, err := c.R().Get(ts.URL + "/redirect-1")
+	_, err := dc().R().Get(ts.URL + "/redirect-1")
 
 	assertEqual(t, "Get /redirect-11: stopped after 10 redirects", err.Error())
 }
@@ -952,48 +954,44 @@ func TestRawFileUploadByBody(t *testing.T) {
 func TestProxySetting(t *testing.T) {
 	c := dc()
 
-	transport, err := c.getTransport()
+	transport, err := c.transport()
 
 	assertNil(t, err)
 
 	assertEqual(t, false, c.IsProxySet())
-	assertNil(t, transport.Proxy)
+	assertNotNil(t, transport.Proxy)
 
 	c.SetProxy("http://sampleproxy:8888")
 	assertEqual(t, true, c.IsProxySet())
 	assertNotNil(t, transport.Proxy)
 
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
-	assertEqual(t, false, c.IsProxySet())
-	assertNil(t, transport.Proxy)
+	assertEqual(t, true, c.IsProxySet())
+	assertNotNil(t, transport.Proxy)
 
-	SetProxy("http://sampleproxy:8888")
-	assertEqual(t, true, IsProxySet())
-	RemoveProxy()
-	assertNil(t, DefaultClient.proxyURL)
+	c.SetProxy("http://sampleproxy:8888")
+	assertEqual(t, true, c.IsProxySet())
+	c.RemoveProxy()
+	assertNil(t, c.proxyURL)
 	assertNil(t, transport.Proxy)
 }
 
 func TestGetClient(t *testing.T) {
-	client := GetClient()
+	client := New()
 	custom := New()
 	customClient := custom.GetClient()
 
-	assertNotNil(t, client)
 	assertNotNil(t, customClient)
-
 	assertNotEqual(t, client, http.DefaultClient)
 	assertNotEqual(t, customClient, http.DefaultClient)
 	assertNotEqual(t, client, customClient)
-
-	assertEqual(t, DefaultClient.httpClient, client)
 }
 
 func TestIncorrectURL(t *testing.T) {
-	_, err := R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
+	c := dc()
+	_, err := c.R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
 	assertEqual(t, true, strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
 
-	c := dc()
 	c.SetHostURL("//not.a.user@%66%6f%6f.com")
 	_, err1 := c.R().Get("/just/a/path/also")
 	assertEqual(t, true, strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
@@ -1125,7 +1123,7 @@ func TestMultiParamsQueryString(t *testing.T) {
 		"status": []string{"pending", "approved", "reject"},
 	}
 
-	_, _ = req2.SetMultiValueQueryParams(v).Get(ts2.URL)
+	_, _ = req2.SetQueryParamsFromValues(v).Get(ts2.URL)
 
 	assertEqual(t, true, strings.Contains(req2.URL, "status=pending"))
 	assertEqual(t, true, strings.Contains(req2.URL, "status=approved"))
@@ -1163,13 +1161,13 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	defer ts.Close()
 	defer cleanupFiles(".testdata/dir-sample")
 
-	DefaultClient = dc()
-	SetRedirectPolicy(FlexibleRedirectPolicy(10))
-	SetOutputDirectory(filepath.Join(getTestDataPath(), "dir-sample"))
-	SetDebug(true)
-	SetLogger(ioutil.Discard)
+	client := dc().
+		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
+		SetOutputDirectory(filepath.Join(getTestDataPath(), "dir-sample")).
+		SetDebug(true)
+	client.outputLogTo(ioutil.Discard)
 
-	resp, err := R().
+	resp, err := client.R().
 		SetOutput("go-resty/test-img-success.png").
 		Get(ts.URL + "/my-image.png")
 
@@ -1189,11 +1187,11 @@ func TestOutputPathDirNotExists(t *testing.T) {
 	defer ts.Close()
 	defer cleanupFiles(filepath.Join(".testdata", "not-exists-dir"))
 
-	DefaultClient = dc()
-	SetRedirectPolicy(FlexibleRedirectPolicy(10))
-	SetOutputDirectory(filepath.Join(getTestDataPath(), "not-exists-dir"))
+	client := dc().
+		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
+		SetOutputDirectory(filepath.Join(getTestDataPath(), "not-exists-dir"))
 
-	resp, err := R().
+	resp, err := client.R().
 		SetOutput("test-img-success.png").
 		Get(ts.URL + "/my-image.png")
 
@@ -1217,13 +1215,8 @@ func TestContextInternal(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	r := R().
+	r := dc().R().
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10))
-
-	if r.isContextCancelledIfAvailable() {
-		t.Error("isContextCancelledIfAvailable != false for vanilla R()")
-	}
-	r.addContextIfAvailable()
 
 	resp, err := r.Get(ts.URL + "/")
 
@@ -1251,7 +1244,7 @@ func TestSRV(t *testing.T) {
 }
 
 func TestSRVInvalidService(t *testing.T) {
-	_, err := R().
+	_, err := dc().R().
 		SetSRV(&SRVRecord{"nonexistantservice", "sampledomain"}).
 		Get("/")
 
@@ -1259,29 +1252,12 @@ func TestSRVInvalidService(t *testing.T) {
 	assertType(t, net.DNSError{}, err)
 }
 
-func TestDeprecatedCodeCoverage(t *testing.T) {
-	var user1 User
-	err := Unmarshal("application/json",
-		[]byte(`{"username":"testuser", "password":"testpass"}`), &user1)
-	assertError(t, err)
-	assertEqual(t, "testuser", user1.Username)
-	assertEqual(t, "testpass", user1.Password)
-
-	var user2 User
-	err = Unmarshal("application/xml",
-		[]byte(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username><Password>testpass</Password></User>`),
-		&user2)
-	assertError(t, err)
-	assertEqual(t, "testuser", user1.Username)
-	assertEqual(t, "testpass", user1.Password)
-}
-
 func TestRequestDoNotParseResponse(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dc().R().
-		SetDoNotParseResponse(true).
+	client := dc().SetDoNotParseResponse(true)
+	resp, err := client.R().
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Get(ts.URL + "/")
 
@@ -1303,11 +1279,6 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 
 	resp.RawResponse = nil
 	assertNil(t, resp.RawBody())
-
-	// just set test part
-	SetDoNotParseResponse(true)
-	assertEqual(t, true, DefaultClient.notParseResponse)
-	SetDoNotParseResponse(false)
 }
 
 type noCtTest struct {
@@ -1353,10 +1324,6 @@ func TestGetPathParams(t *testing.T) {
 	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/details"))
 
 	logResponse(t, resp)
-
-	SetPathParams(map[string]string{
-		"userId": "sample@sample.com",
-	})
 }
 
 func TestReportMethodSupportsPayload(t *testing.T) {
@@ -1396,8 +1363,8 @@ func TestRequestOverridesClientAuthorizationHeader(t *testing.T) {
 
 	c := dc()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
-		SetHeader("Authorization", "some token")
-	SetHostURL(ts.URL + "/")
+		SetHeader("Authorization", "some token").
+		SetHostURL(ts.URL + "/")
 
 	resp, err := c.R().
 		SetHeader("Authorization", "Bearer 004DDB79-6801-4587-B976-F093E6AC44FF").
@@ -1441,7 +1408,7 @@ func TestHostHeaderOverride(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := R().
+	resp, err := dc().R().
 		SetHeader("Host", "myhostname").
 		Get(ts.URL + "/host-header")
 
@@ -1458,8 +1425,8 @@ func TestPathParamURLInput(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().SetDebug(true).SetLogger(ioutil.Discard)
-	c.SetHostURL(ts.URL).
+	c := dc().SetDebug(true).
+		SetHostURL(ts.URL).
 		SetPathParams(map[string]string{
 			"userId": "sample@sample.com",
 		})
@@ -1476,4 +1443,45 @@ func TestPathParamURLInput(t *testing.T) {
 	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/https:%2F%2Fexample.com"))
 
 	logResponse(t, resp)
+}
+
+// This test case is kind of pass always
+func TestTraceInfo(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	client := dc()
+	client.SetHostURL(ts.URL).EnableTrace()
+	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
+		resp, err := client.R().Get(u)
+		assertNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+		assertEqual(t, true, tr.DNSLookup >= 0)
+		assertEqual(t, true, tr.ConnTime >= 0)
+		assertEqual(t, true, tr.TLSHandshake >= 0)
+		assertEqual(t, true, tr.ServerTime >= 0)
+		assertEqual(t, true, tr.ResponseTime >= 0)
+		assertEqual(t, true, tr.TotalTime >= 0)
+	}
+
+	client.DisableTrace()
+
+	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
+		resp, err := client.R().EnableTrace().Get(u)
+		assertNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+		assertEqual(t, true, tr.DNSLookup >= 0)
+		assertEqual(t, true, tr.ConnTime >= 0)
+		assertEqual(t, true, tr.TLSHandshake >= 0)
+		assertEqual(t, true, tr.ServerTime >= 0)
+		assertEqual(t, true, tr.ResponseTime >= 0)
+		assertEqual(t, true, tr.TotalTime >= 0)
+	}
+
+	// for sake of hook funcs
+	_, _ = client.R().EnableTrace().Get("https://httpbin.org/get")
 }
