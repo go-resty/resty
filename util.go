@@ -14,6 +14,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -255,10 +256,22 @@ func closeq(v interface{}) {
 
 func sliently(_ ...interface{}) {}
 
+func composeCookies(jar http.CookieJar, url url.URL) string {
+	var str []string
+	for _, k := range jar.Cookies(&url) {
+		v := strings.TrimSpace(fmt.Sprintf("\t%s: %s", k.Name, k.Value))
+		str = append(str, "\t"+v)
+	}
+	return strings.Join(str, "\n")
+}
+
 func composeHeaders(hdrs http.Header) string {
 	var str []string
 	for _, k := range sortHeaderKeys(hdrs) {
-		str = append(str, fmt.Sprintf("%25s: %s", k, strings.Join(hdrs[k], ", ")))
+		v := strings.TrimSpace(fmt.Sprintf("%25s: %s", k, strings.Join(hdrs[k], ", ")))
+		if v != "" {
+			str = append(str, "\t"+v)
+		}
 	}
 	return strings.Join(str, "\n")
 }

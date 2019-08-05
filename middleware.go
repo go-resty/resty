@@ -231,11 +231,11 @@ func requestLogger(c *Client, r *Request) error {
 		}
 
 		reqLog := "\n---------------------- REQUEST LOG -----------------------\n" +
-			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
-			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
-			fmt.Sprintf("HEADERS:\n") +
-			composeHeaders(rl.Header) + "\n" +
-			fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
+			fmt.Sprintf("%s %s %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
+			fmt.Sprintf("HOST: %s\n", rr.URL.Host) +
+			fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(rl.Header)) +
+			fmt.Sprintf("COOKIES:\n%s\n", composeCookies(c.GetClient().Jar, *rr.URL)) +
+			fmt.Sprintf("BODY:\n%v\n", rl.Body) +
 			"----------------------------------------------------------\n"
 
 		c.Log.Print(reqLog)
