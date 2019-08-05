@@ -134,6 +134,14 @@ func (r *Response) IsError() bool {
 	return r.StatusCode() > 399
 }
 
+// Close method closes the inner HTTP response body.
+func (r *Response) Close() error {
+	if body := r.RawBody(); body != nil {
+		return body.Close()
+	}
+	return nil
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Response Unexported methods
 //_______________________________________________________________________

@@ -805,7 +805,11 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if !req.isSaveResponse {
-		defer closeq(resp.Body)
+		defer func() {
+			closeq(resp.Body)
+			// response body should be used no longer
+			resp.Body = nil
+		}()
 		body := resp.Body
 
 		// GitHub #142 & #187
