@@ -41,6 +41,7 @@ type Request struct {
 	RawRequest *http.Request
 	SRV        *SRVRecord
 	UserInfo   *User
+	Cookies    []*http.Cookie
 
 	isMultiPart         bool
 	isFormData          bool
@@ -464,6 +465,63 @@ func (r *Request) SetJSONEscapeHTML(b bool) *Request {
 	r.jsonEscapeHTML = b
 	return r
 }
+
+// SetCookie method appends a single cookie in the current request instance.
+// 		client.R().SetCookie(&http.Cookie{
+// 					Name:"go-resty",
+// 					Value:"This is cookie value",
+// 					Path: "/",
+// 					Domain: "sample.com",
+// 					MaxAge: 36000,
+// 					HttpOnly: true,
+//					Secure: false,
+// 				})
+//
+// Note: Method appends the Cookie value into existing Cookie if already existing.
+//
+// Since v2.1.0
+func (r *Request) SetCookie(hc *http.Cookie) *Request {
+	r.Cookies = append(r.Cookies, hc)
+	return r
+}
+
+// SetCookies method sets an array of cookies in the current request instance.
+// 		cookies := make([]*http.Cookie, 0)
+//
+//		cookies = append(cookies, &http.Cookie{
+// 					Name:"go-resty-1",
+// 					Value:"This is cookie 1 value",
+// 					Path: "/",
+// 					Domain: "sample.com",
+// 					MaxAge: 36000,
+// 					HttpOnly: true,
+//					Secure: false,
+// 				})
+//
+//		cookies = append(cookies, &http.Cookie{
+// 					Name:"go-resty-2",
+// 					Value:"This is cookie 2 value",
+// 					Path: "/",
+// 					Domain: "sample.com",
+// 					MaxAge: 36000,
+// 					HttpOnly: true,
+//					Secure: false,
+// 				})
+//
+//		// Setting a cookies into resty's current request
+// 		client.R().SetCookies(cookies)
+//
+// Note: Method appends the Cookie value into existing Cookie if already existing.
+//
+// Since v2.1.0
+func (r *Request) SetCookies(rs []*http.Cookie) *Request {
+	r.Cookies = append(r.Cookies, rs...)
+	return r
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// HTTP request tracing
+//_______________________________________________________________________
 
 // EnableTrace method enables trace for the current request
 // using `httptrace.ClientTrace` and provides insights.

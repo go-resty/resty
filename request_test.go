@@ -735,19 +735,37 @@ func TestGetWithCookie(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcl()
 	c.SetHostURL(ts.URL)
 	c.SetCookie(&http.Cookie{
 		Name:     "go-resty-1",
 		Value:    "This is cookie 1 value",
 		Path:     "/",
-		Domain:   "localhost",
 		MaxAge:   36000,
 		HttpOnly: true,
 		Secure:   false,
 	})
 
-	resp, err := c.R().Get("mypage2")
+	resp, err := c.R().
+		SetCookie(&http.Cookie{
+			Name:     "go-resty-2",
+			Value:    "This is cookie 2 value",
+			Path:     "/",
+			MaxAge:   36000,
+			HttpOnly: true,
+			Secure:   false,
+		}).
+		SetCookies([]*http.Cookie{
+			&http.Cookie{
+				Name:     "go-resty-1",
+				Value:    "This is cookie 1 value additional append",
+				Path:     "/",
+				MaxAge:   36000,
+				HttpOnly: true,
+				Secure:   false,
+			},
+		}).
+		Get("mypage2")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -766,7 +784,6 @@ func TestGetWithCookies(t *testing.T) {
 		Name:     "go-resty-1",
 		Value:    "This is cookie 1 value",
 		Path:     "/",
-		Domain:   "sample.com",
 		MaxAge:   36000,
 		HttpOnly: true,
 		Secure:   false,
@@ -776,7 +793,6 @@ func TestGetWithCookies(t *testing.T) {
 		Name:     "go-resty-2",
 		Value:    "This is cookie 2 value",
 		Path:     "/",
-		Domain:   "sample.com",
 		MaxAge:   36000,
 		HttpOnly: true,
 		Secure:   false,
@@ -786,7 +802,16 @@ func TestGetWithCookies(t *testing.T) {
 	c.SetHostURL(ts.URL).
 		SetCookies(cookies)
 
-	resp, err := c.R().Get("mypage2")
+	resp, err := c.R().
+		SetCookie(&http.Cookie{
+			Name:     "go-resty-1",
+			Value:    "This is cookie 1 value additional append",
+			Path:     "/",
+			MaxAge:   36000,
+			HttpOnly: true,
+			Secure:   false,
+		}).
+		Get("mypage2")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
