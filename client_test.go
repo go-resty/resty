@@ -241,12 +241,12 @@ func TestClientOptions(t *testing.T) {
 	client.SetHostURL("http://httpbin.org")
 	assertEqual(t, "http://httpbin.org", client.HostURL)
 
-	client.SetHeader(hdrContentTypeKey, jsonContentType)
+	client.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8")
 	client.SetHeaders(map[string]string{
 		hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1",
 		"X-Request-Id":  strconv.FormatInt(time.Now().UnixNano(), 10),
 	})
-	assertEqual(t, jsonContentType, client.Header.Get(hdrContentTypeKey))
+	assertEqual(t, "application/json; charset=utf-8", client.Header.Get(hdrContentTypeKey))
 
 	client.SetCookie(&http.Cookie{
 		Name:     "default-cookie",

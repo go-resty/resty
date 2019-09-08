@@ -58,7 +58,7 @@ var (
 	hdrAuthorizationKey   = http.CanonicalHeaderKey("Authorization")
 
 	plainTextType   = "text/plain; charset=utf-8"
-	jsonContentType = "application/json; charset=utf-8"
+	jsonContentType = "application/json"
 	formContentType = "application/x-www-form-urlencoded"
 
 	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(json|.*\+json|json\-.*)(;|$))`)
