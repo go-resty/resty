@@ -241,6 +241,7 @@ func requestLogger(c *Client, r *Request) error {
 		}
 
 		reqLog := "\n==============================================================================\n" +
+			"~~~ REQUEST ~~~\n" +
 			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
 			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
 			fmt.Sprintf("HEADERS:\n") +
@@ -269,15 +270,16 @@ func responseLogger(c *Client, res *Response) error {
 		}
 
 		debugLog := res.Request.values[debugRequestLogKey].(string)
-		debugLog += fmt.Sprintf("STATUS 		: %s\n", res.Status()) +
-			fmt.Sprintf("RECEIVED AT	: %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
-			fmt.Sprintf("RESPONSE TIME	: %v\n", res.Time()) +
-			"HEADERS:\n" +
+		debugLog += "~~~ RESPONSE ~~~\n" +
+			fmt.Sprintf("STATUS       : %s\n", res.Status()) +
+			fmt.Sprintf("RECEIVED AT  : %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
+			fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
+			"HEADERS      :\n" +
 			composeHeaders(rl.Header) + "\n"
 		if res.Request.isSaveResponse {
-			debugLog += fmt.Sprintf("BODY   :\n***** RESPONSE WRITTEN INTO FILE *****\n")
+			debugLog += fmt.Sprintf("BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n")
 		} else {
-			debugLog += fmt.Sprintf("BODY   :\n%v\n", rl.Body)
+			debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)
 		}
 		debugLog += "==============================================================================\n"
 
