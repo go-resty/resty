@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -198,6 +199,32 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	if c.trace || r.trace {
 		r.clientTrace = &clientTrace{}
 		r.RawRequest = r.RawRequest.WithContext(r.clientTrace.createContext())
+	}
+
+	// assign get body func for the underlying raw request instance
+	r.RawRequest.GetBody = func() (io.ReadCloser, error) {
+		// If r.bodyBuf present, return the copy
+		if r.bodyBuf != nil {
+			return ioutil.NopCloser(bytes.NewReader(r.bodyBuf.Bytes())), nil
+		}
+
+		// Maybe body is `io.Reader`.
+		// Note: Resty user have to watchout for large body size of `io.Reader`
+		if r.RawRequest.Body != nil {
+			b, err := ioutil.ReadAll(r.RawRequest.Body)
+			if err != nil {
+				return nil, err
+			}
+
+			// Restore the Body
+			closeq(r.RawRequest.Body)
+			r.RawRequest.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+
+			// Return the Body bytes
+			return ioutil.NopCloser(bytes.NewBuffer(b)), nil
+		}
+
+		return nil, nil
 	}
 
 	return
