@@ -771,15 +771,15 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
+	if hostHeader := req.Header.Get("Host"); hostHeader != "" {
+		req.RawRequest.Host = hostHeader
+	}
+
 	// call pre-request if defined
 	if c.preReqHook != nil {
 		if err = c.preReqHook(c, req.RawRequest); err != nil {
 			return nil, err
 		}
-	}
-
-	if hostHeader := req.Header.Get("Host"); hostHeader != "" {
-		req.RawRequest.Host = hostHeader
 	}
 
 	if err = requestLogger(c, req); err != nil {

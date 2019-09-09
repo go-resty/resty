@@ -355,8 +355,34 @@ func TestClientPreRequestHook(t *testing.T) {
 
 	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
 		c.log.Debugf("I'm Overwriting existing Pre-Request Hook")
+
+		// Reading Request `N` no of times
+		for i := 0; i < 5; i++ {
+			b, _ := r.GetBody()
+			rb, _ := ioutil.ReadAll(b)
+			c.log.Debugf("%s %v", string(rb), len(rb))
+			assertEqual(t, true, len(rb) >= 45)
+		}
 		return nil
 	})
+
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	// Regular bodybuf use case
+	resp, _ := client.R().
+		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		Post(ts.URL + "/login")
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, `{ "id": "success", "message": "login successful" }`, resp.String())
+
+	// io.Reader body use case
+	resp, _ = client.R().
+		SetHeader(hdrContentTypeKey, jsonContentType).
+		SetBody(bytes.NewReader([]byte(`{"username":"testuser", "password":"testpass"}`))).
+		Post(ts.URL + "/login")
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, `{ "id": "success", "message": "login successful" }`, resp.String())
 }
 
 func TestClientAllowsGetMethodPayload(t *testing.T) {
