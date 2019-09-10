@@ -57,6 +57,10 @@ func (l *logger) Debugf(format string, v ...interface{}) {
 }
 
 func (l *logger) output(format string, v ...interface{}) {
+	if len(v) == 0 {
+		l.l.Print(format)
+		return
+	}
 	l.l.Printf(format, v...)
 }
 
