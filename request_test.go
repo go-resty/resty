@@ -120,8 +120,8 @@ func TestPostJSONStringSuccess(t *testing.T) {
 	defer ts.Close()
 
 	c := dc()
-	c.SetHeader(hdrContentTypeKey, jsonContentType).
-		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1", hdrAcceptKey: jsonContentType})
+	c.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
+		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1", hdrAcceptKey: "application/json; charset=utf-8"})
 
 	resp, err := c.R().
 		SetBody(`{"username":"testuser", "password":"testpass"}`).
@@ -148,8 +148,8 @@ func TestPostJSONBytesSuccess(t *testing.T) {
 	defer ts.Close()
 
 	c := dc()
-	c.SetHeader(hdrContentTypeKey, jsonContentType).
-		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.7", hdrAcceptKey: jsonContentType})
+	c.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
+		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.7", hdrAcceptKey: "application/json; charset=utf-8"})
 
 	resp, err := c.R().
 		SetBody([]byte(`{"username":"testuser", "password":"testpass"}`)).
@@ -166,7 +166,7 @@ func TestPostJSONBytesIoReader(t *testing.T) {
 	defer ts.Close()
 
 	c := dc()
-	c.SetHeader(hdrContentTypeKey, jsonContentType)
+	c.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8")
 
 	bodyBytes := []byte(`{"username":"testuser", "password":"testpass"}`)
 
@@ -188,7 +188,7 @@ func TestPostJSONStructSuccess(t *testing.T) {
 
 	c := dc().SetJSONEscapeHTML(false)
 	resp, err := c.R().
-		SetHeader(hdrContentTypeKey, jsonContentType).
+		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(user).
 		SetResult(&AuthSuccess{}).
 		Post(ts.URL + "/login")
@@ -231,7 +231,7 @@ func TestPostJSONStructInvalidLogin(t *testing.T) {
 	c.SetDebug(false)
 
 	resp, err := c.R().
-		SetHeader(hdrContentTypeKey, jsonContentType).
+		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(User{Username: "testuser", Password: "testpass1"}).
 		SetError(AuthError{}).
 		SetJSONEscapeHTML(false).
@@ -254,7 +254,7 @@ func TestPostJSONErrorRFC7807(t *testing.T) {
 
 	c := dc()
 	resp, err := c.R().
-		SetHeader(hdrContentTypeKey, jsonContentType).
+		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(User{Username: "testuser", Password: "testpass1"}).
 		SetError(AuthError{}).
 		Post(ts.URL + "/login?ct=problem")
@@ -853,7 +853,7 @@ func TestPutJSONString(t *testing.T) {
 	client.outputLogTo(ioutil.Discard)
 
 	resp, err := client.R().
-		SetHeaders(map[string]string{hdrContentTypeKey: jsonContentType, hdrAcceptKey: jsonContentType}).
+		SetHeaders(map[string]string{hdrContentTypeKey: "application/json; charset=utf-8", hdrAcceptKey: "application/json; charset=utf-8"}).
 		SetBody(`{"content":"json content sending to server"}`).
 		Put(ts.URL + "/json")
 
