@@ -179,8 +179,13 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	// Add headers into http request
 	r.RawRequest.Header = r.Header
 
-	// Add cookies into http request
+	// Add cookies from client instance into http request
 	for _, cookie := range c.Cookies {
+		r.RawRequest.AddCookie(cookie)
+	}
+
+	// Add cookies from request instance into http request
+	for _, cookie := range r.Cookies {
 		r.RawRequest.AddCookie(cookie)
 	}
 

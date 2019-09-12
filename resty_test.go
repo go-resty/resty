@@ -540,8 +540,15 @@ func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest
 }
 
 func dc() *Client {
-	c := New()
-	c.outputLogTo(ioutil.Discard)
+	c := New().
+		outputLogTo(ioutil.Discard)
+	return c
+}
+
+func dcl() *Client {
+	c := New().
+		SetDebug(true).
+		outputLogTo(ioutil.Discard)
 	return c
 }
 
@@ -550,9 +557,9 @@ func dcr() *Request {
 }
 
 func dclr() *Request {
-	c := dc()
-	c.SetDebug(true)
-	c.outputLogTo(ioutil.Discard)
+	c := dc().
+		SetDebug(true).
+		outputLogTo(ioutil.Discard)
 	return c.R()
 }
 

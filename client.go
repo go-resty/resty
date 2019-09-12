@@ -202,8 +202,8 @@ func (c *Client) SetCookie(hc *http.Cookie) *Client {
 //
 //		cookies = append(cookies, &http.Cookie{
 // 					Name:"go-resty-1",
-//					Value:"This is cookie 1 value",
-//					Path: "/",
+// 					Value:"This is cookie 1 value",
+// 					Path: "/",
 // 					Domain: "sample.com",
 // 					MaxAge: 36000,
 // 					HttpOnly: true,
@@ -212,8 +212,8 @@ func (c *Client) SetCookie(hc *http.Cookie) *Client {
 //
 //		cookies = append(cookies, &http.Cookie{
 // 					Name:"go-resty-2",
-//					Value:"This is cookie 2 value",
-//					Path: "/",
+// 					Value:"This is cookie 2 value",
+// 					Path: "/",
 // 					Domain: "sample.com",
 // 					MaxAge: 36000,
 // 					HttpOnly: true,
@@ -316,6 +316,7 @@ func (c *Client) R() *Request {
 		QueryParam: url.Values{},
 		FormData:   url.Values{},
 		Header:     http.Header{},
+		Cookies:    make([]*http.Cookie, 0),
 
 		client:          c,
 		multipartFiles:  []*File{},
@@ -857,9 +858,10 @@ func (c *Client) transport() (*http.Transport, error) {
 	return nil, errors.New("current transport is not an *http.Transport instance")
 }
 
-// just an helper method
-func (c *Client) outputLogTo(w io.Writer) {
+// just an internal helper method
+func (c *Client) outputLogTo(w io.Writer) *Client {
 	c.log.(*logger).l.SetOutput(w)
+	return c
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
