@@ -292,7 +292,7 @@ func closeq(v interface{}) {
 func sliently(_ ...interface{}) {}
 
 func composeHeaders(hdrs http.Header) string {
-	var str []string
+	str := make([]string, 0, len(hdrs))
 	for _, k := range sortHeaderKeys(hdrs) {
 		str = append(str, fmt.Sprintf("%25s: %s", k, strings.Join(hdrs[k], ", ")))
 	}
@@ -300,7 +300,7 @@ func composeHeaders(hdrs http.Header) string {
 }
 
 func sortHeaderKeys(hdrs http.Header) []string {
-	var keys []string
+	keys := make([]string, 0, len(hdrs))
 	for key := range hdrs {
 		keys = append(keys, key)
 	}
