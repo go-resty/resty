@@ -470,11 +470,6 @@ func (r *Request) SetJSONEscapeHTML(b bool) *Request {
 // 		client.R().SetCookie(&http.Cookie{
 // 					Name:"go-resty",
 // 					Value:"This is cookie value",
-// 					Path: "/",
-// 					Domain: "sample.com",
-// 					MaxAge: 36000,
-// 					HttpOnly: true,
-//					Secure: false,
 // 				})
 //
 // Note: Method appends the Cookie value into existing Cookie if already existing.
@@ -486,27 +481,16 @@ func (r *Request) SetCookie(hc *http.Cookie) *Request {
 }
 
 // SetCookies method sets an array of cookies in the current request instance.
-// 		cookies := make([]*http.Cookie, 0)
-//
-//		cookies = append(cookies, &http.Cookie{
-// 					Name:"go-resty-1",
-// 					Value:"This is cookie 1 value",
-// 					Path: "/",
-// 					Domain: "sample.com",
-// 					MaxAge: 36000,
-// 					HttpOnly: true,
-//					Secure: false,
-// 				})
-//
-//		cookies = append(cookies, &http.Cookie{
-// 					Name:"go-resty-2",
-// 					Value:"This is cookie 2 value",
-// 					Path: "/",
-// 					Domain: "sample.com",
-// 					MaxAge: 36000,
-// 					HttpOnly: true,
-//					Secure: false,
-// 				})
+// 		cookies := []*http.Cookie{
+// 			&http.Cookie{
+// 				Name:"go-resty-1",
+// 				Value:"This is cookie 1 value",
+// 			},
+// 			&http.Cookie{
+// 				Name:"go-resty-2",
+// 				Value:"This is cookie 2 value",
+// 			},
+// 		}
 //
 //		// Setting a cookies into resty's current request
 // 		client.R().SetCookies(cookies)

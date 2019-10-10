@@ -185,11 +185,6 @@ func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
 // 		client.SetCookie(&http.Cookie{
 // 					Name:"go-resty",
 //					Value:"This is cookie value",
-//					Path: "/",
-// 					Domain: "sample.com",
-// 					MaxAge: 36000,
-// 					HttpOnly: true,
-//					Secure: false,
 // 				})
 func (c *Client) SetCookie(hc *http.Cookie) *Client {
 	c.Cookies = append(c.Cookies, hc)
@@ -198,27 +193,16 @@ func (c *Client) SetCookie(hc *http.Cookie) *Client {
 
 // SetCookies method sets an array of cookies in the client instance.
 // These cookies will be added to all the request raised from this client instance.
-// 		cookies := make([]*http.Cookie, 0)
-//
-//		cookies = append(cookies, &http.Cookie{
-// 					Name:"go-resty-1",
-// 					Value:"This is cookie 1 value",
-// 					Path: "/",
-// 					Domain: "sample.com",
-// 					MaxAge: 36000,
-// 					HttpOnly: true,
-//					Secure: false,
-// 				})
-//
-//		cookies = append(cookies, &http.Cookie{
-// 					Name:"go-resty-2",
-// 					Value:"This is cookie 2 value",
-// 					Path: "/",
-// 					Domain: "sample.com",
-// 					MaxAge: 36000,
-// 					HttpOnly: true,
-//					Secure: false,
-// 				})
+// 		cookies := []*http.Cookie{
+// 			&http.Cookie{
+// 				Name:"go-resty-1",
+// 				Value:"This is cookie 1 value",
+// 			},
+// 			&http.Cookie{
+// 				Name:"go-resty-2",
+// 				Value:"This is cookie 2 value",
+// 			},
+// 		}
 //
 //		// Setting a cookies into resty
 // 		client.SetCookies(cookies)
