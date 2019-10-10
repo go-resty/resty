@@ -291,10 +291,26 @@ func closeq(v interface{}) {
 
 func sliently(_ ...interface{}) {}
 
-func composeHeaders(hdrs http.Header) string {
+func composeHeaders(c *Client, r *Request, hdrs http.Header) string {
 	var str []string
 	for _, k := range sortHeaderKeys(hdrs) {
-		str = append(str, fmt.Sprintf("%25s: %s", k, strings.Join(hdrs[k], ", ")))
+		var v string
+		if k == "Cookie" {
+			cv := strings.TrimSpace(strings.Join(hdrs[k], ", "))
+			for _, c := range c.GetClient().Jar.Cookies(r.RawRequest.URL) {
+				if cv != "" {
+					cv = cv + "; " + c.String()
+				} else {
+					cv = c.String()
+				}
+			}
+			v = strings.TrimSpace(fmt.Sprintf("%25s: %s", k, cv))
+		} else {
+			v = strings.TrimSpace(fmt.Sprintf("%25s: %s", k, strings.Join(hdrs[k], ", ")))
+		}
+		if v != "" {
+			str = append(str, "\t"+v)
+		}
 	}
 	return strings.Join(str, "\n")
 }

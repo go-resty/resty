@@ -738,31 +738,19 @@ func TestGetWithCookie(t *testing.T) {
 	c := dcl()
 	c.SetHostURL(ts.URL)
 	c.SetCookie(&http.Cookie{
-		Name:     "go-resty-1",
-		Value:    "This is cookie 1 value",
-		Path:     "/",
-		MaxAge:   36000,
-		HttpOnly: true,
-		Secure:   false,
+		Name:  "go-resty-1",
+		Value: "This is cookie 1 value",
 	})
 
 	resp, err := c.R().
 		SetCookie(&http.Cookie{
-			Name:     "go-resty-2",
-			Value:    "This is cookie 2 value",
-			Path:     "/",
-			MaxAge:   36000,
-			HttpOnly: true,
-			Secure:   false,
+			Name:  "go-resty-2",
+			Value: "This is cookie 2 value",
 		}).
 		SetCookies([]*http.Cookie{
 			&http.Cookie{
-				Name:     "go-resty-1",
-				Value:    "This is cookie 1 value additional append",
-				Path:     "/",
-				MaxAge:   36000,
-				HttpOnly: true,
-				Secure:   false,
+				Name:  "go-resty-1",
+				Value: "This is cookie 1 value additional append",
 			},
 		}).
 		Get("mypage2")
@@ -778,38 +766,37 @@ func TestGetWithCookies(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	var cookies []*http.Cookie
-
-	cookies = append(cookies, &http.Cookie{
-		Name:     "go-resty-1",
-		Value:    "This is cookie 1 value",
-		Path:     "/",
-		MaxAge:   36000,
-		HttpOnly: true,
-		Secure:   false,
-	})
-
-	cookies = append(cookies, &http.Cookie{
-		Name:     "go-resty-2",
-		Value:    "This is cookie 2 value",
-		Path:     "/",
-		MaxAge:   36000,
-		HttpOnly: true,
-		Secure:   false,
-	})
+	cookies := []*http.Cookie{
+		&http.Cookie{
+			Name:  "go-resty-1",
+			Value: "This is cookie 1 value",
+		},
+		&http.Cookie{
+			Name:  "go-resty-2",
+			Value: "This is cookie 2 value",
+		},
+	}
 
 	c := dc()
 	c.SetHostURL(ts.URL).
 		SetCookies(cookies)
 
+	tu, _ := url.Parse(ts.URL)
+	c.GetClient().Jar.SetCookies(tu, []*http.Cookie{
+		&http.Cookie{
+			Name:  "jar-go-resty-1",
+			Value: "From Jar - This is cookie 1 value",
+		},
+		&http.Cookie{
+			Name:  "jar-go-resty-2",
+			Value: "From Jar - This is cookie 2 value",
+		},
+	})
+
 	resp, err := c.R().
 		SetCookie(&http.Cookie{
-			Name:     "go-resty-1",
-			Value:    "This is cookie 1 value additional append",
-			Path:     "/",
-			MaxAge:   36000,
-			HttpOnly: true,
-			Secure:   false,
+			Name:  "go-resty-1",
+			Value: "This is cookie 1 value additional append",
 		}).
 		Get("mypage2")
 
