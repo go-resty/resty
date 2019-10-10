@@ -292,7 +292,7 @@ func closeq(v interface{}) {
 func sliently(_ ...interface{}) {}
 
 func composeHeaders(c *Client, r *Request, hdrs http.Header) string {
-	var str []string
+	str := make([]string, 0, len(hdrs))
 	for _, k := range sortHeaderKeys(hdrs) {
 		var v string
 		if k == "Cookie" {
@@ -316,7 +316,7 @@ func composeHeaders(c *Client, r *Request, hdrs http.Header) string {
 }
 
 func sortHeaderKeys(hdrs http.Header) []string {
-	var keys []string
+	keys := make([]string, 0, len(hdrs))
 	for key := range hdrs {
 		keys = append(keys, key)
 	}
