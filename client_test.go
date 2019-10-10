@@ -249,27 +249,20 @@ func TestClientOptions(t *testing.T) {
 	assertEqual(t, "application/json; charset=utf-8", client.Header.Get(hdrContentTypeKey))
 
 	client.SetCookie(&http.Cookie{
-		Name:     "default-cookie",
-		Value:    "This is cookie default-cookie value",
-		Path:     "/",
-		Domain:   "localhost",
-		MaxAge:   36000,
-		HttpOnly: true,
-		Secure:   false,
+		Name:  "default-cookie",
+		Value: "This is cookie default-cookie value",
 	})
 	assertEqual(t, "default-cookie", client.Cookies[0].Name)
 
-	var cookies []*http.Cookie
-	cookies = append(cookies, &http.Cookie{
-		Name:  "default-cookie-1",
-		Value: "This is default-cookie 1 value",
-		Path:  "/",
-	})
-	cookies = append(cookies, &http.Cookie{
-		Name:  "default-cookie-2",
-		Value: "This is default-cookie 2 value",
-		Path:  "/",
-	})
+	cookies := []*http.Cookie{
+		&http.Cookie{
+			Name:  "default-cookie-1",
+			Value: "This is default-cookie 1 value",
+		}, &http.Cookie{
+			Name:  "default-cookie-2",
+			Value: "This is default-cookie 2 value",
+		},
+	}
 	client.SetCookies(cookies)
 	assertEqual(t, "default-cookie-1", client.Cookies[1].Name)
 	assertEqual(t, "default-cookie-2", client.Cookies[2].Name)
