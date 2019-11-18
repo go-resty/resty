@@ -195,15 +195,15 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest.URL.Host = r.URL
 	}
 
-	// Use context if it was specified
-	if r.ctx != nil {
-		r.RawRequest = r.RawRequest.WithContext(r.ctx)
-	}
-
 	// Enable trace
 	if c.trace || r.trace {
 		r.clientTrace = &clientTrace{}
-		r.RawRequest = r.RawRequest.WithContext(r.clientTrace.createContext())
+		r.ctx = r.clientTrace.createContext(r.Context())
+	}
+
+	// Use context if it was specified
+	if r.ctx != nil {
+		r.RawRequest = r.RawRequest.WithContext(r.ctx)
 	}
 
 	// assign get body func for the underlying raw request instance

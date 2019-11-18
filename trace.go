@@ -77,9 +77,9 @@ type clientTrace struct {
 // Trace unexported methods
 //_______________________________________________________________________
 
-func (t *clientTrace) createContext() context.Context {
+func (t *clientTrace) createContext(ctx context.Context) context.Context {
 	return httptrace.WithClientTrace(
-		context.Background(),
+		ctx,
 		&httptrace.ClientTrace{
 			GetConn: func(_ string) {
 				t.getConn = time.Now()
