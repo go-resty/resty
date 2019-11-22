@@ -582,13 +582,12 @@ func TestClientRetryErrorRecover(t *testing.T) {
 
 	assertError(t, err)
 
-	responseErr := resp.Error().(*AuthError)
 	authSuccess := resp.Result().(*AuthSuccess)
 
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "hello", authSuccess.Message)
 
-	assertNil(t, responseErr)
+	assertNil(t, resp.Error())
 }
 
 func filler(*Response, error) bool {
