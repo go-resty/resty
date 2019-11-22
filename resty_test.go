@@ -81,6 +81,16 @@ func createGetServer(t *testing.T) *httptest.Server {
 					_, _ = fmt.Fprintf(w, "%d", uint64(sinceLastRequest))
 				}
 				atomic.AddInt32(&attempt, 1)
+
+			case "/set-retry-error-recover":
+				w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
+				if atomic.LoadInt32(&attempt) == 0 {
+					w.WriteHeader(http.StatusTooManyRequests)
+					_, _ = w.Write([]byte(`{ "message": "too many" }`))
+				} else {
+					_, _ = w.Write([]byte(`{ "message": "hello" }`))
+				}
+				atomic.AddInt32(&attempt, 1)
 			case "/set-timeout-test-with-sequence":
 				seq := atomic.AddInt32(&sequence, 1)
 				time.Sleep(time.Second * 2)
