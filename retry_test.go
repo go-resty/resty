@@ -559,6 +559,37 @@ func TestClientRetryPost(t *testing.T) {
 	}
 }
 
+func TestClientRetryErrorRecover(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc().
+		SetRetryCount(2).
+		SetError(AuthError{}).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				err, ok := r.Error().(*AuthError)
+				retry := ok && r.StatusCode() == 429 && err.Message == "too many"
+				return retry
+			},
+		)
+
+	resp, err := c.R().
+		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
+		SetJSONEscapeHTML(false).
+		SetResult(AuthSuccess{}).
+		Get(ts.URL + "/set-retry-error-recover")
+
+	assertError(t, err)
+
+	authSuccess := resp.Result().(*AuthSuccess)
+
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "hello", authSuccess.Message)
+
+	assertNil(t, resp.Error())
+}
+
 func filler(*Response, error) bool {
 	return false
 }

@@ -330,6 +330,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 	if IsJSONType(ct) || IsXMLType(ct) {
 		// HTTP status code > 199 and < 300, considered as Result
 		if res.IsSuccess() {
+			res.Request.Error = nil
 			if res.Request.Result != nil {
 				err = Unmarshalc(c, ct, res.body, res.Request.Result)
 				return
