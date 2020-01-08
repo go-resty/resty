@@ -943,6 +943,64 @@ func TestPatchMethod(t *testing.T) {
 	assertEqual(t, "", resp.String())
 }
 
+func TestSendMethod(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	t.Run("send-get", func(t *testing.T) {
+		req := dclr()
+		req.Method = http.MethodGet
+		req.URL = ts.URL + "/gzip-test"
+
+		resp, err := req.Send()
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		assertEqual(t, "This is Gzip response testing", resp.String())
+	})
+
+	t.Run("send-options", func(t *testing.T) {
+		req := dclr()
+		req.Method = http.MethodOptions
+		req.URL = ts.URL + "/options"
+
+		resp, err := req.Send()
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		assertEqual(t, "", resp.String())
+		assertEqual(t, "x-go-resty-id", resp.Header().Get("Access-Control-Expose-Headers"))
+	})
+
+	t.Run("send-patch", func(t *testing.T) {
+		req := dclr()
+		req.Method = http.MethodPatch
+		req.URL = ts.URL + "/patch"
+
+		resp, err := req.Send()
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		assertEqual(t, "", resp.String())
+	})
+
+	t.Run("send-put", func(t *testing.T) {
+		req := dclr()
+		req.Method = http.MethodPut
+		req.URL = ts.URL + "/plaintext"
+
+		resp, err := req.Send()
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		assertEqual(t, "TestPut: plain text response", resp.String())
+	})
+}
+
 func TestRawFileUploadByBody(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()

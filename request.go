@@ -581,6 +581,16 @@ func (r *Request) Patch(url string) (*Response, error) {
 	return r.Execute(MethodPatch, url)
 }
 
+// Send method performs the HTTP request using the method and URL already defined
+// for current `Request`.
+//      req := client.R()
+//      req.Method = resty.GET
+//      req.URL = "http://httpbin.org/get"
+// 		resp, err := client.R().Send()
+func (r *Request) Send() (*Response, error) {
+	return r.Execute(r.Method, r.URL)
+}
+
 // Execute method performs the HTTP request with given HTTP method and URL
 // for current `Request`.
 // 		resp, err := client.R().Execute(resty.GET, "http://httpbin.org/get")
