@@ -1555,3 +1555,24 @@ func TestTraceInfo(t *testing.T) {
 	// for sake of hook funcs
 	_, _ = client.R().EnableTrace().Get("https://httpbin.org/get")
 }
+
+func TestTraceInfoWithoutEnableTrace(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	client := dc()
+	client.SetHostURL(ts.URL)
+	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
+		resp, err := client.R().Get(u)
+		assertNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+		assertEqual(t, true, tr.DNSLookup == 0)
+		assertEqual(t, true, tr.ConnTime == 0)
+		assertEqual(t, true, tr.TLSHandshake == 0)
+		assertEqual(t, true, tr.ServerTime == 0)
+		assertEqual(t, true, tr.ResponseTime == 0)
+		assertEqual(t, true, tr.TotalTime == 0)
+	}
+}

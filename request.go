@@ -525,10 +525,17 @@ func (r *Request) EnableTrace() *Request {
 }
 
 // TraceInfo method returns the trace info for the request.
+// If either the Client or Request EnableTrace function has not been called
+// prior to the request being made, an empty TraceInfo object will be returned.
 //
 // Since v2.0.0
 func (r *Request) TraceInfo() TraceInfo {
 	ct := r.clientTrace
+
+	if ct == nil {
+		return TraceInfo{}
+	}
+
 	return TraceInfo{
 		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
 		ConnTime:      ct.gotConn.Sub(ct.getConn),
