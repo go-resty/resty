@@ -7,7 +7,6 @@ package resty
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -662,51 +661,65 @@ type SRVRecord struct {
 // Request Unexported methods
 //_______________________________________________________________________
 
-func (r *Request) fmtBodyString() (body string) {
+func (r *Request) fmtBodyString(sl int64) (body string) {
 	body = "***** NO CONTENT *****"
-	if isPayloadSupported(r.Method, r.client.AllowGetMethodPayload) {
-		if _, ok := r.Body.(io.Reader); ok {
-			body = "***** BODY IS io.Reader *****"
+	if !isPayloadSupported(r.Method, r.client.AllowGetMethodPayload) {
+		return
+	}
+
+	if _, ok := r.Body.(io.Reader); ok {
+		body = "***** BODY IS io.Reader *****"
+		return
+	}
+
+	// multipart or form-data
+	if r.isMultiPart || r.isFormData {
+		bodySize := int64(r.bodyBuf.Len())
+		if bodySize > sl {
+			body = fmt.Sprintf("***** REQUEST TOO LARGE (size - %d) *****", bodySize)
 			return
 		}
+		body = r.bodyBuf.String()
+		return
+	}
 
-		// multipart or form-data
-		if r.isMultiPart || r.isFormData {
-			body = r.bodyBuf.String()
-			return
-		}
+	// request body data
+	if r.Body == nil {
+		return
+	}
+	var prtBodyBytes []byte
+	var err error
 
-		// request body data
-		if r.Body == nil {
-			return
-		}
-		var prtBodyBytes []byte
-		var err error
-
-		contentType := r.Header.Get(hdrContentTypeKey)
-		kind := kindOf(r.Body)
-		if canJSONMarshal(contentType, kind) {
-			prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
-		} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-			prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
-		} else if b, ok := r.Body.(string); ok {
-			if IsJSONType(contentType) {
-				bodyBytes := []byte(b)
-				out := acquireBuffer()
-				defer releaseBuffer(out)
-				if err = json.Indent(out, bodyBytes, "", "   "); err == nil {
-					prtBodyBytes = out.Bytes()
-				}
-			} else {
-				body = b
-				return
+	contentType := r.Header.Get(hdrContentTypeKey)
+	kind := kindOf(r.Body)
+	if canJSONMarshal(contentType, kind) {
+		prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
+	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
+		prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
+	} else if b, ok := r.Body.(string); ok {
+		if IsJSONType(contentType) {
+			bodyBytes := []byte(b)
+			out := acquireBuffer()
+			defer releaseBuffer(out)
+			if err = json.Indent(out, bodyBytes, "", "   "); err == nil {
+				prtBodyBytes = out.Bytes()
 			}
-		} else if b, ok := r.Body.([]byte); ok {
-			body = base64.StdEncoding.EncodeToString(b)
+		} else {
+			body = b
 		}
+	} else if b, ok := r.Body.([]byte); ok {
+		body = fmt.Sprintf("***** BODY IS byte(s) (size - %d) *****", len(b))
+		return
+	}
 
-		if prtBodyBytes != nil && err == nil {
-			body = string(prtBodyBytes)
+	if prtBodyBytes != nil && err == nil {
+		body = string(prtBodyBytes)
+	}
+
+	if len(body) > 0 {
+		bodySize := int64(len([]byte(body)))
+		if bodySize > sl {
+			body = fmt.Sprintf("***** REQUEST TOO LARGE (size - %d) *****", bodySize)
 		}
 	}
 
