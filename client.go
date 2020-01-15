@@ -366,7 +366,7 @@ func (c *Client) SetDebug(d bool) *Client {
 	return c
 }
 
-// SetDebugBodyLimit sets the maximum size for which the response body will be logged in debug mode.
+// SetDebugBodyLimit sets the maximum size for which the response and request body will be logged in debug mode.
 //		client.SetDebugBodyLimit(1000000)
 func (c *Client) SetDebugBodyLimit(sl int64) *Client {
 	c.debugBodySizeLimit = sl
