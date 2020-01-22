@@ -17,6 +17,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -93,24 +94,25 @@ type Client struct {
 	JSONMarshal           func(v interface{}) ([]byte, error)
 	JSONUnmarshal         func(data []byte, v interface{}) error
 
-	jsonEscapeHTML     bool
-	setContentLength   bool
-	closeConnection    bool
-	notParseResponse   bool
-	trace              bool
-	debugBodySizeLimit int64
-	outputDirectory    string
-	scheme             string
-	pathParams         map[string]string
-	log                Logger
-	httpClient         *http.Client
-	proxyURL           *url.URL
-	beforeRequest      []func(*Client, *Request) error
-	udBeforeRequest    []func(*Client, *Request) error
-	preReqHook         func(*Client, *http.Request) error
-	afterResponse      []func(*Client, *Response) error
-	requestLog         func(*RequestLog) error
-	responseLog        func(*ResponseLog) error
+	jsonEscapeHTML           bool
+	setContentLength         bool
+	closeConnection          bool
+	notParseResponse         bool
+	trace                    bool
+	recordRequestAndResponse bool
+	debugBodySizeLimit       int64
+	outputDirectory          string
+	scheme                   string
+	pathParams               map[string]string
+	log                      Logger
+	httpClient               *http.Client
+	proxyURL                 *url.URL
+	beforeRequest            []func(*Client, *Request) error
+	udBeforeRequest          []func(*Client, *Request) error
+	preReqHook               func(*Client, *http.Request) error
+	afterResponse            []func(*Client, *Response) error
+	requestLog               func(*RequestLog) error
+	responseLog              func(*ResponseLog) error
 }
 
 // User type is to hold an username and password information
@@ -410,6 +412,13 @@ func (c *Client) SetDisableWarn(d bool) *Client {
 //		client.SetAllowGetMethodPayload(true)
 func (c *Client) SetAllowGetMethodPayload(a bool) *Client {
 	c.AllowGetMethodPayload = a
+	return c
+}
+
+// Set whether to record request and response packets
+//		client.SetRecordRequestAndResponse(true)
+func (c *Client) SetRecordRequestAndResponse(a bool) *Client {
+	c.recordRequestAndResponse = a
 	return c
 }
 
@@ -816,6 +825,22 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		if err = f(c, response); err != nil {
 			break
 		}
+	}
+
+	// record Request And Response packet
+	if c.recordRequestAndResponse {
+		reqByte, reqErr := httputil.DumpRequest(response.Request.RawRequest, true)
+		if reqErr != nil {
+			return response, err
+		}
+
+		respByte, respErr := httputil.DumpResponse(response.RawResponse, true)
+		if respErr != nil {
+			return response, err
+		}
+
+		response.requestByte = reqByte
+		response.responseByte = respByte
 	}
 
 	return response, err

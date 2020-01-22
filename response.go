@@ -22,9 +22,11 @@ type Response struct {
 	Request     *Request
 	RawResponse *http.Response
 
-	body       []byte
-	size       int64
-	receivedAt time.Time
+	body         []byte
+	size         int64
+	receivedAt   time.Time
+	requestByte  []byte
+	responseByte []byte
 }
 
 // Body method returns HTTP response as []byte array for the executed request.
@@ -132,6 +134,22 @@ func (r *Response) IsSuccess() bool {
 // IsError method returns true if HTTP status `code >= 400` otherwise false.
 func (r *Response) IsError() bool {
 	return r.StatusCode() > 399
+}
+
+// If recordRequestAndResponse is true,the content bytecode of the request packet is returned, otherwise the empty bytecode is returned
+func (r *Response) GetRequestStr() []byte {
+	if r.requestByte == nil {
+		return []byte("")
+	}
+	return r.requestByte
+}
+
+// If recordRequestAndResponse is true,the content bytecode of the response packet is returned, otherwise the empty bytecode is returned
+func (r *Response) GetResponseStr() []byte {
+	if r.responseByte == nil {
+		return []byte("")
+	}
+	return r.responseByte
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
