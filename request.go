@@ -399,7 +399,7 @@ func (r *Request) SetAuthToken(token string) *Request {
 // SetAuthScheme method sets the auth token scheme type in the HTTP request. For Example:
 //      Authorization: <auth-scheme-value-set-here> <auth-token-value>
 //
-// For Example: To set the scheme to use OAuth 
+// For Example: To set the scheme to use OAuth
 //
 // 		client.R().SetAuthScheme("OAuth")
 //

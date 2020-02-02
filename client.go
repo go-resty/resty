@@ -79,8 +79,8 @@ type Client struct {
 	FormData              url.Values
 	Header                http.Header
 	UserInfo              *User
-    Token                 string
-	AuthScheme	          string
+	Token                 string
+	AuthScheme            string
 	Cookies               []*http.Cookie
 	Error                 reflect.Type
 	Debug                 bool
@@ -117,10 +117,6 @@ type Client struct {
 // User type is to hold an username and password information
 type User struct {
 	Username, Password string
-}
-
-type AuthHeader struct {
-    Scheme, Token string
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -302,7 +298,7 @@ func (c *Client) SetAuthToken(token string) *Client {
 // SetAuthScheme method sets the auth token scheme type in the HTTP request. For Example:
 //      Authorization: <auth-scheme-value-set-here> <auth-token-value>
 //
-// For Example: To set the scheme to use OAuth 
+// For Example: To set the scheme to use OAuth
 //
 // 		client.SetAuthScheme("OAuth")
 //
