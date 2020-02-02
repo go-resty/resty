@@ -61,7 +61,7 @@ func TestClientAuthScheme(t *testing.T) {
 
 	c := dc()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
-		SetAuthScheme("Bearer").
+		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
 		SetHostURL(ts.URL + "/")
 
 	resp, err := c.R().Get("/profile")
