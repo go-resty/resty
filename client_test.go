@@ -55,6 +55,21 @@ func TestClientAuthToken(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
+func TestClientAuthScheme(t *testing.T) {
+	ts := createAuthServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+		SetAuthScheme("Bearer").
+		SetHostURL(ts.URL + "/")
+
+	resp, err := c.R().Get("/profile")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
 func TestOnAfterMiddleware(t *testing.T) {
 	ts := createGenServer(t)
 	defer ts.Close()
