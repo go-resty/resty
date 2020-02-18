@@ -608,7 +608,7 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 
 // SetOutputDirectory method sets output directory for saving HTTP response into file.
 // If the output directory not exists then resty creates one. This setting is optional one,
-// if you're planning using absoule path in `Request.SetOutput` and can used together.
+// if you're planning using absolute path in `Request.SetOutput` and can used together.
 // 		client.SetOutputDirectory("/save/http/response/here")
 func (c *Client) SetOutputDirectory(dirPath string) *Client {
 	c.outputDirectory = dirPath
