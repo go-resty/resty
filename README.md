@@ -447,7 +447,7 @@ _, err := client.R().
           Get("http://bit.ly/1LouEKr")
 
 // OR using absolute path
-// Note: output directory path is not used for absoulte path
+// Note: output directory path is not used for absolute path
 _, err := client.R().
           SetOutput("/MyDownloads/plugin/ReplyWithHeader-v5.1-beta.zip").
           Get("http://bit.ly/1LouEKr")
