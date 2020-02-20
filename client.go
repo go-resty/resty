@@ -305,6 +305,11 @@ func (c *Client) SetAuthToken(token string) *Client {
 // This auth token gets added to all the request rasied from this client instance.
 // Also it can be overridden or set one at the request level is supported.
 //
+// Information about Auth schemes can be found in RFC7235 which is linked to below along with the page containing
+// the currently defined official authentication schemes:
+//     https://tools.ietf.org/html/rfc7235
+//     https://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml#authschemes
+//
 // See `Request.SetAuthToken`.
 func (c *Client) SetAuthScheme(scheme string) *Client {
 	c.AuthScheme = scheme
