@@ -406,6 +406,11 @@ func (r *Request) SetAuthToken(token string) *Request {
 // This auth header scheme gets added to all the request rasied from this client instance.
 // Also it can be overridden or set one at the request level is supported.
 //
+// Information about Auth schemes can be found in RFC7235 which is linked to below along with the page containing
+// the currently defined official authentication schemes:
+//     https://tools.ietf.org/html/rfc7235
+//     https://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml#authschemes
+//
 // This method overrides the Authorization scheme set by method `Client.SetAuthScheme`.
 func (r *Request) SetAuthScheme(scheme string) *Request {
 	r.AuthScheme = scheme
