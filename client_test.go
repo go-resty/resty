@@ -175,6 +175,19 @@ func TestClientSetRootCertificateNotExists(t *testing.T) {
 	assertNil(t, transport.TLSClientConfig)
 }
 
+func TestClientSetRootCertificateFromString(t *testing.T) {
+	client := dc()
+	rootPemData, err := ioutil.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	assertNil(t, err)
+
+	client.SetRootCertificateFromString(string(rootPemData))
+
+	transport, err := client.transport()
+
+	assertNil(t, err)
+	assertNotNil(t, transport.TLSClientConfig.RootCAs)
+}
+
 func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
