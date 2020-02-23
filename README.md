@@ -571,6 +571,29 @@ if err != nil {
 client.SetCertificates(cert1, cert2, cert3)
 ```
 
+#### Custom Root Certificates and Client Certificates from string
+
+```go
+// Custom Root certificates from string
+// You can pass you certificates throught env variables as strings
+// you can add one or more root certificates, its get appended
+client.SetRootCertificateFromString("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----")
+client.SetRootCertificateFromString("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----")
+// ... and so on!
+
+// Adding Client Certificates, you add one or more certificates
+// Sample for creating certificate object
+// Parsing public/private key pair from a pair of files. The files must contain PEM encoded data.
+cert1, err := tls.X509KeyPair([]byte("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----"), []byte("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----"))
+if err != nil {
+  log.Fatalf("ERROR client certificate: %s", err)
+}
+// ...
+
+// You add one or more certificates
+client.SetCertificates(cert1, cert2, cert3)
+```
+
 #### Proxy Settings - Client as well as at Request Level
 
 Default `Go` supports Proxy via environment variable `HTTP_PROXY`. Resty provides support via `SetProxy` & `RemoveProxy`.

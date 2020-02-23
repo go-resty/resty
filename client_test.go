@@ -188,6 +188,23 @@ func TestClientSetRootCertificateFromString(t *testing.T) {
 	assertNotNil(t, transport.TLSClientConfig.RootCAs)
 }
 
+func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
+	client := NewWithClient(&http.Client{})
+	client.outputLogTo(ioutil.Discard)
+
+	rootPemData, err := ioutil.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	assertNil(t, err)
+	rt := &CustomRoundTripper{}
+	client.SetTransport(rt)
+	transport, err := client.transport()
+
+	client.SetRootCertificateFromString(string(rootPemData))
+
+	assertNotNil(t, rt)
+	assertNotNil(t, err)
+	assertNil(t, transport)
+}
+
 func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
