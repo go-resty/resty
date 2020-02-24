@@ -606,6 +606,22 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	return c
 }
 
+// SetRootCertificateFromString method helps to add one or more root certificates into Resty client
+// 		client.SetRootCertificateFromString("pem file content")
+func (c *Client) SetRootCertificateFromString(pemContent string) *Client {
+	config, err := c.tlsConfig()
+	if err != nil {
+		c.log.Errorf("%v", err)
+		return c
+	}
+	if config.RootCAs == nil {
+		config.RootCAs = x509.NewCertPool()
+	}
+
+	config.RootCAs.AppendCertsFromPEM([]byte(pemContent))
+	return c
+}
+
 // SetOutputDirectory method sets output directory for saving HTTP response into file.
 // If the output directory not exists then resty creates one. This setting is optional one,
 // if you're planning using absolute path in `Request.SetOutput` and can used together.
