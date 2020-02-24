@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2020 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -1611,8 +1611,8 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	resp, err = New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 		SetFormData(map[string]string{
 			"first_name": "Alex",
-			"last_name": strings.Repeat("C", int(debugBodySizeLimit)),
-			"zip_code": "00001"}).
+			"last_name":  strings.Repeat("C", int(debugBodySizeLimit)),
+			"zip_code":   "00001"}).
 		SetBasicAuth("myuser", "mypass").
 		Post(formTs.URL + "/profile")
 	assertNil(t, err)
@@ -1624,8 +1624,8 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	resp, err = New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 		SetFormData(map[string]string{
 			"first_name": "Alex",
-			"last_name": "C",
-			"zip_code": "00001"}).
+			"last_name":  "C",
+			"zip_code":   "00001"}).
 		SetBasicAuth("myuser", "mypass").
 		Post(formTs.URL + "/profile")
 	assertNil(t, err)
@@ -1637,7 +1637,7 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	resp, err = New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 		SetBody(`{
 			"first_name": "Alex",
-			"last_name": "` + strings.Repeat("C", int(debugBodySizeLimit)) + `C",
+			"last_name": "`+strings.Repeat("C", int(debugBodySizeLimit))+`C",
 			"zip_code": "00001"}`).
 		SetBasicAuth("myuser", "mypass").
 		Post(formTs.URL + "/profile")
