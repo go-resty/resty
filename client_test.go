@@ -285,10 +285,10 @@ func TestClientOptions(t *testing.T) {
 	assertEqual(t, "default-cookie", client.Cookies[0].Name)
 
 	cookies := []*http.Cookie{
-		&http.Cookie{
+		{
 			Name:  "default-cookie-1",
 			Value: "This is default-cookie 1 value",
-		}, &http.Cookie{
+		}, {
 			Name:  "default-cookie-2",
 			Value: "This is default-cookie 2 value",
 		},

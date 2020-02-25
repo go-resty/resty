@@ -748,7 +748,7 @@ func TestGetWithCookie(t *testing.T) {
 			Value: "This is cookie 2 value",
 		}).
 		SetCookies([]*http.Cookie{
-			&http.Cookie{
+			{
 				Name:  "go-resty-1",
 				Value: "This is cookie 1 value additional append",
 			},
@@ -767,11 +767,11 @@ func TestGetWithCookies(t *testing.T) {
 	defer ts.Close()
 
 	cookies := []*http.Cookie{
-		&http.Cookie{
+		{
 			Name:  "go-resty-1",
 			Value: "This is cookie 1 value",
 		},
-		&http.Cookie{
+		{
 			Name:  "go-resty-2",
 			Value: "This is cookie 2 value",
 		},
@@ -783,11 +783,11 @@ func TestGetWithCookies(t *testing.T) {
 
 	tu, _ := url.Parse(ts.URL)
 	c.GetClient().Jar.SetCookies(tu, []*http.Cookie{
-		&http.Cookie{
+		{
 			Name:  "jar-go-resty-1",
 			Value: "From Jar - This is cookie 1 value",
 		},
-		&http.Cookie{
+		{
 			Name:  "jar-go-resty-2",
 			Value: "From Jar - This is cookie 2 value",
 		},
