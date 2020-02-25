@@ -1534,6 +1534,7 @@ func TestTraceInfo(t *testing.T) {
 		assertEqual(t, true, tr.ServerTime >= 0)
 		assertEqual(t, true, tr.ResponseTime >= 0)
 		assertEqual(t, true, tr.TotalTime >= 0)
+		assertEqual(t, true, tr.TotalTime == resp.Time())
 	}
 
 	client.DisableTrace()
@@ -1550,6 +1551,7 @@ func TestTraceInfo(t *testing.T) {
 		assertEqual(t, true, tr.ServerTime >= 0)
 		assertEqual(t, true, tr.ResponseTime >= 0)
 		assertEqual(t, true, tr.TotalTime >= 0)
+		assertEqual(t, true, tr.TotalTime == resp.Time())
 	}
 
 	// for sake of hook funcs

@@ -789,19 +789,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	req.Time = time.Now()
 	resp, err := c.httpClient.Do(req.RawRequest)
-	endTime := time.Now()
-
-	if c.trace || req.trace {
-		req.clientTrace.endTime = endTime
-	}
 
 	response := &Response{
 		Request:     req,
 		RawResponse: resp,
-		receivedAt:  endTime,
 	}
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
+		response.setReceviedAt()
 		return response, err
 	}
 
@@ -814,6 +809,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
+					response.setReceviedAt()
 					return response, err
 				}
 				defer closeq(body)
@@ -821,9 +817,11 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 
 		if response.body, err = ioutil.ReadAll(body); err != nil {
+			response.setReceviedAt()
 			return response, err
 		}
 
+		response.setReceviedAt() // after we read the body
 		response.size = int64(len(response.body))
 	}
 

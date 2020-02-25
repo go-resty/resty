@@ -535,13 +535,21 @@ func (r *Request) TraceInfo() TraceInfo {
 		return TraceInfo{}
 	}
 
+	if ct.dnsStart.IsZero() {
+		ct.dnsStart = ct.dnsDone
+	}
+	if ct.dnsStart.IsZero() && ct.dnsDone.IsZero() {
+		ct.dnsStart = ct.getConn
+		ct.dnsDone = ct.getConn
+	}
+
 	return TraceInfo{
 		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
 		ConnTime:      ct.gotConn.Sub(ct.getConn),
 		TLSHandshake:  ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
-		ServerTime:    ct.gotFirstResponseByte.Sub(ct.wroteRequest),
+		ServerTime:    ct.gotFirstResponseByte.Sub(ct.gotConn),
 		ResponseTime:  ct.endTime.Sub(ct.gotFirstResponseByte),
-		TotalTime:     ct.endTime.Sub(ct.getConn),
+		TotalTime:     ct.endTime.Sub(ct.dnsStart),
 		IsConnReused:  ct.gotConnInfo.Reused,
 		IsConnWasIdle: ct.gotConnInfo.WasIdle,
 		ConnIdleTime:  ct.gotConnInfo.IdleTime,

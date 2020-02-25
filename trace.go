@@ -68,7 +68,6 @@ type clientTrace struct {
 	dnsDone              time.Time
 	tlsHandshakeStart    time.Time
 	tlsHandshakeDone     time.Time
-	wroteRequest         time.Time
 	endTime              time.Time
 	gotConnInfo          httptrace.GotConnInfo
 }
@@ -81,6 +80,17 @@ func (t *clientTrace) createContext(ctx context.Context) context.Context {
 	return httptrace.WithClientTrace(
 		ctx,
 		&httptrace.ClientTrace{
+			DNSStart: func(_ httptrace.DNSStartInfo) {
+				t.dnsStart = time.Now()
+			},
+			DNSDone: func(_ httptrace.DNSDoneInfo) {
+				t.dnsDone = time.Now()
+			},
+			ConnectStart: func(_, _ string) {
+				if t.dnsDone.IsZero() {
+					t.dnsDone = time.Now()
+				}
+			},
 			GetConn: func(_ string) {
 				t.getConn = time.Now()
 			},
@@ -91,20 +101,11 @@ func (t *clientTrace) createContext(ctx context.Context) context.Context {
 			GotFirstResponseByte: func() {
 				t.gotFirstResponseByte = time.Now()
 			},
-			DNSStart: func(_ httptrace.DNSStartInfo) {
-				t.dnsStart = time.Now()
-			},
-			DNSDone: func(_ httptrace.DNSDoneInfo) {
-				t.dnsDone = time.Now()
-			},
 			TLSHandshakeStart: func() {
 				t.tlsHandshakeStart = time.Now()
 			},
 			TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
 				t.tlsHandshakeDone = time.Now()
-			},
-			WroteRequest: func(_ httptrace.WroteRequestInfo) {
-				t.wroteRequest = time.Now()
 			},
 		},
 	)
