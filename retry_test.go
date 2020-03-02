@@ -590,6 +590,35 @@ func TestClientRetryErrorRecover(t *testing.T) {
 	assertNil(t, resp.Error())
 }
 
+func TestClientRetryCount(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	attempt := 0
+
+	c := dc().
+		SetTimeout(time.Second * 3).
+		SetRetryCount(1).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				attempt++
+				return true
+			},
+		)
+
+	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")
+	assertEqual(t, "", resp.Status())
+	assertEqual(t, 0, resp.StatusCode())
+	assertEqual(t, 0, len(resp.Cookies()))
+	assertNotNil(t, resp.Body())
+	assertEqual(t, 0, len(resp.Header()))
+
+	// 2 attempts were made
+	assertEqual(t, attempt, 2)
+
+	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test"))
+}
+
 func filler(*Response, error) bool {
 	return false
 }
