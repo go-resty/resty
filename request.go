@@ -535,14 +535,6 @@ func (r *Request) TraceInfo() TraceInfo {
 		return TraceInfo{}
 	}
 
-	if ct.dnsStart.IsZero() {
-		ct.dnsStart = ct.dnsDone
-	}
-	if ct.dnsStart.IsZero() && ct.dnsDone.IsZero() {
-		ct.dnsStart = ct.getConn
-		ct.dnsDone = ct.getConn
-	}
-
 	return TraceInfo{
 		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
 		ConnTime:      ct.gotConn.Sub(ct.getConn),

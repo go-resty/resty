@@ -796,7 +796,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
-		response.setReceviedAt()
+		response.setReceivedAt()
 		return response, err
 	}
 
@@ -809,7 +809,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
-					response.setReceviedAt()
+					response.setReceivedAt()
 					return response, err
 				}
 				defer closeq(body)
@@ -817,11 +817,11 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 
 		if response.body, err = ioutil.ReadAll(body); err != nil {
-			response.setReceviedAt()
+			response.setReceivedAt()
 			return response, err
 		}
 
-		response.setReceviedAt() // after we read the body
+		response.setReceivedAt() // after we read the body
 		response.size = int64(len(response.body))
 	}
 

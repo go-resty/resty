@@ -138,7 +138,7 @@ func (r *Response) IsError() bool {
 // Response Unexported methods
 //_______________________________________________________________________
 
-func (r *Response) setReceviedAt() {
+func (r *Response) setReceivedAt() {
 	r.receivedAt = time.Now()
 	if r.Request.clientTrace != nil {
 		r.Request.clientTrace.endTime = r.receivedAt
