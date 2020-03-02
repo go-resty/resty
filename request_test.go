@@ -311,6 +311,27 @@ func TestPostJSONMapInvalidResponseJson(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestForceContentTypeForGH276andGH240(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetDebug(false)
+
+	resp, err := c.R().
+		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetResult(AuthSuccess{}).
+		ForceContentType("application/json").
+		Post(ts.URL + "/login-json-html")
+
+	assertNotNil(t, err) // expecting error due to incorrect content type from server end
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+
+	logResponse(t, resp)
+}
+
 func TestPostXMLStringSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
