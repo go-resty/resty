@@ -89,7 +89,7 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 		err  error
 	)
 
-	for attempt := 0; attempt < opts.maxRetries; attempt++ {
+	for attempt := 0; attempt <= opts.maxRetries; attempt++ {
 		resp, err = operation()
 		ctx := context.Background()
 		if resp != nil && resp.Request.ctx != nil {

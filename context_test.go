@@ -177,7 +177,7 @@ func TestClientRetryWithSetContext(t *testing.T) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 		attp := atomic.AddInt32(&attemptctx, 1)
-		if attp <= 3 {
+		if attp <= 4 {
 			time.Sleep(time.Second * 2)
 		}
 		_, _ = w.Write([]byte("TestClientRetry page"))
