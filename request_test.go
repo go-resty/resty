@@ -491,6 +491,24 @@ func TestRequestAuthToken(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
+func TestRequestAuthScheme(t *testing.T) {
+	ts := createAuthServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+		SetAuthScheme("OAuth").
+		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF")
+
+	resp, err := c.R().
+		SetAuthScheme("Bearer").
+		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
+	        Get(ts.URL + "/profile")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
 func TestFormData(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()

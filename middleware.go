@@ -252,11 +252,21 @@ func addCredentials(c *Client, r *Request) error {
 		}
 	}
 
-	// Token Auth
+	// Set the Authorization Header Scheme
+	var authScheme string
+	if !IsStringEmpty(r.AuthScheme) {
+		authScheme = r.AuthScheme
+	} else if !IsStringEmpty(c.AuthScheme) {
+		authScheme = c.AuthScheme
+	} else {
+		authScheme = "Bearer"
+	}
+
+	// Build the Token Auth header
 	if !IsStringEmpty(r.Token) { // takes precedence
-		r.RawRequest.Header.Set(hdrAuthorizationKey, "Bearer "+r.Token)
+		r.RawRequest.Header.Set(hdrAuthorizationKey, authScheme+" "+r.Token)
 	} else if !IsStringEmpty(c.Token) {
-		r.RawRequest.Header.Set(hdrAuthorizationKey, "Bearer "+c.Token)
+		r.RawRequest.Header.Set(hdrAuthorizationKey, authScheme+" "+c.Token)
 	}
 
 	return nil

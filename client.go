@@ -80,6 +80,7 @@ type Client struct {
 	Header                http.Header
 	UserInfo              *User
 	Token                 string
+	AuthScheme            string
 	Cookies               []*http.Cookie
 	Error                 reflect.Type
 	Debug                 bool
@@ -278,19 +279,41 @@ func (c *Client) SetBasicAuth(username, password string) *Client {
 	return c
 }
 
-// SetAuthToken method sets bearer auth token header in the HTTP request. For Example:
-// 		Authorization: Bearer <auth-token-value-comes-here>
+// SetAuthToken method sets the auth token of the `Authorization` header for all HTTP requests.
+// The default auth scheme is `Bearer`, it can be customized with the method `SetAuthScheme`. For Example:
+// 		Authorization: <auth-scheme> <auth-token-value>
 //
 // For Example: To set auth token BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F
 //
 // 		client.SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F")
 //
-// This bearer auth token gets added to all the request rasied from this client instance.
+// This auth token gets added to all the requests rasied from this client instance.
 // Also it can be overridden or set one at the request level is supported.
 //
 // See `Request.SetAuthToken`.
 func (c *Client) SetAuthToken(token string) *Client {
 	c.Token = token
+	return c
+}
+
+// SetAuthScheme method sets the auth scheme type in the HTTP request. For Example:
+//      Authorization: <auth-scheme-value> <auth-token-value>
+//
+// For Example: To set the scheme to use OAuth
+//
+// 		client.SetAuthScheme("OAuth")
+//
+// This auth scheme gets added to all the requests rasied from this client instance.
+// Also it can be overridden or set one at the request level is supported.
+//
+// Information about auth schemes can be found in RFC7235 which is linked to below
+// along with the page containing the currently defined official authentication schemes:
+//     https://tools.ietf.org/html/rfc7235
+//     https://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml#authschemes
+//
+// See `Request.SetAuthToken`.
+func (c *Client) SetAuthScheme(scheme string) *Client {
+	c.AuthScheme = scheme
 	return c
 }
 
