@@ -444,7 +444,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	r.bodyBuf = nil
 
 	if reader, ok := r.Body.(io.Reader); ok {
-		if c.setContentLength || r.setContentLength { // keep backward compability
+		if c.setContentLength || r.setContentLength { // keep backward compatibility
 			r.bodyBuf = acquireBuffer()
 			_, err = r.bodyBuf.ReadFrom(reader)
 			r.Body = nil

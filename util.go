@@ -285,11 +285,11 @@ func releaseBuffer(buf *bytes.Buffer) {
 
 func closeq(v interface{}) {
 	if c, ok := v.(io.Closer); ok {
-		sliently(c.Close())
+		silently(c.Close())
 	}
 }
 
-func sliently(_ ...interface{}) {}
+func silently(_ ...interface{}) {}
 
 func composeHeaders(c *Client, r *Request, hdrs http.Header) string {
 	str := make([]string, 0, len(hdrs))
