@@ -64,7 +64,7 @@ func createGetServer(t *testing.T) *httptest.Server {
 				_, _ = w.Write([]byte("TestGet: text response from mypage2"))
 			case "/set-retrycount-test":
 				attp := atomic.AddInt32(&attempt, 1)
-				if attp <= 3 {
+				if attp <= 4 {
 					time.Sleep(time.Second * 6)
 				}
 				_, _ = w.Write([]byte("TestClientRetry page"))
