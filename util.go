@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2020 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -285,11 +285,11 @@ func releaseBuffer(buf *bytes.Buffer) {
 
 func closeq(v interface{}) {
 	if c, ok := v.(io.Closer); ok {
-		sliently(c.Close())
+		silently(c.Close())
 	}
 }
 
-func sliently(_ ...interface{}) {}
+func silently(_ ...interface{}) {}
 
 func composeHeaders(c *Client, r *Request, hdrs http.Header) string {
 	str := make([]string, 0, len(hdrs))

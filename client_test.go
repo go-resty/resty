@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2020 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -199,6 +199,36 @@ func TestClientSetRootCertificateNotExists(t *testing.T) {
 	assertNil(t, transport.TLSClientConfig)
 }
 
+func TestClientSetRootCertificateFromString(t *testing.T) {
+	client := dc()
+	rootPemData, err := ioutil.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	assertNil(t, err)
+
+	client.SetRootCertificateFromString(string(rootPemData))
+
+	transport, err := client.transport()
+
+	assertNil(t, err)
+	assertNotNil(t, transport.TLSClientConfig.RootCAs)
+}
+
+func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
+	client := NewWithClient(&http.Client{})
+	client.outputLogTo(ioutil.Discard)
+
+	rootPemData, err := ioutil.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	assertNil(t, err)
+	rt := &CustomRoundTripper{}
+	client.SetTransport(rt)
+	transport, err := client.transport()
+
+	client.SetRootCertificateFromString(string(rootPemData))
+
+	assertNotNil(t, rt)
+	assertNotNil(t, err)
+	assertNil(t, transport)
+}
+
 func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
@@ -279,10 +309,10 @@ func TestClientOptions(t *testing.T) {
 	assertEqual(t, "default-cookie", client.Cookies[0].Name)
 
 	cookies := []*http.Cookie{
-		&http.Cookie{
+		{
 			Name:  "default-cookie-1",
 			Value: "This is default-cookie 1 value",
-		}, &http.Cookie{
+		}, {
 			Name:  "default-cookie-2",
 			Value: "This is default-cookie 2 value",
 		},

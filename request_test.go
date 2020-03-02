@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2020 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -766,7 +766,7 @@ func TestGetWithCookie(t *testing.T) {
 			Value: "This is cookie 2 value",
 		}).
 		SetCookies([]*http.Cookie{
-			&http.Cookie{
+			{
 				Name:  "go-resty-1",
 				Value: "This is cookie 1 value additional append",
 			},
@@ -785,11 +785,11 @@ func TestGetWithCookies(t *testing.T) {
 	defer ts.Close()
 
 	cookies := []*http.Cookie{
-		&http.Cookie{
+		{
 			Name:  "go-resty-1",
 			Value: "This is cookie 1 value",
 		},
-		&http.Cookie{
+		{
 			Name:  "go-resty-2",
 			Value: "This is cookie 2 value",
 		},
@@ -801,11 +801,11 @@ func TestGetWithCookies(t *testing.T) {
 
 	tu, _ := url.Parse(ts.URL)
 	c.GetClient().Jar.SetCookies(tu, []*http.Cookie{
-		&http.Cookie{
+		{
 			Name:  "jar-go-resty-1",
 			Value: "From Jar - This is cookie 1 value",
 		},
-		&http.Cookie{
+		{
 			Name:  "jar-go-resty-2",
 			Value: "From Jar - This is cookie 2 value",
 		},
@@ -1552,6 +1552,7 @@ func TestTraceInfo(t *testing.T) {
 		assertEqual(t, true, tr.ServerTime >= 0)
 		assertEqual(t, true, tr.ResponseTime >= 0)
 		assertEqual(t, true, tr.TotalTime >= 0)
+		assertEqual(t, true, tr.TotalTime == resp.Time())
 	}
 
 	client.DisableTrace()
@@ -1568,6 +1569,7 @@ func TestTraceInfo(t *testing.T) {
 		assertEqual(t, true, tr.ServerTime >= 0)
 		assertEqual(t, true, tr.ResponseTime >= 0)
 		assertEqual(t, true, tr.TotalTime >= 0)
+		assertEqual(t, true, tr.TotalTime == resp.Time())
 	}
 
 	// for sake of hook funcs

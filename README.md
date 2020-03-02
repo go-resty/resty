@@ -4,7 +4,7 @@
 <p align="center"><a href="#features">Features</a> section describes in detail about Resty capabilities</p>
 </p>
 <p align="center">
-<p align="center"><a href="https://travis-ci.org/go-resty/resty"><img src="https://travis-ci.org/go-resty/resty.svg?branch=master" alt="Build Status"></a> <a href="https://codecov.io/gh/go-resty/resty/branch/master"><img src="https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg" alt="Code Coverage"></a> <a href="https://goreportcard.com/report/go-resty/resty"><img src="https://goreportcard.com/badge/go-resty/resty" alt="Go Report Card"></a> <a href="https://github.com/go-resty/resty/releases/latest"><img src="https://img.shields.io/badge/version-2.1.0-blue.svg" alt="Release Version"></a> <a href="https://godoc.org/github.com/go-resty/resty"><img src="https://godoc.org/github.com/go-resty/resty?status.svg" alt="GoDoc"></a> <a href="LICENSE"><img src="https://img.shields.io/github/license/go-resty/resty.svg" alt="License"></a> <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a></p>
+<p align="center"><a href="https://travis-ci.org/go-resty/resty"><img src="https://travis-ci.org/go-resty/resty.svg?branch=master" alt="Build Status"></a> <a href="https://codecov.io/gh/go-resty/resty/branch/master"><img src="https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg" alt="Code Coverage"></a> <a href="https://goreportcard.com/report/go-resty/resty"><img src="https://goreportcard.com/badge/go-resty/resty" alt="Go Report Card"></a> <a href="https://github.com/go-resty/resty/releases/latest"><img src="https://img.shields.io/badge/version-2.2.0-blue.svg" alt="Release Version"></a> <a href="https://pkg.go.dev/github.com/go-resty/resty/v2"><img src="https://godoc.org/github.com/go-resty/resty?status.svg" alt="GoDoc"></a> <a href="LICENSE"><img src="https://img.shields.io/github/license/go-resty/resty.svg" alt="License"></a> <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a></p>
 </p>
 <p align="center">
 <h4 align="center">Resty Communication Channels</h4>
@@ -13,7 +13,7 @@
 
 ## News
 
-  * v2.1.0 [released](https://github.com/go-resty/resty/releases/tag/v2.1.0) and tagged on Oct 10, 2019.
+  * v2.2.0 [released](https://github.com/go-resty/resty/releases/tag/v2.2.0) and tagged on Feb 23, 2020.
   * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on Jul 16, 2019.
   * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.  
   * v1.0 released and tagged on Sep 25, 2017. - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years since first release. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
@@ -104,7 +104,7 @@ Resty author also published following projects for Go Community.
 
 ```bash
 # Go Modules
-require github.com/go-resty/resty/v2 v2.1.0
+require github.com/go-resty/resty/v2 v2.2.0
 ```
 
 ## Usage
@@ -447,7 +447,7 @@ _, err := client.R().
           Get("http://bit.ly/1LouEKr")
 
 // OR using absolute path
-// Note: output directory path is not used for absoulte path
+// Note: output directory path is not used for absolute path
 _, err := client.R().
           SetOutput("/MyDownloads/plugin/ReplyWithHeader-v5.1-beta.zip").
           Get("http://bit.ly/1LouEKr")
@@ -562,6 +562,29 @@ client.SetRootCertificate("/path/to/root/pemFile2.pem")
 // Sample for creating certificate object
 // Parsing public/private key pair from a pair of files. The files must contain PEM encoded data.
 cert1, err := tls.LoadX509KeyPair("certs/client.pem", "certs/client.key")
+if err != nil {
+  log.Fatalf("ERROR client certificate: %s", err)
+}
+// ...
+
+// You add one or more certificates
+client.SetCertificates(cert1, cert2, cert3)
+```
+
+#### Custom Root Certificates and Client Certificates from string
+
+```go
+// Custom Root certificates from string
+// You can pass you certificates throught env variables as strings
+// you can add one or more root certificates, its get appended
+client.SetRootCertificateFromString("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----")
+client.SetRootCertificateFromString("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----")
+// ... and so on!
+
+// Adding Client Certificates, you add one or more certificates
+// Sample for creating certificate object
+// Parsing public/private key pair from a pair of files. The files must contain PEM encoded data.
+cert1, err := tls.X509KeyPair([]byte("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----"), []byte("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----"))
 if err != nil {
   log.Fatalf("ERROR client certificate: %s", err)
 }

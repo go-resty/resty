@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2020 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -629,9 +629,25 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	return c
 }
 
+// SetRootCertificateFromString method helps to add one or more root certificates into Resty client
+// 		client.SetRootCertificateFromString("pem file content")
+func (c *Client) SetRootCertificateFromString(pemContent string) *Client {
+	config, err := c.tlsConfig()
+	if err != nil {
+		c.log.Errorf("%v", err)
+		return c
+	}
+	if config.RootCAs == nil {
+		config.RootCAs = x509.NewCertPool()
+	}
+
+	config.RootCAs.AppendCertsFromPEM([]byte(pemContent))
+	return c
+}
+
 // SetOutputDirectory method sets output directory for saving HTTP response into file.
 // If the output directory not exists then resty creates one. This setting is optional one,
-// if you're planning using absoule path in `Request.SetOutput` and can used together.
+// if you're planning using absolute path in `Request.SetOutput` and can used together.
 // 		client.SetOutputDirectory("/save/http/response/here")
 func (c *Client) SetOutputDirectory(dirPath string) *Client {
 	c.outputDirectory = dirPath
@@ -796,19 +812,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	req.Time = time.Now()
 	resp, err := c.httpClient.Do(req.RawRequest)
-	endTime := time.Now()
-
-	if c.trace || req.trace {
-		req.clientTrace.endTime = endTime
-	}
 
 	response := &Response{
 		Request:     req,
 		RawResponse: resp,
-		receivedAt:  endTime,
 	}
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
+		response.setReceivedAt()
 		return response, err
 	}
 
@@ -821,6 +832,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
+					response.setReceivedAt()
 					return response, err
 				}
 				defer closeq(body)
@@ -828,9 +840,11 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 
 		if response.body, err = ioutil.ReadAll(body); err != nil {
+			response.setReceivedAt()
 			return response, err
 		}
 
+		response.setReceivedAt() // after we read the body
 		response.size = int64(len(response.body))
 	}
 

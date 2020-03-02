@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2019 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2020 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -561,9 +561,9 @@ func (r *Request) TraceInfo() TraceInfo {
 		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
 		ConnTime:      ct.gotConn.Sub(ct.getConn),
 		TLSHandshake:  ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
-		ServerTime:    ct.gotFirstResponseByte.Sub(ct.wroteRequest),
+		ServerTime:    ct.gotFirstResponseByte.Sub(ct.gotConn),
 		ResponseTime:  ct.endTime.Sub(ct.gotFirstResponseByte),
-		TotalTime:     ct.endTime.Sub(ct.getConn),
+		TotalTime:     ct.endTime.Sub(ct.dnsStart),
 		IsConnReused:  ct.gotConnInfo.Reused,
 		IsConnWasIdle: ct.gotConnInfo.WasIdle,
 		ConnIdleTime:  ct.gotConnInfo.IdleTime,
