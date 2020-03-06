@@ -241,6 +241,13 @@ func createPostServer(t *testing.T) *httptest.Server {
 
 			handleUsersEndpoint(t, w, r)
 
+			if r.URL.Path == "/login-json-html" {
+				w.Header().Set(hdrContentTypeKey, "text/html")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`<htm><body>Test JSON request with HTML response</body></html>`))
+				return
+			}
+
 			if r.URL.Path == "/usersmap" {
 				// JSON
 				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {

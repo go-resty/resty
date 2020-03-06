@@ -52,6 +52,7 @@ type Request struct {
 	trace               bool
 	outputFile          string
 	fallbackContentType string
+	forceContentType    string
 	ctx                 context.Context
 	pathParams          map[string]string
 	values              map[string]interface{}
@@ -476,6 +477,13 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 // when `Content-Type` response header is unavailable.
 func (r *Request) ExpectContentType(contentType string) *Request {
 	r.fallbackContentType = contentType
+	return r
+}
+
+// ForceContentType method provides a strong sense of response `Content-Type` for automatic unmarshalling.
+// Resty will respect it with higher priority; even response `Content-Type` response header value is available.
+func (r *Request) ForceContentType(contentType string) *Request {
+	r.forceContentType = contentType
 	return r
 }
 
