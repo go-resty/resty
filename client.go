@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -971,7 +973,7 @@ func createTransport(localAddr net.Addr) *http.Transport {
 	if localAddr != nil {
 		dialer.LocalAddr = localAddr
 	}
-	return &http.Transport{
+	transp := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           dialer.DialContext,
 		MaxIdleConns:          100,
@@ -980,4 +982,7 @@ func createTransport(localAddr net.Addr) *http.Transport {
 		ExpectContinueTimeout: 1 * time.Second,
 		MaxIdleConnsPerHost:   runtime.GOMAXPROCS(0) + 1,
 	}
+	_ = http2.ConfigureTransport(transp)
+
+	return transp
 }
