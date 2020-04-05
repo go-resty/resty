@@ -196,7 +196,7 @@ func TestClientSetRootCertificateNotExists(t *testing.T) {
 	transport, err := client.transport()
 
 	assertNil(t, err)
-	assertNil(t, transport.TLSClientConfig.RootCAs)
+	assertNotNil(t, transport.TLSClientConfig)
 }
 
 func TestClientSetRootCertificateFromString(t *testing.T) {
