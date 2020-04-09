@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -971,14 +973,17 @@ func createTransport(localAddr net.Addr) *http.Transport {
 	if localAddr != nil {
 		dialer.LocalAddr = localAddr
 	}
-	transp := http.DefaultTransport.(*http.Transport).Clone()
-	transp.Proxy = http.ProxyFromEnvironment
-	transp.DialContext = dialer.DialContext
-	transp.MaxIdleConns = 100
-	transp.IdleConnTimeout = 90 * time.Second
-	transp.TLSHandshakeTimeout = 10 * time.Second
-	transp.ExpectContinueTimeout = 1 * time.Second
-	transp.MaxIdleConnsPerHost = runtime.GOMAXPROCS(0) + 1
+
+	transp := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConnsPerHost:   runtime.GOMAXPROCS(0) + 1,
+	}
+	_ = http2.ConfigureTransport(transp)
 
 	return transp
 }
