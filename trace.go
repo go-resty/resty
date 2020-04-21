@@ -63,6 +63,7 @@ type TraceInfo struct {
 type clientTrace struct {
 	getConn              time.Time
 	gotConn              time.Time
+	connectDone          time.Time
 	gotFirstResponseByte time.Time
 	dnsStart             time.Time
 	dnsDone              time.Time
@@ -86,14 +87,16 @@ func (t *clientTrace) createContext(ctx context.Context) context.Context {
 			DNSDone: func(_ httptrace.DNSDoneInfo) {
 				t.dnsDone = time.Now()
 			},
+			ConnectStart: func(_, _ string) {
+				if t.dnsDone.IsZero() {
+					t.dnsDone = time.Now()
+				}
+			},
+			ConnectDone: func(net, addr string, err error) {
+				t.connectDone = time.Now()
+			},
 			GetConn: func(_ string) {
 				t.getConn = time.Now()
-				if t.dnsStart.IsZero() {
-					t.dnsStart = t.getConn
-				}
-				if t.dnsDone.IsZero() {
-					t.dnsDone = t.getConn
-				}
 			},
 			GotConn: func(ci httptrace.GotConnInfo) {
 				t.gotConn = time.Now()
