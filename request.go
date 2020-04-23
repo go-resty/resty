@@ -564,13 +564,11 @@ func (r *Request) TraceInfo() TraceInfo {
 	if ct == nil {
 		return TraceInfo{}
 	}
-	if ct.dnsStart.IsZero() {
-		ct.dnsStart = ct.dnsDone
-	}
 
 	return TraceInfo{
 		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
-		ConnTime:      ct.connectDone.Sub(ct.dnsDone),
+		ConnTime:      ct.gotConn.Sub(ct.getConn),
+		TCPConnTime:   ct.connectDone.Sub(ct.dnsDone),
 		TLSHandshake:  ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
 		ServerTime:    ct.gotFirstResponseByte.Sub(ct.gotConn),
 		ResponseTime:  ct.endTime.Sub(ct.gotFirstResponseByte),

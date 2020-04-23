@@ -27,6 +27,8 @@ type TraceInfo struct {
 	// ConnTime is a duration that took to obtain a successful connection.
 	ConnTime time.Duration
 
+	TCPConnTime time.Duration
+
 	// TLSHandshake is a duration that TLS handshake took place.
 	TLSHandshake time.Duration
 
@@ -90,6 +92,9 @@ func (t *clientTrace) createContext(ctx context.Context) context.Context {
 			ConnectStart: func(_, _ string) {
 				if t.dnsDone.IsZero() {
 					t.dnsDone = time.Now()
+				}
+				if t.dnsStart.IsZero() {
+					t.dnsStart = t.dnsDone
 				}
 			},
 			ConnectDone: func(net, addr string, err error) {
