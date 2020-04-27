@@ -27,7 +27,7 @@ type TraceInfo struct {
 	// ConnTime is a duration that took to obtain a successful connection.
 	ConnTime time.Duration
 
-	// TCPConnTime is a duration that took to obtain the tcp connection
+	// TCPConnTime is a duration that took to obtain the TCP connection.
 	TCPConnTime time.Duration
 
 	// TLSHandshake is a duration that TLS handshake took place.
