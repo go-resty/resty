@@ -784,14 +784,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// to modify the *resty.Request object
 	for _, f := range c.udBeforeRequest {
 		if err = f(c, req); err != nil {
-			return nil, err
+			return nil, wrapNoRetryErr(err)
 		}
 	}
 
 	// resty middlewares
 	for _, f := range c.beforeRequest {
 		if err = f(c, req); err != nil {
-			return nil, err
+			return nil, wrapNoRetryErr(err)
 		}
 	}
 
@@ -802,12 +802,12 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// call pre-request if defined
 	if c.preReqHook != nil {
 		if err = c.preReqHook(c, req.RawRequest); err != nil {
-			return nil, err
+			return nil, wrapNoRetryErr(err)
 		}
 	}
 
 	if err = requestLogger(c, req); err != nil {
-		return nil, err
+		return nil, wrapNoRetryErr(err)
 	}
 
 	req.Time = time.Now()
@@ -855,7 +855,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	return response, err
+	return response, wrapNoRetryErr(err)
 }
 
 // getting TLS client config if not exists then create one

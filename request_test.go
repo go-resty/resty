@@ -315,8 +315,14 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
+	retried := 0
 	c := dc()
 	c.SetDebug(false)
+	c.SetRetryCount(3)
+	c.SetRetryAfter(RetryAfterFunc(func(*Client, *Response) (time.Duration, error) {
+		retried++
+		return 0, nil
+	}))
 
 	resp, err := c.R().
 		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
@@ -326,6 +332,7 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 
 	assertNotNil(t, err) // expecting error due to incorrect content type from server end
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, 0, retried)
 
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
 
@@ -524,7 +531,7 @@ func TestRequestAuthScheme(t *testing.T) {
 	resp, err := c.R().
 		SetAuthScheme("Bearer").
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
-	        Get(ts.URL + "/profile")
+		Get(ts.URL + "/profile")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())

@@ -99,10 +99,11 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 			return err
 		}
 
-		needsRetry := err != nil // retry on operation errors by default
+		err1 := unwrapNoRetryErr(err)           // raw error, it used for return users callback.
+		needsRetry := err != nil && err == err1 // retry on a few operation errors by default
 
 		for _, condition := range opts.retryConditions {
-			needsRetry = condition(resp, err)
+			needsRetry = condition(resp, err1)
 			if needsRetry {
 				break
 			}
