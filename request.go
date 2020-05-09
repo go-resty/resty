@@ -322,6 +322,16 @@ func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Reque
 	return r
 }
 
+// SetMultipartFormData method allows simple form data to be attached to the request as `multipart:form-data`
+func (r *Request) SetMultipartFormData(data map[string]string) *Request {
+
+	for k, v := range data {
+		r = r.SetMultipartField(k, "", "", strings.NewReader(v))
+	}
+
+	return r
+}
+
 // SetMultipartField method is to set custom data using io.Reader for multipart upload.
 func (r *Request) SetMultipartField(param, fileName, contentType string, reader io.Reader) *Request {
 	r.isMultiPart = true

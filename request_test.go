@@ -524,7 +524,7 @@ func TestRequestAuthScheme(t *testing.T) {
 	resp, err := c.R().
 		SetAuthScheme("Bearer").
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
-	        Get(ts.URL + "/profile")
+		Get(ts.URL + "/profile")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -705,6 +705,19 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 		Delete(ts.URL + "/upload")
 
 	assertEqual(t, "multipart content is not allowed in HTTP verb [DELETE]", err.Error())
+}
+
+func TestMultiPartFormData(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	resp, err := dclr().
+		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
+		SetBasicAuth("myuser", "mypass").
+		Post(ts.URL + "/profile")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "Success", resp.String())
 }
 
 func TestMultiPartMultipartField(t *testing.T) {
