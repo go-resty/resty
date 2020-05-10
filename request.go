@@ -568,6 +568,7 @@ func (r *Request) TraceInfo() TraceInfo {
 	return TraceInfo{
 		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
 		ConnTime:      ct.gotConn.Sub(ct.getConn),
+		TCPConnTime:   ct.connectDone.Sub(ct.dnsDone),
 		TLSHandshake:  ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
 		ServerTime:    ct.gotFirstResponseByte.Sub(ct.gotConn),
 		ResponseTime:  ct.endTime.Sub(ct.gotFirstResponseByte),
