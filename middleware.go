@@ -325,7 +325,7 @@ func responseLogger(c *Client, res *Response) error {
 		}
 		debugLog += "==============================================================================\n"
 
-		c.log.Debugf(debugLog)
+		c.log.Debugf("%s", debugLog)
 	}
 
 	return nil
