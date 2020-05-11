@@ -55,6 +55,14 @@ func (r *Response) StatusCode() int {
 	return r.RawResponse.StatusCode
 }
 
+// Proto method returns the HTTP response protocol used for the request.
+func (r *Response) Proto() string {
+	if r.RawResponse == nil {
+		return ""
+	}
+	return r.RawResponse.Proto
+}
+
 // Result method returns the response value as an object if it has one
 func (r *Response) Result() interface{} {
 	return r.Request.Result

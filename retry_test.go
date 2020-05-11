@@ -151,7 +151,8 @@ func TestClientRetryGet(t *testing.T) {
 	assertNotNil(t, resp.Body())
 	assertEqual(t, 0, len(resp.Header()))
 
-	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test"))
+	assertEqual(t, true, (strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
+		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\"")))
 }
 
 func TestClientRetryWait(t *testing.T) {
@@ -616,7 +617,8 @@ func TestClientRetryCount(t *testing.T) {
 	// 2 attempts were made
 	assertEqual(t, attempt, 2)
 
-	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test"))
+	assertEqual(t, true, (strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
+		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\"")))
 }
 
 func filler(*Response, error) bool {

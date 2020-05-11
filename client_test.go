@@ -107,11 +107,13 @@ func TestClientRedirectPolicy(t *testing.T) {
 	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(20))
 	_, err := c.R().Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, "Get /redirect-21: stopped after 20 redirects", err.Error())
+	assertEqual(t, true, ("Get /redirect-21: stopped after 20 redirects" == err.Error() ||
+		"Get \"/redirect-21\": stopped after 20 redirects" == err.Error()))
 
 	c.SetRedirectPolicy(NoRedirectPolicy())
 	_, err = c.R().Get(ts.URL + "/redirect-1")
-	assertEqual(t, "Get /redirect-2: auto redirect is disabled", err.Error())
+	assertEqual(t, true, ("Get /redirect-2: auto redirect is disabled" == err.Error() ||
+		"Get \"/redirect-2\": auto redirect is disabled" == err.Error()))
 }
 
 func TestClientTimeout(t *testing.T) {
