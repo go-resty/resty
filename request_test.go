@@ -828,20 +828,8 @@ func TestGetWithCookies(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	cookies := []*http.Cookie{
-		{
-			Name:  "go-resty-1",
-			Value: "This is cookie 1 value",
-		},
-		{
-			Name:  "go-resty-2",
-			Value: "This is cookie 2 value",
-		},
-	}
-
 	c := dc()
-	c.SetHostURL(ts.URL).
-		SetCookies(cookies)
+	c.SetHostURL(ts.URL).SetDebug(true)
 
 	tu, _ := url.Parse(ts.URL)
 	c.GetClient().Jar.SetCookies(tu, []*http.Cookie{
@@ -855,10 +843,26 @@ func TestGetWithCookies(t *testing.T) {
 		},
 	})
 
-	resp, err := c.R().
-		SetCookie(&http.Cookie{
+	resp, err := c.R().SetHeader("Cookie", "").Get("mypage2")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	// Client cookies
+	c.SetCookies([]*http.Cookie{
+		{
 			Name:  "go-resty-1",
-			Value: "This is cookie 1 value additional append",
+			Value: "This is cookie 1 value",
+		},
+		{
+			Name:  "go-resty-2",
+			Value: "This is cookie 2 value",
+		},
+	})
+
+	resp, err = c.R().
+		SetCookie(&http.Cookie{
+			Name:  "req-go-resty-1",
+			Value: "This is request cookie 1 value additional append",
 		}).
 		Get("mypage2")
 
