@@ -633,6 +633,7 @@ func (r *Request) Send() (*Response, error) {
 // 		resp, err := client.R().Execute(resty.GET, "http://httpbin.org/get")
 func (r *Request) Execute(method, url string) (*Response, error) {
 	var addrs []*net.SRV
+	var resp *Response
 	var err error
 
 	if r.isMultiPart && !(method == MethodPost || method == MethodPut || method == MethodPatch) {
@@ -650,10 +651,10 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	r.URL = r.selectAddr(addrs, url, 0)
 
 	if r.client.RetryCount == 0 {
-		return r.client.execute(r)
+		resp, err = r.client.execute(r)
+		return resp, unwrapNoRetryErr(err)
 	}
 
-	var resp *Response
 	attempt := 0
 	err = Backoff(
 		func() (*Response, error) {
@@ -674,7 +675,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		RetryConditions(r.client.RetryConditions),
 	)
 
-	return resp, err
+	return resp, unwrapNoRetryErr(err)
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
