@@ -714,6 +714,19 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 	assertEqual(t, "multipart content is not allowed in HTTP verb [DELETE]", err.Error())
 }
 
+func TestMultiPartFormData(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	resp, err := dclr().
+		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
+		SetBasicAuth("myuser", "mypass").
+		Post(ts.URL + "/profile")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "Success", resp.String())
+}
+
 func TestMultiPartMultipartField(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
