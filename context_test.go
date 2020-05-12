@@ -192,7 +192,8 @@ func TestClientRetryWithSetContext(t *testing.T) {
 		SetContext(context.Background()).
 		Get(ts.URL + "/")
 
-	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/"))
+	assertEqual(t, true, (strings.HasPrefix(err.Error(), "Get "+ts.URL+"/") ||
+		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/\"")))
 }
 
 func TestRequestContext(t *testing.T) {

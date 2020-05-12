@@ -297,11 +297,13 @@ func composeHeaders(c *Client, r *Request, hdrs http.Header) string {
 		var v string
 		if k == "Cookie" {
 			cv := strings.TrimSpace(strings.Join(hdrs[k], ", "))
-			for _, c := range c.GetClient().Jar.Cookies(r.RawRequest.URL) {
-				if cv != "" {
-					cv = cv + "; " + c.String()
-				} else {
-					cv = c.String()
+			if c.GetClient().Jar != nil {
+				for _, c := range c.GetClient().Jar.Cookies(r.RawRequest.URL) {
+					if cv != "" {
+						cv = cv + "; " + c.String()
+					} else {
+						cv = c.String()
+					}
 				}
 			}
 			v = strings.TrimSpace(fmt.Sprintf("%25s: %s", k, cv))

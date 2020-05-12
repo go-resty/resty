@@ -38,6 +38,7 @@ func TestGet(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "HTTP/1.1", resp.Proto())
 	assertEqual(t, "200 OK", resp.Status())
 	assertNotNil(t, resp.Body())
 	assertEqual(t, "TestGet: text response", resp.String())
@@ -56,6 +57,7 @@ func TestGetCustomUserAgent(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "HTTP/1.1", resp.Proto())
 	assertEqual(t, "200 OK", resp.Status())
 	assertEqual(t, "TestGet: text response", resp.String())
 
@@ -80,6 +82,7 @@ func TestGetClientParamRequestParam(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "HTTP/1.1", resp.Proto())
 	assertEqual(t, "200 OK", resp.Status())
 	assertEqual(t, "TestGet: text response", resp.String())
 
@@ -825,20 +828,8 @@ func TestGetWithCookies(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	cookies := []*http.Cookie{
-		{
-			Name:  "go-resty-1",
-			Value: "This is cookie 1 value",
-		},
-		{
-			Name:  "go-resty-2",
-			Value: "This is cookie 2 value",
-		},
-	}
-
 	c := dc()
-	c.SetHostURL(ts.URL).
-		SetCookies(cookies)
+	c.SetHostURL(ts.URL).SetDebug(true)
 
 	tu, _ := url.Parse(ts.URL)
 	c.GetClient().Jar.SetCookies(tu, []*http.Cookie{
@@ -852,10 +843,26 @@ func TestGetWithCookies(t *testing.T) {
 		},
 	})
 
-	resp, err := c.R().
-		SetCookie(&http.Cookie{
+	resp, err := c.R().SetHeader("Cookie", "").Get("mypage2")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	// Client cookies
+	c.SetCookies([]*http.Cookie{
+		{
 			Name:  "go-resty-1",
-			Value: "This is cookie 1 value additional append",
+			Value: "This is cookie 1 value",
+		},
+		{
+			Name:  "go-resty-2",
+			Value: "This is cookie 2 value",
+		},
+	})
+
+	resp, err = c.R().
+		SetCookie(&http.Cookie{
+			Name:  "req-go-resty-1",
+			Value: "This is request cookie 1 value additional append",
 		}).
 		Get("mypage2")
 
@@ -952,7 +959,8 @@ func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 
 	_, err := dc().R().Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, "Get /redirect-11: stopped after 10 redirects", err.Error())
+	assertEqual(t, true, ("Get /redirect-11: stopped after 10 redirects" == err.Error() ||
+		"Get \"/redirect-11\": stopped after 10 redirects" == err.Error()))
 }
 
 func TestHostCheckRedirectPolicy(t *testing.T) {
@@ -1119,11 +1127,13 @@ func TestGetClient(t *testing.T) {
 func TestIncorrectURL(t *testing.T) {
 	c := dc()
 	_, err := c.R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
-	assertEqual(t, true, strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
+	assertEqual(t, true, (strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
+		strings.Contains(err.Error(), "parse \"//not.a.user@%66%6f%6f.com/just/a/path/also\"")))
 
 	c.SetHostURL("//not.a.user@%66%6f%6f.com")
 	_, err1 := c.R().Get("/just/a/path/also")
-	assertEqual(t, true, strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also"))
+	assertEqual(t, true, (strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
+		strings.Contains(err1.Error(), "parse \"//not.a.user@%66%6f%6f.com/just/a/path/also\"")))
 }
 
 func TestDetectContentTypeForPointer(t *testing.T) {
