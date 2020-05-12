@@ -66,6 +66,23 @@ var (
 	bufPool           = &sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 )
 
+type (
+	// RequestMiddleware type is for request middleware, called before a request is sent
+	RequestMiddleware func(*Client, *Request) error
+
+	// ResponseMiddleware type is for response middleware, called after a response has been received
+	ResponseMiddleware func(*Client, *Response) error
+
+	// PreRequestHook type is for the request hook, called right before the request is sent
+	PreRequestHook func(*Client, *http.Request) error
+
+	// RequestLogCallback type is for request logs, called before the request is logged
+	RequestLogCallback func(*RequestLog) error
+
+	// ResponseLogCallback type is for response logs, called before the response is logged
+	ResponseLogCallback func(*ResponseLog) error
+)
+
 // Client struct is used to create Resty client with client level settings,
 // these settings are applicable to all the request raised from the client.
 //
@@ -104,12 +121,12 @@ type Client struct {
 	log                Logger
 	httpClient         *http.Client
 	proxyURL           *url.URL
-	beforeRequest      []func(*Client, *Request) error
-	udBeforeRequest    []func(*Client, *Request) error
-	preReqHook         func(*Client, *http.Request) error
-	afterResponse      []func(*Client, *Response) error
-	requestLog         func(*RequestLog) error
-	responseLog        func(*ResponseLog) error
+	beforeRequest      []RequestMiddleware
+	udBeforeRequest    []RequestMiddleware
+	preReqHook         PreRequestHook
+	afterResponse      []ResponseMiddleware
+	requestLog         RequestLogCallback
+	responseLog        ResponseLogCallback
 }
 
 // User type is to hold an username and password information
@@ -347,7 +364,7 @@ func (c *Client) NewRequest() *Request {
 //
 //				return nil 	// if its success otherwise return error
 //			})
-func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
+func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
 	c.udBeforeRequest = append(c.udBeforeRequest, m)
 	return c
 }
@@ -361,7 +378,7 @@ func (c *Client) OnBeforeRequest(m func(*Client, *Request) error) *Client {
 //
 //				return nil 	// if its success otherwise return error
 //			})
-func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
+func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 	c.afterResponse = append(c.afterResponse, m)
 	return c
 }
@@ -370,7 +387,7 @@ func (c *Client) OnAfterResponse(m func(*Client, *Response) error) *Client {
 // It is called right before the request is fired.
 //
 // Note: Only one pre-request hook can be registered. Use `client.OnBeforeRequest` for mutilple.
-func (c *Client) SetPreRequestHook(h func(*Client, *http.Request) error) *Client {
+func (c *Client) SetPreRequestHook(h PreRequestHook) *Client {
 	if c.preReqHook != nil {
 		c.log.Warnf("Overwriting an existing pre-request hook: %s", functionName(h))
 	}
@@ -396,7 +413,7 @@ func (c *Client) SetDebugBodyLimit(sl int64) *Client {
 
 // OnRequestLog method used to set request log callback into Resty. Registered callback gets
 // called before the resty actually logs the information.
-func (c *Client) OnRequestLog(rl func(*RequestLog) error) *Client {
+func (c *Client) OnRequestLog(rl RequestLogCallback) *Client {
 	if c.requestLog != nil {
 		c.log.Warnf("Overwriting an existing on-request-log callback from=%s to=%s",
 			functionName(c.requestLog), functionName(rl))
@@ -407,7 +424,7 @@ func (c *Client) OnRequestLog(rl func(*RequestLog) error) *Client {
 
 // OnResponseLog method used to set response log callback into Resty. Registered callback gets
 // called before the resty actually logs the information.
-func (c *Client) OnResponseLog(rl func(*ResponseLog) error) *Client {
+func (c *Client) OnResponseLog(rl ResponseLogCallback) *Client {
 	if c.responseLog != nil {
 		c.log.Warnf("Overwriting an existing on-response-log callback from=%s to=%s",
 			functionName(c.responseLog), functionName(rl))
@@ -939,7 +956,7 @@ func createClient(hc *http.Client) *Client {
 	c.SetLogger(createLogger())
 
 	// default before request middlewares
-	c.beforeRequest = []func(*Client, *Request) error{
+	c.beforeRequest = []RequestMiddleware{
 		parseRequestURL,
 		parseRequestHeader,
 		parseRequestBody,
@@ -948,10 +965,10 @@ func createClient(hc *http.Client) *Client {
 	}
 
 	// user defined request middlewares
-	c.udBeforeRequest = []func(*Client, *Request) error{}
+	c.udBeforeRequest = []RequestMiddleware{}
 
 	// default after response middlewares
-	c.afterResponse = []func(*Client, *Response) error{
+	c.afterResponse = []ResponseMiddleware{
 		responseLogger,
 		parseResponseBody,
 		saveResponseIntoFile,
