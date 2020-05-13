@@ -1476,7 +1476,6 @@ func TestReportMethodSupportsPayload(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-
 }
 
 func TestRequestQueryStringOrder(t *testing.T) {
@@ -1648,6 +1647,25 @@ func TestTraceInfoWithoutEnableTrace(t *testing.T) {
 	}
 }
 
+func TestTraceInfoOnTimeout(t *testing.T) {
+	client := dc()
+	client.SetHostURL("http://resty-nowhere.local").EnableTrace()
+
+	resp, err := client.R().Get("/")
+	assertNotNil(t, err)
+	assertNotNil(t, resp)
+
+	tr := resp.Request.TraceInfo()
+	assertEqual(t, true, tr.DNSLookup >= 0)
+	assertEqual(t, true, tr.ConnTime == 0)
+	assertEqual(t, true, tr.TLSHandshake == 0)
+	assertEqual(t, true, tr.TCPConnTime == 0)
+	assertEqual(t, true, tr.ServerTime == 0)
+	assertEqual(t, true, tr.ResponseTime == 0)
+	assertEqual(t, true, tr.TotalTime > 0)
+	assertEqual(t, true, tr.TotalTime == resp.Time())
+}
+
 func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	ts := createFilePostServer(t)
 	defer ts.Close()
@@ -1683,7 +1701,8 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 		SetFormData(map[string]string{
 			"first_name": "Alex",
 			"last_name":  strings.Repeat("C", int(debugBodySizeLimit)),
-			"zip_code":   "00001"}).
+			"zip_code":   "00001",
+		}).
 		SetBasicAuth("myuser", "mypass").
 		Post(formTs.URL + "/profile")
 	assertNil(t, err)
@@ -1696,7 +1715,8 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 		SetFormData(map[string]string{
 			"first_name": "Alex",
 			"last_name":  "C",
-			"zip_code":   "00001"}).
+			"zip_code":   "00001",
+		}).
 		SetBasicAuth("myuser", "mypass").
 		Post(formTs.URL + "/profile")
 	assertNil(t, err)

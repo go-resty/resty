@@ -324,7 +324,6 @@ func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Reque
 
 // SetMultipartFormData method allows simple form data to be attached to the request as `multipart:form-data`
 func (r *Request) SetMultipartFormData(data map[string]string) *Request {
-
 	for k, v := range data {
 		r = r.SetMultipartField(k, "", "", strings.NewReader(v))
 	}
@@ -575,18 +574,32 @@ func (r *Request) TraceInfo() TraceInfo {
 		return TraceInfo{}
 	}
 
-	return TraceInfo{
+	ti := TraceInfo{
 		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
-		ConnTime:      ct.gotConn.Sub(ct.getConn),
-		TCPConnTime:   ct.connectDone.Sub(ct.dnsDone),
 		TLSHandshake:  ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
 		ServerTime:    ct.gotFirstResponseByte.Sub(ct.gotConn),
-		ResponseTime:  ct.endTime.Sub(ct.gotFirstResponseByte),
 		TotalTime:     ct.endTime.Sub(ct.dnsStart),
 		IsConnReused:  ct.gotConnInfo.Reused,
 		IsConnWasIdle: ct.gotConnInfo.WasIdle,
 		ConnIdleTime:  ct.gotConnInfo.IdleTime,
 	}
+
+	// Only calcuate on successful connections
+	if !ct.connectDone.IsZero() {
+		ti.TCPConnTime = ct.connectDone.Sub(ct.dnsDone)
+	}
+
+	// Only calcuate on successful connections
+	if !ct.gotConn.IsZero() {
+		ti.ConnTime = ct.gotConn.Sub(ct.getConn)
+	}
+
+	// Only calcuate on successful connections
+	if !ct.gotFirstResponseByte.IsZero() {
+		ti.ResponseTime = ct.endTime.Sub(ct.gotFirstResponseByte)
+	}
+
+	return ti
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
