@@ -65,13 +65,13 @@ type TraceInfo struct {
 // Request.
 type clientTrace struct {
 	getConn              time.Time
-	gotConn              time.Time
-	connectDone          time.Time
-	gotFirstResponseByte time.Time
 	dnsStart             time.Time
 	dnsDone              time.Time
+	connectDone          time.Time
 	tlsHandshakeStart    time.Time
 	tlsHandshakeDone     time.Time
+	gotConn              time.Time
+	gotFirstResponseByte time.Time
 	endTime              time.Time
 	gotConnInfo          httptrace.GotConnInfo
 }
