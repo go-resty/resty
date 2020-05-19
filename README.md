@@ -4,7 +4,7 @@
 <p align="center"><a href="#features">Features</a> section describes in detail about Resty capabilities</p>
 </p>
 <p align="center">
-<p align="center"><a href="https://travis-ci.org/go-resty/resty"><img src="https://travis-ci.org/go-resty/resty.svg?branch=master" alt="Build Status"></a> <a href="https://codecov.io/gh/go-resty/resty/branch/master"><img src="https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg" alt="Code Coverage"></a> <a href="https://goreportcard.com/report/go-resty/resty"><img src="https://goreportcard.com/badge/go-resty/resty" alt="Go Report Card"></a> <a href="https://github.com/go-resty/resty/releases/latest"><img src="https://img.shields.io/badge/version-2.2.0-blue.svg" alt="Release Version"></a> <a href="https://pkg.go.dev/github.com/go-resty/resty/v2"><img src="https://godoc.org/github.com/go-resty/resty?status.svg" alt="GoDoc"></a> <a href="LICENSE"><img src="https://img.shields.io/github/license/go-resty/resty.svg" alt="License"></a> <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a></p>
+<p align="center"><a href="https://travis-ci.org/go-resty/resty"><img src="https://travis-ci.org/go-resty/resty.svg?branch=master" alt="Build Status"></a> <a href="https://codecov.io/gh/go-resty/resty/branch/master"><img src="https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg" alt="Code Coverage"></a> <a href="https://goreportcard.com/report/go-resty/resty"><img src="https://goreportcard.com/badge/go-resty/resty" alt="Go Report Card"></a> <a href="https://github.com/go-resty/resty/releases/latest"><img src="https://img.shields.io/badge/version-2.3.0-blue.svg" alt="Release Version"></a> <a href="https://pkg.go.dev/github.com/go-resty/resty/v2"><img src="https://godoc.org/github.com/go-resty/resty?status.svg" alt="GoDoc"></a> <a href="LICENSE"><img src="https://img.shields.io/github/license/go-resty/resty.svg" alt="License"></a> <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a></p>
 </p>
 <p align="center">
 <h4 align="center">Resty Communication Channels</h4>
@@ -13,7 +13,7 @@
 
 ## News
 
-  * v2.2.0 [released](https://github.com/go-resty/resty/releases/tag/v2.2.0) and tagged on Feb 23, 2020.
+  * v2.3.0 [released](https://github.com/go-resty/resty/releases/tag/v2.3.0) and tagged on May 20, 2020.
   * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on Jul 16, 2019.
   * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.  
   * v1.0 released and tagged on Sep 25, 2017. - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years since first release. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
@@ -104,7 +104,7 @@ Resty author also published following projects for Go Community.
 
 ```bash
 # Go Modules
-require github.com/go-resty/resty/v2 v2.2.0
+require github.com/go-resty/resty/v2 v2.3.0
 ```
 
 ## Usage
@@ -131,6 +131,7 @@ fmt.Println("Response Info:")
 fmt.Println("Error      :", err)
 fmt.Println("Status Code:", resp.StatusCode())
 fmt.Println("Status     :", resp.Status())
+fmt.Println("Proto      :", resp.Proto())
 fmt.Println("Time       :", resp.Time())
 fmt.Println("Received At:", resp.ReceivedAt())
 fmt.Println("Body       :\n", resp)
@@ -141,6 +142,7 @@ fmt.Println("Request Trace Info:")
 ti := resp.Request.TraceInfo()
 fmt.Println("DNSLookup    :", ti.DNSLookup)
 fmt.Println("ConnTime     :", ti.ConnTime)
+fmt.Println("TCPConnTime  :", ti.TCPConnTime)
 fmt.Println("TLSHandshake :", ti.TLSHandshake)
 fmt.Println("ServerTime   :", ti.ServerTime)
 fmt.Println("ResponseTime :", ti.ResponseTime)
@@ -154,27 +156,29 @@ Response Info:
 Error      : <nil>
 Status Code: 200
 Status     : 200 OK
-Time       : 465.301137ms
-Received At: 2019-06-16 01:52:33.772456 -0800 PST m=+0.466672260
+Proto      : HTTP/2.0
+Time       : 475.611189ms
+Received At: 2020-05-19 00:11:06.828188 -0700 PDT m=+0.476510773
 Body       :
  {
   "args": {},
   "headers": {
     "Accept-Encoding": "gzip",
     "Host": "httpbin.org",
-    "User-Agent": "go-resty/2.0.0 (https://github.com/go-resty/resty)"
+    "User-Agent": "go-resty/2.3.0 (https://github.com/go-resty/resty)"
   },
   "origin": "0.0.0.0",
   "url": "https://httpbin.org/get"
 }
 
 Request Trace Info:
-DNSLookup    : 2.21124ms
-ConnTime     : 393.875795ms
-TLSHandshake : 319.313546ms
-ServerTime   : 71.109256ms
-ResponseTime : 94.466µs
-TotalTime    : 465.301137ms
+DNSLookup    : 4.870246ms
+ConnTime     : 393.95373ms
+TCPConnTime  : 78.360432ms
+TLSHandshake : 310.032859ms
+ServerTime   : 81.648284ms
+ResponseTime : 124.266µs
+TotalTime    : 475.611189ms
 IsConnReused : false
 IsConnWasIdle: false
 ConnIdleTime : 0s
@@ -832,6 +836,10 @@ BTW, I'd like to know what you think about `Resty`. Kindly open an issue or send
 ## Creator
 
 [Jeevanandam M.](https://github.com/jeevatkm) (jeeva@myjeeva.com)
+
+## Core Team
+
+Have a look on [Members](https://github.com/orgs/go-resty/teams/core/members) page.
 
 ## Contributors
 
