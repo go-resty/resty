@@ -578,10 +578,15 @@ func (r *Request) TraceInfo() TraceInfo {
 		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
 		TLSHandshake:  ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
 		ServerTime:    ct.gotFirstResponseByte.Sub(ct.gotConn),
-		TotalTime:     ct.endTime.Sub(ct.dnsStart),
 		IsConnReused:  ct.gotConnInfo.Reused,
 		IsConnWasIdle: ct.gotConnInfo.WasIdle,
 		ConnIdleTime:  ct.gotConnInfo.IdleTime,
+	}
+
+	if ct.gotConnInfo.Reused {
+		ti.TotalTime = ct.endTime.Sub(ct.getConn)
+	} else {
+		ti.TotalTime = ct.endTime.Sub(ct.dnsStart)
 	}
 
 	// Only calcuate on successful connections
