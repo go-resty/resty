@@ -25,6 +25,7 @@
   * [Request](https://godoc.org/github.com/go-resty/resty#Request) Body can be `string`, `[]byte`, `struct`, `map`, `slice` and `io.Reader` too
     * Auto detects `Content-Type`
     * Buffer less processing for `io.Reader`
+    * Native `*http.Request` instance may be accessed during middleware and request execution via `Request.RawRequest`
     * Request Body can be read multiple times via `Request.RawRequest.GetBody()`
   * [Response](https://godoc.org/github.com/go-resty/resty#Response) object gives you more possibility
     * Access as `[]byte` array - `response.Body()` OR Access as `string` - `response.String()`
