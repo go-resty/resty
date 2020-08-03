@@ -470,8 +470,14 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	} else if IsJSONType(contentType) &&
 		(kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
 		bodyBytes, err = jsonMarshal(c, r, r.Body)
+		if err != nil {
+			return
+		}
 	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
 		bodyBytes, err = xml.Marshal(r.Body)
+		if err != nil {
+			return
+		}
 	}
 
 	if bodyBytes == nil && r.bodyBuf == nil {
