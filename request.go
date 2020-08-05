@@ -589,17 +589,17 @@ func (r *Request) TraceInfo() TraceInfo {
 		ti.TotalTime = ct.endTime.Sub(ct.dnsStart)
 	}
 
-	// Only calcuate on successful connections
+	// Only calculate on successful connections
 	if !ct.connectDone.IsZero() {
 		ti.TCPConnTime = ct.connectDone.Sub(ct.dnsDone)
 	}
 
-	// Only calcuate on successful connections
+	// Only calculate on successful connections
 	if !ct.gotConn.IsZero() {
 		ti.ConnTime = ct.gotConn.Sub(ct.getConn)
 	}
 
-	// Only calcuate on successful connections
+	// Only calculate on successful connections
 	if !ct.gotFirstResponseByte.IsZero() {
 		ti.ResponseTime = ct.endTime.Sub(ct.gotFirstResponseByte)
 	}
