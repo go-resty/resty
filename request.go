@@ -375,7 +375,7 @@ func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 // See `Client.SetContentLength`
 // 		client.R().SetContentLength(true)
 func (r *Request) SetContentLength(l bool) *Request {
-	r.setContentLength = true
+	r.setContentLength = l
 	return r
 }
 
