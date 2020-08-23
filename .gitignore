@@ -29,3 +29,4 @@ go.sum
 
 # Exclude intellij IDE folders
 .idea/*
+.vscode/*

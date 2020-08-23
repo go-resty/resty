@@ -12,10 +12,10 @@
 </p>
 
 ## News
-
+  * v2.3.1 [released](https://github.com/go-resty/resty/releases/tag/v2.3.0) and tagged on Aug 23, 2020.
   * v2.3.0 [released](https://github.com/go-resty/resty/releases/tag/v2.3.0) and tagged on May 20, 2020.
   * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on Jul 16, 2019.
-  * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.  
+  * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.
   * v1.0 released and tagged on Sep 25, 2017. - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years since first release. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
 
 ## Features
@@ -83,7 +83,7 @@
 
 #### Supported Go Versions
 
-Initially Resty started supporting `go modules` since `v1.10.0` release. 
+Initially Resty started supporting `go modules` since `v1.10.0` release.
 
 Starting Resty v2 and higher versions, it fully embraces [go modules](https://github.com/golang/go/wiki/Modules) package release. It requires a Go version capable of understanding `/vN` suffixed imports:
 
@@ -824,7 +824,7 @@ More detailed example of mocking resty http requests using ginko could be found 
 Resty releases versions according to [Semantic Versioning](http://semver.org)
 
   * Resty v2 does not use `gopkg.in` service for library versioning.
-  * Resty fully adapted to `go mod` capabilities since `v1.10.0` release. 
+  * Resty fully adapted to `go mod` capabilities since `v1.10.0` release.
   * Resty v1 series was using `gopkg.in` to provide versioning. `gopkg.in/resty.vX` points to appropriate tagged versions; `X` denotes version series number and it's a stable release for production use. For e.g. `gopkg.in/resty.v0`.
   * Development takes place at the master branch. Although the code in master should always compile and test successfully, it might break API's. I aim to maintain backwards compatibility, but sometimes API's and behavior might be changed to fix a bug.
 
