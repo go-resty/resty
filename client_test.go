@@ -234,6 +234,7 @@ func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
 func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
+		assertNotNil(t, r.RawRequest)
 		r.SetAuthToken("This is test auth token")
 		return nil
 	})
@@ -610,3 +611,4 @@ func TestNewWithLocalAddr(t *testing.T) {
 	assertNil(t, err)
 	assertEqual(t, resp.String(), "TestGet: text response")
 }
+
