@@ -1312,6 +1312,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, true, resp.Size() != 0)
+	assertEqual(t, true, resp.Time() > 0)
 }
 
 func TestOutputFileWithBaseDirError(t *testing.T) {
@@ -1336,6 +1337,7 @@ func TestOutputPathDirNotExists(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, true, resp.Size() != 0)
+	assertEqual(t, true, resp.Time() > 0)
 }
 
 func TestOutputFileAbsPath(t *testing.T) {

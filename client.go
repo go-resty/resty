@@ -859,9 +859,10 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			return response, err
 		}
 
-		response.setReceivedAt() // after we read the body
 		response.size = int64(len(response.body))
 	}
+
+	response.setReceivedAt() // after we read the body
 
 	// Apply Response middleware
 	for _, f := range c.afterResponse {
