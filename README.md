@@ -656,8 +656,8 @@ client := resty.New()
 
 client.AddRetryCondition(
     // RetryConditionFunc type is for retry condition function
-	  // input: non-nil Response OR request execution error
-    func(r *resty.Response, err error) bool {
+    // input: non-nil Response OR request execution error
+    func(r *resty.Response) (bool, error) {
         return r.StatusCode() == http.StatusTooManyRequests
     },
 )
