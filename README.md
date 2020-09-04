@@ -211,6 +211,13 @@ resp, err := client.R().
       SetHeader("Accept", "application/json").
       SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F").
       Get("/show_product")
+
+
+// If necessary, you can force response content type to tell Resty to parse a JSON response into your struct
+resp, err := client.R().
+      SetResult(result).
+      ForceContentType("application/json").
+      Get("v2/alpine/manifests/latest")
 ```
 
 #### Various POST method combinations

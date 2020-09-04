@@ -490,7 +490,8 @@ func (r *Request) ExpectContentType(contentType string) *Request {
 }
 
 // ForceContentType method provides a strong sense of response `Content-Type` for automatic unmarshalling.
-// Resty will respect it with higher priority; even response `Content-Type` response header value is available.
+// Resty gives this a higher priority than the `Content-Type` response header.  This means that if both
+// `Request.ForceContentType` is set and the response `Content-Type` is available, `ForceContentType` will win.
 func (r *Request) ForceContentType(contentType string) *Request {
 	r.forceContentType = contentType
 	return r
