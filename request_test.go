@@ -7,6 +7,8 @@ package resty
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/xml"
+	"errors"
 	"io"
 	"io/ioutil"
 	"net"
@@ -314,6 +316,32 @@ func TestPostJSONMapInvalidResponseJson(t *testing.T) {
 	logResponse(t, resp)
 }
 
+type brokenMarshalJSON struct{}
+
+func (b brokenMarshalJSON) MarshalJSON() ([]byte, error) {
+	return nil, errors.New("b0rk3d")
+}
+
+func TestPostJSONMarshalError(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	b := brokenMarshalJSON{}
+	exp := "b0rk3d"
+
+	_, err := dclr().
+		SetHeader(hdrContentTypeKey, "application/json").
+		SetBody(b).
+		Post(ts.URL + "/login")
+	if err == nil {
+		t.Fatalf("expected error but got %v", err)
+	}
+
+	if !strings.Contains(err.Error(), exp) {
+		t.Errorf("expected error string %q to contain %q", err, exp)
+	}
+}
+
 func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
@@ -359,6 +387,32 @@ func TestPostXMLStringSuccess(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
 	logResponse(t, resp)
+}
+
+type brokenMarshalXML struct{}
+
+func (b brokenMarshalXML) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	return errors.New("b0rk3d")
+}
+
+func TestPostXMLMarshalError(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	b := brokenMarshalXML{}
+	exp := "b0rk3d"
+
+	_, err := dclr().
+		SetHeader(hdrContentTypeKey, "application/xml").
+		SetBody(b).
+		Post(ts.URL + "/login")
+	if err == nil {
+		t.Fatalf("expected error but got %v", err)
+	}
+
+	if !strings.Contains(err.Error(), exp) {
+		t.Errorf("expected error string %q to contain %q", err, exp)
+	}
 }
 
 func TestPostXMLStringError(t *testing.T) {
