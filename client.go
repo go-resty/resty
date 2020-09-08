@@ -125,6 +125,7 @@ type Client struct {
 	udBeforeRequest    []RequestMiddleware
 	preReqHook         PreRequestHook
 	afterResponse      []ResponseMiddleware
+	udAfterResponse    []ResponseMiddleware
 	requestLog         RequestLogCallback
 	responseLog        ResponseLogCallback
 }
@@ -364,6 +365,10 @@ func (c *Client) NewRequest() *Request {
 //
 //				return nil 	// if its success otherwise return error
 //			})
+//
+// Please note that reading the request body on a middleware will drain it,
+// making it unavailable on the following middlewares and at request time.
+// For more information see https://golang.org/pkg/net/http/httputil/#DumpRequest
 func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
 	c.udBeforeRequest = append(c.udBeforeRequest, m)
 	return c
@@ -371,15 +376,20 @@ func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
 
 // OnAfterResponse method appends response middleware into the after response chain.
 // Once we receive response from host server, default Resty response middleware
-// gets applied and then user assigened response middlewares applied.
+// gets applied and then user assigned response middlewares applied.
+// Note that these middleware will execute on all paths, including request failure
 // 		client.OnAfterResponse(func(c *resty.Client, r *resty.Response) error {
 //				// Now you have access to Client and Response instance
 //				// manipulate it as per your need
 //
 //				return nil 	// if its success otherwise return error
 //			})
+//
+// Please note that reading the response body on a middleware will drain it,
+// making it unavailable on the following middlewares and at further consumption.
+// For more information see https://golang.org/pkg/net/http/httputil/#DumpResponse
 func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
-	c.afterResponse = append(c.afterResponse, m)
+	c.udAfterResponse = append(c.udAfterResponse, m)
 	return c
 }
 
@@ -792,18 +802,17 @@ func (c *Client) GetClient() *http.Client {
 // error.
 func (c *Client) execute(req *Request) (*Response, error) {
 	defer releaseBuffer(req.bodyBuf)
-	// Apply Request middleware
+	// Apply Request middlewares on the *resty.Request instance
 	var err error
 
-	// resty middlewares
+	// Apply resty OnBeforeRequest middlewares
 	for _, f := range c.beforeRequest {
 		if err = f(c, req); err != nil {
 			return nil, wrapNoRetryErr(err)
 		}
 	}
 
-	// user defined on before request methods
-	// to modify the *resty.Request object
+	// Apply user-defined OnBeforeRequest middlewares
 	for _, f := range c.udBeforeRequest {
 		if err = f(c, req); err != nil {
 			return nil, wrapNoRetryErr(err)
@@ -825,16 +834,22 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		return nil, wrapNoRetryErr(err)
 	}
 
+	// Execute HTTP request
 	req.Time = time.Now()
 	resp, err := c.httpClient.Do(req.RawRequest)
 
+	// Build Response from HTTP response
 	response := &Response{
 		Request:     req,
 		RawResponse: resp,
 	}
 
+	// Response handling: on happy path execute resty OnAfterResponse middlewares
+	// on all paths execute user-defined middlewares on the *resty.Response instance
+
 	if err != nil || req.notParseResponse || c.notParseResponse {
 		response.setReceivedAt()
+		c.applyCustomResponseMiddlewares(response)
 		return response, err
 	}
 
@@ -848,6 +863,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 				body, err = gzip.NewReader(body)
 				if err != nil {
 					response.setReceivedAt()
+					c.applyCustomResponseMiddlewares(response)
 					return response, err
 				}
 				defer closeq(body)
@@ -856,6 +872,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 		if response.body, err = ioutil.ReadAll(body); err != nil {
 			response.setReceivedAt()
+			c.applyCustomResponseMiddlewares(response)
 			return response, err
 		}
 
@@ -864,7 +881,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	response.setReceivedAt() // after we read the body
 
-	// Apply Response middleware
+
+	// Apply OnAfterResponse middlewares
+	c.applyCustomResponseMiddlewares(response)
 	for _, f := range c.afterResponse {
 		if err = f(c, response); err != nil {
 			break
@@ -872,6 +891,15 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	return response, wrapNoRetryErr(err)
+}
+
+// Apply user defined Response middlewares on the given response
+func (c *Client) applyCustomResponseMiddlewares(response *Response) {
+	for _, f := range c.udAfterResponse {
+		if err := f(c, response); err != nil {
+			break
+		}
+	}
 }
 
 // getting TLS client config if not exists then create one
