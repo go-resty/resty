@@ -54,6 +54,10 @@ type TraceInfo struct {
 	// ConnIdleTime is a duration how long the connection was previously
 	// idle, if IsConnWasIdle is true.
 	ConnIdleTime time.Duration
+
+	// RetryAttempt is to represent the retry attempt made during a Resty
+	// request execution flow when using the Resty retry feature.
+	RetryAttempt int
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾

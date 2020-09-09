@@ -27,21 +27,22 @@ import (
 // resty client. Request provides an options to override client level
 // settings and also an options for the request composition.
 type Request struct {
-	URL        string
-	Method     string
-	Token      string
-	AuthScheme string
-	QueryParam url.Values
-	FormData   url.Values
-	Header     http.Header
-	Time       time.Time
-	Body       interface{}
-	Result     interface{}
-	Error      interface{}
-	RawRequest *http.Request
-	SRV        *SRVRecord
-	UserInfo   *User
-	Cookies    []*http.Cookie
+	URL          string
+	Method       string
+	Token        string
+	AuthScheme   string
+	QueryParam   url.Values
+	FormData     url.Values
+	Header       http.Header
+	Time         time.Time
+	Body         interface{}
+	Result       interface{}
+	Error        interface{}
+	RawRequest   *http.Request
+	SRV          *SRVRecord
+	UserInfo     *User
+	Cookies      []*http.Cookie
+	RetryAttempt int
 
 	isMultiPart         bool
 	isFormData          bool
@@ -582,6 +583,7 @@ func (r *Request) TraceInfo() TraceInfo {
 		IsConnReused:  ct.gotConnInfo.Reused,
 		IsConnWasIdle: ct.gotConnInfo.WasIdle,
 		ConnIdleTime:  ct.gotConnInfo.IdleTime,
+		RetryAttempt:  r.RetryAttempt,
 	}
 
 	if ct.gotConnInfo.Reused {
@@ -703,6 +705,8 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		MaxWaitTime(r.client.RetryMaxWaitTime),
 		RetryConditions(r.client.RetryConditions),
 	)
+
+	r.RetryAttempt = attempt
 
 	return resp, unwrapNoRetryErr(err)
 }
