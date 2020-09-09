@@ -7,6 +7,7 @@ package resty
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"net/http/httptrace"
 	"time"
 )
@@ -58,10 +59,13 @@ type TraceInfo struct {
 	// RetryAttempt is to represent the retry attempt made during a Resty
 	// request execution flow when using the Resty retry feature.
 	RetryAttempt int
+
+	// RemoteAddr returns the remote network address.
+	RemoteAddr net.Addr
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// CientTrace struct and its methods
+// ClientTrace struct and its methods
 //_______________________________________________________________________
 
 // tracer struct maps the `httptrace.ClientTrace` hooks into Fields

@@ -586,6 +586,8 @@ func (r *Request) TraceInfo() TraceInfo {
 		RetryAttempt:  r.RetryAttempt,
 	}
 
+	// Calculate the total time accordingly,
+	// when connection is reused
 	if ct.gotConnInfo.Reused {
 		ti.TotalTime = ct.endTime.Sub(ct.getConn)
 	} else {
@@ -605,6 +607,11 @@ func (r *Request) TraceInfo() TraceInfo {
 	// Only calculate on successful connections
 	if !ct.gotFirstResponseByte.IsZero() {
 		ti.ResponseTime = ct.endTime.Sub(ct.gotFirstResponseByte)
+	}
+
+	// Capture remote address info when connection is non-nil
+	if ct.gotConnInfo.Conn != nil {
+		ti.RemoteAddr = ct.gotConnInfo.Conn.RemoteAddr()
 	}
 
 	return ti
