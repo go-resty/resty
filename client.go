@@ -849,7 +849,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
 		response.setReceivedAt()
-		c.applyCustomResponseMiddlewares(response)
+		c.applyUdResponseMiddlewares(response)
 		return response, err
 	}
 
@@ -863,7 +863,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 				body, err = gzip.NewReader(body)
 				if err != nil {
 					response.setReceivedAt()
-					c.applyCustomResponseMiddlewares(response)
+					c.applyUdResponseMiddlewares(response)
 					return response, err
 				}
 				defer closeq(body)
@@ -872,7 +872,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 		if response.body, err = ioutil.ReadAll(body); err != nil {
 			response.setReceivedAt()
-			c.applyCustomResponseMiddlewares(response)
+			c.applyUdResponseMiddlewares(response)
 			return response, err
 		}
 
@@ -883,7 +883,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 
 	// Apply OnAfterResponse middlewares
-	c.applyCustomResponseMiddlewares(response)
+	c.applyUdResponseMiddlewares(response)
 	for _, f := range c.afterResponse {
 		if err = f(c, response); err != nil {
 			break
@@ -894,7 +894,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 }
 
 // Apply user defined Response middlewares on the given response
-func (c *Client) applyCustomResponseMiddlewares(response *Response) {
+func (c *Client) applyUdResponseMiddlewares(response *Response) {
 	for _, f := range c.udAfterResponse {
 		if err := f(c, response); err != nil {
 			break
@@ -993,8 +993,9 @@ func createClient(hc *http.Client) *Client {
 		addCredentials,
 	}
 
-	// user defined request middlewares
+	// user defined request and response middlewares
 	c.udBeforeRequest = []RequestMiddleware{}
+	c.udAfterResponse = []ResponseMiddleware{}
 
 	// default after response middlewares
 	c.afterResponse = []ResponseMiddleware{
