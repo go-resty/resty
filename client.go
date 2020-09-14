@@ -849,7 +849,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
 		response.setReceivedAt()
-		c.applyUdResponseMiddlewares(response)
+		c.applyResponseMiddlewares(response)
 		return response, err
 	}
 
@@ -863,7 +863,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 				body, err = gzip.NewReader(body)
 				if err != nil {
 					response.setReceivedAt()
-					c.applyUdResponseMiddlewares(response)
+					c.applyResponseMiddlewares(response)
 					return response, err
 				}
 				defer closeq(body)
@@ -872,7 +872,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 		if response.body, err = ioutil.ReadAll(body); err != nil {
 			response.setReceivedAt()
-			c.applyUdResponseMiddlewares(response)
+			c.applyResponseMiddlewares(response)
 			return response, err
 		}
 
@@ -881,25 +881,26 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	response.setReceivedAt() // after we read the body
 
-
-	// Apply OnAfterResponse middlewares
-	c.applyUdResponseMiddlewares(response)
-	for _, f := range c.afterResponse {
-		if err = f(c, response); err != nil {
-			break
-		}
-	}
+	// Apply internal and OnAfterResponse middlewares
+	err = c.applyResponseMiddlewares(response)
 
 	return response, wrapNoRetryErr(err)
 }
 
 // Apply user defined Response middlewares on the given response
-func (c *Client) applyUdResponseMiddlewares(response *Response) {
+func (c *Client) applyResponseMiddlewares(response *Response) error {
+	var err error
 	for _, f := range c.udAfterResponse {
-		if err := f(c, response); err != nil {
+		if err = f(c, response); err != nil {
 			break
 		}
 	}
+	for _, f := range c.afterResponse {
+		if err = f(c, response); err != nil {
+			break
+		}
+	}
+	return err
 }
 
 // getting TLS client config if not exists then create one
