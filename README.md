@@ -15,7 +15,7 @@
 
   * v2.3.0 [released](https://github.com/go-resty/resty/releases/tag/v2.3.0) and tagged on May 20, 2020.
   * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on Jul 16, 2019.
-  * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.  
+  * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.
   * v1.0 released and tagged on Sep 25, 2017. - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years since first release. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
 
 ## Features
@@ -55,11 +55,12 @@
   * Option to specify expected `Content-Type` when response `Content-Type` header missing. Refer to [#92](https://github.com/go-resty/resty/issues/92)
   * Resty design
     * Have client level settings & options and also override at Request level if you want to
-    * Request and Response middlewares
+    * Request and Response middleware
     * Create Multiple clients if you want to `resty.New()`
     * Supports `http.RoundTripper` implementation, see [SetTransport](https://godoc.org/github.com/go-resty/resty#Client.SetTransport)
     * goroutine concurrent safe
     * Resty Client trace, see [Client.EnableTrace](https://godoc.org/github.com/go-resty/resty#Client.EnableTrace) and [Request.EnableTrace](https://godoc.org/github.com/go-resty/resty#Request.EnableTrace)
+      * Since v2.4.0, `RequestAttempt` value supported in trace info also Request instance contains `Attempt` attribute
     * Debug mode - clean and informative logging presentation
     * Gzip - Go does it automatically also resty has fallback handling too
     * Works fine with `HTTP/2` and `HTTP/1.1`
@@ -83,7 +84,7 @@
 
 #### Supported Go Versions
 
-Initially Resty started supporting `go modules` since `v1.10.0` release. 
+Initially Resty started supporting `go modules` since `v1.10.0` release.
 
 Starting Resty v2 and higher versions, it fully embraces [go modules](https://github.com/golang/go/wiki/Modules) package release. It requires a Go version capable of understanding `/vN` suffixed imports:
 
@@ -124,65 +125,70 @@ import "github.com/go-resty/resty/v2"
 client := resty.New()
 
 resp, err := client.R().
-		EnableTrace().
-		Get("https://httpbin.org/get")
+    EnableTrace().
+    Get("https://httpbin.org/get")
 
 // Explore response object
 fmt.Println("Response Info:")
-fmt.Println("Error      :", err)
-fmt.Println("Status Code:", resp.StatusCode())
-fmt.Println("Status     :", resp.Status())
-fmt.Println("Proto      :", resp.Proto())
-fmt.Println("Time       :", resp.Time())
-fmt.Println("Received At:", resp.ReceivedAt())
-fmt.Println("Body       :\n", resp)
+fmt.Println("  Error      :", err)
+fmt.Println("  Status Code:", resp.StatusCode())
+fmt.Println("  Status     :", resp.Status())
+fmt.Println("  Proto      :", resp.Proto())
+fmt.Println("  Time       :", resp.Time())
+fmt.Println("  Received At:", resp.ReceivedAt())
+fmt.Println("  Body       :\n", resp)
 fmt.Println()
 
 // Explore trace info
 fmt.Println("Request Trace Info:")
 ti := resp.Request.TraceInfo()
-fmt.Println("DNSLookup    :", ti.DNSLookup)
-fmt.Println("ConnTime     :", ti.ConnTime)
-fmt.Println("TCPConnTime  :", ti.TCPConnTime)
-fmt.Println("TLSHandshake :", ti.TLSHandshake)
-fmt.Println("ServerTime   :", ti.ServerTime)
-fmt.Println("ResponseTime :", ti.ResponseTime)
-fmt.Println("TotalTime    :", ti.TotalTime)
-fmt.Println("IsConnReused :", ti.IsConnReused)
-fmt.Println("IsConnWasIdle:", ti.IsConnWasIdle)
-fmt.Println("ConnIdleTime :", ti.ConnIdleTime)
+fmt.Println("  DNSLookup     :", ti.DNSLookup)
+fmt.Println("  ConnTime      :", ti.ConnTime)
+fmt.Println("  TCPConnTime   :", ti.TCPConnTime)
+fmt.Println("  TLSHandshake  :", ti.TLSHandshake)
+fmt.Println("  ServerTime    :", ti.ServerTime)
+fmt.Println("  ResponseTime  :", ti.ResponseTime)
+fmt.Println("  TotalTime     :", ti.TotalTime)
+fmt.Println("  IsConnReused  :", ti.IsConnReused)
+fmt.Println("  IsConnWasIdle :", ti.IsConnWasIdle)
+fmt.Println("  ConnIdleTime  :", ti.ConnIdleTime)
+fmt.Println("  RequestAttempt:", ti.RequestAttempt)
+fmt.Println("  RemoteAddr    :", ti.RemoteAddr.String())
 
 /* Output
 Response Info:
-Error      : <nil>
-Status Code: 200
-Status     : 200 OK
-Proto      : HTTP/2.0
-Time       : 475.611189ms
-Received At: 2020-05-19 00:11:06.828188 -0700 PDT m=+0.476510773
-Body       :
- {
-  "args": {},
-  "headers": {
-    "Accept-Encoding": "gzip",
-    "Host": "httpbin.org",
-    "User-Agent": "go-resty/2.3.0 (https://github.com/go-resty/resty)"
-  },
-  "origin": "0.0.0.0",
-  "url": "https://httpbin.org/get"
-}
+  Error      : <nil>
+  Status Code: 200
+  Status     : 200 OK
+  Proto      : HTTP/2.0
+  Time       : 457.034718ms
+  Received At: 2020-09-14 15:35:29.784681 -0700 PDT m=+0.458137045
+  Body       :
+  {
+    "args": {},
+    "headers": {
+      "Accept-Encoding": "gzip",
+      "Host": "httpbin.org",
+      "User-Agent": "go-resty/2.3.0-dev (https://github.com/go-resty/resty)",
+      "X-Amzn-Trace-Id": "Root=1-5f5ff031-000ff6292204aa6898e4de49"
+    },
+    "origin": "0.0.0.0",
+    "url": "https://httpbin.org/get"
+  }
 
 Request Trace Info:
-DNSLookup    : 4.870246ms
-ConnTime     : 393.95373ms
-TCPConnTime  : 78.360432ms
-TLSHandshake : 310.032859ms
-ServerTime   : 81.648284ms
-ResponseTime : 124.266µs
-TotalTime    : 475.611189ms
-IsConnReused : false
-IsConnWasIdle: false
-ConnIdleTime : 0s
+  DNSLookup     : 4.074657ms
+  ConnTime      : 381.709936ms
+  TCPConnTime   : 77.428048ms
+  TLSHandshake  : 299.623597ms
+  ServerTime    : 75.414703ms
+  ResponseTime  : 79.337µs
+  TotalTime     : 457.034718ms
+  IsConnReused  : false
+  IsConnWasIdle : false
+  ConnIdleTime  : 0s
+  RequestAttempt: 1
+  RemoteAddr    : 3.221.81.55:443
 */
 ```
 
@@ -831,7 +837,7 @@ More detailed example of mocking resty http requests using ginko could be found 
 Resty releases versions according to [Semantic Versioning](http://semver.org)
 
   * Resty v2 does not use `gopkg.in` service for library versioning.
-  * Resty fully adapted to `go mod` capabilities since `v1.10.0` release. 
+  * Resty fully adapted to `go mod` capabilities since `v1.10.0` release.
   * Resty v1 series was using `gopkg.in` to provide versioning. `gopkg.in/resty.vX` points to appropriate tagged versions; `X` denotes version series number and it's a stable release for production use. For e.g. `gopkg.in/resty.v0`.
   * Development takes place at the master branch. Although the code in master should always compile and test successfully, it might break API's. I aim to maintain backwards compatibility, but sometimes API's and behavior might be changed to fix a bug.
 

@@ -444,6 +444,7 @@ func TestClientRetryWaitCallbackSwitchToDefault(t *testing.T) {
 	}
 
 	c := dc().
+		EnableTrace().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
@@ -456,10 +457,12 @@ func TestClientRetryWaitCallbackSwitchToDefault(t *testing.T) {
 				return true
 			},
 		)
-	_, _ = c.R().Get(ts.URL + "/set-retrywaittime-test")
+	resp, _ := c.R().Get(ts.URL + "/set-retrywaittime-test")
 
 	// 6 attempts were made
 	assertEqual(t, attempt, 6)
+	assertEqual(t, resp.Request.Attempt, 6)
+	assertEqual(t, resp.Request.TraceInfo().RequestAttempt, 6)
 
 	// Initial attempt has 0 time slept since last request
 	assertEqual(t, retryIntervals[0], uint64(0))

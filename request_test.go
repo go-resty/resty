@@ -1644,6 +1644,8 @@ func TestTraceInfo(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
+	serverAddr := ts.URL[strings.LastIndex(ts.URL, "/")+1:]
+
 	client := dc()
 	client.SetHostURL(ts.URL).EnableTrace()
 	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
@@ -1660,6 +1662,7 @@ func TestTraceInfo(t *testing.T) {
 		assertEqual(t, true, tr.TotalTime >= 0)
 		assertEqual(t, true, tr.TotalTime < time.Hour)
 		assertEqual(t, true, tr.TotalTime == resp.Time())
+		assertEqual(t, tr.RemoteAddr.String(), serverAddr)
 	}
 
 	client.DisableTrace()
@@ -1677,6 +1680,7 @@ func TestTraceInfo(t *testing.T) {
 		assertEqual(t, true, tr.ResponseTime >= 0)
 		assertEqual(t, true, tr.TotalTime >= 0)
 		assertEqual(t, true, tr.TotalTime == resp.Time())
+		assertEqual(t, tr.RemoteAddr.String(), serverAddr)
 	}
 
 	// for sake of hook funcs

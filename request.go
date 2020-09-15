@@ -43,6 +43,12 @@ type Request struct {
 	UserInfo   *User
 	Cookies    []*http.Cookie
 
+	// Attempt is to represent the request attempt made during a Resty
+	// request execution flow, including retry count.
+	//
+	// Since v2.4.0
+	Attempt int
+
 	isMultiPart         bool
 	isFormData          bool
 	setContentLength    bool
@@ -576,14 +582,17 @@ func (r *Request) TraceInfo() TraceInfo {
 	}
 
 	ti := TraceInfo{
-		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
-		TLSHandshake:  ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
-		ServerTime:    ct.gotFirstResponseByte.Sub(ct.gotConn),
-		IsConnReused:  ct.gotConnInfo.Reused,
-		IsConnWasIdle: ct.gotConnInfo.WasIdle,
-		ConnIdleTime:  ct.gotConnInfo.IdleTime,
+		DNSLookup:      ct.dnsDone.Sub(ct.dnsStart),
+		TLSHandshake:   ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
+		ServerTime:     ct.gotFirstResponseByte.Sub(ct.gotConn),
+		IsConnReused:   ct.gotConnInfo.Reused,
+		IsConnWasIdle:  ct.gotConnInfo.WasIdle,
+		ConnIdleTime:   ct.gotConnInfo.IdleTime,
+		RequestAttempt: r.Attempt,
 	}
 
+	// Calculate the total time accordingly,
+	// when connection is reused
 	if ct.gotConnInfo.Reused {
 		ti.TotalTime = ct.endTime.Sub(ct.getConn)
 	} else {
@@ -603,6 +612,11 @@ func (r *Request) TraceInfo() TraceInfo {
 	// Only calculate on successful connections
 	if !ct.gotFirstResponseByte.IsZero() {
 		ti.ResponseTime = ct.endTime.Sub(ct.gotFirstResponseByte)
+	}
+
+	// Capture remote address info when connection is non-nil
+	if ct.gotConnInfo.Conn != nil {
+		ti.RemoteAddr = ct.gotConnInfo.Conn.RemoteAddr()
 	}
 
 	return ti
@@ -680,20 +694,20 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	r.URL = r.selectAddr(addrs, url, 0)
 
 	if r.client.RetryCount == 0 {
+		r.Attempt = 1
 		resp, err = r.client.execute(r)
 		return resp, unwrapNoRetryErr(err)
 	}
 
-	attempt := 0
 	err = Backoff(
 		func() (*Response, error) {
-			attempt++
+			r.Attempt++
 
-			r.URL = r.selectAddr(addrs, url, attempt)
+			r.URL = r.selectAddr(addrs, url, r.Attempt)
 
 			resp, err = r.client.execute(r)
 			if err != nil {
-				r.client.log.Errorf("%v, Attempt %v", err, attempt)
+				r.client.log.Errorf("%v, Attempt %v", err, r.Attempt)
 			}
 
 			return resp, err
