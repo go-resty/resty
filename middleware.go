@@ -320,7 +320,7 @@ func responseLogger(c *Client, res *Response) error {
 			"HEADERS      :\n" +
 			composeHeaders(c, res.Request, rl.Header) + "\n"
 		if res.Request.isSaveResponse {
-			debugLog += fmt.Sprintf("BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n")
+			debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
 		} else {
 			debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)
 		}

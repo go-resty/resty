@@ -56,9 +56,9 @@ type TraceInfo struct {
 	// idle, if IsConnWasIdle is true.
 	ConnIdleTime time.Duration
 
-	// RetryAttempt is to represent the retry attempt made during a Resty
-	// request execution flow when using the Resty retry feature.
-	RetryAttempt int
+	// RequestAttempt is to represent the request attempt made during a Resty
+	// request execution flow, including retry count.
+	RequestAttempt int
 
 	// RemoteAddr returns the remote network address.
 	RemoteAddr net.Addr

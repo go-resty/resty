@@ -461,8 +461,8 @@ func TestClientRetryWaitCallbackSwitchToDefault(t *testing.T) {
 
 	// 6 attempts were made
 	assertEqual(t, attempt, 6)
-	assertEqual(t, resp.Request.RetryAttempt, 6)
-	assertEqual(t, resp.Request.TraceInfo().RetryAttempt, 6)
+	assertEqual(t, resp.Request.Attempt, 6)
+	assertEqual(t, resp.Request.TraceInfo().RequestAttempt, 6)
 
 	// Initial attempt has 0 time slept since last request
 	assertEqual(t, retryIntervals[0], uint64(0))

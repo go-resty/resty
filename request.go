@@ -27,22 +27,27 @@ import (
 // resty client. Request provides an options to override client level
 // settings and also an options for the request composition.
 type Request struct {
-	URL          string
-	Method       string
-	Token        string
-	AuthScheme   string
-	QueryParam   url.Values
-	FormData     url.Values
-	Header       http.Header
-	Time         time.Time
-	Body         interface{}
-	Result       interface{}
-	Error        interface{}
-	RawRequest   *http.Request
-	SRV          *SRVRecord
-	UserInfo     *User
-	Cookies      []*http.Cookie
-	RetryAttempt int
+	URL        string
+	Method     string
+	Token      string
+	AuthScheme string
+	QueryParam url.Values
+	FormData   url.Values
+	Header     http.Header
+	Time       time.Time
+	Body       interface{}
+	Result     interface{}
+	Error      interface{}
+	RawRequest *http.Request
+	SRV        *SRVRecord
+	UserInfo   *User
+	Cookies    []*http.Cookie
+
+	// Attempt is to represent the request attempt made during a Resty
+	// request execution flow, including retry count.
+	//
+	// Since v2.4.0
+	Attempt int
 
 	isMultiPart         bool
 	isFormData          bool
@@ -577,13 +582,13 @@ func (r *Request) TraceInfo() TraceInfo {
 	}
 
 	ti := TraceInfo{
-		DNSLookup:     ct.dnsDone.Sub(ct.dnsStart),
-		TLSHandshake:  ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
-		ServerTime:    ct.gotFirstResponseByte.Sub(ct.gotConn),
-		IsConnReused:  ct.gotConnInfo.Reused,
-		IsConnWasIdle: ct.gotConnInfo.WasIdle,
-		ConnIdleTime:  ct.gotConnInfo.IdleTime,
-		RetryAttempt:  r.RetryAttempt,
+		DNSLookup:      ct.dnsDone.Sub(ct.dnsStart),
+		TLSHandshake:   ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
+		ServerTime:     ct.gotFirstResponseByte.Sub(ct.gotConn),
+		IsConnReused:   ct.gotConnInfo.Reused,
+		IsConnWasIdle:  ct.gotConnInfo.WasIdle,
+		ConnIdleTime:   ct.gotConnInfo.IdleTime,
+		RequestAttempt: r.Attempt,
 	}
 
 	// Calculate the total time accordingly,
@@ -689,20 +694,20 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	r.URL = r.selectAddr(addrs, url, 0)
 
 	if r.client.RetryCount == 0 {
+		r.Attempt = 1
 		resp, err = r.client.execute(r)
 		return resp, unwrapNoRetryErr(err)
 	}
 
-	attempt := 0
 	err = Backoff(
 		func() (*Response, error) {
-			attempt++
+			r.Attempt++
 
-			r.URL = r.selectAddr(addrs, url, attempt)
+			r.URL = r.selectAddr(addrs, url, r.Attempt)
 
 			resp, err = r.client.execute(r)
 			if err != nil {
-				r.client.log.Errorf("%v, Attempt %v", err, attempt)
+				r.client.log.Errorf("%v, Attempt %v", err, r.Attempt)
 			}
 
 			return resp, err
@@ -712,8 +717,6 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		MaxWaitTime(r.client.RetryMaxWaitTime),
 		RetryConditions(r.client.RetryConditions),
 	)
-
-	r.RetryAttempt = attempt
 
 	return resp, unwrapNoRetryErr(err)
 }
