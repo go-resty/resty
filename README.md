@@ -653,7 +653,7 @@ client.
     SetRetryMaxWaitTime(20 * time.Second).
     // SetRetryAfter sets callback to calculate wait time between retries.
     // Default (nil) implies exponential backoff with jitter
-    SetRetryAfter(func(client *Client, resp *Response) (time.Duration, error) {
+    SetRetryAfter(func(client *resty.Client, resp *resty.Response) (time.Duration, error) {
         return 0, errors.New("quota exceeded")
     })
 ```
