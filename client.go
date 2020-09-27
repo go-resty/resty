@@ -54,6 +54,7 @@ var (
 	hdrContentLengthKey   = http.CanonicalHeaderKey("Content-Length")
 	hdrContentEncodingKey = http.CanonicalHeaderKey("Content-Encoding")
 	hdrAuthorizationKey   = http.CanonicalHeaderKey("Authorization")
+	hdrLocationKey        = http.CanonicalHeaderKey("Location")
 
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json"
