@@ -554,6 +554,19 @@ func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 	return c
 }
 
+// AddRetryAfterErrorCondition adds the basic condition of retrying after enncoutering
+// an error from the http response
+func (c *Client) AddRetryAfterErrorCondition() *Client {
+	c.AddRetryCondition(func(response *Response, err error) bool {
+		if response.IsError() {
+			return true
+		}
+
+		return false
+	})
+	return c
+}
+
 // SetTLSClientConfig method sets TLSClientConfig for underling client Transport.
 //
 // For Example:
