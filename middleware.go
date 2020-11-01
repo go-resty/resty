@@ -206,29 +206,16 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest = r.RawRequest.WithContext(r.ctx)
 	}
 
+	bodyCopy, err := getBodyCopy(r)
+	if err != nil {
+		return err
+	}
+
 	// assign get body func for the underlying raw request instance
 	r.RawRequest.GetBody = func() (io.ReadCloser, error) {
-		// If r.bodyBuf present, return the copy
-		if r.bodyBuf != nil {
-			return ioutil.NopCloser(bytes.NewReader(r.bodyBuf.Bytes())), nil
+		if bodyCopy != nil {
+			return ioutil.NopCloser(bytes.NewReader(bodyCopy.Bytes())), nil
 		}
-
-		// Maybe body is `io.Reader`.
-		// Note: Resty user have to watchout for large body size of `io.Reader`
-		if r.RawRequest.Body != nil {
-			b, err := ioutil.ReadAll(r.RawRequest.Body)
-			if err != nil {
-				return nil, err
-			}
-
-			// Restore the Body
-			closeq(r.RawRequest.Body)
-			r.RawRequest.Body = ioutil.NopCloser(bytes.NewBuffer(b))
-
-			// Return the Body bytes
-			return ioutil.NopCloser(bytes.NewBuffer(b)), nil
-		}
-
 		return nil, nil
 	}
 
@@ -529,4 +516,28 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 	}
 
 	return nil
+}
+
+func getBodyCopy(r *Request) (*bytes.Buffer, error) {
+	// If r.bodyBuf present, return the copy
+	if r.bodyBuf != nil {
+		return bytes.NewBuffer(r.bodyBuf.Bytes()), nil
+	}
+
+	// Maybe body is `io.Reader`.
+	// Note: Resty user have to watchout for large body size of `io.Reader`
+	if r.RawRequest.Body != nil {
+		b, err := ioutil.ReadAll(r.RawRequest.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		// Restore the Body
+		closeq(r.RawRequest.Body)
+		r.RawRequest.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+
+		// Return the Body bytes
+		return bytes.NewBuffer(b), nil
+	}
+	return nil, nil
 }

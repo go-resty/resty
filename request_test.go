@@ -1807,3 +1807,37 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	assertNotNil(t, resp)
 	assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
 }
+
+func TestPostMapTemporaryRedirect(t *testing.T)  {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dc()
+	resp, err := c.R().SetBody(map[string]string{"username":"testuser", "password": "testpass"}).
+		Post(ts.URL + "/redirect")
+
+	assertNil(t, err)
+	assertNotNil(t, resp)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+type brokenReadCloser struct{}
+
+func (b brokenReadCloser) Read(p []byte) (n int, err error) {
+	return 0, errors.New("read error")
+}
+
+func (b brokenReadCloser) Close() error {
+	return nil
+}
+
+func TestPostBodyError(t *testing.T)  {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dc()
+	resp, err := c.R().SetBody(brokenReadCloser{}).Post(ts.URL + "/redirect")
+	assertNotNil(t, err)
+	assertEqual(t, "read error", err.Error())
+	assertNil(t, resp)
+}
