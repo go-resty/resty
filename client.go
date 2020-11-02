@@ -554,7 +554,7 @@ func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 	return c
 }
 
-// AddRetryAfterErrorCondition adds the basic condition of retrying after enncoutering
+// AddRetryAfterErrorCondition adds the basic condition of retrying after encountering
 // an error from the http response
 func (c *Client) AddRetryAfterErrorCondition() *Client {
 	c.AddRetryCondition(func(response *Response, err error) bool {
