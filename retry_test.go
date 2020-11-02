@@ -612,7 +612,6 @@ func TestClientRetryCount(t *testing.T) {
 		)
 
 	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")
-	t.Logf("resp: %v", resp)
 	assertEqual(t, "", resp.Status())
 	assertEqual(t, "", resp.Proto())
 	assertEqual(t, 0, resp.StatusCode())
