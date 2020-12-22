@@ -82,6 +82,9 @@ type (
 
 	// ResponseLogCallback type is for response logs, called before the response is logged
 	ResponseLogCallback func(*ResponseLog) error
+
+	// ErrorHook type is for reacting to request errors, called after all retries were attempted
+	ErrorHook func(error)
 )
 
 // Client struct is used to create Resty client with client level settings,
@@ -118,16 +121,17 @@ type Client struct {
 	debugBodySizeLimit int64
 	outputDirectory    string
 	scheme             string
-	pathParams         map[string]string
-	log                Logger
-	httpClient         *http.Client
-	proxyURL           *url.URL
-	beforeRequest      []RequestMiddleware
-	udBeforeRequest    []RequestMiddleware
-	preReqHook         PreRequestHook
-	afterResponse      []ResponseMiddleware
-	requestLog         RequestLogCallback
-	responseLog        ResponseLogCallback
+	pathParams      map[string]string
+	log             Logger
+	httpClient      *http.Client
+	proxyURL        *url.URL
+	beforeRequest   []RequestMiddleware
+	udBeforeRequest []RequestMiddleware
+	preReqHook      PreRequestHook
+	afterResponse   []ResponseMiddleware
+	requestLog      RequestLogCallback
+	responseLog     ResponseLogCallback
+	errorHooks      []ErrorHook
 }
 
 // User type is to hold an username and password information
@@ -381,6 +385,17 @@ func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
 //			})
 func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 	c.afterResponse = append(c.afterResponse, m)
+	return c
+}
+
+// OnError method adds a callback that will be run whenever a request execution fails
+// This is called after all retries have been attempted (if any).
+// 		client.OnError(func(err error) {
+//			// Log the error, increment a metric, etc...
+//		})
+//
+func (c *Client) OnError(h ErrorHook) *Client {
+	c.errorHooks = append(c.errorHooks, h)
 	return c
 }
 
@@ -900,6 +915,15 @@ func (c *Client) transport() (*http.Transport, error) {
 func (c *Client) outputLogTo(w io.Writer) *Client {
 	c.log.(*logger).l.SetOutput(w)
 	return c
+}
+
+// helper to run onErrorHooks hooks
+func (c *Client) onErrorHooks(err error) {
+	if err != nil {
+		for _, h := range c.errorHooks {
+			h(err)
+		}
+	}
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
