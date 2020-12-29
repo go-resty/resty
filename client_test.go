@@ -699,3 +699,13 @@ func TestClientOnResponseError(t *testing.T) {
 		})
 	}
 }
+
+func TestResponseError(t *testing.T) {
+	err := errors.New("error message")
+	re := &ResponseError{
+		Response: &Response{},
+		Err:      err,
+	}
+	assertNotNil(t, re.Unwrap())
+	assertEqual(t, err.Error(), re.Error())
+}

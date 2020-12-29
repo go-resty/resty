@@ -121,17 +121,17 @@ type Client struct {
 	debugBodySizeLimit int64
 	outputDirectory    string
 	scheme             string
-	pathParams      map[string]string
-	log             Logger
-	httpClient      *http.Client
-	proxyURL        *url.URL
-	beforeRequest   []RequestMiddleware
-	udBeforeRequest []RequestMiddleware
-	preReqHook      PreRequestHook
-	afterResponse   []ResponseMiddleware
-	requestLog      RequestLogCallback
-	responseLog     ResponseLogCallback
-	errorHooks      []ErrorHook
+	pathParams         map[string]string
+	log                Logger
+	httpClient         *http.Client
+	proxyURL           *url.URL
+	beforeRequest      []RequestMiddleware
+	udBeforeRequest    []RequestMiddleware
+	preReqHook         PreRequestHook
+	afterResponse      []ResponseMiddleware
+	requestLog         RequestLogCallback
+	responseLog        ResponseLogCallback
+	errorHooks         []ErrorHook
 }
 
 // User type is to hold an username and password information
@@ -390,10 +390,15 @@ func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 
 // OnError method adds a callback that will be run whenever a request execution fails
 // This is called after all retries have been attempted (if any).
-// 		client.OnError(func(err error) {
+// If there was a response from the server, the error will be wrapped in *ResponseError
+// which has the last response received from the server.
+//
+//		client.OnError(func(err error) {
+//			if v, ok := err.(*resty.ResponseError); ok {
+//				// Do something with v.Response
+//			}
 //			// Log the error, increment a metric, etc...
 //		})
-//
 func (c *Client) OnError(h ErrorHook) *Client {
 	c.errorHooks = append(c.errorHooks, h)
 	return c
@@ -917,9 +922,29 @@ func (c *Client) outputLogTo(w io.Writer) *Client {
 	return c
 }
 
-// helper to run onErrorHooks hooks
-func (c *Client) onErrorHooks(err error) {
+// ResponseError is a wrapper for including the server response with an error
+// neither the err nor the response should be nil
+type ResponseError struct {
+	Response *Response
+	Err      error
+}
+
+func (e *ResponseError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *ResponseError) Unwrap() error {
+	return e.Err
+}
+
+// helper to run onErrorHooks hooks.
+// it wraps the error in a ResponseError if the resp is not nil
+// so hooks can access it.
+func (c *Client) onErrorHooks(resp *Response, err error) {
 	if err != nil {
+		if resp != nil { // wrap with ResponseError
+			err = &ResponseError{Response: resp, Err: err}
+		}
 		for _, h := range c.errorHooks {
 			h(err)
 		}

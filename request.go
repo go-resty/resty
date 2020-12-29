@@ -696,7 +696,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	if r.client.RetryCount == 0 {
 		r.Attempt = 1
 		resp, err = r.client.execute(r)
-		r.client.onErrorHooks(unwrapNoRetryErr(err))
+		r.client.onErrorHooks(resp, unwrapNoRetryErr(err))
 		return resp, unwrapNoRetryErr(err)
 	}
 
@@ -719,7 +719,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		RetryConditions(r.client.RetryConditions),
 	)
 
-	r.client.onErrorHooks(unwrapNoRetryErr(err))
+	r.client.onErrorHooks(resp, unwrapNoRetryErr(err))
 
 	return resp, unwrapNoRetryErr(err)
 }
