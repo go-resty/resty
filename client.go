@@ -84,7 +84,7 @@ type (
 	ResponseLogCallback func(*ResponseLog) error
 
 	// ErrorHook type is for reacting to request errors, called after all retries were attempted
-	ErrorHook func(error)
+	ErrorHook func(*Request, error)
 )
 
 // Client struct is used to create Resty client with client level settings,
@@ -393,7 +393,7 @@ func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 // If there was a response from the server, the error will be wrapped in *ResponseError
 // which has the last response received from the server.
 //
-//		client.OnError(func(err error) {
+//		client.OnError(func(req *resty.Request, err error) {
 //			if v, ok := err.(*resty.ResponseError); ok {
 //				// Do something with v.Response
 //			}
@@ -940,13 +940,13 @@ func (e *ResponseError) Unwrap() error {
 // helper to run onErrorHooks hooks.
 // it wraps the error in a ResponseError if the resp is not nil
 // so hooks can access it.
-func (c *Client) onErrorHooks(resp *Response, err error) {
+func (c *Client) onErrorHooks(req *Request, resp *Response, err error) {
 	if err != nil {
 		if resp != nil { // wrap with ResponseError
 			err = &ResponseError{Response: resp, Err: err}
 		}
 		for _, h := range c.errorHooks {
-			h(err)
+			h(req, err)
 		}
 	}
 }

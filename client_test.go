@@ -683,7 +683,7 @@ func TestClientOnResponseError(t *testing.T) {
 					}
 					return response.IsError()
 				}).
-				OnError(func(err error) {
+				OnError(func(r *Request, err error) {
 					errs++
 				})
 			if test.setup != nil {
