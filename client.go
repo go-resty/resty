@@ -388,7 +388,7 @@ func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 	return c
 }
 
-// OnError method adds a callback that will be run whenever a request execution fails
+// OnError method adds a callback that will be run whenever a request execution fails.
 // This is called after all retries have been attempted (if any).
 // If there was a response from the server, the error will be wrapped in *ResponseError
 // which has the last response received from the server.
@@ -922,8 +922,8 @@ func (c *Client) outputLogTo(w io.Writer) *Client {
 	return c
 }
 
-// ResponseError is a wrapper for including the server response with an error
-// neither the err nor the response should be nil
+// ResponseError is a wrapper for including the server response with an error.
+// Neither the err nor the response should be nil.
 type ResponseError struct {
 	Response *Response
 	Err      error
@@ -937,8 +937,8 @@ func (e *ResponseError) Unwrap() error {
 	return e.Err
 }
 
-// helper to run onErrorHooks hooks.
-// it wraps the error in a ResponseError if the resp is not nil
+// Helper to run onErrorHooks hooks.
+// It wraps the error in a ResponseError if the resp is not nil
 // so hooks can access it.
 func (c *Client) onErrorHooks(req *Request, resp *Response, err error) {
 	if err != nil {
