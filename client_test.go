@@ -618,9 +618,10 @@ func TestClientOnResponseError(t *testing.T) {
 	defer ts.Close()
 
 	tests := []struct {
-		name    string
-		setup   func(*Client)
-		isError bool
+		name        string
+		setup       func(*Client)
+		isError     bool
+		hasResponse bool
 	}{
 		{
 			name: "successful_request",
@@ -656,7 +657,8 @@ func TestClientOnResponseError(t *testing.T) {
 					return fmt.Errorf("after response")
 				})
 			},
-			isError: true,
+			isError:     true,
+			hasResponse: true,
 		},
 		{
 			name: "after_response_error_retry",
@@ -665,13 +667,23 @@ func TestClientOnResponseError(t *testing.T) {
 					return fmt.Errorf("after response")
 				})
 			},
-			isError: true,
+			isError:     true,
+			hasResponse: true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var errs int
+			var assertErrorHook = func(r *Request, err error) {
+				assertNotNil(t, r)
+				v, ok := err.(*ResponseError)
+				assertEqual(t, test.hasResponse, ok)
+				if ok {
+					assertNotNil(t, v.Response)
+					assertNotNil(t, v.Err)
+				}
+			}
+			var hook1, hook2 int
 			c := New().outputLogTo(ioutil.Discard).
 				SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 				SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
@@ -684,7 +696,12 @@ func TestClientOnResponseError(t *testing.T) {
 					return response.IsError()
 				}).
 				OnError(func(r *Request, err error) {
-					errs++
+					assertErrorHook(r, err)
+					hook1++
+				}).
+				OnError(func(r *Request, err error) {
+					assertErrorHook(r, err)
+					hook2++
 				})
 			if test.setup != nil {
 				test.setup(c)
@@ -692,7 +709,8 @@ func TestClientOnResponseError(t *testing.T) {
 			_, err := c.R().Get(ts.URL + "/profile")
 			if test.isError {
 				assertNotNil(t, err)
-				assertEqual(t, 1, errs)
+				assertEqual(t, 1, hook1)
+				assertEqual(t, 1, hook2)
 			} else {
 				assertError(t, err)
 			}
