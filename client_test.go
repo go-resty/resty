@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -612,3 +613,117 @@ func TestNewWithLocalAddr(t *testing.T) {
 	assertEqual(t, resp.String(), "TestGet: text response")
 }
 
+func TestClientOnResponseError(t *testing.T) {
+	ts := createAuthServer(t)
+	defer ts.Close()
+
+	tests := []struct {
+		name        string
+		setup       func(*Client)
+		isError     bool
+		hasResponse bool
+	}{
+		{
+			name: "successful_request",
+		},
+		{
+			name: "http_status_error",
+			setup: func(client *Client) {
+				client.SetAuthToken("BAD")
+			},
+		},
+		{
+			name: "before_request_error",
+			setup: func(client *Client) {
+				client.OnBeforeRequest(func(client *Client, request *Request) error {
+					return fmt.Errorf("before request")
+				})
+			},
+			isError: true,
+		},
+		{
+			name: "before_request_error_retry",
+			setup: func(client *Client) {
+				client.SetRetryCount(3).OnBeforeRequest(func(client *Client, request *Request) error {
+					return fmt.Errorf("before request")
+				})
+			},
+			isError: true,
+		},
+		{
+			name: "after_response_error",
+			setup: func(client *Client) {
+				client.OnAfterResponse(func(client *Client, response *Response) error {
+					return fmt.Errorf("after response")
+				})
+			},
+			isError:     true,
+			hasResponse: true,
+		},
+		{
+			name: "after_response_error_retry",
+			setup: func(client *Client) {
+				client.SetRetryCount(3).OnAfterResponse(func(client *Client, response *Response) error {
+					return fmt.Errorf("after response")
+				})
+			},
+			isError:     true,
+			hasResponse: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var assertErrorHook = func(r *Request, err error) {
+				assertNotNil(t, r)
+				v, ok := err.(*ResponseError)
+				assertEqual(t, test.hasResponse, ok)
+				if ok {
+					assertNotNil(t, v.Response)
+					assertNotNil(t, v.Err)
+				}
+			}
+			var hook1, hook2 int
+			c := New().outputLogTo(ioutil.Discard).
+				SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+				SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
+				SetRetryCount(0).
+				SetRetryMaxWaitTime(time.Microsecond).
+				AddRetryCondition(func(response *Response, err error) bool {
+					if err != nil {
+						return true
+					}
+					return response.IsError()
+				}).
+				OnError(func(r *Request, err error) {
+					assertErrorHook(r, err)
+					hook1++
+				}).
+				OnError(func(r *Request, err error) {
+					assertErrorHook(r, err)
+					hook2++
+				})
+			if test.setup != nil {
+				test.setup(c)
+			}
+			_, err := c.R().Get(ts.URL + "/profile")
+			if test.isError {
+				assertNotNil(t, err)
+				assertEqual(t, 1, hook1)
+				assertEqual(t, 1, hook2)
+			} else {
+				assertError(t, err)
+			}
+		})
+	}
+}
+
+func TestResponseError(t *testing.T) {
+	err := errors.New("error message")
+	re := &ResponseError{
+		Response: &Response{},
+		Err:      err,
+	}
+	assertNotNil(t, re.Unwrap())
+	assertEqual(t, err.Error(), re.Error())
+}

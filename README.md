@@ -514,6 +514,28 @@ client.OnAfterResponse(func(c *resty.Client, resp *resty.Response) error {
   })
 ```
 
+#### OnError Hooks
+
+Resty provides OnError hooks that may be called because:
+
+- The client failed to send the request due to connection timeout, TLS handshake failure, etc...
+- The request was retried the maximum amount of times, and still failed.
+
+If there was a response from the server, the original error will be wrapped in `*resty.ResponseError` which contains the last response received.
+
+```go
+// Create a Resty Client
+client := resty.New()
+
+client.OnError(func(req *resty.Request, err error) {
+  if v, ok := err.(*resty.ResponseError); ok {
+    // v.Response contains the last response from the server
+    // v.Err contains the original error
+  }
+  // Log the error, increment a metric, etc...
+})
+```
+
 #### Redirect Policy
 
 Resty provides few ready to use redirect policy(s) also it supports multiple policies together.

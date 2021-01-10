@@ -82,6 +82,9 @@ type (
 
 	// ResponseLogCallback type is for response logs, called before the response is logged
 	ResponseLogCallback func(*ResponseLog) error
+
+	// ErrorHook type is for reacting to request errors, called after all retries were attempted
+	ErrorHook func(*Request, error)
 )
 
 // Client struct is used to create Resty client with client level settings,
@@ -128,6 +131,7 @@ type Client struct {
 	afterResponse      []ResponseMiddleware
 	requestLog         RequestLogCallback
 	responseLog        ResponseLogCallback
+	errorHooks         []ErrorHook
 }
 
 // User type is to hold an username and password information
@@ -381,6 +385,22 @@ func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
 //			})
 func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 	c.afterResponse = append(c.afterResponse, m)
+	return c
+}
+
+// OnError method adds a callback that will be run whenever a request execution fails.
+// This is called after all retries have been attempted (if any).
+// If there was a response from the server, the error will be wrapped in *ResponseError
+// which has the last response received from the server.
+//
+//		client.OnError(func(req *resty.Request, err error) {
+//			if v, ok := err.(*resty.ResponseError); ok {
+//				// Do something with v.Response
+//			}
+//			// Log the error, increment a metric, etc...
+//		})
+func (c *Client) OnError(h ErrorHook) *Client {
+	c.errorHooks = append(c.errorHooks, h)
 	return c
 }
 
@@ -900,6 +920,35 @@ func (c *Client) transport() (*http.Transport, error) {
 func (c *Client) outputLogTo(w io.Writer) *Client {
 	c.log.(*logger).l.SetOutput(w)
 	return c
+}
+
+// ResponseError is a wrapper for including the server response with an error.
+// Neither the err nor the response should be nil.
+type ResponseError struct {
+	Response *Response
+	Err      error
+}
+
+func (e *ResponseError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *ResponseError) Unwrap() error {
+	return e.Err
+}
+
+// Helper to run onErrorHooks hooks.
+// It wraps the error in a ResponseError if the resp is not nil
+// so hooks can access it.
+func (c *Client) onErrorHooks(req *Request, resp *Response, err error) {
+	if err != nil {
+		if resp != nil { // wrap with ResponseError
+			err = &ResponseError{Response: resp, Err: err}
+		}
+		for _, h := range c.errorHooks {
+			h(req, err)
+		}
+	}
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
