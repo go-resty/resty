@@ -661,7 +661,7 @@ client.
 Above setup will result in resty retrying requests returned non nil error up to
 3 times with delay increased after each attempt.
 
-You can optionally provide client with custom retry conditions:
+You can optionally provide client with [custom retry conditions](https://pkg.go.dev/github.com/go-resty/resty/v2#RetryConditionFunc):
 
 ```go
 // Create a Resty Client
@@ -670,7 +670,7 @@ client := resty.New()
 client.AddRetryCondition(
     // RetryConditionFunc type is for retry condition function
     // input: non-nil Response OR request execution error
-    func(r *resty.Response) (bool, error) {
+    func(r *resty.Response, err error) bool {
         return r.StatusCode() == http.StatusTooManyRequests
     },
 )
