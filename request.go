@@ -680,12 +680,14 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	var err error
 
 	if r.isMultiPart && !(method == MethodPost || method == MethodPut || method == MethodPatch) {
+		// No OnError hook here since this is a request validation error
 		return nil, fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
 	}
 
 	if r.SRV != nil {
 		_, addrs, err = net.LookupSRV(r.SRV.Service, "tcp", r.SRV.Domain)
 		if err != nil {
+			r.client.onErrorHooks(r, nil, err)
 			return nil, err
 		}
 	}
