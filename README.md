@@ -661,7 +661,7 @@ client.
 Above setup will result in resty retrying requests returned non nil error up to
 3 times with delay increased after each attempt.
 
-You can optionally provide client with [custom retry conditions](https://godoc.org/github.com/go-resty/resty#RetryConditionFunc):
+You can optionally provide client with [custom retry conditions](https://pkg.go.dev/github.com/go-resty/resty/v2#RetryConditionFunc):
 
 ```go
 // Create a Resty Client
