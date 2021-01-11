@@ -53,7 +53,6 @@ var (
 	hdrContentTypeKey     = http.CanonicalHeaderKey("Content-Type")
 	hdrContentLengthKey   = http.CanonicalHeaderKey("Content-Length")
 	hdrContentEncodingKey = http.CanonicalHeaderKey("Content-Encoding")
-	hdrAuthorizationKey   = http.CanonicalHeaderKey("Authorization")
 	hdrLocationKey        = http.CanonicalHeaderKey("Location")
 
 	plainTextType   = "text/plain; charset=utf-8"
@@ -112,6 +111,10 @@ type Client struct {
 	RetryAfter            RetryAfterFunc
 	JSONMarshal           func(v interface{}) ([]byte, error)
 	JSONUnmarshal         func(data []byte, v interface{}) error
+
+	// HeaderAuthorizationKey is used to set/access Request Authorization header
+	// value when `SetAuthToken` option is used.
+	HeaderAuthorizationKey string
 
 	jsonEscapeHTML     bool
 	setContentLength   bool
@@ -1007,18 +1010,19 @@ func createClient(hc *http.Client) *Client {
 	}
 
 	c := &Client{ // not setting lang default values
-		QueryParam:         url.Values{},
-		FormData:           url.Values{},
-		Header:             http.Header{},
-		Cookies:            make([]*http.Cookie, 0),
-		RetryWaitTime:      defaultWaitTime,
-		RetryMaxWaitTime:   defaultMaxWaitTime,
-		JSONMarshal:        json.Marshal,
-		JSONUnmarshal:      json.Unmarshal,
-		jsonEscapeHTML:     true,
-		httpClient:         hc,
-		debugBodySizeLimit: math.MaxInt32,
-		pathParams:         make(map[string]string),
+		QueryParam:             url.Values{},
+		FormData:               url.Values{},
+		Header:                 http.Header{},
+		Cookies:                make([]*http.Cookie, 0),
+		RetryWaitTime:          defaultWaitTime,
+		RetryMaxWaitTime:       defaultMaxWaitTime,
+		JSONMarshal:            json.Marshal,
+		JSONUnmarshal:          json.Unmarshal,
+		HeaderAuthorizationKey: http.CanonicalHeaderKey("Authorization"),
+		jsonEscapeHTML:         true,
+		httpClient:             hc,
+		debugBodySizeLimit:     math.MaxInt32,
+		pathParams:             make(map[string]string),
 	}
 
 	// Logger

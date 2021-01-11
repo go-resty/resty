@@ -251,9 +251,9 @@ func addCredentials(c *Client, r *Request) error {
 
 	// Build the Token Auth header
 	if !IsStringEmpty(r.Token) { // takes precedence
-		r.RawRequest.Header.Set(hdrAuthorizationKey, authScheme+" "+r.Token)
+		r.RawRequest.Header.Set(c.HeaderAuthorizationKey, authScheme+" "+r.Token)
 	} else if !IsStringEmpty(c.Token) {
-		r.RawRequest.Header.Set(hdrAuthorizationKey, authScheme+" "+c.Token)
+		r.RawRequest.Header.Set(c.HeaderAuthorizationKey, authScheme+" "+c.Token)
 	}
 
 	return nil
