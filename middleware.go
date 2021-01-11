@@ -162,6 +162,8 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	if r.bodyBuf == nil {
 		if reader, ok := r.Body.(io.Reader); ok {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, reader)
+		} else if c.setContentLength || r.setContentLength {
+			r.RawRequest, err = http.NewRequest(r.Method, r.URL, http.NoBody)
 		} else {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, nil)
 		}
@@ -251,9 +253,9 @@ func addCredentials(c *Client, r *Request) error {
 
 	// Build the Token Auth header
 	if !IsStringEmpty(r.Token) { // takes precedence
-		r.RawRequest.Header.Set(hdrAuthorizationKey, authScheme+" "+r.Token)
+		r.RawRequest.Header.Set(c.HeaderAuthorizationKey, authScheme+" "+r.Token)
 	} else if !IsStringEmpty(c.Token) {
-		r.RawRequest.Header.Set(hdrAuthorizationKey, authScheme+" "+c.Token)
+		r.RawRequest.Header.Set(c.HeaderAuthorizationKey, authScheme+" "+c.Token)
 	}
 
 	return nil

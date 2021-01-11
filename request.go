@@ -469,6 +469,20 @@ func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 	return r
 }
 
+// SetPathParam method sets single URL path key-value pair in the
+// Resty current request instance.
+// 		client.R().SetPathParam("userId", "sample@sample.com")
+//
+// 		Result:
+// 		   URL - /v1/users/{userId}/details
+// 		   Composed URL - /v1/users/sample@sample.com/details
+// It replaces the value of the key while composing the request URL. Also you can
+// override Path Params value, which was set at client instance level.
+func (r *Request) SetPathParam(param, value string) *Request {
+	r.pathParams[param] = value
+	return r
+}
+
 // SetPathParams method sets multiple URL path key-value pairs at one go in the
 // Resty current request instance.
 // 		client.R().SetPathParams(map[string]string{
@@ -479,11 +493,11 @@ func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 // 		Result:
 // 		   URL - /v1/users/{userId}/{subAccountId}/details
 // 		   Composed URL - /v1/users/sample@sample.com/100002/details
-// It replace the value of the key while composing request URL. Also you can
+// It replaces the value of the key while composing request URL. Also you can
 // override Path Params value, which was set at client instance level.
 func (r *Request) SetPathParams(params map[string]string) *Request {
 	for p, v := range params {
-		r.pathParams[p] = v
+		r.SetPathParam(p, v)
 	}
 	return r
 }
