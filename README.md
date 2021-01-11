@@ -13,7 +13,7 @@
 
 ## News
 
-  * v2.4.0 [released](https://github.com/go-resty/resty/releases/tag/v2.4.0) and tagged on Nov 01, 2020.
+  * v2.4.0 [released](https://github.com/go-resty/resty/releases/tag/v2.4.0) and tagged on Jan 11, 2021.
   * v2.3.0 [released](https://github.com/go-resty/resty/releases/tag/v2.3.0) and tagged on May 20, 2020.
   * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on Jul 16, 2019.
   * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.
