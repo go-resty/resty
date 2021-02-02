@@ -111,6 +111,13 @@ func createGetServer(t *testing.T) *httptest.Server {
 				_, _ = w.Write(body)
 			case "/host-header":
 				_, _ = w.Write([]byte(r.Host))
+			case "/get-headers":
+				keys := strings.Split(r.FormValue("headers"), ",")
+				var values []string
+				for _, key := range keys {
+					values = append(values, r.Header.Get(key))
+				}
+				_, _ = io.WriteString(w, strings.Join(values, ","))
 			}
 
 			switch {

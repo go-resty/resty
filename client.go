@@ -130,7 +130,7 @@ type Client struct {
 	proxyURL           *url.URL
 	beforeRequest      []RequestMiddleware
 	udBeforeRequest    []RequestMiddleware
-	preReqHook         PreRequestHook
+	preReqHooks        []PreRequestHook
 	afterResponse      []ResponseMiddleware
 	requestLog         RequestLogCallback
 	responseLog        ResponseLogCallback
@@ -364,14 +364,14 @@ func (c *Client) NewRequest() *Request {
 }
 
 // OnBeforeRequest method appends request middleware into the before request chain.
-// Its gets applied after default Resty request middlewares and before request
-// been sent from Resty to host server.
+// Its gets applied before default Resty request middlewares.
 // 		client.OnBeforeRequest(func(c *resty.Client, r *resty.Request) error {
 //				// Now you have access to Client and Request instance
 //				// manipulate it as per your need
 //
 //				return nil 	// if its success otherwise return error
 //			})
+// NOTE: RequestMiddleware can not access RawRequest since it has not been created.
 func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
 	c.udBeforeRequest = append(c.udBeforeRequest, m)
 	return c
@@ -407,15 +407,35 @@ func (c *Client) OnError(h ErrorHook) *Client {
 	return c
 }
 
+// OnPreRequest method adds a callback that will be run right before the request is fired.
+// If you want to access or modify RawRequest then use this method, if you want to access or
+// modify Request, use OnBeforeRequest.
+//
+//		client.OnPreRequest(func(c *resty.Client, r *http.Request) error {
+//			// Now you have access to Client and RawRequest instance
+//			// manipulate it as per your need
+//
+//			return nil 	// if its success otherwise return error
+//		})
+func (c *Client) OnPreRequest(h PreRequestHook) *Client {
+	c.preReqHooks = append(c.preReqHooks, h)
+	return c
+}
+
 // SetPreRequestHook method sets the given pre-request function into resty client.
 // It is called right before the request is fired.
 //
-// Note: Only one pre-request hook can be registered. Use `client.OnBeforeRequest` for mutilple.
+// Note: Only one pre-request hook can be registered and existing pre-request hooks will be overwrited.
+// Deprecated, use `OnPreRequest` instead.
 func (c *Client) SetPreRequestHook(h PreRequestHook) *Client {
-	if c.preReqHook != nil {
-		c.log.Warnf("Overwriting an existing pre-request hook: %s", functionName(h))
+	if len(c.preReqHooks) > 0 {
+		var names []string
+		for _, h := range c.preReqHooks {
+			names = append(names, functionName(h))
+		}
+		c.log.Warnf("Overwriting existing pre-request hooks: %v", names)
 	}
-	c.preReqHook = h
+	c.preReqHooks = []PreRequestHook{h}
 	return c
 }
 
@@ -837,16 +857,16 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// Apply Request middleware
 	var err error
 
-	// resty middlewares
-	for _, f := range c.beforeRequest {
+	// user defined on before request methods
+	// to modify the *resty.Request object
+	for _, f := range c.udBeforeRequest {
 		if err = f(c, req); err != nil {
 			return nil, wrapNoRetryErr(err)
 		}
 	}
 
-	// user defined on before request methods
-	// to modify the *resty.Request object
-	for _, f := range c.udBeforeRequest {
+	// resty middlewares
+	for _, f := range c.beforeRequest {
 		if err = f(c, req); err != nil {
 			return nil, wrapNoRetryErr(err)
 		}
@@ -857,8 +877,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	// call pre-request if defined
-	if c.preReqHook != nil {
-		if err = c.preReqHook(c, req.RawRequest); err != nil {
+	for _, f := range c.preReqHooks {
+		if err = f(c, req.RawRequest); err != nil {
 			return nil, wrapNoRetryErr(err)
 		}
 	}

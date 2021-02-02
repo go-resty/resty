@@ -235,7 +235,6 @@ func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
 func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
-		assertNotNil(t, r.RawRequest)
 		r.SetAuthToken("This is test auth token")
 		return nil
 	})
@@ -250,6 +249,42 @@ func TestClientOnBeforeRequestModification(t *testing.T) {
 	assertEqual(t, "200 OK", resp.Status())
 	assertNotNil(t, resp.Body())
 	assertEqual(t, "TestGet: text response", resp.String())
+
+	logResponse(t, resp)
+
+	// NOTE: v2.4.0 will fail for the following part
+	resp, err = tc.R().Get(ts.URL + "/get-headers?headers=Authorization")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "200 OK", resp.Status())
+	assertNotNil(t, resp.Body())
+	assertEqual(t, "Bearer This is test auth token", resp.String())
+
+	logResponse(t, resp)
+}
+
+func TestClientOnPreRequestModification(t *testing.T) {
+	tc := dc()
+	tc.OnPreRequest(func(c *Client, r *http.Request) error {
+		r.Header.Set("aaa", "bbb")
+		return nil
+	})
+	tc.OnPreRequest(func(c *Client, r *http.Request) error {
+		r.Header.Set("ccc", "ddd")
+		return nil
+	})
+
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := tc.R().Get(ts.URL + "/get-headers?headers=aaa,ccc")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "200 OK", resp.Status())
+	assertNotNil(t, resp.Body())
+	assertEqual(t, "bbb,ddd", resp.String())
 
 	logResponse(t, resp)
 }
