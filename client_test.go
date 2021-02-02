@@ -266,25 +266,30 @@ func TestClientOnBeforeRequestModification(t *testing.T) {
 
 func TestClientOnPreRequestModification(t *testing.T) {
 	tc := dc()
+
 	tc.OnPreRequest(func(c *Client, r *http.Request) error {
-		r.Header.Set("aaa", "bbb")
+		r.Header.Set("aaa", "000")
+		return nil
+	})
+	tc.SetPreRequestHook(func(c *Client, r *http.Request) error {
+		r.Header.Set("bbb", "111")
 		return nil
 	})
 	tc.OnPreRequest(func(c *Client, r *http.Request) error {
-		r.Header.Set("ccc", "ddd")
+		r.Header.Set("ccc", "222")
 		return nil
 	})
 
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := tc.R().Get(ts.URL + "/get-headers?headers=aaa,ccc")
+	resp, err := tc.R().Get(ts.URL + "/get-headers?headers=aaa,bbb,ccc")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
 	assertNotNil(t, resp.Body())
-	assertEqual(t, "bbb,ddd", resp.String())
+	assertEqual(t, ",111,222", resp.String())
 
 	logResponse(t, resp)
 }
