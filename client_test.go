@@ -235,7 +235,6 @@ func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
 func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
-		assertNotNil(t, r.RawRequest)
 		r.SetAuthToken("This is test auth token")
 		return nil
 	})
