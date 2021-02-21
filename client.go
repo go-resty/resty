@@ -108,6 +108,7 @@ type Client struct {
 	RetryWaitTime         time.Duration
 	RetryMaxWaitTime      time.Duration
 	RetryConditions       []RetryConditionFunc
+	RetryHooks            []OnRetryFunc
 	RetryAfter            RetryAfterFunc
 	JSONMarshal           func(v interface{}) ([]byte, error)
 	JSONUnmarshal         func(data []byte, v interface{}) error
@@ -588,6 +589,13 @@ func (c *Client) AddRetryAfterErrorCondition() *Client {
 
 		return false
 	})
+	return c
+}
+
+// AddRetryHook adds a side-effecting retry hook to an array of hooks
+// that will be executed on each retry.
+func (c *Client) AddRetryHook(hook OnRetryFunc) *Client {
+	c.RetryHooks = append(c.RetryHooks, hook)
 	return c
 }
 

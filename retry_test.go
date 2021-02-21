@@ -77,6 +77,23 @@ func TestConditionalBackoffConditionNonExecution(t *testing.T) {
 	assertNotEqual(t, counter, attempts)
 }
 
+// Check to make sure that RetryHooks are executed
+func TestOnRetryBackoff(t *testing.T) {
+	attempts := 3
+	counter := 0
+
+	hook := func(r *Response, err error) {
+		counter++
+	}
+
+	retryErr := Backoff(func() (*Response, error) {
+		return nil, nil
+	}, RetryHooks([]OnRetryFunc{hook}))
+
+	assertError(t, retryErr)
+	assertNotEqual(t, counter, attempts)
+}
+
 // Check to make sure the functions added to add conditionals work
 func TestConditionalGet(t *testing.T) {
 	ts := createGetServer(t)
@@ -649,6 +666,35 @@ func TestClientErrorRetry(t *testing.T) {
 	assertEqual(t, "hello", authSuccess.Message)
 
 	assertNil(t, resp.Error())
+}
+
+func TestClientRetryHook(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	attempt := 0
+
+	c := dc().
+		SetRetryCount(2).
+		SetTimeout(time.Second * 3).
+		AddRetryHook(
+			func(r *Response, _ error) {
+				attempt++
+			},
+		)
+
+	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")
+	assertEqual(t, "", resp.Status())
+	assertEqual(t, "", resp.Proto())
+	assertEqual(t, 0, resp.StatusCode())
+	assertEqual(t, 0, len(resp.Cookies()))
+	assertNotNil(t, resp.Body())
+	assertEqual(t, 0, len(resp.Header()))
+
+	assertEqual(t, 3, attempt)
+
+	assertEqual(t, true, (strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
+		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\"")))
 }
 
 func filler(*Response, error) bool {
