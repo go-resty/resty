@@ -598,6 +598,7 @@ func TestLogCallbacks(t *testing.T) {
 		Get(ts.URL + "/profile")
 	assertEqual(t, errors.New("request test error"), err)
 	assertNil(t, resp)
+	assertNotNil(t, err)
 
 	c.OnRequestLog(nil)
 	c.OnResponseLog(func(r *ResponseLog) error { return errors.New("response test error") })

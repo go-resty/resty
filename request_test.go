@@ -48,6 +48,16 @@ func TestGet(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestIllegalRetryCount(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dc().SetRetryCount(-1).R().Get(ts.URL + "/")
+
+	assertNil(t, err)
+	assertNil(t, resp)
+}
+
 func TestGetCustomUserAgent(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
