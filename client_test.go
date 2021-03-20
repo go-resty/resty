@@ -352,6 +352,15 @@ func TestClientOptions(t *testing.T) {
 	client.SetRetryMaxWaitTime(mrwt)
 	assertEqual(t, mrwt, client.RetryMaxWaitTime)
 
+	client.AddRetryAfterErrorCondition()
+	equal(client.RetryConditions[0], func(response *Response, err error) bool {
+		if response.IsError() {
+			return true
+		}
+
+		return false
+	})
+
 	err := &AuthError{}
 	client.SetError(err)
 	if reflect.TypeOf(err) == client.Error {
