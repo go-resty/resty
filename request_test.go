@@ -1498,19 +1498,15 @@ func TestRequestExpectContentTypeTest(t *testing.T) {
 	assertEqual(t, "", firstNonEmpty("", ""))
 }
 
-func TestGetPathParams(t *testing.T) {
+func TestGetPathParamAndPathParams(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc()
-	c.SetHostURL(ts.URL).
-		SetPathParams(map[string]string{
-			"userId": "sample@sample.com",
-		})
+	c := dc().
+		SetHostURL(ts.URL).
+		SetPathParam("userId", "sample@sample.com")
 
-	resp, err := c.R().SetPathParams(map[string]string{
-		"subAccountId": "100002",
-	}).
+	resp, err := c.R().SetPathParam("subAccountId", "100002").
 		Get("/v1/users/{userId}/{subAccountId}/details")
 
 	assertError(t, err)
@@ -1806,4 +1802,38 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	assertNil(t, err)
 	assertNotNil(t, resp)
 	assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+}
+
+func TestPostMapTemporaryRedirect(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dc()
+	resp, err := c.R().SetBody(map[string]string{"username": "testuser", "password": "testpass"}).
+		Post(ts.URL + "/redirect")
+
+	assertNil(t, err)
+	assertNotNil(t, resp)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+type brokenReadCloser struct{}
+
+func (b brokenReadCloser) Read(p []byte) (n int, err error) {
+	return 0, errors.New("read error")
+}
+
+func (b brokenReadCloser) Close() error {
+	return nil
+}
+
+func TestPostBodyError(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dc()
+	resp, err := c.R().SetBody(brokenReadCloser{}).Post(ts.URL + "/redirect")
+	assertNotNil(t, err)
+	assertEqual(t, "read error", err.Error())
+	assertNil(t, resp)
 }

@@ -287,6 +287,9 @@ func createPostServer(t *testing.T) *httptest.Server {
 
 					return
 				}
+			} else if r.URL.Path == "/redirect" {
+				w.Header().Set(hdrLocationKey, "/login")
+				w.WriteHeader(http.StatusTemporaryRedirect)
 			}
 		}
 	})
