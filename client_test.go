@@ -235,7 +235,6 @@ func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
 func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
-		assertNotNil(t, r.RawRequest)
 		r.SetAuthToken("This is test auth token")
 		return nil
 	})
@@ -364,6 +363,15 @@ func TestClientOptions(t *testing.T) {
 	mrwt := time.Duration(2) * time.Second
 	client.SetRetryMaxWaitTime(mrwt)
 	assertEqual(t, mrwt, client.RetryMaxWaitTime)
+
+	client.AddRetryAfterErrorCondition()
+	equal(client.RetryConditions[0], func(response *Response, err error) bool {
+		if response.IsError() {
+			return true
+		}
+
+		return false
+	})
 
 	err := &AuthError{}
 	client.SetError(err)
@@ -602,6 +610,7 @@ func TestLogCallbacks(t *testing.T) {
 		Get(ts.URL + "/profile")
 	assertEqual(t, errors.New("request test error"), err)
 	assertNil(t, resp)
+	assertNotNil(t, err)
 
 	c.OnRequestLog(nil)
 	c.OnResponseLog(func(r *ResponseLog) error { return errors.New("response test error") })

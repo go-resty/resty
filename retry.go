@@ -8,6 +8,7 @@ import (
 	"context"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -133,46 +134,67 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 
 func sleepDuration(resp *Response, min, max time.Duration, attempt int) (time.Duration, error) {
 	const maxInt = 1<<31 - 1 // max int for arch 386
-
 	if max < 0 {
 		max = maxInt
 	}
-
 	if resp == nil {
-		goto defaultCase
+		return jitterBackoff(min, max, attempt), nil
 	}
 
-	// 1. Check for custom callback
-	if retryAfterFunc := resp.Request.client.RetryAfter; retryAfterFunc != nil {
-		result, err := retryAfterFunc(resp.Request.client, resp)
-		if err != nil {
-			return 0, err // i.e. 'API quota exceeded'
-		}
-		if result == 0 {
-			goto defaultCase
-		}
-		if result < 0 || max < result {
-			result = max
-		}
-		if result < min {
-			result = min
-		}
-		return result, nil
+	retryAfterFunc := resp.Request.client.RetryAfter
+
+	// Check for custom callback
+	if retryAfterFunc == nil {
+		return jitterBackoff(min, max, attempt), nil
 	}
 
-	// 2. Return capped exponential backoff with jitter
-	// http://www.awsarchitectureblog.com/2015/03/backoff.html
-defaultCase:
+	result, err := retryAfterFunc(resp.Request.client, resp)
+	if err != nil {
+		return 0, err // i.e. 'API quota exceeded'
+	}
+	if result == 0 {
+		return jitterBackoff(min, max, attempt), nil
+	}
+	if result < 0 || max < result {
+		result = max
+	}
+	if result < min {
+		result = min
+	}
+	return result, nil
+}
+
+// Return capped exponential backoff with jitter
+// http://www.awsarchitectureblog.com/2015/03/backoff.html
+func jitterBackoff(min, max time.Duration, attempt int) time.Duration {
 	base := float64(min)
 	capLevel := float64(max)
 
 	temp := math.Min(capLevel, base*math.Exp2(float64(attempt)))
-	ri := int64(temp / 2)
-	result := time.Duration(math.Abs(float64(ri + rand.Int63n(ri))))
+	ri := time.Duration(temp / 2)
+	result := randDuration(ri)
 
 	if result < min {
 		result = min
 	}
 
-	return result, nil
+	return result
+}
+
+var rnd = newRnd()
+var rndMu sync.Mutex
+
+func randDuration(center time.Duration) time.Duration {
+	rndMu.Lock()
+	defer rndMu.Unlock()
+
+	var ri = int64(center)
+	var jitter = rnd.Int63n(ri)
+	return time.Duration(math.Abs(float64(ri + jitter)))
+}
+
+func newRnd() *rand.Rand {
+	var seed = time.Now().UnixNano()
+	var src = rand.NewSource(seed)
+	return rand.New(src)
 }

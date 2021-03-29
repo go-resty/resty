@@ -626,6 +626,31 @@ func TestClientRetryCount(t *testing.T) {
 		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\"")))
 }
 
+func TestClientErrorRetry(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc().
+		SetTimeout(time.Second * 3).
+		SetRetryCount(1).
+		AddRetryAfterErrorCondition()
+
+	resp, err := c.R().
+		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
+		SetJSONEscapeHTML(false).
+		SetResult(AuthSuccess{}).
+		Get(ts.URL + "/set-retry-error-recover")
+
+	assertError(t, err)
+
+	authSuccess := resp.Result().(*AuthSuccess)
+
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "hello", authSuccess.Message)
+
+	assertNil(t, resp.Error())
+}
+
 func filler(*Response, error) bool {
 	return false
 }
