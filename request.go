@@ -121,11 +121,11 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 //
 // For Example: To set `all_lowercase` and `UPPERCASE` as `available`.
 // 		client.R().
-//			SetHeader("all_lowercase", "available").
-//			SetHeader("UPPERCASE", "available")
+//			SetHeaderVerbatim("all_lowercase", "available").
+//			SetHeaderVerbatim("UPPERCASE", "available")
 //
 // Also you can override header value, which was set at client instance level.
-func (r *Request) SetHeaderVerbatim(header, value string) *Request {
+func (r *Request) SetHeaderVerbatim(header string, value string) *Request {
 	r.Header[header] = []string{value}
 	return r
 }
