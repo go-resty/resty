@@ -194,6 +194,19 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 	return c
 }
 
+// SetHeaderVerbatim method is to set a single header field and its value verbatim in the current request.
+//
+// For Example: To set `all_lowercase` and `UPPERCASE` as `available`.
+// 		client.R().
+//			SetHeaderVerbatim("all_lowercase", "available").
+//			SetHeaderVerbatim("UPPERCASE", "available")
+//
+// Also you can override header value, which was set at client instance level.
+func (c *Client) SetHeaderVerbatim(header, value string) *Client {
+	c.Header[header] = []string{value}
+	return c
+}
+
 // SetCookieJar method sets custom http.CookieJar in the resty client. Its way to override default.
 //
 // For Example: sometimes we don't want to save cookies in api contacting, we can remove the default

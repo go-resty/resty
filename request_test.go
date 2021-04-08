@@ -1359,6 +1359,19 @@ func TestSetQueryStringTypical(t *testing.T) {
 	assertEqual(t, "TestGet: text response", resp.String())
 }
 
+func TestSetHeaderVerbatim(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	r := dclr().
+		SetHeaderVerbatim("header-lowercase", "value_lowercase").
+		SetHeader("header-lowercase", "value_standard")
+
+	assertEqual(t, "value_lowercase", strings.Join(r.Header["header-lowercase"], ""))
+	assertEqual(t, "value_standard", strings.Join(r.Header["Header-Lowercase"], ""))
+}
+
+
 func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()

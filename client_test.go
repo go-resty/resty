@@ -253,6 +253,18 @@ func TestClientOnBeforeRequestModification(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestClientSetHeaderVerbatim(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dc().
+		SetHeaderVerbatim("header-lowercase", "value_lowercase").
+		SetHeader("header-lowercase", "value_standard")
+
+	assertEqual(t, "value_lowercase", strings.Join(c.Header["header-lowercase"], ""))
+	assertEqual(t, "value_standard", strings.Join(c.Header["Header-Lowercase"], ""))
+}
+
 func TestClientSetTransport(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()

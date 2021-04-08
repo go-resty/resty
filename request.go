@@ -117,6 +117,19 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 	return r
 }
 
+// SetHeaderVerbatim method is to set a single header field and its value verbatim in the current request.
+//
+// For Example: To set `all_lowercase` and `UPPERCASE` as `available`.
+// 		client.R().
+//			SetHeaderVerbatim("all_lowercase", "available").
+//			SetHeaderVerbatim("UPPERCASE", "available")
+//
+// Also you can override header value, which was set at client instance level.
+func (r *Request) SetHeaderVerbatim(header, value string) *Request {
+	r.Header[header] = []string{value}
+	return r
+}
+
 // SetQueryParam method sets single parameter and its value in the current request.
 // It will be formed as query string for the request.
 //
