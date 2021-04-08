@@ -733,6 +733,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		WaitTime(r.client.RetryWaitTime),
 		MaxWaitTime(r.client.RetryMaxWaitTime),
 		RetryConditions(r.client.RetryConditions),
+		RetryHooks(r.client.RetryHooks),
 	)
 
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))

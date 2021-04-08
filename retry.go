@@ -26,6 +26,9 @@ type (
 	// input: non-nil Response OR request execution error
 	RetryConditionFunc func(*Response, error) bool
 
+	// OnRetryFunc is for side-effecting functions triggered on retry
+	OnRetryFunc func(*Response, error)
+
 	// RetryAfterFunc returns time to wait before retry
 	// For example, it can parse HTTP Retry-After header
 	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html
@@ -39,6 +42,7 @@ type (
 		waitTime        time.Duration
 		maxWaitTime     time.Duration
 		retryConditions []RetryConditionFunc
+		retryHooks      []OnRetryFunc
 	}
 )
 
@@ -67,6 +71,13 @@ func MaxWaitTime(value time.Duration) Option {
 func RetryConditions(conditions []RetryConditionFunc) Option {
 	return func(o *Options) {
 		o.retryConditions = conditions
+	}
+}
+
+// RetryHooks sets the hooks that will be executed after each retry
+func RetryHooks(hooks []OnRetryFunc) Option {
+	return func(o *Options) {
+		o.retryHooks = hooks
 	}
 }
 
@@ -112,6 +123,10 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 
 		if !needsRetry {
 			return err
+		}
+
+		for _, hook := range opts.retryHooks {
+			hook(resp, err)
 		}
 
 		waitTime, err2 := sleepDuration(resp, opts.waitTime, opts.maxWaitTime, attempt)
