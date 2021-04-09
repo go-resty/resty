@@ -261,8 +261,8 @@ func TestClientSetHeaderVerbatim(t *testing.T) {
 		SetHeaderVerbatim("header-lowercase", "value_lowercase").
 		SetHeader("header-lowercase", "value_standard")
 
-	assertEqual(t, "value_lowercase", strings.Join(c.Header["header-lowercase"], ""))
-	assertEqual(t, "value_standard", strings.Join(c.Header["Header-Lowercase"], ""))
+	assertEqual(t, "value_lowercase", strings.Join(c.Header["header-lowercase"], "")) //nolint
+	assertEqual(t, "value_standard", c.Header.Get("Header-Lowercase"))
 }
 
 func TestClientSetTransport(t *testing.T) {
@@ -366,11 +366,7 @@ func TestClientOptions(t *testing.T) {
 
 	client.AddRetryAfterErrorCondition()
 	equal(client.RetryConditions[0], func(response *Response, err error) bool {
-		if response.IsError() {
-			return true
-		}
-
-		return false
+		return response.IsError()
 	})
 
 	err := &AuthError{}

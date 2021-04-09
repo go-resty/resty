@@ -202,6 +202,8 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 //			SetHeaderVerbatim("UPPERCASE", "available")
 //
 // Also you can override header value, which was set at client instance level.
+//
+// Since v2.6.0
 func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 	c.Header[header] = []string{value}
 	return c
@@ -594,19 +596,19 @@ func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 
 // AddRetryAfterErrorCondition adds the basic condition of retrying after encountering
 // an error from the http response
+//
+// Since v2.6.0
 func (c *Client) AddRetryAfterErrorCondition() *Client {
 	c.AddRetryCondition(func(response *Response, err error) bool {
-		if response.IsError() {
-			return true
-		}
-
-		return false
+		return response.IsError()
 	})
 	return c
 }
 
 // AddRetryHook adds a side-effecting retry hook to an array of hooks
 // that will be executed on each retry.
+//
+// Since v2.6.0
 func (c *Client) AddRetryHook(hook OnRetryFunc) *Client {
 	c.RetryHooks = append(c.RetryHooks, hook)
 	return c

@@ -1367,10 +1367,9 @@ func TestSetHeaderVerbatim(t *testing.T) {
 		SetHeaderVerbatim("header-lowercase", "value_lowercase").
 		SetHeader("header-lowercase", "value_standard")
 
-	assertEqual(t, "value_lowercase", strings.Join(r.Header["header-lowercase"], ""))
-	assertEqual(t, "value_standard", strings.Join(r.Header["Header-Lowercase"], ""))
+	assertEqual(t, "value_lowercase", strings.Join(r.Header["header-lowercase"], "")) //nolint
+	assertEqual(t, "value_standard", r.Header.Get("Header-Lowercase"))
 }
-
 
 func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	ts := createGetServer(t)

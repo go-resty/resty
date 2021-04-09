@@ -125,6 +125,8 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 //			SetHeaderVerbatim("UPPERCASE", "available")
 //
 // Also you can override header value, which was set at client instance level.
+//
+// Since v2.6.0
 func (r *Request) SetHeaderVerbatim(header, value string) *Request {
 	r.Header[header] = []string{value}
 	return r
