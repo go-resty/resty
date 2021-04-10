@@ -869,7 +869,6 @@ func (c *Client) GetClient() *http.Client {
 // Executes method executes the given `Request` object and returns response
 // error.
 func (c *Client) execute(req *Request) (*Response, error) {
-	defer releaseBuffer(req.bodyBuf)
 	// Apply Request middleware
 	var err error
 
@@ -902,6 +901,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	if err = requestLogger(c, req); err != nil {
 		return nil, wrapNoRetryErr(err)
 	}
+
+	req.RawRequest.Body = newRequestBodyReleaser(req.RawRequest.Body, req.bodyBuf)
 
 	req.Time = time.Now()
 	resp, err := c.httpClient.Do(req.RawRequest)
