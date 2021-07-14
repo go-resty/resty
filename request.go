@@ -67,6 +67,7 @@ type Request struct {
 	clientTrace         *clientTrace
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
+	retryConditions     []RetryConditionFunc
 }
 
 // Context method returns the Context if its already set in request
@@ -577,6 +578,16 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 	return r
 }
 
+// AddRetryCondition method adds a retry condition function to the request's
+// array of functions that are checked to determine if the request is retried.
+// The request will retry if any of the functions return true and error is nil.
+//
+// Note: These retry conditions are checked after all retry conditions of the client.
+func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
+	r.retryConditions = append(r.retryConditions, condition)
+	return r
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // HTTP request tracing
 //_______________________________________________________________________
@@ -747,7 +758,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		Retries(r.client.RetryCount),
 		WaitTime(r.client.RetryWaitTime),
 		MaxWaitTime(r.client.RetryMaxWaitTime),
-		RetryConditions(r.client.RetryConditions),
+		RetryConditions(append(r.client.RetryConditions, r.retryConditions...)),
 		RetryHooks(r.client.RetryHooks),
 	)
 

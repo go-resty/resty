@@ -589,6 +589,9 @@ func (c *Client) SetRetryAfter(callback RetryAfterFunc) *Client {
 // AddRetryCondition method adds a retry condition function to array of functions
 // that are checked to determine if the request is retried. The request will
 // retry if any of the functions return true and error is nil.
+//
+// Note: These retry conditions are applied on all Request made using this Client.
+// For Request specific retry conditions check *Request.AddRetryCondition
 func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 	c.RetryConditions = append(c.RetryConditions, condition)
 	return c
