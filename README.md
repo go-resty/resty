@@ -876,7 +876,7 @@ BTW, I'd like to know what you think about `Resty`. Kindly open an issue or send
 
 ## Core Team
 
-Have a look on [Members](https://github.com/orgs/go-resty/teams/core/members) page.
+Have a look on [Members](https://github.com/orgs/go-resty/people) page.
 
 ## Contributors
 
