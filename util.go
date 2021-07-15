@@ -195,7 +195,7 @@ func writeMultipartFormFile(w *multipart.Writer, fieldName, fileName string, r i
 	// Auto detect actual multipart content type
 	cbuf := make([]byte, 512)
 	size, err := r.Read(cbuf)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		return err
 	}
 
