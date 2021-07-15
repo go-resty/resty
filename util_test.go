@@ -5,6 +5,8 @@
 package resty
 
 import (
+	"bytes"
+	"mime/multipart"
 	"testing"
 )
 
@@ -77,5 +79,13 @@ func TestIsXMLType(t *testing.T) {
 		if result != test.expect {
 			t.Errorf("failed on %q: want %v, got %v", test.input, test.expect, result)
 		}
+	}
+}
+
+func TestWriteMultipartFormFileEmpty(t *testing.T) {
+	w := multipart.NewWriter(bytes.NewBuffer(nil))
+	defer func() { _ = w.Close() }()
+	if err := writeMultipartFormFile(w, "foo", "bar", bytes.NewReader(nil)); err != nil {
+		t.Errorf("Got unexpected error: %v", err)
 	}
 }
