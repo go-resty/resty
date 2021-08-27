@@ -415,12 +415,12 @@ func TestClientOptions(t *testing.T) {
 
 func TestClientPreRequestHook(t *testing.T) {
 	client := dc()
-	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
+	client.SetPreRequestHook(func(c *Client, r *http.Request) (*http.Request, error) {
 		c.log.Debugf("I'm in Pre-Request Hook")
-		return nil
+		return r, nil
 	})
 
-	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
+	client.SetPreRequestHook(func(c *Client, r *http.Request) (*http.Request, error) {
 		c.log.Debugf("I'm Overwriting existing Pre-Request Hook")
 
 		// Reading Request `N` no of times
@@ -430,7 +430,7 @@ func TestClientPreRequestHook(t *testing.T) {
 			c.log.Debugf("%s %v", string(rb), len(rb))
 			assertEqual(t, true, len(rb) >= 45)
 		}
-		return nil
+		return r, nil
 	})
 
 	ts := createPostServer(t)
@@ -458,7 +458,7 @@ func TestClientAllowsGetMethodPayload(t *testing.T) {
 
 	c := dc()
 	c.SetAllowGetMethodPayload(true)
-	c.SetPreRequestHook(func(*Client, *http.Request) error { return nil }) // for coverage
+	c.SetPreRequestHook(func(*Client, *http.Request) (*http.Request, error) { return nil, nil }) // for coverage
 
 	payload := "test-payload"
 	resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
