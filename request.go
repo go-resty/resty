@@ -132,9 +132,7 @@ func (r *Request) SetMultiValueHeaders(headers map[string][]string) *Request {
 
 		if len(values) > 1 {
 			headerValue = strings.Join(values, ", ")
-		}
-
-		if len(values) == 1 {
+		} else {
 			headerValue = values[0]
 		}
 
