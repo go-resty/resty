@@ -128,15 +128,7 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 // Also you can override header value, which was set at client instance level.
 func (r *Request) SetMultiValueHeaders(headers map[string][]string) *Request {
 	for key, values := range headers {
-		var headerValue string
-
-		if len(values) > 1 {
-			headerValue = strings.Join(values, ", ")
-		} else {
-			headerValue = values[0]
-		}
-
-		r.SetHeader(key, headerValue)
+		r.SetHeader(key, strings.Join(values, ", "))
 	}
 	return r
 }

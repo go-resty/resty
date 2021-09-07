@@ -1381,6 +1381,7 @@ func TestSetHeaderMultipleValue(t *testing.T) {
 			"Authorization": []string{"Bearer xyz"},
 		})
 	assertEqual(t, "text/*, text/html, *", r.Header.Get("content"))
+	assertEqual(t, "Bearer xyz", r.Header.Get("authorization"))
 }
 
 func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
