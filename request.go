@@ -117,6 +117,22 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 	return r
 }
 
+// SetHeaderMultiValues sets multiple headers fields and its values is list of strings at one go in the current request.
+//
+// For Example: To set `Accept` as `text/html, application/xhtml+xml, application/xml;q=0.9, image/webp, */*;q=0.8`
+//
+// 		client.R().
+//			SetHeaderMultiValues(map[string][]string{
+//				"Accept": []string{"text/html", "application/xhtml+xml", "application/xml;q=0.9", "image/webp", "*/*;q=0.8"},
+//			})
+// Also you can override header value, which was set at client instance level.
+func (r *Request) SetHeaderMultiValues(headers map[string][]string) *Request {
+	for key, values := range headers {
+		r.SetHeader(key, strings.Join(values, ", "))
+	}
+	return r
+}
+
 // SetHeaderVerbatim method is to set a single header field and its value verbatim in the current request.
 //
 // For Example: To set `all_lowercase` and `UPPERCASE` as `available`.
