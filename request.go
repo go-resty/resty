@@ -870,11 +870,14 @@ func (r *Request) initValuesMap() {
 	}
 }
 
-var noescapeJSONMarshal = func(v interface{}) ([]byte, error) {
+var noescapeJSONMarshal = func(v interface{}) (*bytes.Buffer, error) {
 	buf := acquireBuffer()
-	defer releaseBuffer(buf)
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(v)
-	return buf.Bytes(), err
+	if err := encoder.Encode(v); err != nil {
+		releaseBuffer(buf)
+		return nil, err
+	}
+
+	return buf, nil
 }
