@@ -829,7 +829,7 @@ client.SetTransport(&transport).SetScheme("http").SetHostURL(unixSocket)
 client.R().Get("/index.html")
 ```
 
-#### Bazel support
+#### Bazel Support
 
 Resty can be built, tested and depended upon via [Bazel](https://bazel.build).
 For example, to run all tests:
