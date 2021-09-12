@@ -126,7 +126,7 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 //				"Accept": []string{"text/html", "application/xhtml+xml", "application/xml;q=0.9", "image/webp", "*/*;q=0.8"},
 //			})
 // Also you can override header value, which was set at client instance level.
-func (r *Request) SetMultiValueHeaders(headers map[string][]string) *Request {
+func (r *Request) SetHeaderMultiValues(headers map[string][]string) *Request {
 	for key, values := range headers {
 		r.SetHeader(key, strings.Join(values, ", "))
 	}

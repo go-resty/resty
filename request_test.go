@@ -1376,7 +1376,7 @@ func TestSetHeaderMultipleValue(t *testing.T) {
 	defer ts.Close()
 
 	r := dclr().
-		SetMultiValueHeaders(map[string][]string{
+		SetHeaderMultiValues(map[string][]string{
 			"Content":       []string{"text/*", "text/html", "*"},
 			"Authorization": []string{"Bearer xyz"},
 		})
