@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 )
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -139,13 +140,19 @@ type ResponseLog struct {
 //_______________________________________________________________________
 
 // way to disable the HTML escape as opt-in
-func jsonMarshal(c *Client, r *Request, d interface{}) ([]byte, error) {
-	if !r.jsonEscapeHTML {
-		return noescapeJSONMarshal(d)
-	} else if !c.jsonEscapeHTML {
+func jsonMarshal(c *Client, r *Request, d interface{}) (*bytes.Buffer, error) {
+	if !r.jsonEscapeHTML || !c.jsonEscapeHTML {
 		return noescapeJSONMarshal(d)
 	}
-	return c.JSONMarshal(d)
+
+	data, err := c.JSONMarshal(d)
+	if err != nil {
+		return nil, err
+	}
+
+	buf := acquireBuffer()
+	_, _ = buf.Write(data)
+	return buf, nil
 }
 
 func firstNonEmpty(v ...string) string {
@@ -281,6 +288,34 @@ func releaseBuffer(buf *bytes.Buffer) {
 		buf.Reset()
 		bufPool.Put(buf)
 	}
+}
+
+// requestBodyReleaser wraps requests's body and implements custom Close for it.
+// The Close method closes original body and releases request body back to sync.Pool.
+type requestBodyReleaser struct {
+	releaseOnce sync.Once
+	reqBuf      *bytes.Buffer
+	io.ReadCloser
+}
+
+func newRequestBodyReleaser(respBody io.ReadCloser, reqBuf *bytes.Buffer) io.ReadCloser {
+	if reqBuf == nil {
+		return respBody
+	}
+
+	return &requestBodyReleaser{
+		reqBuf:     reqBuf,
+		ReadCloser: respBody,
+	}
+}
+
+func (rr *requestBodyReleaser) Close() error {
+	err := rr.ReadCloser.Close()
+	rr.releaseOnce.Do(func() {
+		releaseBuffer(rr.reqBuf)
+	})
+
+	return err
 }
 
 func closeq(v interface{}) {

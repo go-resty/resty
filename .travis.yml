@@ -3,8 +3,8 @@ language: go
 os: linux
 
 go: # use travis ci resource effectively, keep always latest 2 versions and tip :) 
+  - 1.16.x
   - 1.15.x
-  - 1.14.x
   - tip
 
 install:
