@@ -195,7 +195,6 @@ func TestClientRetryGet(t *testing.T) {
 		SetRetryCount(3)
 
 	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")
-	assertNil(t, err)
 	assertEqual(t, "", resp.Status())
 	assertEqual(t, "", resp.Proto())
 	assertEqual(t, 0, resp.StatusCode())
@@ -663,7 +662,6 @@ func TestClientRetryCount(t *testing.T) {
 		)
 
 	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")
-	assertNil(t, err)
 	assertEqual(t, "", resp.Status())
 	assertEqual(t, "", resp.Proto())
 	assertEqual(t, 0, resp.StatusCode())
@@ -719,7 +717,6 @@ func TestClientRetryHook(t *testing.T) {
 		)
 
 	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")
-	assertNil(t, err)
 	assertEqual(t, "", resp.Status())
 	assertEqual(t, "", resp.Proto())
 	assertEqual(t, 0, resp.StatusCode())
