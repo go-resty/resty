@@ -117,12 +117,12 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 	return r
 }
 
-// SetMultiValueHeaders sets multiple headers fields and its values is list of strings at one go in the current request.
+// SetHeaderMultiValues sets multiple headers fields and its values is list of strings at one go in the current request.
 //
 // For Example: To set `Accept` as `text/html, application/xhtml+xml, application/xml;q=0.9, image/webp, */*;q=0.8`
 //
 // 		client.R().
-//			SetMultiValueHeaders(map[string][]string{
+//			SetHeaderMultiValues(map[string][]string{
 //				"Accept": []string{"text/html", "application/xhtml+xml", "application/xml;q=0.9", "image/webp", "*/*;q=0.8"},
 //			})
 // Also you can override header value, which was set at client instance level.
