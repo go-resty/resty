@@ -32,6 +32,39 @@ func TestBackoffSuccess(t *testing.T) {
 	assertEqual(t, externalCounter, attempts)
 }
 
+func TestBackoffNoWaitForLastRetry(t *testing.T) {
+	attempts := 1
+	externalCounter := 0
+	numRetries := 1
+
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resp := &Response{
+		Request: &Request{
+			ctx: canceledCtx,
+			client: &Client{
+				RetryAfter: func(*Client, *Response) (time.Duration, error) {
+					return 6, nil
+				},
+			},
+		},
+	}
+
+	retryErr := Backoff(func() (*Response, error) {
+		externalCounter++
+		return resp, nil
+	}, RetryConditions([]RetryConditionFunc{func(response *Response, err error) bool {
+		if externalCounter == attempts + numRetries {
+			// Backoff returns context canceled if goes to sleep after last retry.
+			cancel()
+		}
+		return true
+	}}), Retries(numRetries))
+
+	assertNil(t, retryErr)
+}
+
 func TestBackoffTenAttemptsSuccess(t *testing.T) {
 	attempts := 10
 	externalCounter := 0
@@ -169,8 +202,8 @@ func TestClientRetryGet(t *testing.T) {
 	assertNotNil(t, resp.Body())
 	assertEqual(t, 0, len(resp.Header()))
 
-	assertEqual(t, true, (strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
-		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\"")))
+	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
+		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\""))
 }
 
 func TestClientRetryWait(t *testing.T) {
@@ -639,8 +672,8 @@ func TestClientRetryCount(t *testing.T) {
 	// 2 attempts were made
 	assertEqual(t, attempt, 2)
 
-	assertEqual(t, true, (strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
-		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\"")))
+	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
+		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\""))
 }
 
 func TestClientErrorRetry(t *testing.T) {
@@ -693,8 +726,8 @@ func TestClientRetryHook(t *testing.T) {
 
 	assertEqual(t, 3, attempt)
 
-	assertEqual(t, true, (strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
-		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\"")))
+	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
+		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\""))
 }
 
 func filler(*Response, error) bool {
