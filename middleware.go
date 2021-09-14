@@ -60,6 +60,11 @@ func parseRequestURL(c *Client, r *Request) error {
 		}
 	}
 
+	// GH #407 && #318
+	if reqURL.Scheme == "" && len(c.scheme) > 0 {
+		reqURL.Scheme = c.scheme
+	}
+
 	// Adding Query Param
 	query := make(url.Values)
 	for k, v := range c.QueryParam {
@@ -189,12 +194,6 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	// Add cookies from request instance into http request
 	for _, cookie := range r.Cookies {
 		r.RawRequest.AddCookie(cookie)
-	}
-
-	// it's for non-http scheme option
-	if r.RawRequest.URL != nil && r.RawRequest.URL.Scheme == "" {
-		r.RawRequest.URL.Scheme = c.scheme
-		r.RawRequest.URL.Host = r.URL
 	}
 
 	// Enable trace

@@ -744,3 +744,46 @@ func TestResponseError(t *testing.T) {
 	assertNotNil(t, re.Unwrap())
 	assertEqual(t, err.Error(), re.Error())
 }
+
+func TestHostURLForGH318AndGH407(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	targetURL, _ := url.Parse(ts.URL)
+	t.Log("ts.URL:", ts.URL)
+	t.Log("targetURL.Host:", targetURL.Host)
+	// Sample output
+	// ts.URL: http://127.0.0.1:55967
+	// targetURL.Host: 127.0.0.1:55967
+
+	// Unable use the local http test server for this
+	// use case testing
+	//
+	// using `targetURL.Host` value or test case yield to ERROR
+	// "parse "127.0.0.1:55967": first path segment in URL cannot contain colon"
+
+	// test the functionality with httpbin.org locally
+	// will figure out later
+
+	c := dc()
+	// c.SetScheme("http")
+	// c.SetHostURL(targetURL.Host + "/")
+
+	// t.Log("with leading `/`")
+	// resp, err := c.R().Post("/login")
+	// assertNil(t, err)
+	// assertNotNil(t, resp)
+
+	// t.Log("\nwithout leading `/`")
+	// resp, err = c.R().Post("login")
+	// assertNil(t, err)
+	// assertNotNil(t, resp)
+
+	t.Log("with leading `/` on request & with trailing `/` on host url")
+	c.SetHostURL(ts.URL + "/")
+	resp, err := c.R().
+		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		Post("/login")
+	assertNil(t, err)
+	assertNotNil(t, resp)
+}

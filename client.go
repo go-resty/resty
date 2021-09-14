@@ -758,7 +758,7 @@ func (c *Client) SetTransport(transport http.RoundTripper) *Client {
 // 		client.SetScheme("http")
 func (c *Client) SetScheme(scheme string) *Client {
 	if !IsStringEmpty(scheme) {
-		c.scheme = scheme
+		c.scheme = strings.TrimSpace(scheme)
 	}
 	return c
 }
