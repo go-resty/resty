@@ -582,7 +582,7 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 // array of functions that are checked to determine if the request is retried.
 // The request will retry if any of the functions return true and error is nil.
 //
-// Note: These retry conditions are checked after all retry conditions of the client.
+// Note: These retry conditions are checked before all retry conditions of the client.
 func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 	r.retryConditions = append(r.retryConditions, condition)
 	return r
@@ -758,7 +758,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		Retries(r.client.RetryCount),
 		WaitTime(r.client.RetryWaitTime),
 		MaxWaitTime(r.client.RetryMaxWaitTime),
-		RetryConditions(append(r.client.RetryConditions, r.retryConditions...)),
+		RetryConditions(append(r.retryConditions, r.client.RetryConditions...)),
 		RetryHooks(r.client.RetryHooks),
 	)
 
