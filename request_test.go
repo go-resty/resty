@@ -1377,8 +1377,8 @@ func TestSetHeaderMultipleValue(t *testing.T) {
 
 	r := dclr().
 		SetHeaderMultiValues(map[string][]string{
-			"Content":       []string{"text/*", "text/html", "*"},
-			"Authorization": []string{"Bearer xyz"},
+			"Content":       {"text/*", "text/html", "*"},
+			"Authorization": {"Bearer xyz"},
 		})
 	assertEqual(t, "text/*, text/html, *", r.Header.Get("content"))
 	assertEqual(t, "Bearer xyz", r.Header.Get("authorization"))
