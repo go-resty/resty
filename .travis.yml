@@ -2,10 +2,11 @@ language: go
 
 os: linux
 
-go: # use travis ci resource effectively, keep always latest 2 versions and tip :) 
+if: (branch = master) OR (type = pull_request)
+
+go: # use travis ci resource effectively, keep always latest 2 versions
   - 1.17.x
   - 1.16.x
-  - tip
 
 install:
   - go get -v -t ./...
@@ -15,7 +16,3 @@ script:
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
-
-jobs:
-  allow_failures:
-    - go: tip
