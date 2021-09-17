@@ -937,6 +937,36 @@ func TestGetWithCookies(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestRequestScopes(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetQueryParam("client_param", "true").
+		SetQueryParams(map[string]string{"req_1": "jeeva", "req_3": "jeeva3"}).
+		SetDebug(true)
+	c.outputLogTo(ioutil.Discard)
+
+	queryParam := func(page, size int) func(r *Request) *Request {
+		return func(r *Request) *Request {
+			return r.SetQueryParam("page", strconv.FormatInt(int64(page), 10)).
+				SetQueryParam("size", strconv.FormatInt(int64(size), 10)).
+				SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10))
+		}
+	}
+	resp, err := c.R().Scopes(queryParam(1, 100)).
+		SetHeader(hdrUserAgentKey, "Test Custom User agent").
+		Get(ts.URL + "/")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "HTTP/1.1", resp.Proto())
+	assertEqual(t, "200 OK", resp.Status())
+	assertEqual(t, "TestGet: text response", resp.String())
+
+	logResponse(t, resp)
+}
+
 func TestPutPlainString(t *testing.T) {
 	ts := createGenServer(t)
 	defer ts.Close()

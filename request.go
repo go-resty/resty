@@ -604,6 +604,28 @@ func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 	return r
 }
 
+// Scopes pass current request instance to arguments `func(*Request) *Request`,
+// which could be used to add parameters dynamically
+//     func TransferContentType(r *Request) *Request {
+//          return r.SetHeader("Content-Type", "application/json").
+//              SetHeader("Accept", "application/json")
+//     }
+//
+//     func PageParam(page, size int) func (r *Request) *Request  {
+//         return func(r *Request) *Request {
+//             return r.SetQueryParam("page", strconv.FormatInt(int64(page), 10)).
+//                  SetQueryParam("size", strconv.FormatInt(int64(size), 10))
+//         }
+//     }
+//
+//     r.Scopes(TransferContentType, PageParam(1, 100)).Get("https://localhost:8080/bar")
+func (r *Request) Scopes(funcs ...func(r *Request) *Request) *Request {
+	for _, f := range funcs {
+		r = f(r)
+	}
+	return r
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // HTTP request tracing
 //_______________________________________________________________________
