@@ -92,7 +92,8 @@ type (
 // Resty also provides an options to override most of the client settings
 // at request level.
 type Client struct {
-	HostURL               string
+	BaseURL               string
+	HostURL               string // Deprecated: use BaseURL instead. To be removed in v3.0.0 release.
 	QueryParam            url.Values
 	FormData              url.Values
 	Header                http.Header
@@ -154,8 +155,25 @@ type User struct {
 //
 //		// Setting HTTPS address
 //		client.SetHostURL("https://myjeeva.com")
+//
+// Deprecated: use SetBaseURL instead. To be removed in v3.0.0 release.
 func (c *Client) SetHostURL(url string) *Client {
-	c.HostURL = strings.TrimRight(url, "/")
+	c.SetBaseURL(url)
+	return c
+}
+
+// SetBaseURL method is to set Base URL in the client instance. It will be used with request
+// raised from this client with relative URL
+//		// Setting HTTP address
+//		client.SetBaseURL("http://myjeeva.com")
+//
+//		// Setting HTTPS address
+//		client.SetBaseURL("https://myjeeva.com")
+//
+// Since v2.7.0
+func (c *Client) SetBaseURL(url string) *Client {
+	c.BaseURL = strings.TrimRight(url, "/")
+	c.HostURL = c.BaseURL
 	return c
 }
 
