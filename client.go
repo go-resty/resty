@@ -96,6 +96,7 @@ type Client struct {
 	HostURL               string // Deprecated: use BaseURL instead. To be removed in v3.0.0 release.
 	QueryParam            url.Values
 	FormData              url.Values
+	PathParams            map[string]string
 	Header                http.Header
 	UserInfo              *User
 	Token                 string
@@ -126,7 +127,6 @@ type Client struct {
 	debugBodySizeLimit int64
 	outputDirectory    string
 	scheme             string
-	pathParams         map[string]string
 	log                Logger
 	httpClient         *http.Client
 	proxyURL           *url.URL
@@ -385,7 +385,7 @@ func (c *Client) R() *Request {
 		client:          c,
 		multipartFiles:  []*File{},
 		multipartFields: []*MultipartField{},
-		pathParams:      map[string]string{},
+		PathParams:      map[string]string{},
 		jsonEscapeHTML:  true,
 	}
 	return r
@@ -814,7 +814,7 @@ func (c *Client) SetDoNotParseResponse(parse bool) *Client {
 // Also it can be overridden at request level Path Params options,
 // see `Request.SetPathParam` or `Request.SetPathParams`.
 func (c *Client) SetPathParam(param, value string) *Client {
-	c.pathParams[param] = value
+	c.PathParams[param] = value
 	return c
 }
 
@@ -1080,7 +1080,7 @@ func createClient(hc *http.Client) *Client {
 		jsonEscapeHTML:         true,
 		httpClient:             hc,
 		debugBodySizeLimit:     math.MaxInt32,
-		pathParams:             make(map[string]string),
+		PathParams:             make(map[string]string),
 	}
 
 	// Logger

@@ -33,6 +33,7 @@ type Request struct {
 	AuthScheme string
 	QueryParam url.Values
 	FormData   url.Values
+	PathParams map[string]string
 	Header     http.Header
 	Time       time.Time
 	Body       interface{}
@@ -60,7 +61,6 @@ type Request struct {
 	fallbackContentType string
 	forceContentType    string
 	ctx                 context.Context
-	pathParams          map[string]string
 	values              map[string]interface{}
 	client              *Client
 	bodyBuf             *bytes.Buffer
@@ -511,7 +511,7 @@ func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 // It replaces the value of the key while composing the request URL. Also you can
 // override Path Params value, which was set at client instance level.
 func (r *Request) SetPathParam(param, value string) *Request {
-	r.pathParams[param] = value
+	r.PathParams[param] = value
 	return r
 }
 
