@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -114,6 +115,8 @@ type Client struct {
 	RetryAfter            RetryAfterFunc
 	JSONMarshal           func(v interface{}) ([]byte, error)
 	JSONUnmarshal         func(data []byte, v interface{}) error
+	XMLMarshal            func(v interface{}) ([]byte, error)
+	XMLUnmarshal          func(data []byte, v interface{}) error
 
 	// HeaderAuthorizationKey is used to set/access Request Authorization header
 	// value when `SetAuthToken` option is used.
@@ -1074,13 +1077,16 @@ func createClient(hc *http.Client) *Client {
 		Cookies:                make([]*http.Cookie, 0),
 		RetryWaitTime:          defaultWaitTime,
 		RetryMaxWaitTime:       defaultMaxWaitTime,
+		PathParams:             make(map[string]string),
 		JSONMarshal:            json.Marshal,
 		JSONUnmarshal:          json.Unmarshal,
+		XMLMarshal:             xml.Marshal,
+		XMLUnmarshal:           xml.Unmarshal,
 		HeaderAuthorizationKey: http.CanonicalHeaderKey("Authorization"),
-		jsonEscapeHTML:         true,
-		httpClient:             hc,
-		debugBodySizeLimit:     math.MaxInt32,
-		PathParams:             make(map[string]string),
+
+		jsonEscapeHTML:     true,
+		httpClient:         hc,
+		debugBodySizeLimit: math.MaxInt32,
 	}
 
 	// Logger

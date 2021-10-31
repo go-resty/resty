@@ -6,7 +6,6 @@ package resty
 
 import (
 	"bytes"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -462,7 +461,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 			return
 		}
 	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-		bodyBytes, err = xml.Marshal(r.Body)
+		bodyBytes, err = c.XMLMarshal(r.Body)
 		if err != nil {
 			return
 		}

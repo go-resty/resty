@@ -6,7 +6,6 @@ package resty
 
 import (
 	"bytes"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
@@ -109,7 +108,7 @@ func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
 	if IsJSONType(ct) {
 		err = c.JSONUnmarshal(b, d)
 	} else if IsXMLType(ct) {
-		err = xml.Unmarshal(b, d)
+		err = c.XMLUnmarshal(b, d)
 	}
 
 	return
