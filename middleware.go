@@ -512,6 +512,12 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 			return err
 		}
 
+		// save modify time
+		mtime, err := http.ParseTime(res.Header().Get("Last-Modified"))
+		if err == nil {
+			_ = os.Chtimes(file, mtime, mtime)
+		}
+
 		res.size = written
 	}
 
