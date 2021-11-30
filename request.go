@@ -920,6 +920,14 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		return nil, err
 	}
 
+	// If there is a rate limiter set for this client, the Execute call will block
+	// until the request is allowed to go through.
+	if r.client.rateLimiter != nil {
+		if err := r.client.rateLimiter.Wait(r.Context()); err != nil {
+			return nil, err
+		}
+	}
+
 	if r.SRV != nil {
 		_, addrs, err = net.LookupSRV(r.SRV.Service, "tcp", r.SRV.Domain)
 		if err != nil {
