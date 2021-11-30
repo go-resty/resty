@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -20,6 +21,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 type AuthSuccess struct {
@@ -46,6 +49,36 @@ func TestGet(t *testing.T) {
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
+}
+
+func TestRateLimiter(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	client := dc().SetRateLimiter(rate.NewLimiter(rate.Every(100*time.Millisecond), 10))
+
+	start := time.Now()
+	for i := 0; i < 21; i++ {
+		resp, err := client.R().
+			SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+			Get(ts.URL + "/")
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "HTTP/1.1", resp.Proto())
+		assertEqual(t, "200 OK", resp.Status())
+		assertNotNil(t, resp.Body())
+		assertEqual(t, "TestGet: text response", resp.String())
+
+		logResponse(t, resp)
+	}
+
+	assertError(t, func() error {
+		dur := time.Now().Sub(start)
+		if dur <= 1*time.Second {
+			return fmt.Errorf("requests executed too fast (%f). rate limiting not working correctly", dur.Seconds())
+		}
+		return nil
+	}())
 }
 
 func TestIllegalRetryCount(t *testing.T) {
