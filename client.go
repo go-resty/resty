@@ -914,6 +914,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
+	// If there is a rate limiter set for this client, the Execute call will block
+	// until the request is allowed to go through.
+	if req.client.rateLimiter != nil {
+		if err := req.client.rateLimiter.Wait(req.Context()); err != nil {
+			return nil, err
+		}
+	}
+
 	// resty middlewares
 	for _, f := range c.beforeRequest {
 		if err = f(c, req); err != nil {
