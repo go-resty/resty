@@ -815,6 +815,13 @@ client.SetFormData(map[string]string{
 // Basic Auth for all request
 client.SetBasicAuth("myuser", "mypass")
 
+// Get auth from netrc
+// import "github.com/cnmade/gonetrc"
+username, pass := gonetrc.GetCredentials("sample.com")
+if username != "" && pass != "" {
+    client.SetBasicAuth(username, pass)
+}
+
 // Bearer Auth Token for all request
 client.SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F")
 
