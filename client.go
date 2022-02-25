@@ -1151,11 +1151,11 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	// If there is a rate limiter set for this client, the Execute call will block
-	// until the request is allowed to go through.
+	// If there is a rate limiter set for this client, the Execute call
+	// will return an error if the rate limit is exceeded.
 	if req.client.rateLimiter != nil {
-		if err := req.client.rateLimiter.Wait(req.Context()); err != nil {
-			return nil, err
+		if !req.client.rateLimiter.Allow() {
+			return nil, wrapNoRetryErr(ErrRateLimitExceeded)
 		}
 	}
 
