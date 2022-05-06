@@ -468,6 +468,21 @@ func TestClientAllowsGetMethodPayload(t *testing.T) {
 	assertEqual(t, payload, resp.String())
 }
 
+func TestClientAllowsGetMethodPayloadDisabled(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetAllowGetMethodPayload(false)
+
+	payload := bytes.NewReader([]byte("test-payload"))
+	resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "", resp.String())
+}
+
 func TestClientRoundTripper(t *testing.T) {
 	c := NewWithClient(&http.Client{})
 	c.outputLogTo(ioutil.Discard)
