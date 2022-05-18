@@ -755,8 +755,9 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 	if r.client.RetryCount == 0 {
 		r.Attempt = 1
+		resp, err = r.client.executor(r)
 		r.client.onErrorHooks(r, resp, err)
-		return r.client.executor(r)
+		return resp, err
 	}
 
 	err = Backoff(
