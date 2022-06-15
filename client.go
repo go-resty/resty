@@ -116,6 +116,7 @@ type Client struct {
 	RetryConditions       []RetryConditionFunc
 	RetryHooks            []OnRetryFunc
 	RetryAfter            RetryAfterFunc
+	RetryResetReaders     bool
 	JSONMarshal           func(v interface{}) ([]byte, error)
 	JSONUnmarshal         func(data []byte, v interface{}) error
 	XMLMarshal            func(v interface{}) ([]byte, error)
@@ -699,6 +700,15 @@ func (c *Client) AddRetryAfterErrorCondition() *Client {
 // Since v2.6.0
 func (c *Client) AddRetryHook(hook OnRetryFunc) *Client {
 	c.RetryHooks = append(c.RetryHooks, hook)
+	return c
+}
+
+// SetRetryResetReaders method enables the Resty client to seek the start of all
+// file readers given as multipart files, if the given object implements `io.ReadSeeker`.
+//
+// Since ...
+func (c *Client) SetRetryResetReaders(b bool) *Client {
+	c.RetryResetReaders = b
 	return c
 }
 

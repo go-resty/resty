@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -55,7 +56,7 @@ func TestBackoffNoWaitForLastRetry(t *testing.T) {
 		externalCounter++
 		return resp, nil
 	}, RetryConditions([]RetryConditionFunc{func(response *Response, err error) bool {
-		if externalCounter == attempts + numRetries {
+		if externalCounter == attempts+numRetries {
 			// Backoff returns context canceled if goes to sleep after last retry.
 			cancel()
 		}
@@ -732,4 +733,37 @@ func TestClientRetryHook(t *testing.T) {
 
 func filler(*Response, error) bool {
 	return false
+}
+
+func TestResetMultipartReaders(t *testing.T) {
+	ts := createFilePostServer(t)
+	defer ts.Close()
+
+	str := "test"
+	buf := []byte(str)
+
+	bufReader := bytes.NewReader(buf)
+	bufCpy := make([]byte, len(buf))
+
+	c := dc().
+		SetRetryCount(2).
+		SetTimeout(time.Second * 3).
+		SetRetryResetReaders(true).
+		AddRetryAfterErrorCondition().
+		AddRetryHook(
+			func(response *Response, _ error) {
+				read, err := bufReader.Read(bufCpy)
+
+				assertNil(t, err)
+				assertEqual(t, len(buf), read)
+				assertEqual(t, str, string(bufCpy))
+			},
+		)
+
+	resp, err := c.R().
+		SetFileReader("name", "filename", bufReader).
+		Post(ts.URL + "/set-reset-multipart-readers-test")
+
+	assertEqual(t, 500, resp.StatusCode())
+	assertNil(t, err)
 }
