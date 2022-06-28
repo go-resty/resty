@@ -89,6 +89,11 @@ func TestGetClientParamRequestParam(t *testing.T) {
 	resp, err := c.R().
 		SetQueryParams(map[string]string{"req_1": "req 1 value", "req_2": "req 2 value"}).
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+		SetQueryStruct(struct {
+			Req3 string `url:"req_3"`
+			Req4 int    `url:"req_4"`
+			Req5 int    `url:"req_5,omitempty"`
+		}{"req 3 value", 4, 0}).
 		SetHeader(hdrUserAgentKey, "Test Custom User agent").
 		Get(ts.URL + "/")
 
