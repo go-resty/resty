@@ -17,6 +17,9 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	
+	"github.com/google/go-querystring/query"
+
 )
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -159,6 +162,28 @@ func (r *Request) SetHeaderVerbatim(header, value string) *Request {
 // Also you can override query params value, which was set at client instance level.
 func (r *Request) SetQueryParam(param, value string) *Request {
 	r.QueryParam.Set(param, value)
+	return r
+}
+
+// SetQueryStruct method set struct parameter and its value in the current request.
+//
+// For Example:
+// type Options struct {
+//  	Query   string `url:"q"`
+//  	ShowAll bool   `url:"all"`
+//  	Page    int    `url:"page,omitempty"`
+// }
+// opt := Options{Query:"foo", ShowAll: true}
+// client.R().
+//	SetQueryStruct(opt)
+// will output: "q=foo&all=true"
+func (r *Request) SetQueryStruct(param interface{}) *Request {
+	values, err := query.Values(param)
+	if err != nil {
+		r.client.log.Errorf("%v", err)
+		return r
+	}
+	r.SetQueryParamsFromValues(values)
 	return r
 }
 
