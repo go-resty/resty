@@ -514,7 +514,12 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 func getBodyCopy(r *Request) (*bytes.Buffer, error) {
 	// If r.bodyBuf present, return the copy
 	if r.bodyBuf != nil {
-		return bytes.NewBuffer(r.bodyBuf.Bytes()), nil
+		bodyCopy := &bytes.Buffer{}
+		if _, err := io.Copy(bodyCopy, bytes.NewReader(r.bodyBuf.Bytes())); err != nil {
+			// cannot use io.Copy(bodyCopy, r.bodyBuf) because io.Copy reset r.bodyBuf
+			return nil, err
+		}
+		return bodyCopy, nil
 	}
 
 	// Maybe body is `io.Reader`.
