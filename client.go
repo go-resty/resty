@@ -85,6 +85,12 @@ type (
 
 	// ErrorHook type is for reacting to request errors, called after all retries were attempted
 	ErrorHook func(*Request, error)
+
+	// Executor executes a Request
+	Executor func(req *Request) (*Response, error)
+
+	// ExecutorMiddleware type wraps the execution of a request
+	ExecutorMiddleware func(req *Request, next Executor) (*Response, error)
 )
 
 // Client struct is used to create Resty client with client level settings,
@@ -140,6 +146,7 @@ type Client struct {
 	requestLog         RequestLogCallback
 	responseLog        ResponseLogCallback
 	errorHooks         []ErrorHook
+	executor           Executor
 }
 
 // User type is to hold an username and password information
@@ -441,6 +448,28 @@ func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 //		})
 func (c *Client) OnError(h ErrorHook) *Client {
 	c.errorHooks = append(c.errorHooks, h)
+	return c
+}
+
+// WrapExecutor wraps the execution of a request, granting full access to the request, response, and error.
+// Runs on every request attempt, before any request hook and after any response or error hook.
+// Can be useful to introduce throttling or add hooks that always fire, regardless of success or error.
+//
+//		c.WrapExecutor(func(req *Request, next Executor) (*Response, error) {
+//			// do something with the Request
+//			// e.g. Acquire a lock
+//
+//			resp, err := next(req)
+//			// do something with the Response or error
+//			// e.g. Release a lock
+//
+//			return resp, err
+//		})
+func (c *Client) WrapExecutor(e ExecutorMiddleware) *Client {
+	next := c.executor
+	c.executor = func(req *Request) (*Response, error) {
+		return e(req, next)
+	}
 	return c
 }
 
@@ -900,14 +929,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// to modify the *resty.Request object
 	for _, f := range c.udBeforeRequest {
 		if err = f(c, req); err != nil {
-			return nil, wrapNoRetryErr(err)
+			return nil, err
 		}
 	}
 
 	// resty middlewares
 	for _, f := range c.beforeRequest {
 		if err = f(c, req); err != nil {
-			return nil, wrapNoRetryErr(err)
+			return nil, err
 		}
 	}
 
@@ -918,12 +947,12 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// call pre-request if defined
 	if c.preReqHook != nil {
 		if err = c.preReqHook(c, req.RawRequest); err != nil {
-			return nil, wrapNoRetryErr(err)
+			return nil, err
 		}
 	}
 
 	if err = requestLogger(c, req); err != nil {
-		return nil, wrapNoRetryErr(err)
+		return nil, err
 	}
 
 	req.RawRequest.Body = newRequestBodyReleaser(req.RawRequest.Body, req.bodyBuf)
@@ -938,7 +967,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
 		response.setReceivedAt()
-		return response, err
+		return response, wrapTemporaryError(err)
 	}
 
 	if !req.isSaveResponse {
@@ -951,7 +980,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 				body, err = gzip.NewReader(body)
 				if err != nil {
 					response.setReceivedAt()
-					return response, err
+					return response, wrapTemporaryError(err)
 				}
 				defer closeq(body)
 			}
@@ -959,7 +988,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 		if response.body, err = ioutil.ReadAll(body); err != nil {
 			response.setReceivedAt()
-			return response, err
+			return response, wrapTemporaryError(err)
 		}
 
 		response.size = int64(len(response.body))
@@ -974,7 +1003,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	return response, wrapNoRetryErr(err)
+	return response, err
 }
 
 // getting TLS client config if not exists then create one
@@ -1091,6 +1120,8 @@ func createClient(hc *http.Client) *Client {
 
 	// Logger
 	c.SetLogger(createLogger())
+
+	c.executor = c.execute
 
 	// default before request middlewares
 	c.beforeRequest = []RequestMiddleware{

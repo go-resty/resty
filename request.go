@@ -745,7 +745,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	if r.SRV != nil {
 		_, addrs, err = net.LookupSRV(r.SRV.Service, "tcp", r.SRV.Domain)
 		if err != nil {
-			r.client.onErrorHooks(r, nil, err)
+			r.client.onErrorHooks(r, resp, err)
 			return nil, err
 		}
 	}
@@ -755,9 +755,9 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 	if r.client.RetryCount == 0 {
 		r.Attempt = 1
-		resp, err = r.client.execute(r)
-		r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
-		return resp, unwrapNoRetryErr(err)
+		resp, err = r.client.executor(r)
+		r.client.onErrorHooks(r, resp, err)
+		return resp, err
 	}
 
 	err = Backoff(
@@ -766,7 +766,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 			r.URL = r.selectAddr(addrs, url, r.Attempt)
 
-			resp, err = r.client.execute(r)
+			resp, err = r.client.executor(r)
 			if err != nil {
 				r.client.log.Errorf("%v, Attempt %v", err, r.Attempt)
 			}
@@ -780,9 +780,9 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		RetryHooks(r.client.RetryHooks),
 	)
 
-	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
+	r.client.onErrorHooks(r, resp, err)
 
-	return resp, unwrapNoRetryErr(err)
+	return resp, err
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾

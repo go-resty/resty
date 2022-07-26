@@ -22,7 +22,7 @@ func TestBackoffSuccess(t *testing.T) {
 	retryErr := Backoff(func() (*Response, error) {
 		externalCounter++
 		if externalCounter < attempts {
-			return nil, errors.New("not yet got the number we're after")
+			return nil, wrapTemporaryError(errors.New("not yet got the number we're after"))
 		}
 
 		return nil, nil
@@ -71,7 +71,7 @@ func TestBackoffTenAttemptsSuccess(t *testing.T) {
 	retryErr := Backoff(func() (*Response, error) {
 		externalCounter++
 		if externalCounter < attempts {
-			return nil, errors.New("not yet got the number we're after")
+			return nil, wrapTemporaryError(errors.New("not yet got the number we're after"))
 		}
 		return nil, nil
 	}, Retries(attempts), WaitTime(5), MaxWaitTime(500))

@@ -735,6 +735,45 @@ func TestClientOnResponseError(t *testing.T) {
 	}
 }
 
+func TestWrapExecutor(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	t.Run("abort", func(t *testing.T) {
+		c := dc()
+		c.WrapExecutor(func(req *Request, next Executor) (*Response, error) {
+			return nil, fmt.Errorf("abort")
+		})
+
+		resp, err := c.R().Get(ts.URL)
+		assertNil(t, resp)
+		assertEqual(t, "abort", err.Error())
+	})
+
+	t.Run("noop", func(t *testing.T) {
+		c := dc()
+		c.WrapExecutor(func(req *Request, next Executor) (*Response, error) {
+			return next(req)
+		})
+
+		resp, err := c.R().Get(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, 200, resp.StatusCode())
+	})
+
+	t.Run("add error", func(t *testing.T) {
+		c := dc()
+		c.WrapExecutor(func(req *Request, next Executor) (*Response, error) {
+			resp, _ := next(req)
+			return resp, fmt.Errorf("error")
+		})
+
+		resp, err := c.R().Get(ts.URL)
+		assertEqual(t, "error", err.Error())
+		assertEqual(t, 200, resp.StatusCode())
+	})
+}
+
 func TestResponseError(t *testing.T) {
 	err := errors.New("error message")
 	re := &ResponseError{

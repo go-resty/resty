@@ -6,7 +6,9 @@ package resty
 
 import (
 	"bytes"
+	"errors"
 	"mime/multipart"
+	"net"
 	"testing"
 )
 
@@ -94,4 +96,23 @@ func TestWriteMultipartFormFileReaderError(t *testing.T) {
 	err := writeMultipartFormFile(nil, "", "", &brokenReadCloser{})
 	assertNotNil(t, err)
 	assertEqual(t, "read error", err.Error())
+}
+
+func Test_wrapTemporaryError(t *testing.T) {
+	tests := []struct {
+		name string
+		base error
+		temp bool
+	}{
+		{name: "nil", temp: false},
+		{name: "dns temp", base: &net.DNSError{Err: "err", IsTemporary: true}, temp: true},
+		{name: "dns not temp", base: &net.DNSError{Err: "err"}, temp: false},
+		{name: "other", base: errors.New("foo"), temp: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := wrapTemporaryError(tt.base)
+			assertEqual(t, tt.temp, isTemporaryError(err))
+		})
+	}
 }

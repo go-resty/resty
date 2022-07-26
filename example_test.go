@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"golang.org/x/net/proxy"
@@ -240,4 +241,36 @@ func Example_socks5Proxy() {
 
 func printOutput(resp *resty.Response, err error) {
 	fmt.Println(resp, err)
+}
+
+//
+// Throttling
+//
+
+func ExampleClient_throttling() {
+	// Consider the use of proper throttler, possibly waiting for resources to free up
+	// e.g. https://github.com/throttled/throttled or https://pkg.go.dev/golang.org/x/time/rate
+	var lock sync.Mutex
+	currentConcurrent := 0
+	maxConcurrent := 10
+
+	resty.New().WrapExecutor(func(req *resty.Request, next resty.Executor) (*resty.Response, error) {
+		lock.Lock()
+		current := currentConcurrent
+		if current == maxConcurrent {
+			lock.Unlock()
+			return nil, fmt.Errorf("max concurrency exceeded")
+		}
+
+		current++
+		lock.Unlock()
+
+		defer func() {
+			lock.Lock()
+			current--
+			lock.Unlock()
+		}()
+
+		return next(req)
+	})
 }
