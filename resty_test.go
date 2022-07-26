@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -240,15 +241,13 @@ func createPostServer(t *testing.T) *httptest.Server {
 			handleLoginEndpoint(t, w, r)
 
 			handleUsersEndpoint(t, w, r)
-
-			if r.URL.Path == "/login-json-html" {
+			switch r.URL.Path {
+			case "/login-json-html":
 				w.Header().Set(hdrContentTypeKey, "text/html")
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte(`<htm><body>Test JSON request with HTML response</body></html>`))
 				return
-			}
-
-			if r.URL.Path == "/usersmap" {
+			case "/usersmap":
 				// JSON
 				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
 					if r.URL.Query().Get("status") == "500" {
@@ -287,9 +286,19 @@ func createPostServer(t *testing.T) *httptest.Server {
 
 					return
 				}
-			} else if r.URL.Path == "/redirect" {
+			case "/redirect":
 				w.Header().Set(hdrLocationKey, "/login")
 				w.WriteHeader(http.StatusTemporaryRedirect)
+			case "/redirect-with-body":
+				body, _ := ioutil.ReadAll(r.Body)
+				query := url.Values{}
+				query.Add("body", string(body))
+				w.Header().Set(hdrLocationKey, "/redirected-with-body?"+query.Encode())
+				w.WriteHeader(http.StatusTemporaryRedirect)
+			case "/redirected-with-body":
+				body, _ := ioutil.ReadAll(r.Body)
+				assertEqual(t, r.URL.Query().Get("body"), string(body))
+				w.WriteHeader(http.StatusOK)
 			}
 		}
 	})

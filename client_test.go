@@ -17,6 +17,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -857,4 +858,28 @@ func TestHostURLForGH318AndGH407(t *testing.T) {
 		Post("/login")
 	assertNil(t, err)
 	assertNotNil(t, resp)
+}
+
+func TestPostRedirectWithBody(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	targetURL, _ := url.Parse(ts.URL)
+	t.Log("ts.URL:", ts.URL)
+	t.Log("targetURL.Host:", targetURL.Host)
+
+	c := dc()
+	wg := sync.WaitGroup{}
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := c.R().
+				SetBody([]byte(strconv.Itoa(newRnd().Int()))).
+				Post(targetURL.String() + "/redirect-with-body")
+			assertError(t, err)
+			assertNotNil(t, resp)
+		}()
+	}
+	wg.Wait()
 }
