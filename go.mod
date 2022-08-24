@@ -1,4 +1,4 @@
-module github.com/go-resty/resty/v2
+module github.com/aadog/resty/v2
 
 require (
 	github.com/jinzhu/copier v0.3.5 // indirect
