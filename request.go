@@ -303,7 +303,9 @@ func (r *Request) SetBody(body interface{}) *Request {
 // Accessing a result value from response instance.
 //		response.Result().(*AuthToken)
 func (r *Request) SetResult(res interface{}) *Request {
-	r.Result = getPointer(res)
+	if res != nil {
+		r.Result = getPointer(res)
+	}
 	return r
 }
 

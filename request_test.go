@@ -1891,3 +1891,13 @@ func TestPostBodyError(t *testing.T) {
 	assertEqual(t, "read error", err.Error())
 	assertNil(t, resp)
 }
+
+func TestSetResultMustNotPanicOnNil(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("must not panic")
+		}
+	}()
+	dc().R().SetResult(nil)
+}
+
