@@ -629,6 +629,40 @@ func TestRequestAuthScheme(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
+func TestRequestDigestAuth(t *testing.T) {
+	conf := defaultDigestServerConf()
+	ts := createDigestServer(t, nil)
+	defer ts.Close()
+
+	resp, err := dclr().
+		SetDigestAuth(conf.username, conf.password).
+		SetResult(&AuthSuccess{}).
+		Get(ts.URL + conf.uri)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+}
+
+func TestRequestDigestAuthFail(t *testing.T) {
+	conf := defaultDigestServerConf()
+	ts := createDigestServer(t, nil)
+	defer ts.Close()
+
+	resp, err := dclr().
+		SetDigestAuth(conf.username, "wrongPassword").
+		SetError(AuthError{}).
+		Get(ts.URL + conf.uri)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
+
+	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	logResponse(t, resp)
+}
+
 func TestFormData(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()

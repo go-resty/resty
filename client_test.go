@@ -82,6 +82,76 @@ func TestClientAuthScheme(t *testing.T) {
 
 }
 
+func TestClientDigestAuth(t *testing.T) {
+	conf := defaultDigestServerConf()
+	ts := createDigestServer(t, conf)
+	defer ts.Close()
+
+	c := dc().
+		SetBaseURL(ts.URL+"/").
+		SetDigestAuth(conf.username, conf.password)
+
+	resp, err := c.R().
+		SetResult(&AuthSuccess{}).
+		Get(conf.uri)
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+}
+
+func TestClientDigestSession(t *testing.T) {
+	conf := defaultDigestServerConf()
+	conf.algo = "MD5-sess"
+	ts := createDigestServer(t, conf)
+	defer ts.Close()
+
+	c := dc().
+		SetBaseURL(ts.URL+"/").
+		SetDigestAuth(conf.username, conf.password)
+
+	resp, err := c.R().
+		SetResult(&AuthSuccess{}).
+		Get(conf.uri)
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+}
+
+func TestClientDigestErrors(t *testing.T) {
+	type test struct {
+		mutateConf func(*digestServerConfig)
+		expect     error
+	}
+	tests := []test{
+		{mutateConf: func(c *digestServerConfig) { c.algo = "BAD_ALGO" }, expect: ErrAlgNotSupported},
+		{mutateConf: func(c *digestServerConfig) { c.qop = "bad-qop" }, expect: ErrQopNotSupported},
+		{mutateConf: func(c *digestServerConfig) { c.qop = "" }, expect: ErrNoQop},
+		{mutateConf: func(c *digestServerConfig) { c.charset = "utf-16" }, expect: ErrCharset},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/bad" }, expect: ErrBadChallenge},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/unknown_param" }, expect: ErrBadChallenge},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/no_challenge" }, expect: ErrBadChallenge},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/status_500" }, expect: nil},
+	}
+
+	for _, tc := range tests {
+		conf := defaultDigestServerConf()
+		tc.mutateConf(conf)
+		ts := createDigestServer(t, conf)
+
+		c := dc().
+			SetBaseURL(ts.URL+"/").
+			SetDigestAuth(conf.username, conf.password)
+
+		_, err := c.R().Get(conf.uri)
+		assertErrorIs(t, tc.expect, err)
+		ts.Close()
+	}
+}
+
 func TestOnAfterMiddleware(t *testing.T) {
 	ts := createGenServer(t)
 	defer ts.Close()

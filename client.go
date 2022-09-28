@@ -55,6 +55,8 @@ var (
 	hdrContentLengthKey   = http.CanonicalHeaderKey("Content-Length")
 	hdrContentEncodingKey = http.CanonicalHeaderKey("Content-Encoding")
 	hdrLocationKey        = http.CanonicalHeaderKey("Location")
+	hdrAuthorizationKey   = http.CanonicalHeaderKey("Authorization")
+	hdrWwwAuthenticateKey = http.CanonicalHeaderKey("WWW-Authenticate")
 
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json"
@@ -126,6 +128,7 @@ type Client struct {
 	// value when `SetAuthToken` option is used.
 	HeaderAuthorizationKey string
 
+	digestCredentials   *digestCredentials
 	jsonEscapeHTML      bool
 	setContentLength    bool
 	closeConnection     bool
@@ -396,6 +399,23 @@ func (c *Client) SetAuthToken(token string) *Client {
 // See `Request.SetAuthToken`.
 func (c *Client) SetAuthScheme(scheme string) *Client {
 	c.AuthScheme = scheme
+	return c
+}
+
+// SetDigestAuth method sets the Digest Access auth scheme for the client. If a server responds with 401 and sends
+// a Digest challenge in the WWW-Authenticate Header, requests will be resent with the appropriate Authorization Header.
+//
+// For Example: To set the Digest scheme with user "Mufasa" and password "Circle Of Life"
+//
+//	client.SetDigestAuth("Mufasa", "Circle Of Life")
+//
+// Information about Digest Access Authentication can be found in RFC7616:
+//
+//	https://datatracker.ietf.org/doc/html/rfc7616
+//
+// See `Request.SetDigestAuth`.
+func (c *Client) SetDigestAuth(username, password string) *Client {
+	c.digestCredentials = &digestCredentials{username: username, password: password}
 	return c
 }
 
@@ -1058,6 +1078,16 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	req.RawRequest.Body = newRequestBodyReleaser(req.RawRequest.Body, req.bodyBuf)
+
+	transport := c.httpClient.Transport
+	if req.digestCredentials != nil {
+		c.httpClient.Transport = &digestTransport{digestCredentials: *req.digestCredentials, transport: transport}
+	} else if c.digestCredentials != nil {
+		c.httpClient.Transport = &digestTransport{digestCredentials: *c.digestCredentials, transport: transport}
+	}
+	defer func() {
+		c.httpClient.Transport = transport
+	}()
 
 	req.Time = time.Now()
 	resp, err := c.httpClient.Do(req.RawRequest)

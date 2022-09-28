@@ -50,6 +50,7 @@ type Request struct {
 	// Since v2.4.0
 	Attempt int
 
+	digestCredentials   *digestCredentials
 	isMultiPart         bool
 	isFormData          bool
 	setContentLength    bool
@@ -499,6 +500,25 @@ func (r *Request) SetAuthToken(token string) *Request {
 // This method overrides the Authorization scheme set by method `Client.SetAuthScheme`.
 func (r *Request) SetAuthScheme(scheme string) *Request {
 	r.AuthScheme = scheme
+	return r
+}
+
+// SetDigestAuth method sets the Digest Access auth scheme for the HTTP request. If a server responds with 401 and sends
+// a Digest challenge in the WWW-Authenticate Header, the request will be resent with the appropriate Authorization Header.
+//
+// For Example: To set the Digest scheme with username "Mufasa" and password "Circle Of Life"
+// 		client.R().SetDigestAuth("Mufasa", "Circle Of Life")
+//
+// Information about Digest Access Authentication can be found in RFC7616:
+//     https://datatracker.ietf.org/doc/html/rfc7616
+//
+// This method overrides the username and password set by method `Client.SetDigestAuth`.
+func (r *Request) SetDigestAuth(username, password string) *Request {
+	r.digestCredentials = &digestCredentials{
+		username: username,
+		password: password,
+	}
+
 	return r
 }
 
