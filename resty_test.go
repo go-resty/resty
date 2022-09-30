@@ -448,7 +448,11 @@ func createFilePostServer(t *testing.T) *httptest.Server {
 }
 
 func createAuthServer(t *testing.T) *httptest.Server {
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return createAuthServerTLSOptional(t, true)
+}
+
+func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
@@ -498,9 +502,11 @@ func createAuthServer(t *testing.T) *httptest.Server {
 
 			return
 		}
-	}))
-
-	return ts
+	})
+	if useTLS {
+		return httptest.NewTLSServer(handler)
+	}
+	return httptest.NewServer(handler)
 }
 
 func createGenServer(t *testing.T) *httptest.Server {

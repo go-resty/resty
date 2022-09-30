@@ -65,6 +65,7 @@ type Request struct {
 	client              *Client
 	bodyBuf             *bytes.Buffer
 	clientTrace         *clientTrace
+	log                 Logger
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
@@ -212,7 +213,7 @@ func (r *Request) SetQueryString(query string) *Request {
 			}
 		}
 	} else {
-		r.client.log.Errorf("%v", err)
+		r.log.Errorf("%v", err)
 	}
 	return r
 }
@@ -596,6 +597,15 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 	return r
 }
 
+// SetLogger method sets given writer for logging Resty request and response details.
+// By default, requests and responses inherit their logger from the client.
+//
+// Compliant to interface `resty.Logger`.
+func (r *Request) SetLogger(l Logger) *Request {
+	r.log = l
+	return r
+}
+
 // AddRetryCondition method adds a retry condition function to the request's
 // array of functions that are checked to determine if the request is retried.
 // The request will retry if any of the functions return true and error is nil.
@@ -770,7 +780,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 			resp, err = r.client.execute(r)
 			if err != nil {
-				r.client.log.Errorf("%v, Attempt %v", err, r.Attempt)
+				r.log.Errorf("%v, Attempt %v", err, r.Attempt)
 			}
 
 			return resp, err
