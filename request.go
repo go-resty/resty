@@ -824,6 +824,10 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		RetryHooks(r.client.RetryHooks),
 	)
 
+	if err != nil {
+		r.client.log.Errorf("%v", err)
+	}
+
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
 
 	return resp, unwrapNoRetryErr(err)
