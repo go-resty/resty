@@ -1,0 +1,26 @@
+name: 'Label'
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  build:
+    name: Run Build
+    if: ${{ github.event.label.name == 'run-build' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.18.x'
+
+      - name: Test
+        run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic
+
+      - name: Coverage
+        run: bash <(curl -s https://codecov.io/bash)
