@@ -325,12 +325,22 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 	}
 	// Handles only JSON or XML content type
 	ct := firstNonEmpty(res.Request.forceContentType, res.Header().Get(hdrContentTypeKey), res.Request.fallbackContentType)
-	if IsJSONType(ct) || IsXMLType(ct) {
+	unmarshalType, forceUnmarshalSet := res.Request.forceUnmarshal[ct]
+	if !forceUnmarshalSet {
+		if IsJSONType(ct) {
+			unmarshalType = UnmarshalAsJSON
+		} else if IsXMLType(ct) {
+			unmarshalType = UnmarshalAsXML
+		} else {
+			unmarshalType = UnmarshalSkip
+		}
+	}
+	if unmarshalType != UnmarshalSkip {
 		// HTTP status code > 199 and < 300, considered as Result
 		if res.IsSuccess() {
 			res.Request.Error = nil
 			if res.Request.Result != nil {
-				err = Unmarshalc(c, ct, res.body, res.Request.Result)
+				err = Unmarshal(c, unmarshalType, res.body, res.Request.Result)
 				return
 			}
 		}
@@ -343,7 +353,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 			}
 
 			if res.Request.Error != nil {
-				err = Unmarshalc(c, ct, res.body, res.Request.Error)
+				err = Unmarshal(c, unmarshalType, res.body, res.Request.Error)
 			}
 		}
 	}

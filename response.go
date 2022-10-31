@@ -159,7 +159,7 @@ func (r *Response) fmtBodyString(sl int64) string {
 			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", len(r.body))
 		}
 		ct := r.Header().Get(hdrContentTypeKey)
-		if IsJSONType(ct) {
+		if IsJSONType(ct) || r.Request.forceUnmarshal[ct] == UnmarshalAsJSON {
 			out := acquireBuffer()
 			defer releaseBuffer(out)
 			err := json.Indent(out, r.body, "", "   ")

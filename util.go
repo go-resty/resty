@@ -114,6 +114,17 @@ func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
 	return
 }
 
+// Unmarshal content into object by specified type
+func Unmarshal(c *Client, t UnmarshalType, b []byte, d interface{}) (err error) {
+	if t == UnmarshalAsJSON {
+		err = c.JSONUnmarshal(b, d)
+	} else if t == UnmarshalAsXML {
+		err = c.XMLUnmarshal(b, d)
+	}
+
+	return
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // RequestLog and ResponseLog type
 //_______________________________________________________________________

@@ -30,6 +30,10 @@ type AuthError struct {
 	ID, Message string
 }
 
+type GenServerResponse struct {
+	Response string
+}
+
 func TestGet(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
@@ -376,6 +380,136 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	assertEqual(t, 0, retried)
 
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+
+	logResponse(t, resp)
+}
+
+func TestAddForceUnmarshalRule(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	retried := 0
+	c := dc()
+	c.SetDebug(false)
+	c.SetRetryCount(3)
+	c.SetRetryAfter(RetryAfterFunc(func(*Client, *Response) (time.Duration, error) {
+		retried++
+		return 0, nil
+	}))
+	for _, test := range []struct {
+		requestPath               string
+		forceUnmarshalContentType string
+		forceUnmarshalType        UnmarshalType
+		expectError               bool
+		expectedResponse          *GenServerResponse
+	}{
+		{
+			requestPath:               "/xml",
+			forceUnmarshalContentType: "application/xml",
+			forceUnmarshalType:        UnmarshalAsJSON,
+			expectError:               true,
+			expectedResponse:          &GenServerResponse{Response: ""},
+		},
+		{
+			requestPath:               "/xml",
+			forceUnmarshalContentType: "application/xml",
+			forceUnmarshalType:        UnmarshalAsXML,
+			expectError:               false,
+			expectedResponse:          &GenServerResponse{Response: "XML response"},
+		},
+		{
+			requestPath:               "/json",
+			forceUnmarshalContentType: "application/json; charset=utf-8",
+			forceUnmarshalType:        UnmarshalAsXML,
+			expectError:               true,
+			expectedResponse:          &GenServerResponse{Response: ""},
+		},
+		{
+			requestPath:               "/json",
+			forceUnmarshalContentType: "application/json; charset=utf-8",
+			forceUnmarshalType:        UnmarshalAsJSON,
+			expectError:               false,
+			expectedResponse:          &GenServerResponse{Response: "json response"},
+		},
+		{
+			requestPath:               "/json",
+			forceUnmarshalContentType: "not-matched",
+			forceUnmarshalType:        UnmarshalSkip,
+			expectError:               false,
+			expectedResponse:          &GenServerResponse{Response: "json response"},
+		},
+		{
+			requestPath:               "/xml",
+			forceUnmarshalContentType: "not-matched",
+			forceUnmarshalType:        UnmarshalSkip,
+			expectError:               false,
+			expectedResponse:          &GenServerResponse{Response: "XML response"},
+		},
+		{
+			requestPath:               "/text",
+			forceUnmarshalContentType: "not-matched",
+			forceUnmarshalType:        UnmarshalSkip,
+			expectError:               false,
+			expectedResponse:          &GenServerResponse{},
+		},
+	} {
+		resp, err := c.R().
+			SetResult(&GenServerResponse{}).
+			AddForceUnmarshalRule(test.forceUnmarshalContentType, test.forceUnmarshalType).
+			Put(ts.URL + test.requestPath)
+
+		if test.expectError {
+			assertNotNil(t, err) // expecting error due to incorrect content type rule
+		} else {
+			assertNil(t, err)
+		}
+
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, 0, retried)
+		assertEqual(t, test.expectedResponse, resp.Result().(*GenServerResponse))
+
+		logResponse(t, resp)
+	}
+}
+
+func TestForceContentTypeAndAddForceUnmarshalRule(t *testing.T) {
+	ts := createGenServer(t)
+	defer ts.Close()
+
+	retried := 0
+	c := dc()
+	c.SetDebug(false)
+	c.SetRetryCount(3)
+	c.SetRetryAfter(RetryAfterFunc(func(*Client, *Response) (time.Duration, error) {
+		retried++
+		return 0, nil
+	}))
+
+	resp, err := c.R().
+		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetResult(&GenServerResponse{}).
+		ForceContentType("any-content-type-unmarshal-as-json").
+		AddForceUnmarshalRule("any-content-type-unmarshal-as-json", UnmarshalAsJSON).
+		Put(ts.URL + "/json")
+
+	assertNil(t, err) // Content-Type set as application/xml and unmarshalRule unmarshal as JSON
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, 0, retried)
+	assertEqual(t, &GenServerResponse{Response: "json response"}, resp.Result().(*GenServerResponse))
+
+	logResponse(t, resp)
+
+	resp, err = c.R().
+		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetResult(&GenServerResponse{}).
+		ForceContentType("any-content-type-unmarshal-as-xml").
+		AddForceUnmarshalRule("any-content-type-unmarshal-as-xml", UnmarshalAsXML).
+		Put(ts.URL + "/json")
+
+	assertNotNil(t, err) // forced to unmarshal as XML.
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, 0, retried)
+	assertEqual(t, &GenServerResponse{}, resp.Result().(*GenServerResponse))
 
 	logResponse(t, resp)
 }
@@ -985,12 +1119,12 @@ func TestPutXMLString(t *testing.T) {
 
 	resp, err := dc().R().
 		SetHeaders(map[string]string{hdrContentTypeKey: "application/xml", hdrAcceptKey: "application/xml"}).
-		SetBody(`<?xml version="1.0" encoding="UTF-8"?><Request>XML Content sending to server</Request>`).
+		SetBody(`<?xml version="1.0" encoding="UTF-8"?><Root><Request>XML Content sending to server</Request></Root>`).
 		Put(ts.URL + "/xml")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, `<?xml version="1.0" encoding="UTF-8"?><Response>XML response</Response>`, resp.String())
+	assertEqual(t, `<?xml version="1.0" encoding="UTF-8"?><Root><Response>XML response</Response></Root>`, resp.String())
 }
 
 func TestOnBeforeMiddleware(t *testing.T) {

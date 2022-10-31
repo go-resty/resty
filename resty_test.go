@@ -496,7 +496,7 @@ func createGenServer(t *testing.T) *httptest.Server {
 				_, _ = w.Write([]byte(`{"response":"json response"}`))
 			} else if r.URL.Path == "/xml" {
 				w.Header().Set(hdrContentTypeKey, "application/xml")
-				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Response>XML response</Response>`))
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Root><Response>XML response</Response></Root>`))
 			}
 			return
 		}

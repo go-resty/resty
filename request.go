@@ -60,6 +60,7 @@ type Request struct {
 	outputFile          string
 	fallbackContentType string
 	forceContentType    string
+	forceUnmarshal      map[string]UnmarshalType
 	ctx                 context.Context
 	values              map[string]interface{}
 	client              *Client
@@ -546,6 +547,23 @@ func (r *Request) ExpectContentType(contentType string) *Request {
 // `Request.ForceContentType` is set and the response `Content-Type` is available, `ForceContentType` will win.
 func (r *Request) ForceContentType(contentType string) *Request {
 	r.forceContentType = contentType
+	return r
+}
+
+type UnmarshalType int
+
+const (
+	UnmarshalSkip UnmarshalType = iota
+	UnmarshalAsJSON
+	UnmarshalAsXML
+)
+
+// AddForceUnmarshalRule register automatic unmarshal rule for specific `Content-Type`.
+// Resty consider specified `contentType` as `UnmarshalType`.
+// Decision rule of `Content-Type` is not overrode by `Request.AddForceUnmarshalRule` and `contentType` have
+// to be matched with decided `Content-Type`.
+func (r *Request) AddForceUnmarshalRule(contentType string, unmarshalType UnmarshalType) *Request {
+	r.forceUnmarshal[contentType] = unmarshalType
 	return r
 }
 

@@ -390,6 +390,7 @@ func (c *Client) R() *Request {
 		multipartFields: []*MultipartField{},
 		PathParams:      map[string]string{},
 		jsonEscapeHTML:  true,
+		forceUnmarshal:  map[string]UnmarshalType{},
 	}
 	return r
 }
