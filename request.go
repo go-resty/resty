@@ -50,8 +50,6 @@ type Request struct {
 	// Since v2.4.0
 	Attempt int
 
-	ForceParse string
-
 	isMultiPart         bool
 	isFormData          bool
 	setContentLength    bool
@@ -70,12 +68,6 @@ type Request struct {
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
-}
-
-// SetForceParse force parse to type(json/xml)
-func (r *Request) SetForceParse(tp string) *Request {
-	r.ForceParse = tp
-	return r
 }
 
 // Context method returns the Context if its already set in request
@@ -820,7 +812,9 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 			resp, err = r.client.execute(r)
 			if err != nil {
-				r.client.log.Warnf("%v, Attempt %v", err, r.Attempt)
+				if !r.client.DisableWarn {
+					r.client.log.Warnf("%v, Attempt %v", err, r.Attempt)
+				}
 			}
 
 			return resp, err
