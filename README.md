@@ -117,7 +117,7 @@ The following samples will assist you to become as comfortable as possible with 
 
 ```go
 // Import resty into your code and refer it as `resty`.
-import "github.com/go-resty/resty/v2"
+import "github.com/aadog/resty/v2"
 ```
 
 #### Simple GET
