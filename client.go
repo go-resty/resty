@@ -122,24 +122,26 @@ type Client struct {
 	// value when `SetAuthToken` option is used.
 	HeaderAuthorizationKey string
 
-	jsonEscapeHTML     bool
-	setContentLength   bool
-	closeConnection    bool
-	notParseResponse   bool
-	trace              bool
-	debugBodySizeLimit int64
-	outputDirectory    string
-	scheme             string
-	log                Logger
-	httpClient         *http.Client
-	proxyURL           *url.URL
-	beforeRequest      []RequestMiddleware
-	udBeforeRequest    []RequestMiddleware
-	preReqHook         PreRequestHook
-	afterResponse      []ResponseMiddleware
-	requestLog         RequestLogCallback
-	responseLog        ResponseLogCallback
-	errorHooks         []ErrorHook
+	jsonEscapeHTML      bool
+	setContentLength    bool
+	closeConnection     bool
+	notParseResponse    bool
+	trace               bool
+	debugBodySizeLimit  int64
+	outputDirectory     string
+	scheme              string
+	log                 Logger
+	httpClient          *http.Client
+	proxyURL            *url.URL
+	beforeRequest       []RequestMiddleware
+	udBeforeRequest     []RequestMiddleware
+	udBeforeRequestLock sync.RWMutex
+	preReqHook          PreRequestHook
+	afterResponse       []ResponseMiddleware
+	afterResponseLock   sync.RWMutex
+	requestLog          RequestLogCallback
+	responseLog         ResponseLogCallback
+	errorHooks          []ErrorHook
 }
 
 // User type is to hold an username and password information
@@ -410,7 +412,11 @@ func (c *Client) NewRequest() *Request {
 //				return nil 	// if its success otherwise return error
 //			})
 func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
+	c.udBeforeRequestLock.Lock()
+	defer c.udBeforeRequestLock.Unlock()
+
 	c.udBeforeRequest = append(c.udBeforeRequest, m)
+
 	return c
 }
 
@@ -424,7 +430,11 @@ func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
 //				return nil 	// if its success otherwise return error
 //			})
 func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
+	c.afterResponseLock.Lock()
+	defer c.afterResponseLock.Unlock()
+
 	c.afterResponse = append(c.afterResponse, m)
+
 	return c
 }
 
@@ -893,6 +903,14 @@ func (c *Client) GetClient() *http.Client {
 // Executes method executes the given `Request` object and returns response
 // error.
 func (c *Client) execute(req *Request) (*Response, error) {
+	// Lock the user-defined pre-request hooks.
+	c.udBeforeRequestLock.RLock()
+	defer c.udBeforeRequestLock.RUnlock()
+
+	// Lock the post-request hooks.
+	c.afterResponseLock.RLock()
+	defer c.afterResponseLock.RUnlock()
+
 	// Apply Request middleware
 	var err error
 
