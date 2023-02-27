@@ -369,13 +369,13 @@ import jsoniter "github.com/json-iterator/go"
 
 json := jsoniter.ConfigCompatibleWithStandardLibrary
 
-client := resty.New()
-client.JSONMarshal = json.Marshal
-client.JSONUnmarshal = json.Unmarshal
+client := resty.New().
+    SetJSONMarshaler(json.Marshal).
+    SetJSONUnmarshaler(json.Unmarshal)
 
 // similarly user could do for XML too with -
-client.XMLMarshal
-client.XMLUnmarshal
+client.SetXMLMarshaler(xml.Marshal).
+    SetXMLUnmarshaler(xml.Unmarshal)
 ```
 
 ### Multipart File(s) upload

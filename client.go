@@ -649,6 +649,34 @@ func (c *Client) SetRetryAfter(callback RetryAfterFunc) *Client {
 	return c
 }
 
+// SetJSONMarshaler method sets the JSON marshaler function to marshal the request body.
+// By default, Resty uses `encoding/json` package to marshal the request body.
+func (c *Client) SetJSONMarshaler(marshaler func(v interface{}) ([]byte, error)) *Client {
+	c.JSONMarshal = marshaler
+	return c
+}
+
+// SetJSONUnmarshaler method sets the JSON unmarshaler function to unmarshal the response body.
+// By default, Resty uses `encoding/json` package to unmarshal the response body.
+func (c *Client) SetJSONUnmarshaler(unmarshaler func(data []byte, v interface{}) error) *Client {
+	c.JSONUnmarshal = unmarshaler
+	return c
+}
+
+// SetXMLMarshaler method sets the XML marshaler function to marshal the request body.
+// By default, Resty uses `encoding/xml` package to marshal the request body.
+func (c *Client) SetXMLMarshaler(marshaler func(v interface{}) ([]byte, error)) *Client {
+	c.XMLMarshal = marshaler
+	return c
+}
+
+// SetXMLUnmarshaler method sets the XML unmarshaler function to unmarshal the response body.
+// By default, Resty uses `encoding/xml` package to unmarshal the response body.
+func (c *Client) SetXMLUnmarshaler(unmarshaler func(data []byte, v interface{}) error) *Client {
+	c.XMLUnmarshal = unmarshaler
+	return c
+}
+
 // AddRetryCondition method adds a retry condition function to array of functions
 // that are checked to determine if the request is retried. The request will
 // retry if any of the functions return true and error is nil.
