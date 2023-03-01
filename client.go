@@ -649,7 +649,7 @@ func (c *Client) AddRetryHook(hook OnRetryFunc) *Client {
 //
 // Note: This method overwrites existing `TLSClientConfig`.
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
-	transport, err := c.transport()
+	transport, err := c.Transport()
 	if err != nil {
 		c.log.Errorf("%v", err)
 		return c
@@ -665,7 +665,7 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 //
 // Refer to godoc `http.ProxyFromEnvironment`.
 func (c *Client) SetProxy(proxyURL string) *Client {
-	transport, err := c.transport()
+	transport, err := c.Transport()
 	if err != nil {
 		c.log.Errorf("%v", err)
 		return c
@@ -685,7 +685,7 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 // RemoveProxy method removes the proxy configuration from Resty client
 //		client.RemoveProxy()
 func (c *Client) RemoveProxy() *Client {
-	transport, err := c.transport()
+	transport, err := c.Transport()
 	if err != nil {
 		c.log.Errorf("%v", err)
 		return c
@@ -979,7 +979,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 // getting TLS client config if not exists then create one
 func (c *Client) tlsConfig() (*tls.Config, error) {
-	transport, err := c.transport()
+	transport, err := c.Transport()
 	if err != nil {
 		return nil, err
 	}
@@ -991,7 +991,7 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 
 // Transport method returns `*http.Transport` currently in use or error
 // in case currently used `transport` is not a `*http.Transport`.
-func (c *Client) transport() (*http.Transport, error) {
+func (c *Client) Transport() (*http.Transport, error) {
 	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
 		return transport, nil
 	}
