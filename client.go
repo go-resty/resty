@@ -75,7 +75,7 @@ type (
 	ResponseMiddleware func(*Client, *Response) error
 
 	// PreRequestHook type is for the request hook, called right before the request is sent
-	PreRequestHook func(*Client, *http.Request) error
+	PreRequestHook func(*Client, *Request) error
 
 	// RequestLogCallback type is for request logs, called before the request is logged
 	RequestLogCallback func(*RequestLog) error
@@ -992,7 +992,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	// call pre-request if defined
 	if c.preReqHook != nil {
-		if err = c.preReqHook(c, req.RawRequest); err != nil {
+		if err = c.preReqHook(c, req); err != nil {
 			return nil, wrapNoRetryErr(err)
 		}
 	}
