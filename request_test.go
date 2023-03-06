@@ -551,6 +551,32 @@ func TestRequestBasicAuth(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestRequestInsecureBasicAuth(t *testing.T) {
+	ts := createAuthServerTLSOptional(t, false)
+	defer ts.Close()
+
+	var logBuf bytes.Buffer
+	logger := createLogger()
+	logger.l.SetOutput(&logBuf)
+
+	c := dc()
+	c.SetHostURL(ts.URL)
+
+	resp, err := c.R().
+		SetBasicAuth("myuser", "basicauth").
+		SetResult(&AuthSuccess{}).
+		SetLogger(logger).
+		Post("/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(logBuf.String(), "WARN RESTY Using Basic Auth in HTTP mode is not secure, use HTTPS"))
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+	t.Logf("captured request-level logs: %s", logBuf.String())
+}
+
 func TestRequestBasicAuthFail(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
