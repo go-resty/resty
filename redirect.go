@@ -33,7 +33,8 @@ func (f RedirectPolicyFunc) Apply(req *http.Request, via []*http.Request) error 
 }
 
 // NoRedirectPolicy is used to disable redirects in the HTTP client
-// 		resty.SetRedirectPolicy(NoRedirectPolicy())
+//
+//	resty.SetRedirectPolicy(NoRedirectPolicy())
 func NoRedirectPolicy() RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		return errors.New("auto redirect is disabled")
@@ -41,7 +42,8 @@ func NoRedirectPolicy() RedirectPolicy {
 }
 
 // FlexibleRedirectPolicy is convenient method to create No of redirect policy for HTTP client.
-// 		resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
+//
+//	resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
 func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		if len(via) >= noOfRedirect {
@@ -54,7 +56,8 @@ func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 
 // DomainCheckRedirectPolicy is convenient method to define domain name redirect rule in resty client.
 // Redirect is allowed for only mentioned host in the policy.
-// 		resty.SetRedirectPolicy(DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
+//
+//	resty.SetRedirectPolicy(DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
 func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 	hosts := make(map[string]bool)
 	for _, h := range hostnames {
