@@ -749,9 +749,22 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	var resp *Response
 	var err error
 
+	defer func() {
+		if rec := recover(); rec != nil {
+			if err, ok := rec.(error); ok {
+				r.client.onPanicHooks(r, err)
+			} else {
+				r.client.onPanicHooks(r, fmt.Errorf("panic %v", rec))
+			}
+			panic(rec)
+		}
+	}()
+
 	if r.isMultiPart && !(method == MethodPost || method == MethodPut || method == MethodPatch) {
 		// No OnError hook here since this is a request validation error
-		return nil, fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
+		err := fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
+		r.client.onInvalidHooks(r, err)
+		return nil, err
 	}
 
 	if r.SRV != nil {
@@ -793,7 +806,6 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	)
 
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
-
 	return resp, unwrapNoRetryErr(err)
 }
 

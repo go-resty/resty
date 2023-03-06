@@ -824,6 +824,27 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 		Delete(ts.URL + "/upload")
 
 	assertEqual(t, "multipart content is not allowed in HTTP verb [DELETE]", err.Error())
+
+	var hook1Count int
+	var hook2Count int
+	_, err = dc().
+		OnInvalid(func(r *Request, err error) {
+			assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+			assertNotNil(t, r)
+			hook1Count++
+		}).
+		OnInvalid(func(r *Request, err error) {
+			assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+			assertNotNil(t, r)
+			hook2Count++
+		}).
+		R().
+		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
+		Head(ts.URL + "/upload")
+
+	assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+	assertEqual(t, 1, hook1Count)
+	assertEqual(t, 1, hook2Count)
 }
 
 func TestMultiPartFormData(t *testing.T) {

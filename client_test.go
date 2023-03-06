@@ -654,6 +654,7 @@ func TestClientOnResponseError(t *testing.T) {
 		setup       func(*Client)
 		isError     bool
 		hasResponse bool
+		panics      bool
 	}{
 		{
 			name: "successful_request",
@@ -702,6 +703,28 @@ func TestClientOnResponseError(t *testing.T) {
 			isError:     true,
 			hasResponse: true,
 		},
+		{
+			name: "panic with error",
+			setup: func(client *Client) {
+				client.OnBeforeRequest(func(client *Client, request *Request) error {
+					panic(fmt.Errorf("before request"))
+				})
+			},
+			isError:     false,
+			hasResponse: false,
+			panics:      true,
+		},
+		{
+			name: "panic with string",
+			setup: func(client *Client) {
+				client.OnBeforeRequest(func(client *Client, request *Request) error {
+					panic("before request")
+				})
+			},
+			isError:     false,
+			hasResponse: false,
+			panics:      true,
+		},
 	}
 
 	for _, test := range tests {
@@ -715,7 +738,16 @@ func TestClientOnResponseError(t *testing.T) {
 					assertNotNil(t, v.Err)
 				}
 			}
-			var hook1, hook2 int
+			var hook1, hook2, hook3, hook4, hook5, hook6 int
+			defer func() {
+				if rec := recover(); rec != nil {
+					assertEqual(t, true, test.panics)
+					assertEqual(t, 0, hook1)
+					assertEqual(t, 0, hook3)
+					assertEqual(t, 1, hook5)
+					assertEqual(t, 1, hook6)
+				}
+			}()
 			c := New().outputLogTo(ioutil.Discard).
 				SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 				SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
@@ -734,6 +766,24 @@ func TestClientOnResponseError(t *testing.T) {
 				OnError(func(r *Request, err error) {
 					assertErrorHook(r, err)
 					hook2++
+				}).
+				OnPanic(func(r *Request, err error) {
+					assertErrorHook(r, err)
+					hook5++
+				}).
+				OnPanic(func(r *Request, err error) {
+					assertErrorHook(r, err)
+					hook6++
+				}).
+				OnSuccess(func(c *Client, resp *Response) {
+					assertNotNil(t, c)
+					assertNotNil(t, resp)
+					hook3++
+				}).
+				OnSuccess(func(c *Client, resp *Response) {
+					assertNotNil(t, c)
+					assertNotNil(t, resp)
+					hook4++
 				})
 			if test.setup != nil {
 				test.setup(c)
@@ -743,8 +793,14 @@ func TestClientOnResponseError(t *testing.T) {
 				assertNotNil(t, err)
 				assertEqual(t, 1, hook1)
 				assertEqual(t, 1, hook2)
+				assertEqual(t, 0, hook3)
+				assertEqual(t, 0, hook5)
 			} else {
 				assertError(t, err)
+				assertEqual(t, 0, hook1)
+				assertEqual(t, 1, hook3)
+				assertEqual(t, 1, hook4)
+				assertEqual(t, 0, hook5)
 			}
 		})
 	}
