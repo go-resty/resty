@@ -685,6 +685,25 @@ func TestMultiPartUploadFile(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
+func TestMultiPartUploadFileViaPatch(t *testing.T) {
+	ts := createFormPatchServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
+
+	basePath := getTestDataPath()
+
+	c := dc()
+	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
+
+	resp, err := c.R().
+		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
+		SetContentLength(true).
+		Patch(ts.URL + "/upload")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
 func TestMultiPartUploadFileError(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
