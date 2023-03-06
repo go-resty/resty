@@ -551,6 +551,32 @@ func TestRequestBasicAuth(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestRequestInsecureBasicAuth(t *testing.T) {
+	ts := createAuthServerTLSOptional(t, false)
+	defer ts.Close()
+
+	var logBuf bytes.Buffer
+	logger := createLogger()
+	logger.l.SetOutput(&logBuf)
+
+	c := dc()
+	c.SetHostURL(ts.URL)
+
+	resp, err := c.R().
+		SetBasicAuth("myuser", "basicauth").
+		SetResult(&AuthSuccess{}).
+		SetLogger(logger).
+		Post("/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(logBuf.String(), "WARN RESTY Using Basic Auth in HTTP mode is not secure, use HTTPS"))
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+	t.Logf("captured request-level logs: %s", logBuf.String())
+}
+
 func TestRequestBasicAuthFail(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
@@ -685,6 +711,25 @@ func TestMultiPartUploadFile(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
+func TestMultiPartUploadFileViaPatch(t *testing.T) {
+	ts := createFormPatchServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
+
+	basePath := getTestDataPath()
+
+	c := dc()
+	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
+
+	resp, err := c.R().
+		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
+		SetContentLength(true).
+		Patch(ts.URL + "/upload")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
 func TestMultiPartUploadFileError(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
@@ -779,6 +824,27 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 		Delete(ts.URL + "/upload")
 
 	assertEqual(t, "multipart content is not allowed in HTTP verb [DELETE]", err.Error())
+
+	var hook1Count int
+	var hook2Count int
+	_, err = dc().
+		OnInvalid(func(r *Request, err error) {
+			assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+			assertNotNil(t, r)
+			hook1Count++
+		}).
+		OnInvalid(func(r *Request, err error) {
+			assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+			assertNotNil(t, r)
+			hook2Count++
+		}).
+		R().
+		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
+		Head(ts.URL + "/upload")
+
+	assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+	assertEqual(t, 1, hook1Count)
+	assertEqual(t, 1, hook2Count)
 }
 
 func TestMultiPartFormData(t *testing.T) {
@@ -1872,3 +1938,13 @@ func TestPostBodyError(t *testing.T) {
 	assertEqual(t, "read error", err.Error())
 	assertNil(t, resp)
 }
+
+func TestSetResultMustNotPanicOnNil(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("must not panic")
+		}
+	}()
+	dc().R().SetResult(nil)
+}
+

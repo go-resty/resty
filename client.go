@@ -85,6 +85,9 @@ type (
 
 	// ErrorHook type is for reacting to request errors, called after all retries were attempted
 	ErrorHook func(*Request, error)
+
+	// SuccessHook type is for reacting to request success
+	SuccessHook func(*Client, *Response)
 )
 
 // Client struct is used to create Resty client with client level settings,
@@ -122,26 +125,29 @@ type Client struct {
 	// value when `SetAuthToken` option is used.
 	HeaderAuthorizationKey string
 
-	jsonEscapeHTML      bool
-	setContentLength    bool
-	closeConnection     bool
-	notParseResponse    bool
-	trace               bool
-	debugBodySizeLimit  int64
-	outputDirectory     string
-	scheme              string
-	log                 Logger
-	httpClient          *http.Client
-	proxyURL            *url.URL
-	beforeRequest       []RequestMiddleware
-	udBeforeRequest     []RequestMiddleware
-	udBeforeRequestLock sync.RWMutex
-	preReqHook          PreRequestHook
-	afterResponse       []ResponseMiddleware
-	afterResponseLock   sync.RWMutex
-	requestLog          RequestLogCallback
-	responseLog         ResponseLogCallback
-	errorHooks          []ErrorHook
+	jsonEscapeHTML     bool
+	setContentLength   bool
+	closeConnection    bool
+	notParseResponse   bool
+	trace              bool
+	debugBodySizeLimit int64
+	outputDirectory    string
+	scheme             string
+	log                Logger
+	httpClient         *http.Client
+	proxyURL           *url.URL
+	beforeRequest      []RequestMiddleware
+	udBeforeRequest    []RequestMiddleware
+  udBeforeRequestLock sync.RWMutex
+	preReqHook         PreRequestHook
+	successHooks       []SuccessHook
+	afterResponse      []ResponseMiddleware
+  afterResponseLock   sync.RWMutex
+	requestLog         RequestLogCallback
+	responseLog        ResponseLogCallback
+	errorHooks         []ErrorHook
+	invalidHooks       []ErrorHook
+	panicHooks         []ErrorHook
 }
 
 // User type is to hold an username and password information
@@ -392,6 +398,7 @@ func (c *Client) R() *Request {
 		multipartFields: []*MultipartField{},
 		PathParams:      map[string]string{},
 		jsonEscapeHTML:  true,
+		log:             c.log,
 	}
 	return r
 }
@@ -449,8 +456,43 @@ func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 //			}
 //			// Log the error, increment a metric, etc...
 //		})
+//
+// Out of the OnSuccess, OnError, OnInvalid, OnPanic callbacks, exactly one
+// set will be invoked for each call to Request.Execute() that comletes.
 func (c *Client) OnError(h ErrorHook) *Client {
 	c.errorHooks = append(c.errorHooks, h)
+	return c
+}
+
+// OnSuccess method adds a callback that will be run whenever a request execution
+// succeeds.  This is called after all retries have been attempted (if any).
+//
+// Out of the OnSuccess, OnError, OnInvalid, OnPanic callbacks, exactly one
+// set will be invoked for each call to Request.Execute() that comletes.
+func (c *Client) OnSuccess(h SuccessHook) *Client {
+	c.successHooks = append(c.successHooks, h)
+	return c
+}
+
+// OnInvalid method adds a callback that will be run whever a request execution
+// fails before it starts because the request is invalid.
+//
+// Out of the OnSuccess, OnError, OnInvalid, OnPanic callbacks, exactly one
+// set will be invoked for each call to Request.Execute() that comletes.
+func (c *Client) OnInvalid(h ErrorHook) *Client {
+	c.invalidHooks = append(c.invalidHooks, h)
+	return c
+}
+
+// OnPanic method adds a callback that will be run whever a request execution
+// panics.
+//
+// Out of the OnSuccess, OnError, OnInvalid, OnPanic callbacks, exactly one
+// set will be invoked for each call to Request.Execute() that completes.
+// If an OnSuccess, OnError, or OnInvalid callback panics, then the exactly
+// one rule can be violated.
+func (c *Client) OnPanic(h ErrorHook) *Client {
+	c.panicHooks = append(c.panicHooks, h)
 	return c
 }
 
@@ -1037,7 +1079,7 @@ func (e *ResponseError) Unwrap() error {
 	return e.Err
 }
 
-// Helper to run onErrorHooks hooks.
+// Helper to run errorHooks hooks.
 // It wraps the error in a ResponseError if the resp is not nil
 // so hooks can access it.
 func (c *Client) onErrorHooks(req *Request, resp *Response, err error) {
@@ -1048,6 +1090,24 @@ func (c *Client) onErrorHooks(req *Request, resp *Response, err error) {
 		for _, h := range c.errorHooks {
 			h(req, err)
 		}
+	} else {
+		for _, h := range c.successHooks {
+			h(c, resp)
+		}
+	}
+}
+
+// Helper to run panicHooks hooks.
+func (c *Client) onPanicHooks(req *Request, err error) {
+	for _, h := range c.panicHooks {
+		h(req, err)
+	}
+}
+
+// Helper to run invalidHooks hooks.
+func (c *Client) onInvalidHooks(req *Request, err error) {
+	for _, h := range c.invalidHooks {
+		h(req, err)
 	}
 }
 

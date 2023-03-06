@@ -362,6 +362,54 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
+func createFormPatchServer(t *testing.T) *httptest.Server {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("Method: %v", r.Method)
+		t.Logf("Path: %v", r.URL.Path)
+		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
+
+		if r.Method == MethodPatch {
+			_ = r.ParseMultipartForm(10e6)
+
+			if r.URL.Path == "/upload" {
+				t.Logf("FirstName: %v", r.FormValue("first_name"))
+				t.Logf("LastName: %v", r.FormValue("last_name"))
+
+				targetPath := filepath.Join(getTestDataPath(), "upload")
+				_ = os.MkdirAll(targetPath, 0700)
+
+				for _, fhdrs := range r.MultipartForm.File {
+					for _, hdr := range fhdrs {
+						t.Logf("Name: %v", hdr.Filename)
+						t.Logf("Header: %v", hdr.Header)
+						dotPos := strings.LastIndex(hdr.Filename, ".")
+
+						fname := fmt.Sprintf("%s-%v%s", hdr.Filename[:dotPos], time.Now().Unix(), hdr.Filename[dotPos:])
+						t.Logf("Write name: %v", fname)
+
+						infile, _ := hdr.Open()
+						f, err := os.OpenFile(filepath.Join(targetPath, fname), os.O_WRONLY|os.O_CREATE, 0666)
+						if err != nil {
+							t.Logf("Error: %v", err)
+							return
+						}
+						defer func() {
+							_ = f.Close()
+						}()
+						_, _ = io.Copy(f, infile)
+
+						_, _ = w.Write([]byte(fmt.Sprintf("File: %v, uploaded as: %v\n", hdr.Filename, fname)))
+					}
+				}
+
+				return
+			}
+		}
+	})
+
+	return ts
+}
+
 func createFilePostServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
@@ -400,7 +448,11 @@ func createFilePostServer(t *testing.T) *httptest.Server {
 }
 
 func createAuthServer(t *testing.T) *httptest.Server {
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return createAuthServerTLSOptional(t, true)
+}
+
+func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
@@ -450,9 +502,11 @@ func createAuthServer(t *testing.T) *httptest.Server {
 
 			return
 		}
-	}))
-
-	return ts
+	})
+	if useTLS {
+		return httptest.NewTLSServer(handler)
+	}
+	return httptest.NewServer(handler)
 }
 
 func createGenServer(t *testing.T) *httptest.Server {

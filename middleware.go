@@ -128,7 +128,7 @@ func parseRequestHeader(c *Client, r *Request) error {
 func parseRequestBody(c *Client, r *Request) (err error) {
 	if isPayloadSupported(r.Method, c.AllowGetMethodPayload) {
 		// Handling Multipart
-		if r.isMultiPart && !(r.Method == MethodPatch) {
+		if r.isMultiPart {
 			if err = handleMultipart(c, r); err != nil {
 				return
 			}
@@ -164,9 +164,7 @@ CL:
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
 	if r.bodyBuf == nil {
-		if reader, ok := r.Body.(io.Reader); ok {
-			r.RawRequest, err = http.NewRequest(r.Method, r.URL, reader)
-		} else if c.setContentLength || r.setContentLength {
+		if c.setContentLength || r.setContentLength {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, http.NoBody)
 		} else {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, nil)
@@ -235,7 +233,7 @@ func addCredentials(c *Client, r *Request) error {
 
 	if !c.DisableWarn {
 		if isBasicAuth && !strings.HasPrefix(r.URL, "https") {
-			c.log.Warnf("Using Basic Auth in HTTP mode is not secure, use HTTPS")
+			r.log.Warnf("Using Basic Auth in HTTP mode is not secure, use HTTPS")
 		}
 	}
 
@@ -313,7 +311,7 @@ func responseLogger(c *Client, res *Response) error {
 		}
 		debugLog += "==============================================================================\n"
 
-		c.log.Debugf("%s", debugLog)
+		res.Request.log.Debugf("%s", debugLog)
 	}
 
 	return nil
@@ -442,14 +440,9 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	r.bodyBuf = nil
 
 	if reader, ok := r.Body.(io.Reader); ok {
-		if c.setContentLength || r.setContentLength { // keep backward compatibility
-			r.bodyBuf = acquireBuffer()
-			_, err = r.bodyBuf.ReadFrom(reader)
-			r.Body = nil
-		} else {
-			// Otherwise buffer less processing for `io.Reader`, sounds good.
-			return
-		}
+		r.bodyBuf = acquireBuffer()
+		_, err = r.bodyBuf.ReadFrom(reader)
+		r.Body = nil
 	} else if b, ok := r.Body.([]byte); ok {
 		bodyBytes = b
 	} else if s, ok := r.Body.(string); ok {

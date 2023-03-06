@@ -65,6 +65,7 @@ type Request struct {
 	client              *Client
 	bodyBuf             *bytes.Buffer
 	clientTrace         *clientTrace
+	log                 Logger
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
@@ -212,7 +213,7 @@ func (r *Request) SetQueryString(query string) *Request {
 			}
 		}
 	} else {
-		r.client.log.Errorf("%v", err)
+		r.log.Errorf("%v", err)
 	}
 	return r
 }
@@ -303,7 +304,9 @@ func (r *Request) SetBody(body interface{}) *Request {
 // Accessing a result value from response instance.
 //		response.Result().(*AuthToken)
 func (r *Request) SetResult(res interface{}) *Request {
-	r.Result = getPointer(res)
+	if res != nil {
+		r.Result = getPointer(res)
+	}
 	return r
 }
 
@@ -594,6 +597,15 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 	return r
 }
 
+// SetLogger method sets given writer for logging Resty request and response details.
+// By default, requests and responses inherit their logger from the client.
+//
+// Compliant to interface `resty.Logger`.
+func (r *Request) SetLogger(l Logger) *Request {
+	r.log = l
+	return r
+}
+
 // AddRetryCondition method adds a retry condition function to the request's
 // array of functions that are checked to determine if the request is retried.
 // The request will retry if any of the functions return true and error is nil.
@@ -724,7 +736,7 @@ func (r *Request) Patch(url string) (*Response, error) {
 //      req := client.R()
 //      req.Method = resty.GET
 //      req.URL = "http://httpbin.org/get"
-// 		resp, err := client.R().Send()
+//      resp, err := req.Send()
 func (r *Request) Send() (*Response, error) {
 	return r.Execute(r.Method, r.URL)
 }
@@ -737,9 +749,22 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	var resp *Response
 	var err error
 
+	defer func() {
+		if rec := recover(); rec != nil {
+			if err, ok := rec.(error); ok {
+				r.client.onPanicHooks(r, err)
+			} else {
+				r.client.onPanicHooks(r, fmt.Errorf("panic %v", rec))
+			}
+			panic(rec)
+		}
+	}()
+
 	if r.isMultiPart && !(method == MethodPost || method == MethodPut || method == MethodPatch) {
 		// No OnError hook here since this is a request validation error
-		return nil, fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
+		err := fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
+		r.client.onInvalidHooks(r, err)
+		return nil, err
 	}
 
 	if r.SRV != nil {
@@ -768,7 +793,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 			resp, err = r.client.execute(r)
 			if err != nil {
-				r.client.log.Errorf("%v, Attempt %v", err, r.Attempt)
+				r.log.Errorf("%v, Attempt %v", err, r.Attempt)
 			}
 
 			return resp, err
@@ -781,7 +806,6 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	)
 
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
-
 	return resp, unwrapNoRetryErr(err)
 }
 
