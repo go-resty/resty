@@ -6,6 +6,7 @@ package resty
 
 import (
 	"context"
+	"io"
 	"math"
 	"math/rand"
 	"sync"
@@ -43,6 +44,7 @@ type (
 		maxWaitTime     time.Duration
 		retryConditions []RetryConditionFunc
 		retryHooks      []OnRetryFunc
+		resetReaders    bool
 	}
 )
 
@@ -78,6 +80,14 @@ func RetryConditions(conditions []RetryConditionFunc) Option {
 func RetryHooks(hooks []OnRetryFunc) Option {
 	return func(o *Options) {
 		o.retryHooks = hooks
+	}
+}
+
+// ResetMultipartReaders sets a boolean value which will lead the start being seeked out
+// on all multipart file readers, if they implement io.ReadSeeker
+func ResetMultipartReaders(value bool) Option {
+	return func(o *Options) {
+		o.resetReaders = value
 	}
 }
 
@@ -123,6 +133,12 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 
 		if !needsRetry {
 			return err
+		}
+
+		if opts.resetReaders {
+			if err := resetFileReaders(resp.Request.multipartFiles); err != nil {
+				return err
+			}
 		}
 
 		for _, hook := range opts.retryHooks {
@@ -218,4 +234,16 @@ func newRnd() *rand.Rand {
 	var seed = time.Now().UnixNano()
 	var src = rand.NewSource(seed)
 	return rand.New(src)
+}
+
+func resetFileReaders(files []*File) error {
+	for _, f := range files {
+		if rs, ok := f.Reader.(io.ReadSeeker); ok {
+			if _, err := rs.Seek(0, io.SeekStart); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

@@ -5,9 +5,12 @@
 package resty
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -55,7 +58,7 @@ func TestBackoffNoWaitForLastRetry(t *testing.T) {
 		externalCounter++
 		return resp, nil
 	}, RetryConditions([]RetryConditionFunc{func(response *Response, err error) bool {
-		if externalCounter == attempts + numRetries {
+		if externalCounter == attempts+numRetries {
 			// Backoff returns context canceled if goes to sleep after last retry.
 			cancel()
 		}
@@ -732,4 +735,77 @@ func TestClientRetryHook(t *testing.T) {
 
 func filler(*Response, error) bool {
 	return false
+}
+
+var seekFailure = fmt.Errorf("failing seek test")
+
+type failingSeeker struct {
+	reader *bytes.Reader
+}
+
+func (f failingSeeker) Read(b []byte) (n int, err error) {
+	return f.reader.Read(b)
+}
+
+func (f failingSeeker) Seek(offset int64, whence int) (int64, error) {
+	if offset == 0 && whence == io.SeekStart {
+		return 0, seekFailure
+	}
+
+	return f.reader.Seek(offset, whence)
+}
+
+func TestResetMultipartReaderSeekStartError(t *testing.T) {
+	ts := createFilePostServer(t)
+	defer ts.Close()
+
+	testSeeker := &failingSeeker{
+		bytes.NewReader([]byte("test")),
+	}
+
+	c := dc().
+		SetRetryCount(2).
+		SetTimeout(time.Second * 3).
+		SetRetryResetReaders(true).
+		AddRetryAfterErrorCondition()
+
+	resp, err := c.R().
+		SetFileReader("name", "filename", testSeeker).
+		Post(ts.URL + "/set-reset-multipart-readers-test")
+
+	assertEqual(t, 500, resp.StatusCode())
+	assertEqual(t, err.Error(), seekFailure.Error())
+}
+
+func TestResetMultipartReaders(t *testing.T) {
+	ts := createFilePostServer(t)
+	defer ts.Close()
+
+	str := "test"
+	buf := []byte(str)
+
+	bufReader := bytes.NewReader(buf)
+	bufCpy := make([]byte, len(buf))
+
+	c := dc().
+		SetRetryCount(2).
+		SetTimeout(time.Second * 3).
+		SetRetryResetReaders(true).
+		AddRetryAfterErrorCondition().
+		AddRetryHook(
+			func(response *Response, _ error) {
+				read, err := bufReader.Read(bufCpy)
+
+				assertNil(t, err)
+				assertEqual(t, len(buf), read)
+				assertEqual(t, str, string(bufCpy))
+			},
+		)
+
+	resp, err := c.R().
+		SetFileReader("name", "filename", bufReader).
+		Post(ts.URL + "/set-reset-multipart-readers-test")
+
+	assertEqual(t, 500, resp.StatusCode())
+	assertNil(t, err)
 }

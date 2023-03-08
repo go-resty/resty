@@ -441,6 +441,10 @@ func createFilePostServer(t *testing.T) *httptest.Server {
 			size, _ := io.Copy(f, r.Body)
 
 			fmt.Fprintf(w, "File Uploaded successfully, file size: %v", size)
+		case "/set-reset-multipart-readers-test":
+			w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprintf(w, `{ "message": "error" }`)
 		}
 	})
 

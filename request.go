@@ -847,6 +847,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		MaxWaitTime(r.client.RetryMaxWaitTime),
 		RetryConditions(append(r.retryConditions, r.client.RetryConditions...)),
 		RetryHooks(r.client.RetryHooks),
+		ResetMultipartReaders(r.client.RetryResetReaders),
 	)
 
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
