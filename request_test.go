@@ -10,7 +10,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -84,7 +83,7 @@ func TestGetClientParamRequestParam(t *testing.T) {
 	c.SetQueryParam("client_param", "true").
 		SetQueryParams(map[string]string{"req_1": "jeeva", "req_3": "jeeva3"}).
 		SetDebug(true)
-	c.outputLogTo(ioutil.Discard)
+	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
 		SetQueryParams(map[string]string{"req_1": "req 1 value", "req_2": "req 2 value"}).
@@ -638,7 +637,7 @@ func TestFormData(t *testing.T) {
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
 		SetContentLength(true).
 		SetDebug(true)
-	c.outputLogTo(ioutil.Discard)
+	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
@@ -660,7 +659,7 @@ func TestMultiValueFormData(t *testing.T) {
 
 	c := dc()
 	c.SetContentLength(true).SetDebug(true)
-	c.outputLogTo(ioutil.Discard)
+	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
 		SetQueryParamsFromValues(v).
@@ -680,7 +679,7 @@ func TestFormDataDisableWarn(t *testing.T) {
 		SetContentLength(true).
 		SetDebug(true).
 		SetDisableWarn(true)
-	c.outputLogTo(ioutil.Discard)
+	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
@@ -781,8 +780,8 @@ func TestMultiPartIoReaderFiles(t *testing.T) {
 	defer cleanupFiles(".testdata/upload")
 
 	basePath := getTestDataPath()
-	profileImgBytes, _ := ioutil.ReadFile(filepath.Join(basePath, "test-img.png"))
-	notesBytes, _ := ioutil.ReadFile(filepath.Join(basePath, "text-file.txt"))
+	profileImgBytes, _ := os.ReadFile(filepath.Join(basePath, "test-img.png"))
+	notesBytes, _ := os.ReadFile(filepath.Join(basePath, "text-file.txt"))
 
 	// Just info values
 	file := File{
@@ -1033,7 +1032,7 @@ func TestPutJSONString(t *testing.T) {
 	})
 
 	client.SetDebug(true)
-	client.outputLogTo(ioutil.Discard)
+	client.outputLogTo(io.Discard)
 
 	resp, err := client.R().
 		SetHeaders(map[string]string{hdrContentTypeKey: "application/json; charset=utf-8", hdrAcceptKey: "application/json; charset=utf-8"}).
@@ -1202,9 +1201,7 @@ func TestRawFileUploadByBody(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	file, err := os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
-	assertNil(t, err)
-	fileBytes, err := ioutil.ReadAll(file)
+	fileBytes, err := os.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
 	assertNil(t, err)
 
 	resp, err := dclr().
@@ -1459,7 +1456,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
 		SetOutputDirectory(filepath.Join(getTestDataPath(), "dir-sample")).
 		SetDebug(true)
-	client.outputLogTo(ioutil.Discard)
+	client.outputLogTo(io.Discard)
 
 	resp, err := client.R().
 		SetOutput("go-resty/test-img-success.png").
@@ -1947,4 +1944,3 @@ func TestSetResultMustNotPanicOnNil(t *testing.T) {
 	}()
 	dc().R().SetResult(nil)
 }
-

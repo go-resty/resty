@@ -9,10 +9,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -205,7 +206,7 @@ func TestClientSetRootCertificateNotExists(t *testing.T) {
 
 func TestClientSetRootCertificateFromString(t *testing.T) {
 	client := dc()
-	rootPemData, err := ioutil.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	rootPemData, err := os.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
 	assertNil(t, err)
 
 	client.SetRootCertificateFromString(string(rootPemData))
@@ -218,9 +219,9 @@ func TestClientSetRootCertificateFromString(t *testing.T) {
 
 func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
 	client := NewWithClient(&http.Client{})
-	client.outputLogTo(ioutil.Discard)
+	client.outputLogTo(io.Discard)
 
-	rootPemData, err := ioutil.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	rootPemData, err := os.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
 	assertNil(t, err)
 	rt := &CustomRoundTripper{}
 	client.SetTransport(rt)
@@ -427,7 +428,7 @@ func TestClientPreRequestHook(t *testing.T) {
 		// Reading Request `N` no of times
 		for i := 0; i < 5; i++ {
 			b, _ := r.GetBody()
-			rb, _ := ioutil.ReadAll(b)
+			rb, _ := io.ReadAll(b)
 			c.log.Debugf("%s %v", string(rb), len(rb))
 			assertEqual(t, true, len(rb) >= 45)
 		}
@@ -486,7 +487,7 @@ func TestClientAllowsGetMethodPayloadDisabled(t *testing.T) {
 
 func TestClientRoundTripper(t *testing.T) {
 	c := NewWithClient(&http.Client{})
-	c.outputLogTo(ioutil.Discard)
+	c.outputLogTo(io.Discard)
 
 	rt := &CustomRoundTripper{}
 	c.SetTransport(rt)
@@ -749,7 +750,7 @@ func TestClientOnResponseError(t *testing.T) {
 					assertEqual(t, 1, hook6)
 				}
 			}()
-			c := New().outputLogTo(ioutil.Discard).
+			c := New().outputLogTo(io.Discard).
 				SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 				SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
 				SetRetryCount(0).
