@@ -128,7 +128,6 @@ type Client struct {
 	// value when `SetAuthToken` option is used.
 	HeaderAuthorizationKey string
 
-	digestCredentials   *digestCredentials
 	jsonEscapeHTML      bool
 	setContentLength    bool
 	closeConnection     bool
@@ -415,7 +414,18 @@ func (c *Client) SetAuthScheme(scheme string) *Client {
 //
 // See `Request.SetDigestAuth`.
 func (c *Client) SetDigestAuth(username, password string) *Client {
-	c.digestCredentials = &digestCredentials{username: username, password: password}
+	oldTransport := c.httpClient.Transport
+	c.OnBeforeRequest(func(c *Client, _ *Request) error {
+		c.httpClient.Transport = &digestTransport{
+			digestCredentials: digestCredentials{username, password},
+			transport:         oldTransport,
+		}
+		return nil
+	})
+	c.OnAfterResponse(func(c *Client, _ *Response) error {
+		c.httpClient.Transport = oldTransport
+		return nil
+	})
 	return c
 }
 
@@ -1078,16 +1088,6 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	req.RawRequest.Body = newRequestBodyReleaser(req.RawRequest.Body, req.bodyBuf)
-
-	transport := c.httpClient.Transport
-	if req.digestCredentials != nil {
-		c.httpClient.Transport = &digestTransport{digestCredentials: *req.digestCredentials, transport: transport}
-	} else if c.digestCredentials != nil {
-		c.httpClient.Transport = &digestTransport{digestCredentials: *c.digestCredentials, transport: transport}
-	}
-	defer func() {
-		c.httpClient.Transport = transport
-	}()
 
 	req.Time = time.Now()
 	resp, err := c.httpClient.Do(req.RawRequest)
