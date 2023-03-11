@@ -510,9 +510,8 @@ func TestClientNewRequest(t *testing.T) {
 	assertNotNil(t, request)
 }
 
-
 func TestClientSetJSONMarshaler(t *testing.T) {
-	m := func (v interface{}) ([]byte, error) { return nil,nil }
+	m := func(v interface{}) ([]byte, error) { return nil, nil }
 	c := New().SetJSONMarshaler(m)
 	p1 := fmt.Sprintf("%p", c.JSONMarshal)
 	p2 := fmt.Sprintf("%p", m)
@@ -520,7 +519,7 @@ func TestClientSetJSONMarshaler(t *testing.T) {
 }
 
 func TestClientSetJSONUnmarshaler(t *testing.T) {
-	m := func ([]byte, interface{}) error { return nil }
+	m := func([]byte, interface{}) error { return nil }
 	c := New().SetJSONUnmarshaler(m)
 	p1 := fmt.Sprintf("%p", c.JSONUnmarshal)
 	p2 := fmt.Sprintf("%p", m)
@@ -528,7 +527,7 @@ func TestClientSetJSONUnmarshaler(t *testing.T) {
 }
 
 func TestClientSetXMLMarshaler(t *testing.T) {
-	m := func (v interface{}) ([]byte, error) { return nil,nil }
+	m := func(v interface{}) ([]byte, error) { return nil, nil }
 	c := New().SetXMLMarshaler(m)
 	p1 := fmt.Sprintf("%p", c.XMLMarshal)
 	p2 := fmt.Sprintf("%p", m)
@@ -536,7 +535,7 @@ func TestClientSetXMLMarshaler(t *testing.T) {
 }
 
 func TestClientSetXMLUnmarshaler(t *testing.T) {
-	m := func ([]byte, interface{}) error { return nil }
+	m := func([]byte, interface{}) error { return nil }
 	c := New().SetXMLUnmarshaler(m)
 	p1 := fmt.Sprintf("%p", c.XMLUnmarshal)
 	p2 := fmt.Sprintf("%p", m)

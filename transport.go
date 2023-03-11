@@ -1,3 +1,4 @@
+//go:build go1.13
 // +build go1.13
 
 // Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
