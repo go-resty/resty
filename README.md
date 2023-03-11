@@ -265,7 +265,7 @@ resp, err := client.R().
       Post("https://myapp.com/login")
 
 // POST of raw bytes for file upload. For example: upload file to Dropbox
-fileBytes, _ := ioutil.ReadFile("/Users/jeeva/mydocument.pdf")
+fileBytes, _ := os.ReadFile("/Users/jeeva/mydocument.pdf")
 
 // See we are not setting content-type header, since go-resty automatically detects Content-Type for you
 resp, err := client.R().
@@ -383,8 +383,8 @@ client.SetXMLMarshaler(xml.Marshal).
 #### Using io.Reader
 
 ```go
-profileImgBytes, _ := ioutil.ReadFile("/Users/jeeva/test-img.png")
-notesBytes, _ := ioutil.ReadFile("/Users/jeeva/text-file.txt")
+profileImgBytes, _ := os.ReadFile("/Users/jeeva/test-img.png")
+notesBytes, _ := os.ReadFile("/Users/jeeva/text-file.txt")
 
 // Create a Resty Client
 client := resty.New()

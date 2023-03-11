@@ -7,7 +7,6 @@ package resty_test
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -121,8 +120,7 @@ func Example_post() {
 func Example_dropboxUpload() {
 	// For example: upload file to Dropbox
 	// POST of raw bytes for file upload.
-	file, _ := os.Open("/Users/jeeva/mydocument.pdf")
-	fileBytes, _ := ioutil.ReadAll(file)
+	fileBytes, _ := os.ReadFile("/Users/jeeva/mydocument.pdf")
 
 	// Create a resty client
 	client := resty.New()

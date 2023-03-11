@@ -14,10 +14,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -126,29 +126,29 @@ type Client struct {
 	// value when `SetAuthToken` option is used.
 	HeaderAuthorizationKey string
 
-	jsonEscapeHTML     bool
-	setContentLength   bool
-	closeConnection    bool
-	notParseResponse   bool
-	trace              bool
-	debugBodySizeLimit int64
-	outputDirectory    string
-	scheme             string
-	log                Logger
-	httpClient         *http.Client
-	proxyURL           *url.URL
-	beforeRequest      []RequestMiddleware
-	udBeforeRequest    []RequestMiddleware
-  udBeforeRequestLock sync.RWMutex
-	preReqHook         PreRequestHook
-	successHooks       []SuccessHook
-	afterResponse      []ResponseMiddleware
-  afterResponseLock   sync.RWMutex
-	requestLog         RequestLogCallback
-	responseLog        ResponseLogCallback
-	errorHooks         []ErrorHook
-	invalidHooks       []ErrorHook
-	panicHooks         []ErrorHook
+	jsonEscapeHTML      bool
+	setContentLength    bool
+	closeConnection     bool
+	notParseResponse    bool
+	trace               bool
+	debugBodySizeLimit  int64
+	outputDirectory     string
+	scheme              string
+	log                 Logger
+	httpClient          *http.Client
+	proxyURL            *url.URL
+	beforeRequest       []RequestMiddleware
+	udBeforeRequest     []RequestMiddleware
+	udBeforeRequestLock sync.RWMutex
+	preReqHook          PreRequestHook
+	successHooks        []SuccessHook
+	afterResponse       []ResponseMiddleware
+	afterResponseLock   sync.RWMutex
+	requestLog          RequestLogCallback
+	responseLog         ResponseLogCallback
+	errorHooks          []ErrorHook
+	invalidHooks        []ErrorHook
+	panicHooks          []ErrorHook
 }
 
 // User type is to hold an username and password information
@@ -825,7 +825,7 @@ func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 //
 //	client.SetRootCertificate("/path/to/root/pemFile.pem")
 func (c *Client) SetRootCertificate(pemFilePath string) *Client {
-	rootPemData, err := ioutil.ReadFile(pemFilePath)
+	rootPemData, err := os.ReadFile(pemFilePath)
 	if err != nil {
 		c.log.Errorf("%v", err)
 		return c
@@ -1088,7 +1088,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			}
 		}
 
-		if response.body, err = ioutil.ReadAll(body); err != nil {
+		if response.body, err = io.ReadAll(body); err != nil {
 			response.setReceivedAt()
 			return response, err
 		}

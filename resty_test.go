@@ -11,7 +11,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -100,12 +99,12 @@ func createGetServer(t *testing.T) *httptest.Server {
 				time.Sleep(time.Second * 6)
 				_, _ = w.Write([]byte("TestClientTimeout page"))
 			case "/my-image.png":
-				fileBytes, _ := ioutil.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
+				fileBytes, _ := os.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
 				w.Header().Set("Content-Type", "image/png")
 				w.Header().Set("Content-Length", strconv.Itoa(len(fileBytes)))
 				_, _ = w.Write(fileBytes)
 			case "/get-method-payload-test":
-				body, err := ioutil.ReadAll(r.Body)
+				body, err := io.ReadAll(r.Body)
 				if err != nil {
 					t.Errorf("Error: could not read get body: %s", err.Error())
 				}
@@ -251,7 +250,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 				// JSON
 				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
 					if r.URL.Query().Get("status") == "500" {
-						body, err := ioutil.ReadAll(r.Body)
+						body, err := io.ReadAll(r.Body)
 						if err != nil {
 							t.Errorf("Error: could not read post body: %s", err.Error())
 						}
@@ -290,13 +289,13 @@ func createPostServer(t *testing.T) *httptest.Server {
 				w.Header().Set(hdrLocationKey, "/login")
 				w.WriteHeader(http.StatusTemporaryRedirect)
 			case "/redirect-with-body":
-				body, _ := ioutil.ReadAll(r.Body)
+				body, _ := io.ReadAll(r.Body)
 				query := url.Values{}
 				query.Add("body", string(body))
 				w.Header().Set(hdrLocationKey, "/redirected-with-body?"+query.Encode())
 				w.WriteHeader(http.StatusTemporaryRedirect)
 			case "/redirected-with-body":
-				body, _ := ioutil.ReadAll(r.Body)
+				body, _ := io.ReadAll(r.Body)
 				assertEqual(t, r.URL.Query().Get("body"), string(body))
 				w.WriteHeader(http.StatusOK)
 			}
@@ -582,7 +581,7 @@ func createGenServer(t *testing.T) *httptest.Server {
 		}
 
 		if r.Method == "REPORT" && r.URL.Path == "/report" {
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			if len(body) == 0 {
 				w.WriteHeader(http.StatusOK)
 			}
@@ -628,14 +627,14 @@ func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest
 
 func dc() *Client {
 	c := New().
-		outputLogTo(ioutil.Discard)
+		outputLogTo(io.Discard)
 	return c
 }
 
 func dcl() *Client {
 	c := New().
 		SetDebug(true).
-		outputLogTo(ioutil.Discard)
+		outputLogTo(io.Discard)
 	return c
 }
 
@@ -646,7 +645,7 @@ func dcr() *Request {
 func dclr() *Request {
 	c := dc().
 		SetDebug(true).
-		outputLogTo(ioutil.Discard)
+		outputLogTo(io.Discard)
 	return c.R()
 }
 
