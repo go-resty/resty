@@ -34,6 +34,9 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
+      - name: Format
+        run: diff -u <(echo -n) <(go fmt $(go list ./...))
+
       - name: Test
         run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic
 
