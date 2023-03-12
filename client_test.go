@@ -127,13 +127,13 @@ func TestClientDigestErrors(t *testing.T) {
 		expect     error
 	}
 	tests := []test{
-		{mutateConf: func(c *digestServerConfig) { c.algo = "BAD_ALGO" }, expect: ErrAlgNotSupported},
-		{mutateConf: func(c *digestServerConfig) { c.qop = "bad-qop" }, expect: ErrQopNotSupported},
-		{mutateConf: func(c *digestServerConfig) { c.qop = "" }, expect: ErrNoQop},
-		{mutateConf: func(c *digestServerConfig) { c.charset = "utf-16" }, expect: ErrCharset},
-		{mutateConf: func(c *digestServerConfig) { c.uri = "/bad" }, expect: ErrBadChallenge},
-		{mutateConf: func(c *digestServerConfig) { c.uri = "/unknown_param" }, expect: ErrBadChallenge},
-		{mutateConf: func(c *digestServerConfig) { c.uri = "/no_challenge" }, expect: ErrBadChallenge},
+		{mutateConf: func(c *digestServerConfig) { c.algo = "BAD_ALGO" }, expect: ErrDigestAlgNotSupported},
+		{mutateConf: func(c *digestServerConfig) { c.qop = "bad-qop" }, expect: ErrDigestQopNotSupported},
+		{mutateConf: func(c *digestServerConfig) { c.qop = "" }, expect: ErrDigestNoQop},
+		{mutateConf: func(c *digestServerConfig) { c.charset = "utf-16" }, expect: ErrDigestCharset},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/bad" }, expect: ErrDigestBadChallenge},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/unknown_param" }, expect: ErrDigestBadChallenge},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/no_challenge" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/status_500" }, expect: nil},
 	}
 

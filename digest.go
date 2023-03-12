@@ -14,11 +14,11 @@ import (
 )
 
 var (
-	ErrBadChallenge    = errors.New("challenge is bad")
-	ErrCharset         = errors.New("unsupported charset")
-	ErrAlgNotSupported = errors.New("algorithm is not supported")
-	ErrQopNotSupported = errors.New("no supported qop in list")
-	ErrNoQop           = errors.New("qop must be specified")
+	ErrDigestBadChallenge    = errors.New("digest: challenge is bad")
+	ErrDigestCharset         = errors.New("digest: unsupported charset")
+	ErrDigestAlgNotSupported = errors.New("digest: algorithm is not supported")
+	ErrDigestQopNotSupported = errors.New("digest: no supported qop in list")
+	ErrDigestNoQop           = errors.New("digest: qop must be specified")
 )
 
 var hashFuncs = map[string]func() hash.Hash{
@@ -56,7 +56,7 @@ func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	}
 	chal := resp.Header.Get(hdrWwwAuthenticateKey)
 	if chal == "" {
-		return resp, ErrBadChallenge
+		return resp, ErrDigestBadChallenge
 	}
 
 	c, err := parseChallenge(chal)
@@ -113,7 +113,7 @@ func parseChallenge(input string) (*challenge, error) {
 	const qs = `"`
 	s := strings.Trim(input, ws)
 	if !strings.HasPrefix(s, "Digest ") {
-		return nil, ErrBadChallenge
+		return nil, ErrDigestBadChallenge
 	}
 	s = strings.Trim(s[7:], ws)
 	sl := strings.Split(s, ", ")
@@ -138,12 +138,12 @@ func parseChallenge(input string) (*challenge, error) {
 			c.qop = strings.Trim(r[1], qs)
 		case "charset":
 			if strings.ToUpper(strings.Trim(r[1], qs)) != "UTF-8" {
-				return nil, ErrCharset
+				return nil, ErrDigestCharset
 			}
 		case "userhash":
 			c.userhash = strings.Trim(r[1], qs)
 		default:
-			return nil, ErrBadChallenge
+			return nil, ErrDigestBadChallenge
 		}
 	}
 	return c, nil
@@ -167,7 +167,7 @@ type credentials struct {
 
 func (c *credentials) authorize() (string, error) {
 	if _, ok := hashFuncs[c.algorithm]; !ok {
-		return "", ErrAlgNotSupported
+		return "", ErrDigestAlgNotSupported
 	}
 
 	if err := c.validateQop(); err != nil {
@@ -208,7 +208,7 @@ func (c *credentials) validateQop() error {
 	// NOTE: cURL support auth-int qop for requests other than POST and PUT (i.e. w/o body) by hashing an empty string
 	// is this applicable for resty? see: https://github.com/curl/curl/blob/307b7543ea1e73ab04e062bdbe4b5bb409eaba3a/lib/vauth/digest.c#L774
 	if c.messageQop == "" {
-		return ErrNoQop
+		return ErrDigestNoQop
 	}
 	possibleQops := strings.Split(c.messageQop, ", ")
 	var authSupport bool
@@ -219,7 +219,7 @@ func (c *credentials) validateQop() error {
 		}
 	}
 	if !authSupport {
-		return ErrQopNotSupported
+		return ErrDigestQopNotSupported
 	}
 
 	c.messageQop = "auth"
