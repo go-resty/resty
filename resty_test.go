@@ -6,9 +6,11 @@ package resty
 
 import (
 	"compress/gzip"
+	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -621,6 +623,120 @@ func createRedirectServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
+type digestServerConfig struct {
+	realm, qop, nonce, opaque, algo, uri, charset, username, password string
+}
+
+func defaultDigestServerConf() *digestServerConfig {
+	return &digestServerConfig{
+		realm:    "testrealm@host.com",
+		qop:      "auth",
+		nonce:    "dcd98b7102dd2f0e8b11d0f600bfb0c093",
+		opaque:   "5ccc069c403ebaf9f0171e9517f40e41",
+		algo:     "MD5",
+		uri:      "/dir/index.html",
+		charset:  "utf-8",
+		username: "Mufasa",
+		password: "Circle Of Life",
+	}
+}
+
+func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server {
+	if conf == nil {
+		conf = defaultDigestServerConf()
+	}
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("Method: %v", r.Method)
+		t.Logf("Path: %v", r.URL.Path)
+
+		switch r.URL.Path {
+		case "/bad":
+			w.Header().Set("WWW-Authenticate", "Bad Challenge")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		case "/unknown_param":
+			w.Header().Set("WWW-Authenticate", "Digest unknown_param=true")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		case "/no_challenge":
+			w.Header().Set("WWW-Authenticate", "")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		case "/status_500":
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
+
+		if !authorizationHeaderValid(t, r, conf) {
+			w.Header().Set("WWW-Authenticate",
+				fmt.Sprintf(`Digest realm="%s", domain="%s", qop="%s", algorithm=%s, nonce="%s", opaque="%s", userhash=true, charset=%s, stale=FALSE`,
+					conf.realm, conf.uri, conf.qop, conf.algo, conf.nonce, conf.opaque, conf.charset))
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
+		} else {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
+		}
+	})
+
+	return ts
+}
+
+func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerConfig) bool {
+	h := func(data string) (string, error) {
+		hf := md5.New()
+
+		_, err := io.WriteString(hf, data)
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("%x", hf.Sum(nil)), nil
+	}
+	input := r.Header.Get(hdrAuthorizationKey)
+	if input == "" {
+		return false
+	}
+	const ws = " \n\r\t"
+	const qs = `"`
+	s := strings.Trim(input, ws)
+	assertEqual(t, true, strings.HasPrefix(s, "Digest "))
+	s = strings.Trim(s[7:], ws)
+	sl := strings.Split(s, ", ")
+
+	pairs := make(map[string]string, len(sl))
+	for i := range sl {
+		pair := strings.SplitN(sl[i], "=", 2)
+		pairs[pair[0]] = strings.Trim(pair[1], qs)
+	}
+
+	assertEqual(t, conf.opaque, pairs["opaque"])
+	assertEqual(t, conf.algo, pairs["algorithm"])
+	assertEqual(t, "true", pairs["userhash"])
+
+	userhash, err := h(fmt.Sprintf("%s:%s", conf.username, conf.realm))
+	assertError(t, err)
+	assertEqual(t, userhash, pairs["username"])
+
+	ha1, err := h(fmt.Sprintf("%s:%s:%s", conf.username, conf.realm, conf.password))
+	assertError(t, err)
+	if strings.HasSuffix(conf.algo, "-sess") {
+		ha1, err = h(fmt.Sprintf("%s:%s:%s", ha1, pairs["nonce"], pairs["cnonce"]))
+		assertError(t, err)
+	}
+	ha2, err := h(fmt.Sprintf("%s:%s", r.Method, conf.uri))
+	assertError(t, err)
+	nonceCount, err := strconv.Atoi(pairs["nc"])
+	assertError(t, err)
+	kd, err := h(fmt.Sprintf("%s:%s", ha1, fmt.Sprintf("%s:%08x:%s:%s:%s",
+		pairs["nonce"], nonceCount, pairs["cnonce"], pairs["qop"], ha2)))
+	assertError(t, err)
+
+	return kd == pairs["response"]
+}
+
 func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(fn))
 }
@@ -671,6 +787,14 @@ func assertError(t *testing.T, err error) {
 	if err != nil {
 		t.Errorf("Error occurred [%v]", err)
 	}
+}
+
+func assertErrorIs(t *testing.T, e, g error) (r bool) {
+	if !errors.Is(g, e) {
+		t.Errorf("Expected [%v], got [%v]", e, g)
+	}
+
+	return true
 }
 
 func assertEqual(t *testing.T, e, g interface{}) (r bool) {
