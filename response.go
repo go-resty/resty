@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Response struct and methods
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 // Response struct holds response values of executed request.
 type Response struct {
@@ -144,9 +144,9 @@ func (r *Response) IsError() bool {
 	return r.StatusCode() > 399
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Response Unexported methods
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 func (r *Response) setReceivedAt() {
 	r.receivedAt = time.Now()
@@ -163,6 +163,7 @@ func (r *Response) fmtBodyString(sl int64) string {
 		ct := r.Header().Get(hdrContentTypeKey)
 		if IsJSONType(ct) {
 			out := acquireBuffer()
+			out.Reset()
 			defer releaseBuffer(out)
 			err := json.Indent(out, r.body, "", "   ")
 			if err != nil {

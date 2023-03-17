@@ -21,9 +21,9 @@ import (
 	"sync"
 )
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Logger interface
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 // Logger interface is to abstract the logging from Resty. Gives control to
 // the Resty users, choice of the logger.
@@ -64,9 +64,9 @@ func (l *logger) output(format string, v ...interface{}) {
 	l.l.Printf(format, v...)
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Package Helper methods
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 // IsStringEmpty method tells whether given string is empty or not
 func IsStringEmpty(str string) bool {
@@ -114,9 +114,9 @@ func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
 	return
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // RequestLog and ResponseLog type
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 // RequestLog struct is used to collected information from resty request
 // instance for debug logging. It sent to request log callback before resty
@@ -134,9 +134,9 @@ type ResponseLog struct {
 	Body   string
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Package Unexported methods
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 // way to disable the HTML escape as opt-in
 func jsonMarshal(c *Client, r *Request, d interface{}) (*bytes.Buffer, error) {
@@ -150,6 +150,7 @@ func jsonMarshal(c *Client, r *Request, d interface{}) (*bytes.Buffer, error) {
 	}
 
 	buf := acquireBuffer()
+	buf.Reset()
 	_, _ = buf.Write(data)
 	return buf, nil
 }
@@ -284,7 +285,6 @@ func acquireBuffer() *bytes.Buffer {
 
 func releaseBuffer(buf *bytes.Buffer) {
 	if buf != nil {
-		buf.Reset()
 		bufPool.Put(buf)
 	}
 }

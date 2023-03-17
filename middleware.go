@@ -21,9 +21,9 @@ import (
 
 const debugRequestLogKey = "__restyDebugRequestLog"
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Request Middleware(s)
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 func parseRequestURL(c *Client, r *Request) error {
 	// GitHub #103 Path Params
@@ -282,9 +282,9 @@ func requestLogger(c *Client, r *Request) error {
 	return nil
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Response Middleware(s)
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 func responseLogger(c *Client, res *Response) error {
 	if c.Debug {
@@ -350,6 +350,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 
 func handleMultipart(c *Client, r *Request) (err error) {
 	r.bodyBuf = acquireBuffer()
+	r.bodyBuf.Reset()
 	w := multipart.NewWriter(r.bodyBuf)
 
 	for k, v := range c.FormData {
@@ -440,6 +441,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 
 	if reader, ok := r.Body.(io.Reader); ok {
 		r.bodyBuf = acquireBuffer()
+		r.bodyBuf.Reset()
 		_, err = r.bodyBuf.ReadFrom(reader)
 		r.Body = nil
 	} else if b, ok := r.Body.([]byte); ok {
@@ -471,6 +473,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	// []byte into Buffer
 	if bodyBytes != nil && r.bodyBuf == nil {
 		r.bodyBuf = acquireBuffer()
+		r.bodyBuf.Reset()
 		_, _ = r.bodyBuf.Write(bodyBytes)
 	}
 
@@ -514,6 +517,7 @@ func getBodyCopy(r *Request) (*bytes.Buffer, error) {
 	// If r.bodyBuf present, return the copy
 	if r.bodyBuf != nil {
 		bodyCopy := acquireBuffer()
+		bodyCopy.Reset()
 		if _, err := io.Copy(bodyCopy, bytes.NewReader(r.bodyBuf.Bytes())); err != nil {
 			// cannot use io.Copy(bodyCopy, r.bodyBuf) because io.Copy reset r.bodyBuf
 			return nil, err

@@ -19,9 +19,9 @@ import (
 	"time"
 )
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Request struct and methods
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 // Request struct is used to compose and fire individual request from
 // resty client. Request provides an options to override client level
@@ -689,9 +689,9 @@ func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 	return r
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // HTTP request tracing
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 // EnableTrace method enables trace for the current request
 // using `httptrace.ClientTrace` and provides insights.
@@ -763,9 +763,9 @@ func (r *Request) TraceInfo() TraceInfo {
 	return ti
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // HTTP verb method starts here
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 // Get method does GET HTTP request. It's defined in section 4.3.1 of RFC7231.
 func (r *Request) Get(url string) (*Response, error) {
@@ -883,9 +883,9 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	return resp, unwrapNoRetryErr(err)
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // SRVRecord struct
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 // SRVRecord struct holds the data to query the SRV record for the
 // following service.
@@ -894,9 +894,9 @@ type SRVRecord struct {
 	Domain  string
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Request Unexported methods
-//_______________________________________________________________________
+// _______________________________________________________________________
 
 func (r *Request) fmtBodyString(sl int64) (body string) {
 	body = "***** NO CONTENT *****"
@@ -937,6 +937,7 @@ func (r *Request) fmtBodyString(sl int64) (body string) {
 		if IsJSONType(contentType) {
 			bodyBytes := []byte(b)
 			out := acquireBuffer()
+			out.Reset()
 			defer releaseBuffer(out)
 			if err = json.Indent(out, bodyBytes, "", "   "); err == nil {
 				prtBodyBytes = out.Bytes()
@@ -983,6 +984,7 @@ func (r *Request) initValuesMap() {
 
 var noescapeJSONMarshal = func(v interface{}) (*bytes.Buffer, error) {
 	buf := acquireBuffer()
+	buf.Reset()
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(v); err != nil {

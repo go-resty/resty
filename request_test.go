@@ -1464,7 +1464,7 @@ func TestSetHeaderVerbatim(t *testing.T) {
 		SetHeaderVerbatim("header-lowercase", "value_lowercase").
 		SetHeader("header-lowercase", "value_standard")
 
-	assertEqual(t, "value_lowercase", strings.Join(r.Header["header-lowercase"], "")) //nolint
+	assertEqual(t, "value_lowercase", strings.Join(r.Header["header-lowercase"], "")) // nolint
 	assertEqual(t, "value_standard", r.Header.Get("Header-Lowercase"))
 }
 
@@ -1591,6 +1591,7 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 	assertError(t, err)
 
 	buf := acquireBuffer()
+	buf.Reset()
 	defer releaseBuffer(buf)
 	_, _ = io.Copy(buf, resp.RawBody())
 
