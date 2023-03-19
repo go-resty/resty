@@ -1122,8 +1122,8 @@ func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 
 	_, err := dc().R().Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, true, ("Get /redirect-11: stopped after 10 redirects" == err.Error() ||
-		"Get \"/redirect-11\": stopped after 10 redirects" == err.Error()))
+	assertEqual(t, true, (err.Error() == "Get /redirect-11: stopped after 10 redirects" ||
+		err.Error() == "Get \"/redirect-11\": stopped after 10 redirects"))
 }
 
 func TestHostCheckRedirectPolicy(t *testing.T) {
@@ -1464,7 +1464,8 @@ func TestSetHeaderVerbatim(t *testing.T) {
 		SetHeaderVerbatim("header-lowercase", "value_lowercase").
 		SetHeader("header-lowercase", "value_standard")
 
-	assertEqual(t, "value_lowercase", strings.Join(r.Header["header-lowercase"], "")) //nolint
+	//lint:ignore SA1008 valid one ignore this!
+	assertEqual(t, "value_lowercase", strings.Join(r.Header["header-lowercase"], ""))
 	assertEqual(t, "value_standard", r.Header.Get("Header-Lowercase"))
 }
 

@@ -751,7 +751,7 @@ func filler(*Response, error) bool {
 	return false
 }
 
-var seekFailure = fmt.Errorf("failing seek test")
+var errSeekFailure = fmt.Errorf("failing seek test")
 
 type failingSeeker struct {
 	reader *bytes.Reader
@@ -763,7 +763,7 @@ func (f failingSeeker) Read(b []byte) (n int, err error) {
 
 func (f failingSeeker) Seek(offset int64, whence int) (int64, error) {
 	if offset == 0 && whence == io.SeekStart {
-		return 0, seekFailure
+		return 0, errSeekFailure
 	}
 
 	return f.reader.Seek(offset, whence)
@@ -788,7 +788,7 @@ func TestResetMultipartReaderSeekStartError(t *testing.T) {
 		Post(ts.URL + "/set-reset-multipart-readers-test")
 
 	assertEqual(t, 500, resp.StatusCode())
-	assertEqual(t, err.Error(), seekFailure.Error())
+	assertEqual(t, err.Error(), errSeekFailure.Error())
 }
 
 func TestResetMultipartReaders(t *testing.T) {
