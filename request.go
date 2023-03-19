@@ -930,7 +930,7 @@ func (r *Request) fmtBodyString(sl int64) (body string) {
 	contentType := r.Header.Get(hdrContentTypeKey)
 	kind := kindOf(r.Body)
 	if canJSONMarshal(contentType, kind) {
-		prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
+		prtBodyBytes, err = noescapeJSONMarshalIndent(&r.Body)
 	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
 		prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
 	} else if b, ok := r.Body.(string); ok {
@@ -991,4 +991,19 @@ var noescapeJSONMarshal = func(v interface{}) (*bytes.Buffer, error) {
 	}
 
 	return buf, nil
+}
+
+var noescapeJSONMarshalIndent = func(v interface{}) ([]byte, error) {
+	buf := acquireBuffer()
+	defer releaseBuffer(buf)
+
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "   ")
+
+	if err := encoder.Encode(v); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
