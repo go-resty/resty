@@ -295,6 +295,20 @@ func TestClientRetryWaitMaxInfinite(t *testing.T) {
 	}
 }
 
+func TestClientRetryWaitMaxMinimum(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	const retryMaxWaitTime = time.Nanosecond // minimal duration value
+
+	c := dc().
+		SetRetryCount(1).
+		SetRetryMaxWaitTime(retryMaxWaitTime).
+		AddRetryCondition(func(*Response, error) bool { return true })
+	_, err := c.R().Get(ts.URL + "/set-retrywaittime-test")
+	assertError(t, err)
+}
+
 func TestClientRetryWaitCallbackError(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()

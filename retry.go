@@ -209,6 +209,9 @@ func jitterBackoff(min, max time.Duration, attempt int) time.Duration {
 
 	temp := math.Min(capLevel, base*math.Exp2(float64(attempt)))
 	ri := time.Duration(temp / 2)
+	if ri == 0 {
+		ri = time.Nanosecond
+	}
 	result := randDuration(ri)
 
 	if result < min {
