@@ -932,7 +932,7 @@ func (r *Request) fmtBodyString(sl int64) (body string) {
 	if canJSONMarshal(contentType, kind) {
 		if !r.jsonEscapeHTML || !r.client.jsonEscapeHTML {
 			prtBodyBytes = noescapeJSONMarshalIndent(&r.Body, "", "   ")
-		}else{
+		} else {
 			prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
 		}
 	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
