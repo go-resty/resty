@@ -645,22 +645,27 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 	if conf == nil {
 		conf = defaultDigestServerConf()
 	}
+
+	setWWWAuthHeader := func(w http.ResponseWriter, v string) {
+		w.Header().Set("WWW-Authenticate", v)
+		w.WriteHeader(http.StatusUnauthorized)
+	}
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 
 		switch r.URL.Path {
 		case "/bad":
-			w.Header().Set("WWW-Authenticate", "Bad Challenge")
-			w.WriteHeader(http.StatusUnauthorized)
+			setWWWAuthHeader(w, "Bad Challenge")
 			return
 		case "/unknown_param":
-			w.Header().Set("WWW-Authenticate", "Digest unknown_param=true")
-			w.WriteHeader(http.StatusUnauthorized)
+			setWWWAuthHeader(w, "Digest unknown_param=true")
+			return
+		case "/missing_value":
+			setWWWAuthHeader(w, `Digest realm="hello", domain`)
 			return
 		case "/no_challenge":
-			w.Header().Set("WWW-Authenticate", "")
-			w.WriteHeader(http.StatusUnauthorized)
+			setWWWAuthHeader(w, "")
 			return
 		case "/status_500":
 			w.WriteHeader(http.StatusInternalServerError)
@@ -670,10 +675,9 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 		w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
 		if !authorizationHeaderValid(t, r, conf) {
-			w.Header().Set("WWW-Authenticate",
+			setWWWAuthHeader(w,
 				fmt.Sprintf(`Digest realm="%s", domain="%s", qop="%s", algorithm=%s, nonce="%s", opaque="%s", userhash=true, charset=%s, stale=FALSE`,
 					conf.realm, conf.uri, conf.qop, conf.algo, conf.nonce, conf.opaque, conf.charset))
-			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
 		} else {
 			w.WriteHeader(http.StatusOK)
