@@ -1252,7 +1252,7 @@ func TestRawFileUploadByBody(t *testing.T) {
 func TestProxySetting(t *testing.T) {
 	c := dc()
 
-	transport, err := c.transport()
+	transport, err := c.Transport()
 
 	assertNil(t, err)
 

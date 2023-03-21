@@ -249,7 +249,7 @@ func TestClientSetCertificates(t *testing.T) {
 	client := dc()
 	client.SetCertificates(tls.Certificate{})
 
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	assertNil(t, err)
 	assertEqual(t, 1, len(transport.TLSClientConfig.Certificates))
@@ -259,7 +259,7 @@ func TestClientSetRootCertificate(t *testing.T) {
 	client := dc()
 	client.SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	assertNil(t, err)
 	assertNotNil(t, transport.TLSClientConfig.RootCAs)
@@ -269,7 +269,7 @@ func TestClientSetRootCertificateNotExists(t *testing.T) {
 	client := dc()
 	client.SetRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	assertNil(t, err)
 	assertNil(t, transport.TLSClientConfig)
@@ -282,7 +282,7 @@ func TestClientSetRootCertificateFromString(t *testing.T) {
 
 	client.SetRootCertificateFromString(string(rootPemData))
 
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	assertNil(t, err)
 	assertNotNil(t, transport.TLSClientConfig.RootCAs)
@@ -296,7 +296,7 @@ func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
 	assertNil(t, err)
 	rt := &CustomRoundTripper{}
 	client.SetTransport(rt)
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	client.SetRootCertificateFromString(string(rootPemData))
 
@@ -352,7 +352,7 @@ func TestClientSetTransport(t *testing.T) {
 		},
 	}
 	client.SetTransport(transport)
-	transportInUse, err := client.transport()
+	transportInUse, err := client.Transport()
 
 	assertNil(t, err)
 	assertEqual(t, true, transport == transportInUse)
@@ -451,7 +451,7 @@ func TestClientOptions(t *testing.T) {
 	}
 
 	client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	transport, transportErr := client.transport()
+	transport, transportErr := client.Transport()
 
 	assertNil(t, transportErr)
 	assertEqual(t, true, transport.TLSClientConfig.InsecureSkipVerify)
@@ -565,7 +565,7 @@ func TestClientRoundTripper(t *testing.T) {
 	rt := &CustomRoundTripper{}
 	c.SetTransport(rt)
 
-	ct, err := c.transport()
+	ct, err := c.Transport()
 	assertNotNil(t, err)
 	assertNil(t, ct)
 	assertEqual(t, "current transport is not an *http.Transport instance", err.Error())
