@@ -169,7 +169,9 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, nil)
 		}
 	} else {
-		r.RawRequest, err = http.NewRequest(r.Method, r.URL, r.bodyBuf)
+		// fix data race: must deep copy.
+		bodyBuf := bytes.NewBuffer(append([]byte{}, r.bodyBuf.Bytes()...))
+		r.RawRequest, err = http.NewRequest(r.Method, r.URL, bodyBuf)
 	}
 
 	if err != nil {
