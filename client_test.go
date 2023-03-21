@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -181,13 +181,13 @@ func TestClientRedirectPolicy(t *testing.T) {
 	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(20))
 	_, err := c.R().Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, true, ("Get /redirect-21: stopped after 20 redirects" == err.Error() ||
-		"Get \"/redirect-21\": stopped after 20 redirects" == err.Error()))
+	assertEqual(t, true, (err.Error() == "Get /redirect-21: stopped after 20 redirects" ||
+		err.Error() == "Get \"/redirect-21\": stopped after 20 redirects"))
 
 	c.SetRedirectPolicy(NoRedirectPolicy())
 	_, err = c.R().Get(ts.URL + "/redirect-1")
-	assertEqual(t, true, ("Get /redirect-2: auto redirect is disabled" == err.Error() ||
-		"Get \"/redirect-2\": auto redirect is disabled" == err.Error()))
+	assertEqual(t, true, (err.Error() == "Get /redirect-2: auto redirect is disabled" ||
+		err.Error() == "Get \"/redirect-2\": auto redirect is disabled"))
 }
 
 func TestClientTimeout(t *testing.T) {
@@ -334,7 +334,9 @@ func TestClientSetHeaderVerbatim(t *testing.T) {
 		SetHeaderVerbatim("header-lowercase", "value_lowercase").
 		SetHeader("header-lowercase", "value_standard")
 
-	assertEqual(t, "value_lowercase", strings.Join(c.Header["header-lowercase"], "")) //nolint
+	//lint:ignore SA1008 valid one, so ignore this!
+	unConventionHdrValue := strings.Join(c.Header["header-lowercase"], "")
+	assertEqual(t, "value_lowercase", unConventionHdrValue)
 	assertEqual(t, "value_standard", c.Header.Get("Header-Lowercase"))
 }
 

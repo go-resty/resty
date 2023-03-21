@@ -1,3 +1,9 @@
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com)
+// 2023 Segev Dagan (https://github.com/segevda)
+// All rights reserved.
+// resty source code and usage is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 package resty
 
 import (
