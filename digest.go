@@ -121,6 +121,9 @@ func parseChallenge(input string) (*challenge, error) {
 	var r []string
 	for i := range sl {
 		r = strings.SplitN(sl[i], "=", 2)
+		if len(r) != 2 {
+			return nil, ErrDigestBadChallenge
+		}
 		switch r[0] {
 		case "realm":
 			c.realm = strings.Trim(r[1], qs)
