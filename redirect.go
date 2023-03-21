@@ -12,6 +12,10 @@ import (
 	"strings"
 )
 
+var (
+	ErrAutoRedirectDisabled = errors.New("auto redirect is disabled")
+)
+
 type (
 	// RedirectPolicy to regulate the redirects in the resty client.
 	// Objects implementing the RedirectPolicy interface can be registered as
@@ -37,7 +41,7 @@ func (f RedirectPolicyFunc) Apply(req *http.Request, via []*http.Request) error 
 //	resty.SetRedirectPolicy(NoRedirectPolicy())
 func NoRedirectPolicy() RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
-		return errors.New("auto redirect is disabled")
+		return ErrAutoRedirectDisabled
 	})
 }
 
