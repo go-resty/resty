@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com)
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com)
 // 2016 Andrew Grigorev (https://github.com/ei-grad)
 // All rights reserved.
 // resty source code and usage is governed by a MIT style
@@ -192,6 +192,8 @@ func TestClientRetryWithSetContext(t *testing.T) {
 		SetContext(context.Background()).
 		Get(ts.URL + "/")
 
+	assertNotNil(t, ts)
+	assertNotNil(t, err)
 	assertEqual(t, true, (strings.HasPrefix(err.Error(), "Get "+ts.URL+"/") ||
 		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/\"")))
 }

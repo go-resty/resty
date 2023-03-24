@@ -86,6 +86,8 @@
 
 #### Supported Go Versions
 
+Recommended to use `go1.16` and above.
+
 Initially Resty started supporting `go modules` since `v1.10.0` release.
 
 Starting Resty v2 and higher versions, it fully embraces [go modules](https://github.com/golang/go/wiki/Modules) package release. It requires a Go version capable of understanding `/vN` suffixed imports:
@@ -265,7 +267,7 @@ resp, err := client.R().
       Post("https://myapp.com/login")
 
 // POST of raw bytes for file upload. For example: upload file to Dropbox
-fileBytes, _ := ioutil.ReadFile("/Users/jeeva/mydocument.pdf")
+fileBytes, _ := os.ReadFile("/Users/jeeva/mydocument.pdf")
 
 // See we are not setting content-type header, since go-resty automatically detects Content-Type for you
 resp, err := client.R().
@@ -369,13 +371,13 @@ import jsoniter "github.com/json-iterator/go"
 
 json := jsoniter.ConfigCompatibleWithStandardLibrary
 
-client := resty.New()
-client.JSONMarshal = json.Marshal
-client.JSONUnmarshal = json.Unmarshal
+client := resty.New().
+    SetJSONMarshaler(json.Marshal).
+    SetJSONUnmarshaler(json.Unmarshal)
 
 // similarly user could do for XML too with -
-client.XMLMarshal
-client.XMLUnmarshal
+client.SetXMLMarshaler(xml.Marshal).
+    SetXMLUnmarshaler(xml.Unmarshal)
 ```
 
 ### Multipart File(s) upload
@@ -383,8 +385,8 @@ client.XMLUnmarshal
 #### Using io.Reader
 
 ```go
-profileImgBytes, _ := ioutil.ReadFile("/Users/jeeva/test-img.png")
-notesBytes, _ := ioutil.ReadFile("/Users/jeeva/text-file.txt")
+profileImgBytes, _ := os.ReadFile("/Users/jeeva/test-img.png")
+notesBytes, _ := os.ReadFile("/Users/jeeva/text-file.txt")
 
 // Create a Resty Client
 client := resty.New()

@@ -20,7 +20,7 @@ jobs:
     name: Build
     strategy:
       matrix:
-        go: [ '1.18.x', '1.17.x' ]
+        go: [ '1.20.x', '1.19.x' ]
         os: [ ubuntu-latest ]
 
     runs-on: ${{ matrix.os }}
@@ -33,6 +33,9 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
+
+      - name: Format
+        run: diff -u <(echo -n) <(go fmt $(go list ./...))
 
       - name: Test
         run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic
