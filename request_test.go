@@ -9,7 +9,6 @@ import (
 	"crypto/tls"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -54,30 +53,38 @@ func TestRateLimiter(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
+	// Test a burst with a valid capacity and then a consecutive request that must fail.
+
+	// Allow a rate of 1 every 100 ms but also allow bursts of 10 requests.
 	client := dc().SetRateLimiter(rate.NewLimiter(rate.Every(100*time.Millisecond), 10))
 
-	start := time.Now()
-	for i := 0; i < 21; i++ {
+	// Execute a burst of 10 requests.
+	for i := 0; i < 10; i++ {
 		resp, err := client.R().
-			SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
-			Get(ts.URL + "/")
+			SetQueryParam("request_no", strconv.Itoa(i)).Get(ts.URL + "/")
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, "HTTP/1.1", resp.Proto())
-		assertEqual(t, "200 OK", resp.Status())
-		assertNotNil(t, resp.Body())
-		assertEqual(t, "TestGet: text response", resp.String())
-
-		logResponse(t, resp)
+	}
+	// Next request issued directly should fail because burst of 10 has been consumed.
+	{
+		_, err := client.R().
+			SetQueryParam("request_no", strconv.Itoa(11)).Get(ts.URL + "/")
+		assertErrorIs(t, ErrRateLimitExceeded, err)
 	}
 
-	assertError(t, func() error {
-		dur := time.Now().Sub(start)
-		if dur <= 1*time.Second {
-			return fmt.Errorf("requests executed too fast (%f). rate limiting not working correctly", dur.Seconds())
-		}
-		return nil
-	}())
+	// Test continues request at a valid rate
+
+	// Allow a rate of 1 every ms with no burst.
+	client = dc().SetRateLimiter(rate.NewLimiter(rate.Every(1*time.Millisecond), 1))
+
+	// Sending requests every ms+tiny delta must succeed.
+	for i := 0; i < 100; i++ {
+		resp, err := client.R().
+			SetQueryParam("request_no", strconv.Itoa(i)).Get(ts.URL + "/")
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		time.Sleep(1*time.Millisecond + 100*time.Microsecond)
+	}
 }
 
 func TestIllegalRetryCount(t *testing.T) {
