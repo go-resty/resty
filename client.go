@@ -71,7 +71,7 @@ var (
 
 type (
 	// RequestDumpFunction is used for dump on request level instead on whole client level
-	RequestDumpFunction func(r *Request, sump string)
+	RequestDumpFunction func(r *Request, dump string)
 
 	// RequestMiddleware type is for request middleware, called before a request is sent
 	RequestMiddleware func(*Client, *Request) error
