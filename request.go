@@ -69,6 +69,7 @@ type Request struct {
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
+	requestDumpFunction RequestDumpFunction
 }
 
 // Context method returns the Context if its already set in request
@@ -881,6 +882,11 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
 	return resp, unwrapNoRetryErr(err)
+}
+
+// SetOnRequestDump set the callback to dump request log regardless of client logging
+func (r *Request) SetOnRequestDump(callback RequestDumpFunction) {
+	r.requestDumpFunction = callback
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
