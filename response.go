@@ -93,7 +93,7 @@ func (r *Response) Cookies() []*http.Cookie {
 
 // String method returns the body of the server response as String.
 func (r *Response) String() string {
-	if r.body == nil {
+	if len(r.body) == 0 {
 		return ""
 	}
 	return strings.TrimSpace(string(r.body))
@@ -156,7 +156,7 @@ func (r *Response) setReceivedAt() {
 }
 
 func (r *Response) fmtBodyString(sl int64) string {
-	if r.body != nil {
+	if len(r.body) > 0 {
 		if int64(len(r.body)) > sl {
 			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", len(r.body))
 		}
