@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -6,14 +6,16 @@ package resty
 
 import (
 	"compress/gzip"
+	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -99,12 +101,12 @@ func createGetServer(t *testing.T) *httptest.Server {
 				time.Sleep(time.Second * 6)
 				_, _ = w.Write([]byte("TestClientTimeout page"))
 			case "/my-image.png":
-				fileBytes, _ := ioutil.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
+				fileBytes, _ := os.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
 				w.Header().Set("Content-Type", "image/png")
 				w.Header().Set("Content-Length", strconv.Itoa(len(fileBytes)))
 				_, _ = w.Write(fileBytes)
 			case "/get-method-payload-test":
-				body, err := ioutil.ReadAll(r.Body)
+				body, err := io.ReadAll(r.Body)
 				if err != nil {
 					t.Errorf("Error: could not read get body: %s", err.Error())
 				}
@@ -240,19 +242,17 @@ func createPostServer(t *testing.T) *httptest.Server {
 			handleLoginEndpoint(t, w, r)
 
 			handleUsersEndpoint(t, w, r)
-
-			if r.URL.Path == "/login-json-html" {
+			switch r.URL.Path {
+			case "/login-json-html":
 				w.Header().Set(hdrContentTypeKey, "text/html")
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte(`<htm><body>Test JSON request with HTML response</body></html>`))
 				return
-			}
-
-			if r.URL.Path == "/usersmap" {
+			case "/usersmap":
 				// JSON
 				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
 					if r.URL.Query().Get("status") == "500" {
-						body, err := ioutil.ReadAll(r.Body)
+						body, err := io.ReadAll(r.Body)
 						if err != nil {
 							t.Errorf("Error: could not read post body: %s", err.Error())
 						}
@@ -287,9 +287,19 @@ func createPostServer(t *testing.T) *httptest.Server {
 
 					return
 				}
-			} else if r.URL.Path == "/redirect" {
+			case "/redirect":
 				w.Header().Set(hdrLocationKey, "/login")
 				w.WriteHeader(http.StatusTemporaryRedirect)
+			case "/redirect-with-body":
+				body, _ := io.ReadAll(r.Body)
+				query := url.Values{}
+				query.Add("body", string(body))
+				w.Header().Set(hdrLocationKey, "/redirected-with-body?"+query.Encode())
+				w.WriteHeader(http.StatusTemporaryRedirect)
+			case "/redirected-with-body":
+				body, _ := io.ReadAll(r.Body)
+				assertEqual(t, r.URL.Query().Get("body"), string(body))
+				w.WriteHeader(http.StatusOK)
 			}
 		}
 	})
@@ -362,6 +372,54 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
+func createFormPatchServer(t *testing.T) *httptest.Server {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("Method: %v", r.Method)
+		t.Logf("Path: %v", r.URL.Path)
+		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
+
+		if r.Method == MethodPatch {
+			_ = r.ParseMultipartForm(10e6)
+
+			if r.URL.Path == "/upload" {
+				t.Logf("FirstName: %v", r.FormValue("first_name"))
+				t.Logf("LastName: %v", r.FormValue("last_name"))
+
+				targetPath := filepath.Join(getTestDataPath(), "upload")
+				_ = os.MkdirAll(targetPath, 0700)
+
+				for _, fhdrs := range r.MultipartForm.File {
+					for _, hdr := range fhdrs {
+						t.Logf("Name: %v", hdr.Filename)
+						t.Logf("Header: %v", hdr.Header)
+						dotPos := strings.LastIndex(hdr.Filename, ".")
+
+						fname := fmt.Sprintf("%s-%v%s", hdr.Filename[:dotPos], time.Now().Unix(), hdr.Filename[dotPos:])
+						t.Logf("Write name: %v", fname)
+
+						infile, _ := hdr.Open()
+						f, err := os.OpenFile(filepath.Join(targetPath, fname), os.O_WRONLY|os.O_CREATE, 0666)
+						if err != nil {
+							t.Logf("Error: %v", err)
+							return
+						}
+						defer func() {
+							_ = f.Close()
+						}()
+						_, _ = io.Copy(f, infile)
+
+						_, _ = w.Write([]byte(fmt.Sprintf("File: %v, uploaded as: %v\n", hdr.Filename, fname)))
+					}
+				}
+
+				return
+			}
+		}
+	})
+
+	return ts
+}
+
 func createFilePostServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
@@ -393,6 +451,10 @@ func createFilePostServer(t *testing.T) *httptest.Server {
 			size, _ := io.Copy(f, r.Body)
 
 			fmt.Fprintf(w, "File Uploaded successfully, file size: %v", size)
+		case "/set-reset-multipart-readers-test":
+			w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprintf(w, `{ "message": "error" }`)
 		}
 	})
 
@@ -400,7 +462,11 @@ func createFilePostServer(t *testing.T) *httptest.Server {
 }
 
 func createAuthServer(t *testing.T) *httptest.Server {
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return createAuthServerTLSOptional(t, true)
+}
+
+func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
@@ -450,9 +516,11 @@ func createAuthServer(t *testing.T) *httptest.Server {
 
 			return
 		}
-	}))
-
-	return ts
+	})
+	if useTLS {
+		return httptest.NewTLSServer(handler)
+	}
+	return httptest.NewServer(handler)
 }
 
 func createGenServer(t *testing.T) *httptest.Server {
@@ -515,7 +583,7 @@ func createGenServer(t *testing.T) *httptest.Server {
 		}
 
 		if r.Method == "REPORT" && r.URL.Path == "/report" {
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			if len(body) == 0 {
 				w.WriteHeader(http.StatusOK)
 			}
@@ -555,20 +623,138 @@ func createRedirectServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
+type digestServerConfig struct {
+	realm, qop, nonce, opaque, algo, uri, charset, username, password string
+}
+
+func defaultDigestServerConf() *digestServerConfig {
+	return &digestServerConfig{
+		realm:    "testrealm@host.com",
+		qop:      "auth",
+		nonce:    "dcd98b7102dd2f0e8b11d0f600bfb0c093",
+		opaque:   "5ccc069c403ebaf9f0171e9517f40e41",
+		algo:     "MD5",
+		uri:      "/dir/index.html",
+		charset:  "utf-8",
+		username: "Mufasa",
+		password: "Circle Of Life",
+	}
+}
+
+func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server {
+	if conf == nil {
+		conf = defaultDigestServerConf()
+	}
+
+	setWWWAuthHeader := func(w http.ResponseWriter, v string) {
+		w.Header().Set("WWW-Authenticate", v)
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("Method: %v", r.Method)
+		t.Logf("Path: %v", r.URL.Path)
+
+		switch r.URL.Path {
+		case "/bad":
+			setWWWAuthHeader(w, "Bad Challenge")
+			return
+		case "/unknown_param":
+			setWWWAuthHeader(w, "Digest unknown_param=true")
+			return
+		case "/missing_value":
+			setWWWAuthHeader(w, `Digest realm="hello", domain`)
+			return
+		case "/no_challenge":
+			setWWWAuthHeader(w, "")
+			return
+		case "/status_500":
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
+
+		if !authorizationHeaderValid(t, r, conf) {
+			setWWWAuthHeader(w,
+				fmt.Sprintf(`Digest realm="%s", domain="%s", qop="%s", algorithm=%s, nonce="%s", opaque="%s", userhash=true, charset=%s, stale=FALSE`,
+					conf.realm, conf.uri, conf.qop, conf.algo, conf.nonce, conf.opaque, conf.charset))
+			_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
+		} else {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
+		}
+	})
+
+	return ts
+}
+
+func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerConfig) bool {
+	h := func(data string) (string, error) {
+		hf := md5.New()
+
+		_, err := io.WriteString(hf, data)
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("%x", hf.Sum(nil)), nil
+	}
+	input := r.Header.Get(hdrAuthorizationKey)
+	if input == "" {
+		return false
+	}
+	const ws = " \n\r\t"
+	const qs = `"`
+	s := strings.Trim(input, ws)
+	assertEqual(t, true, strings.HasPrefix(s, "Digest "))
+	s = strings.Trim(s[7:], ws)
+	sl := strings.Split(s, ", ")
+
+	pairs := make(map[string]string, len(sl))
+	for i := range sl {
+		pair := strings.SplitN(sl[i], "=", 2)
+		pairs[pair[0]] = strings.Trim(pair[1], qs)
+	}
+
+	assertEqual(t, conf.opaque, pairs["opaque"])
+	assertEqual(t, conf.algo, pairs["algorithm"])
+	assertEqual(t, "true", pairs["userhash"])
+
+	userhash, err := h(fmt.Sprintf("%s:%s", conf.username, conf.realm))
+	assertError(t, err)
+	assertEqual(t, userhash, pairs["username"])
+
+	ha1, err := h(fmt.Sprintf("%s:%s:%s", conf.username, conf.realm, conf.password))
+	assertError(t, err)
+	if strings.HasSuffix(conf.algo, "-sess") {
+		ha1, err = h(fmt.Sprintf("%s:%s:%s", ha1, pairs["nonce"], pairs["cnonce"]))
+		assertError(t, err)
+	}
+	ha2, err := h(fmt.Sprintf("%s:%s", r.Method, conf.uri))
+	assertError(t, err)
+	nonceCount, err := strconv.Atoi(pairs["nc"])
+	assertError(t, err)
+	kd, err := h(fmt.Sprintf("%s:%s", ha1, fmt.Sprintf("%s:%08x:%s:%s:%s",
+		pairs["nonce"], nonceCount, pairs["cnonce"], pairs["qop"], ha2)))
+	assertError(t, err)
+
+	return kd == pairs["response"]
+}
+
 func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(fn))
 }
 
 func dc() *Client {
 	c := New().
-		outputLogTo(ioutil.Discard)
+		outputLogTo(io.Discard)
 	return c
 }
 
 func dcl() *Client {
 	c := New().
 		SetDebug(true).
-		outputLogTo(ioutil.Discard)
+		outputLogTo(io.Discard)
 	return c
 }
 
@@ -579,7 +765,7 @@ func dcr() *Request {
 func dclr() *Request {
 	c := dc().
 		SetDebug(true).
-		outputLogTo(ioutil.Discard)
+		outputLogTo(io.Discard)
 	return c.R()
 }
 
@@ -605,6 +791,14 @@ func assertError(t *testing.T, err error) {
 	if err != nil {
 		t.Errorf("Error occurred [%v]", err)
 	}
+}
+
+func assertErrorIs(t *testing.T, e, g error) (r bool) {
+	if !errors.Is(g, e) {
+		t.Errorf("Expected [%v], got [%v]", e, g)
+	}
+
+	return true
 }
 
 func assertEqual(t *testing.T, e, g interface{}) (r bool) {

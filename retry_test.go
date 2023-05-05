@@ -1,13 +1,16 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
 package resty
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -55,7 +58,7 @@ func TestBackoffNoWaitForLastRetry(t *testing.T) {
 		externalCounter++
 		return resp, nil
 	}, RetryConditions([]RetryConditionFunc{func(response *Response, err error) bool {
-		if externalCounter == attempts + numRetries {
+		if externalCounter == attempts+numRetries {
 			// Backoff returns context canceled if goes to sleep after last retry.
 			cancel()
 		}
@@ -290,6 +293,20 @@ func TestClientRetryWaitMaxInfinite(t *testing.T) {
 			t.Errorf("Client has slept %f seconds before retry %d", slept.Seconds(), i)
 		}
 	}
+}
+
+func TestClientRetryWaitMaxMinimum(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	const retryMaxWaitTime = time.Nanosecond // minimal duration value
+
+	c := dc().
+		SetRetryCount(1).
+		SetRetryMaxWaitTime(retryMaxWaitTime).
+		AddRetryCondition(func(*Response, error) bool { return true })
+	_, err := c.R().Get(ts.URL + "/set-retrywaittime-test")
+	assertError(t, err)
 }
 
 func TestClientRetryWaitCallbackError(t *testing.T) {
@@ -732,4 +749,77 @@ func TestClientRetryHook(t *testing.T) {
 
 func filler(*Response, error) bool {
 	return false
+}
+
+var errSeekFailure = fmt.Errorf("failing seek test")
+
+type failingSeeker struct {
+	reader *bytes.Reader
+}
+
+func (f failingSeeker) Read(b []byte) (n int, err error) {
+	return f.reader.Read(b)
+}
+
+func (f failingSeeker) Seek(offset int64, whence int) (int64, error) {
+	if offset == 0 && whence == io.SeekStart {
+		return 0, errSeekFailure
+	}
+
+	return f.reader.Seek(offset, whence)
+}
+
+func TestResetMultipartReaderSeekStartError(t *testing.T) {
+	ts := createFilePostServer(t)
+	defer ts.Close()
+
+	testSeeker := &failingSeeker{
+		bytes.NewReader([]byte("test")),
+	}
+
+	c := dc().
+		SetRetryCount(2).
+		SetTimeout(time.Second * 3).
+		SetRetryResetReaders(true).
+		AddRetryAfterErrorCondition()
+
+	resp, err := c.R().
+		SetFileReader("name", "filename", testSeeker).
+		Post(ts.URL + "/set-reset-multipart-readers-test")
+
+	assertEqual(t, 500, resp.StatusCode())
+	assertEqual(t, err.Error(), errSeekFailure.Error())
+}
+
+func TestResetMultipartReaders(t *testing.T) {
+	ts := createFilePostServer(t)
+	defer ts.Close()
+
+	str := "test"
+	buf := []byte(str)
+
+	bufReader := bytes.NewReader(buf)
+	bufCpy := make([]byte, len(buf))
+
+	c := dc().
+		SetRetryCount(2).
+		SetTimeout(time.Second * 3).
+		SetRetryResetReaders(true).
+		AddRetryAfterErrorCondition().
+		AddRetryHook(
+			func(response *Response, _ error) {
+				read, err := bufReader.Read(bufCpy)
+
+				assertNil(t, err)
+				assertEqual(t, len(buf), read)
+				assertEqual(t, str, string(bufCpy))
+			},
+		)
+
+	resp, err := c.R().
+		SetFileReader("name", "filename", bufReader).
+		Post(ts.URL + "/set-reset-multipart-readers-test")
+
+	assertEqual(t, 500, resp.StatusCode())
+	assertNil(t, err)
 }

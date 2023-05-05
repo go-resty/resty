@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -10,7 +10,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -84,7 +83,7 @@ func TestGetClientParamRequestParam(t *testing.T) {
 	c.SetQueryParam("client_param", "true").
 		SetQueryParams(map[string]string{"req_1": "jeeva", "req_3": "jeeva3"}).
 		SetDebug(true)
-	c.outputLogTo(ioutil.Discard)
+	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
 		SetQueryParams(map[string]string{"req_1": "req 1 value", "req_2": "req 2 value"}).
@@ -551,6 +550,32 @@ func TestRequestBasicAuth(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestRequestInsecureBasicAuth(t *testing.T) {
+	ts := createAuthServerTLSOptional(t, false)
+	defer ts.Close()
+
+	var logBuf bytes.Buffer
+	logger := createLogger()
+	logger.l.SetOutput(&logBuf)
+
+	c := dc()
+	c.SetHostURL(ts.URL)
+
+	resp, err := c.R().
+		SetBasicAuth("myuser", "basicauth").
+		SetResult(&AuthSuccess{}).
+		SetLogger(logger).
+		Post("/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(logBuf.String(), "WARN RESTY Using Basic Auth in HTTP mode is not secure, use HTTPS"))
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+	t.Logf("captured request-level logs: %s", logBuf.String())
+}
+
 func TestRequestBasicAuthFail(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
@@ -604,6 +629,40 @@ func TestRequestAuthScheme(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
+func TestRequestDigestAuth(t *testing.T) {
+	conf := defaultDigestServerConf()
+	ts := createDigestServer(t, nil)
+	defer ts.Close()
+
+	resp, err := dclr().
+		SetDigestAuth(conf.username, conf.password).
+		SetResult(&AuthSuccess{}).
+		Get(ts.URL + conf.uri)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+}
+
+func TestRequestDigestAuthFail(t *testing.T) {
+	conf := defaultDigestServerConf()
+	ts := createDigestServer(t, nil)
+	defer ts.Close()
+
+	resp, err := dclr().
+		SetDigestAuth(conf.username, "wrongPassword").
+		SetError(AuthError{}).
+		Get(ts.URL + conf.uri)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
+
+	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	logResponse(t, resp)
+}
+
 func TestFormData(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
@@ -612,7 +671,7 @@ func TestFormData(t *testing.T) {
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
 		SetContentLength(true).
 		SetDebug(true)
-	c.outputLogTo(ioutil.Discard)
+	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
@@ -634,7 +693,7 @@ func TestMultiValueFormData(t *testing.T) {
 
 	c := dc()
 	c.SetContentLength(true).SetDebug(true)
-	c.outputLogTo(ioutil.Discard)
+	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
 		SetQueryParamsFromValues(v).
@@ -654,7 +713,7 @@ func TestFormDataDisableWarn(t *testing.T) {
 		SetContentLength(true).
 		SetDebug(true).
 		SetDisableWarn(true)
-	c.outputLogTo(ioutil.Discard)
+	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
@@ -680,6 +739,25 @@ func TestMultiPartUploadFile(t *testing.T) {
 		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
 		SetContentLength(true).
 		Post(ts.URL + "/upload")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+func TestMultiPartUploadFileViaPatch(t *testing.T) {
+	ts := createFormPatchServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
+
+	basePath := getTestDataPath()
+
+	c := dc()
+	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
+
+	resp, err := c.R().
+		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
+		SetContentLength(true).
+		Patch(ts.URL + "/upload")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -736,8 +814,8 @@ func TestMultiPartIoReaderFiles(t *testing.T) {
 	defer cleanupFiles(".testdata/upload")
 
 	basePath := getTestDataPath()
-	profileImgBytes, _ := ioutil.ReadFile(filepath.Join(basePath, "test-img.png"))
-	notesBytes, _ := ioutil.ReadFile(filepath.Join(basePath, "text-file.txt"))
+	profileImgBytes, _ := os.ReadFile(filepath.Join(basePath, "test-img.png"))
+	notesBytes, _ := os.ReadFile(filepath.Join(basePath, "text-file.txt"))
 
 	// Just info values
 	file := File{
@@ -779,6 +857,27 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 		Delete(ts.URL + "/upload")
 
 	assertEqual(t, "multipart content is not allowed in HTTP verb [DELETE]", err.Error())
+
+	var hook1Count int
+	var hook2Count int
+	_, err = dc().
+		OnInvalid(func(r *Request, err error) {
+			assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+			assertNotNil(t, r)
+			hook1Count++
+		}).
+		OnInvalid(func(r *Request, err error) {
+			assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+			assertNotNil(t, r)
+			hook2Count++
+		}).
+		R().
+		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
+		Head(ts.URL + "/upload")
+
+	assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+	assertEqual(t, 1, hook1Count)
+	assertEqual(t, 1, hook2Count)
 }
 
 func TestMultiPartFormData(t *testing.T) {
@@ -967,7 +1066,7 @@ func TestPutJSONString(t *testing.T) {
 	})
 
 	client.SetDebug(true)
-	client.outputLogTo(ioutil.Discard)
+	client.outputLogTo(io.Discard)
 
 	resp, err := client.R().
 		SetHeaders(map[string]string{hdrContentTypeKey: "application/json; charset=utf-8", hdrAcceptKey: "application/json; charset=utf-8"}).
@@ -1023,8 +1122,8 @@ func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 
 	_, err := dc().R().Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, true, ("Get /redirect-11: stopped after 10 redirects" == err.Error() ||
-		"Get \"/redirect-11\": stopped after 10 redirects" == err.Error()))
+	assertEqual(t, true, (err.Error() == "Get /redirect-11: stopped after 10 redirects" ||
+		err.Error() == "Get \"/redirect-11\": stopped after 10 redirects"))
 }
 
 func TestHostCheckRedirectPolicy(t *testing.T) {
@@ -1136,9 +1235,7 @@ func TestRawFileUploadByBody(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	file, err := os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
-	assertNil(t, err)
-	fileBytes, err := ioutil.ReadAll(file)
+	fileBytes, err := os.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
 	assertNil(t, err)
 
 	resp, err := dclr().
@@ -1155,7 +1252,7 @@ func TestRawFileUploadByBody(t *testing.T) {
 func TestProxySetting(t *testing.T) {
 	c := dc()
 
-	transport, err := c.transport()
+	transport, err := c.Transport()
 
 	assertNil(t, err)
 
@@ -1367,7 +1464,8 @@ func TestSetHeaderVerbatim(t *testing.T) {
 		SetHeaderVerbatim("header-lowercase", "value_lowercase").
 		SetHeader("header-lowercase", "value_standard")
 
-	assertEqual(t, "value_lowercase", strings.Join(r.Header["header-lowercase"], "")) //nolint
+	//lint:ignore SA1008 valid one ignore this!
+	assertEqual(t, "value_lowercase", strings.Join(r.Header["header-lowercase"], ""))
 	assertEqual(t, "value_standard", r.Header.Get("Header-Lowercase"))
 }
 
@@ -1393,7 +1491,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
 		SetOutputDirectory(filepath.Join(getTestDataPath(), "dir-sample")).
 		SetDebug(true)
-	client.outputLogTo(ioutil.Discard)
+	client.outputLogTo(io.Discard)
 
 	resp, err := client.R().
 		SetOutput("go-resty/test-img-success.png").
@@ -1871,4 +1969,13 @@ func TestPostBodyError(t *testing.T) {
 	assertNotNil(t, err)
 	assertEqual(t, "read error", err.Error())
 	assertNil(t, resp)
+}
+
+func TestSetResultMustNotPanicOnNil(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("must not panic")
+		}
+	}()
+	dc().R().SetResult(nil)
 }

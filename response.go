@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -38,6 +38,7 @@ func (r *Response) Body() []byte {
 }
 
 // Status method returns the HTTP status string for the executed request.
+//
 //	Example: 200 OK
 func (r *Response) Status() string {
 	if r.RawResponse == nil {
@@ -47,6 +48,7 @@ func (r *Response) Status() string {
 }
 
 // StatusCode method returns the HTTP status code for the executed request.
+//
 //	Example: 200
 func (r *Response) StatusCode() int {
 	if r.RawResponse == nil {

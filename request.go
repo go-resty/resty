@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -65,6 +65,7 @@ type Request struct {
 	client              *Client
 	bodyBuf             *bytes.Buffer
 	clientTrace         *clientTrace
+	log                 Logger
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
@@ -223,7 +224,7 @@ func (r *Request) SetQueryString(query string) *Request {
 			}
 		}
 	} else {
-		r.client.log.Errorf("%v", err)
+		r.log.Errorf("%v", err)
 	}
 	return r
 }
@@ -324,7 +325,9 @@ func (r *Request) SetBody(body interface{}) *Request {
 //
 //	response.Result().(*AuthToken)
 func (r *Request) SetResult(res interface{}) *Request {
-	r.Result = getPointer(res)
+	if res != nil {
+		r.Result = getPointer(res)
+	}
 	return r
 }
 
@@ -499,6 +502,35 @@ func (r *Request) SetAuthScheme(scheme string) *Request {
 	return r
 }
 
+// SetDigestAuth method sets the Digest Access auth scheme for the HTTP request. If a server responds with 401 and sends
+// a Digest challenge in the WWW-Authenticate Header, the request will be resent with the appropriate Authorization Header.
+//
+// For Example: To set the Digest scheme with username "Mufasa" and password "Circle Of Life"
+//
+//	client.R().SetDigestAuth("Mufasa", "Circle Of Life")
+//
+// Information about Digest Access Authentication can be found in RFC7616:
+//
+//	https://datatracker.ietf.org/doc/html/rfc7616
+//
+// This method overrides the username and password set by method `Client.SetDigestAuth`.
+func (r *Request) SetDigestAuth(username, password string) *Request {
+	oldTransport := r.client.httpClient.Transport
+	r.client.OnBeforeRequest(func(c *Client, _ *Request) error {
+		c.httpClient.Transport = &digestTransport{
+			digestCredentials: digestCredentials{username, password},
+			transport:         oldTransport,
+		}
+		return nil
+	})
+	r.client.OnAfterResponse(func(c *Client, _ *Response) error {
+		c.httpClient.Transport = oldTransport
+		return nil
+	})
+
+	return r
+}
+
 // SetOutput method sets the output file for current HTTP request. Current HTTP response will be
 // saved into given file. It is similar to `curl -o` flag. Absolute path or relative path can be used.
 // If is it relative path then output file goes under the output directory, as mentioned
@@ -636,6 +668,15 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 	return r
 }
 
+// SetLogger method sets given writer for logging Resty request and response details.
+// By default, requests and responses inherit their logger from the client.
+//
+// Compliant to interface `resty.Logger`.
+func (r *Request) SetLogger(l Logger) *Request {
+	r.log = l
+	return r
+}
+
 // AddRetryCondition method adds a retry condition function to the request's
 // array of functions that are checked to determine if the request is retried.
 // The request will retry if any of the functions return true and error is nil.
@@ -764,10 +805,10 @@ func (r *Request) Patch(url string) (*Response, error) {
 // Send method performs the HTTP request using the method and URL already defined
 // for current `Request`.
 //
-//	     req := client.R()
-//	     req.Method = resty.GET
-//	     req.URL = "http://httpbin.org/get"
-//			resp, err := client.R().Send()
+//	req := client.R()
+//	req.Method = resty.GET
+//	req.URL = "http://httpbin.org/get"
+//	resp, err := req.Send()
 func (r *Request) Send() (*Response, error) {
 	return r.Execute(r.Method, r.URL)
 }
@@ -781,9 +822,22 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	var resp *Response
 	var err error
 
+	defer func() {
+		if rec := recover(); rec != nil {
+			if err, ok := rec.(error); ok {
+				r.client.onPanicHooks(r, err)
+			} else {
+				r.client.onPanicHooks(r, fmt.Errorf("panic %v", rec))
+			}
+			panic(rec)
+		}
+	}()
+
 	if r.isMultiPart && !(method == MethodPost || method == MethodPut || method == MethodPatch) {
 		// No OnError hook here since this is a request validation error
-		return nil, fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
+		err := fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
+		r.client.onInvalidHooks(r, err)
+		return nil, err
 	}
 
 	if r.SRV != nil {
@@ -812,7 +866,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 			resp, err = r.client.execute(r)
 			if err != nil {
-				r.client.log.Warnf("%v, Attempt %v", err, r.Attempt)
+				r.log.Warnf("%v, Attempt %v", err, r.Attempt)
 			}
 
 			return resp, err
@@ -822,6 +876,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		MaxWaitTime(r.client.RetryMaxWaitTime),
 		RetryConditions(append(r.retryConditions, r.client.RetryConditions...)),
 		RetryHooks(r.client.RetryHooks),
+		ResetMultipartReaders(r.client.RetryResetReaders),
 	)
 
 	if err != nil {
@@ -829,7 +884,6 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	}
 
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
-
 	return resp, unwrapNoRetryErr(err)
 }
 
@@ -880,7 +934,7 @@ func (r *Request) fmtBodyString(sl int64) (body string) {
 	contentType := r.Header.Get(hdrContentTypeKey)
 	kind := kindOf(r.Body)
 	if canJSONMarshal(contentType, kind) {
-		prtBodyBytes, err = json.MarshalIndent(&r.Body, "", "   ")
+		prtBodyBytes, err = noescapeJSONMarshalIndent(&r.Body)
 	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
 		prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
 	} else if b, ok := r.Body.(string); ok {
@@ -941,4 +995,19 @@ var noescapeJSONMarshal = func(v interface{}) (*bytes.Buffer, error) {
 	}
 
 	return buf, nil
+}
+
+var noescapeJSONMarshalIndent = func(v interface{}) ([]byte, error) {
+	buf := acquireBuffer()
+	defer releaseBuffer(buf)
+
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "   ")
+
+	if err := encoder.Encode(v); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
