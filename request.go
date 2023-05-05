@@ -880,7 +880,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	)
 
 	if err != nil {
-		r.client.log.Errorf("%v", err)
+		r.log.Errorf("%v", err)
 	}
 
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
