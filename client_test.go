@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -133,6 +133,7 @@ func TestClientDigestErrors(t *testing.T) {
 		{mutateConf: func(c *digestServerConfig) { c.charset = "utf-16" }, expect: ErrDigestCharset},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/bad" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/unknown_param" }, expect: ErrDigestBadChallenge},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/missing_value" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/no_challenge" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/status_500" }, expect: nil},
 	}
@@ -180,13 +181,13 @@ func TestClientRedirectPolicy(t *testing.T) {
 	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(20))
 	_, err := c.R().Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, true, ("Get /redirect-21: stopped after 20 redirects" == err.Error() ||
-		"Get \"/redirect-21\": stopped after 20 redirects" == err.Error()))
+	assertEqual(t, true, (err.Error() == "Get /redirect-21: stopped after 20 redirects" ||
+		err.Error() == "Get \"/redirect-21\": stopped after 20 redirects"))
 
 	c.SetRedirectPolicy(NoRedirectPolicy())
 	_, err = c.R().Get(ts.URL + "/redirect-1")
-	assertEqual(t, true, ("Get /redirect-2: auto redirect is disabled" == err.Error() ||
-		"Get \"/redirect-2\": auto redirect is disabled" == err.Error()))
+	assertEqual(t, true, (err.Error() == "Get /redirect-2: auto redirect is disabled" ||
+		err.Error() == "Get \"/redirect-2\": auto redirect is disabled"))
 }
 
 func TestClientTimeout(t *testing.T) {
@@ -248,7 +249,7 @@ func TestClientSetCertificates(t *testing.T) {
 	client := dc()
 	client.SetCertificates(tls.Certificate{})
 
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	assertNil(t, err)
 	assertEqual(t, 1, len(transport.TLSClientConfig.Certificates))
@@ -258,7 +259,7 @@ func TestClientSetRootCertificate(t *testing.T) {
 	client := dc()
 	client.SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	assertNil(t, err)
 	assertNotNil(t, transport.TLSClientConfig.RootCAs)
@@ -268,7 +269,7 @@ func TestClientSetRootCertificateNotExists(t *testing.T) {
 	client := dc()
 	client.SetRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	assertNil(t, err)
 	assertNil(t, transport.TLSClientConfig)
@@ -281,7 +282,7 @@ func TestClientSetRootCertificateFromString(t *testing.T) {
 
 	client.SetRootCertificateFromString(string(rootPemData))
 
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	assertNil(t, err)
 	assertNotNil(t, transport.TLSClientConfig.RootCAs)
@@ -295,7 +296,7 @@ func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
 	assertNil(t, err)
 	rt := &CustomRoundTripper{}
 	client.SetTransport(rt)
-	transport, err := client.transport()
+	transport, err := client.Transport()
 
 	client.SetRootCertificateFromString(string(rootPemData))
 
@@ -333,7 +334,9 @@ func TestClientSetHeaderVerbatim(t *testing.T) {
 		SetHeaderVerbatim("header-lowercase", "value_lowercase").
 		SetHeader("header-lowercase", "value_standard")
 
-	assertEqual(t, "value_lowercase", strings.Join(c.Header["header-lowercase"], "")) //nolint
+	//lint:ignore SA1008 valid one, so ignore this!
+	unConventionHdrValue := strings.Join(c.Header["header-lowercase"], "")
+	assertEqual(t, "value_lowercase", unConventionHdrValue)
 	assertEqual(t, "value_standard", c.Header.Get("Header-Lowercase"))
 }
 
@@ -349,7 +352,7 @@ func TestClientSetTransport(t *testing.T) {
 		},
 	}
 	client.SetTransport(transport)
-	transportInUse, err := client.transport()
+	transportInUse, err := client.Transport()
 
 	assertNil(t, err)
 	assertEqual(t, true, transport == transportInUse)
@@ -448,7 +451,7 @@ func TestClientOptions(t *testing.T) {
 	}
 
 	client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	transport, transportErr := client.transport()
+	transport, transportErr := client.Transport()
 
 	assertNil(t, transportErr)
 	assertEqual(t, true, transport.TLSClientConfig.InsecureSkipVerify)
@@ -562,7 +565,7 @@ func TestClientRoundTripper(t *testing.T) {
 	rt := &CustomRoundTripper{}
 	c.SetTransport(rt)
 
-	ct, err := c.transport()
+	ct, err := c.Transport()
 	assertNotNil(t, err)
 	assertNil(t, ct)
 	assertEqual(t, "current transport is not an *http.Transport instance", err.Error())

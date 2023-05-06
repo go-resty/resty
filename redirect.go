@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -10,6 +10,10 @@ import (
 	"net"
 	"net/http"
 	"strings"
+)
+
+var (
+	ErrAutoRedirectDisabled = errors.New("auto redirect is disabled")
 )
 
 type (
@@ -37,7 +41,7 @@ func (f RedirectPolicyFunc) Apply(req *http.Request, via []*http.Request) error 
 //	resty.SetRedirectPolicy(NoRedirectPolicy())
 func NoRedirectPolicy() RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
-		return errors.New("auto redirect is disabled")
+		return ErrAutoRedirectDisabled
 	})
 }
 

@@ -1,3 +1,9 @@
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com)
+// 2023 Segev Dagan (https://github.com/segevda)
+// All rights reserved.
+// resty source code and usage is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 package resty
 
 import (
@@ -121,6 +127,9 @@ func parseChallenge(input string) (*challenge, error) {
 	var r []string
 	for i := range sl {
 		r = strings.SplitN(sl[i], "=", 2)
+		if len(r) != 2 {
+			return nil, ErrDigestBadChallenge
+		}
 		switch r[0] {
 		case "realm":
 			c.realm = strings.Trim(r[1], qs)
