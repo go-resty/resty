@@ -162,7 +162,6 @@ CL:
 }
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
-	var bodyCopy *bytes.Buffer
 	if r.bodyBuf == nil {
 		if c.setContentLength || r.setContentLength {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, http.NoBody)
@@ -171,7 +170,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		}
 	} else {
 		// deep copy
-		bodyCopy = acquireBuffer()
+		bodyCopy := acquireBuffer()
 		_, err := io.Copy(bodyCopy, bytes.NewReader(r.bodyBuf.Bytes()))
 		if err != nil {
 			return err
@@ -210,19 +209,18 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest = r.RawRequest.WithContext(r.ctx)
 	}
 
-	if bodyCopy == nil {
-		bodyCopy, err = getRawRequestBodyCopy(r)
+	if r.bodyBuf == nil {
+		bodyCopy, err := getRawRequestBodyCopy(r)
 		if err != nil {
 			return err
 		}
-	}
 
-	// assign get body func for the underlying raw request instance
-	r.RawRequest.GetBody = func() (io.ReadCloser, error) {
 		if bodyCopy != nil {
-			return io.NopCloser(bytes.NewReader(bodyCopy.Bytes())), nil
+			// assign get body func for the underlying raw request instance
+			r.RawRequest.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(bodyCopy.Bytes())), nil
+			}
 		}
-		return nil, nil
 	}
 
 	return
