@@ -162,6 +162,7 @@ CL:
 }
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
+	var bodyCopy *bytes.Buffer
 	if r.bodyBuf == nil {
 		if c.setContentLength || r.setContentLength {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, http.NoBody)
@@ -169,9 +170,13 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, nil)
 		}
 	} else {
-		// fix data race: must deep copy.
-		bodyBuf := bytes.NewBuffer(append([]byte{}, r.bodyBuf.Bytes()...))
-		r.RawRequest, err = http.NewRequest(r.Method, r.URL, bodyBuf)
+		// deep copy
+		bodyCopy = acquireBuffer()
+		_, err := io.Copy(bodyCopy, bytes.NewReader(r.bodyBuf.Bytes()))
+		if err != nil {
+			return err
+		}
+		r.RawRequest, err = http.NewRequest(r.Method, r.URL, bodyCopy)
 	}
 
 	if err != nil {
@@ -205,9 +210,11 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		r.RawRequest = r.RawRequest.WithContext(r.ctx)
 	}
 
-	bodyCopy, err := getBodyCopy(r)
-	if err != nil {
-		return err
+	if bodyCopy == nil {
+		bodyCopy, err = getRawRequestBodyCopy(r)
+		if err != nil {
+			return err
+		}
 	}
 
 	// assign get body func for the underlying raw request instance
@@ -512,17 +519,7 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 	return nil
 }
 
-func getBodyCopy(r *Request) (*bytes.Buffer, error) {
-	// If r.bodyBuf present, return the copy
-	if r.bodyBuf != nil {
-		bodyCopy := acquireBuffer()
-		if _, err := io.Copy(bodyCopy, bytes.NewReader(r.bodyBuf.Bytes())); err != nil {
-			// cannot use io.Copy(bodyCopy, r.bodyBuf) because io.Copy reset r.bodyBuf
-			return nil, err
-		}
-		return bodyCopy, nil
-	}
-
+func getRawRequestBodyCopy(r *Request) (*bytes.Buffer, error) {
 	// Maybe body is `io.Reader`.
 	// Note: Resty user have to watchout for large body size of `io.Reader`
 	if r.RawRequest.Body != nil {
