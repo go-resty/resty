@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -209,6 +209,9 @@ func jitterBackoff(min, max time.Duration, attempt int) time.Duration {
 
 	temp := math.Min(capLevel, base*math.Exp2(float64(attempt)))
 	ri := time.Duration(temp / 2)
+	if ri == 0 {
+		ri = time.Nanosecond
+	}
 	result := randDuration(ri)
 
 	if result < min {
