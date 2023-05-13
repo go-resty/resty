@@ -40,7 +40,7 @@
   * Easy to upload one or more file(s) via `multipart/form-data`
     * Auto detects file content type
   * Request URL [Path Params (aka URI Params)](https://pkg.go.dev/github.com/go-resty/resty/v2#Request.SetPathParams)
-  * Backoff Retry Mechanism with retry condition function [reference](retry_test.go)
+  * Backoff Retry Mechanism with retry condition function [reference](https://github.com/go-resty/resty/blob/master/retry_test.go)
   * Resty client HTTP & REST [Request](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.OnBeforeRequest) and [Response](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.OnAfterResponse) middlewares
   * `Request.SetContext` supported
   * Authorization option of `BasicAuth` and `Bearer` token
@@ -726,7 +726,7 @@ status code.
 Multiple retry conditions can be added.
 
 It is also possible to use `resty.Backoff(...)` to get arbitrary retry scenarios
-implemented. [Reference](retry_test.go).
+implemented. [Reference](https://github.com/go-resty/resty/blob/master/retry_test.go).
 
 #### Allow GET request with Payload
 
