@@ -103,6 +103,7 @@ type Client struct {
 	QueryParam            url.Values
 	FormData              url.Values
 	PathParams            map[string]string
+	RawPathParams         map[string]string
 	Header                http.Header
 	UserInfo              *User
 	Token                 string
@@ -441,6 +442,7 @@ func (c *Client) R() *Request {
 		multipartFiles:  []*File{},
 		multipartFields: []*MultipartField{},
 		PathParams:      map[string]string{},
+		RawPathParams:   map[string]string{},
 		jsonEscapeHTML:  true,
 		log:             c.log,
 	}
@@ -964,6 +966,7 @@ func (c *Client) SetDoNotParseResponse(parse bool) *Client {
 //	   Composed URL - /v1/users/sample@sample.com/details
 //
 // It replaces the value of the key while composing the request URL.
+// The value will be escaped using `url.PathEscape` function.
 //
 // Also it can be overridden at request level Path Params options,
 // see `Request.SetPathParam` or `Request.SetPathParams`.
@@ -976,21 +979,73 @@ func (c *Client) SetPathParam(param, value string) *Client {
 // Resty client instance.
 //
 //	client.SetPathParams(map[string]string{
-//	   "userId": "sample@sample.com",
-//	   "subAccountId": "100002",
+//		"userId":       "sample@sample.com",
+//		"subAccountId": "100002",
+//		"path":         "groups/developers",
 //	})
 //
 //	Result:
-//	   URL - /v1/users/{userId}/{subAccountId}/details
-//	   Composed URL - /v1/users/sample@sample.com/100002/details
+//	   URL - /v1/users/{userId}/{subAccountId}/{path}/details
+//	   Composed URL - /v1/users/sample@sample.com/100002/groups%2Fdevelopers/details
 //
 // It replaces the value of the key while composing the request URL.
+// The values will be escaped using `url.PathEscape` function.
 //
 // Also it can be overridden at request level Path Params options,
 // see `Request.SetPathParam` or `Request.SetPathParams`.
 func (c *Client) SetPathParams(params map[string]string) *Client {
 	for p, v := range params {
 		c.SetPathParam(p, v)
+	}
+	return c
+}
+
+// SetRawPathParam method sets single URL path key-value pair in the
+// Resty client instance.
+//
+//	client.SetPathParam("userId", "sample@sample.com")
+//
+//	Result:
+//	   URL - /v1/users/{userId}/details
+//	   Composed URL - /v1/users/sample@sample.com/details
+//
+//	client.SetPathParam("path", "groups/developers")
+//
+//	Result:
+//	   URL - /v1/users/{userId}/details
+//	   Composed URL - /v1/users/groups%2Fdevelopers/details
+//
+// It replaces the value of the key while composing the request URL.
+// The value will be used as it is and will not be escaped.
+//
+// Also it can be overridden at request level Path Params options,
+// see `Request.SetPathParam` or `Request.SetPathParams`.
+func (c *Client) SetRawPathParam(param, value string) *Client {
+	c.RawPathParams[param] = value
+	return c
+}
+
+// SetRawPathParams method sets multiple URL path key-value pairs at one go in the
+// Resty client instance.
+//
+//	client.SetPathParams(map[string]string{
+//		"userId":       "sample@sample.com",
+//		"subAccountId": "100002",
+//		"path":         "groups/developers",
+//	})
+//
+//	Result:
+//	   URL - /v1/users/{userId}/{subAccountId}/{path}/details
+//	   Composed URL - /v1/users/sample@sample.com/100002/groups/developers/details
+//
+// It replaces the value of the key while composing the request URL.
+// The values will be used as they are and will not be escaped.
+//
+// Also it can be overridden at request level Path Params options,
+// see `Request.SetPathParam` or `Request.SetPathParams`.
+func (c *Client) SetRawPathParams(params map[string]string) *Client {
+	for p, v := range params {
+		c.SetRawPathParam(p, v)
 	}
 	return c
 }
@@ -1257,6 +1312,7 @@ func createClient(hc *http.Client) *Client {
 		RetryWaitTime:          defaultWaitTime,
 		RetryMaxWaitTime:       defaultMaxWaitTime,
 		PathParams:             make(map[string]string),
+		RawPathParams:          make(map[string]string),
 		JSONMarshal:            json.Marshal,
 		JSONUnmarshal:          json.Unmarshal,
 		XMLMarshal:             xml.Marshal,

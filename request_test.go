@@ -1636,7 +1636,7 @@ func TestGetPathParamAndPathParams(t *testing.T) {
 	defer ts.Close()
 
 	c := dc().
-		SetHostURL(ts.URL).
+		SetBaseURL(ts.URL).
 		SetPathParam("userId", "sample@sample.com")
 
 	resp, err := c.R().SetPathParam("subAccountId", "100002").
@@ -1749,21 +1749,47 @@ func TestPathParamURLInput(t *testing.T) {
 	defer ts.Close()
 
 	c := dc().SetDebug(true).
-		SetHostURL(ts.URL).
+		SetBaseURL(ts.URL).
 		SetPathParams(map[string]string{
 			"userId": "sample@sample.com",
+			"path":   "users/developers",
 		})
 
 	resp, err := c.R().
 		SetPathParams(map[string]string{
 			"subAccountId": "100002",
 			"website":      "https://example.com",
-		}).Get("/v1/users/{userId}/{subAccountId}/{website}")
+		}).Get("/v1/users/{userId}/{subAccountId}/{path}/{website}")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
-	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/https:%2F%2Fexample.com"))
+	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users%2Fdevelopers/https:%2F%2Fexample.com"))
+
+	logResponse(t, resp)
+}
+
+func TestRawPathParamURLInput(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc().SetDebug(true).
+		SetBaseURL(ts.URL).
+		SetRawPathParams(map[string]string{
+			"userId": "sample@sample.com",
+			"path":   "users/developers",
+		})
+
+	resp, err := c.R().
+		SetRawPathParams(map[string]string{
+			"subAccountId": "100002",
+			"website":      "https://example.com",
+		}).Get("/v1/users/{userId}/{subAccountId}/{path}/{website}")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
+	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users/developers/https://example.com"))
 
 	logResponse(t, resp)
 }
