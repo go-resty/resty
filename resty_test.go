@@ -113,6 +113,13 @@ func createGetServer(t *testing.T) *httptest.Server {
 				_, _ = w.Write(body)
 			case "/host-header":
 				_, _ = w.Write([]byte(r.Host))
+			case "/not-found-with-error":
+				w.Header().Set(hdrContentTypeKey, "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error": "Not found"}`))
+			case "/not-found-no-error":
+				w.Header().Set(hdrContentTypeKey, "application/json")
+				w.WriteHeader(http.StatusNotFound)
 			}
 
 			switch {
