@@ -156,7 +156,7 @@ func (r *Response) setReceivedAt() {
 }
 
 func (r *Response) fmtBodyString(sl int64) string {
-	if r.body != nil {
+	if r.body != nil && len(r.body) > 0 {
 		if int64(len(r.body)) > sl {
 			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", len(r.body))
 		}
