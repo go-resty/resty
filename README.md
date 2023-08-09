@@ -637,7 +637,7 @@ client.SetCertificates(cert1, cert2, cert3)
 
 ```go
 // Custom Root certificates from string
-// You can pass you certificates throught env variables as strings
+// You can pass you certificates through env variables as strings
 // you can add one or more root certificates, its get appended
 client.SetRootCertificateFromString("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----")
 client.SetRootCertificateFromString("-----BEGIN CERTIFICATE-----content-----END CERTIFICATE-----")
