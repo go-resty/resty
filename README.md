@@ -702,8 +702,9 @@ client.
     })
 ```
 
-Above setup will result in resty retrying requests returned non nil error up to
-3 times with delay increased after each attempt.
+By default, resty will retry requests that return a non-nil error during execution. 
+Therefore, the above setup will result in resty retrying requests with non-nil errors up to 3 times, 
+with the delay increasing after each attempt.
 
 You can optionally provide client with [custom retry conditions](https://pkg.go.dev/github.com/go-resty/resty/v2#RetryConditionFunc):
 
@@ -720,10 +721,26 @@ client.AddRetryCondition(
 )
 ```
 
-Above example will make resty retry requests ended with `429 Too Many Requests`
-status code.
+The above example will make resty retry requests that end with a `429 Too Many Requests` status code.
+It's important to note that when you specify conditions using `AddRetryCondition`,
+it will override the default retry behavior, which retries on errors encountered during the request.
+If you want to retry on errors encountered during the request, similar to the default behavior,
+you'll need to configure it as follows:
 
-Multiple retry conditions can be added.
+```go
+// Create a Resty Client
+client := resty.New()
+
+client.AddRetryCondition(
+    func(r *resty.Response, err error) bool {
+        // Including "err != nil" emulates the default retry behavior for errors encountered during the request.
+        return err != nil || r.StatusCode() == http.StatusTooManyRequests
+    },
+)
+```
+
+Multiple retry conditions can be added. 
+Note that if multiple conditions are specified, a retry will occur if any of the conditions are met.
 
 It is also possible to use `resty.Backoff(...)` to get arbitrary retry scenarios
 implemented. [Reference](retry_test.go).
