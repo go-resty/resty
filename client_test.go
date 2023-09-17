@@ -543,6 +543,22 @@ func TestClientAllowsGetMethodPayload(t *testing.T) {
 	assertEqual(t, payload, resp.String())
 }
 
+func TestClientAllowsGetMethodPayloadIoReader(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetAllowGetMethodPayload(true)
+
+	payload := "test-payload"
+	body := bytes.NewReader([]byte(payload))
+	resp, err := c.R().SetBody(body).Get(ts.URL + "/get-method-payload-test")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, payload, resp.String())
+}
+
 func TestClientAllowsGetMethodPayloadDisabled(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
