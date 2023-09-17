@@ -656,7 +656,7 @@ if err != nil {
 client.SetCertificates(cert1, cert2, cert3)
 ```
 
-#### Proxy Settings - Client as well as at Request Level
+#### Proxy Settings
 
 Default `Go` supports Proxy via environment variable `HTTP_PROXY`. Resty provides support via `SetProxy` & `RemoveProxy`.
 Choose as per your need.
