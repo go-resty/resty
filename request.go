@@ -27,22 +27,23 @@ import (
 // resty client. Request provides an options to override client level
 // settings and also an options for the request composition.
 type Request struct {
-	URL        string
-	Method     string
-	Token      string
-	AuthScheme string
-	QueryParam url.Values
-	FormData   url.Values
-	PathParams map[string]string
-	Header     http.Header
-	Time       time.Time
-	Body       interface{}
-	Result     interface{}
-	Error      interface{}
-	RawRequest *http.Request
-	SRV        *SRVRecord
-	UserInfo   *User
-	Cookies    []*http.Cookie
+	URL           string
+	Method        string
+	Token         string
+	AuthScheme    string
+	QueryParam    url.Values
+	FormData      url.Values
+	PathParams    map[string]string
+	RawPathParams map[string]string
+	Header        http.Header
+	Time          time.Time
+	Body          interface{}
+	Result        interface{}
+	Error         interface{}
+	RawRequest    *http.Request
+	SRV           *SRVRecord
+	UserInfo      *User
+	Cookies       []*http.Cookie
 
 	// Attempt is to represent the request attempt made during a Resty
 	// request execution flow, including retry count.
@@ -578,8 +579,17 @@ func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 //	   URL - /v1/users/{userId}/details
 //	   Composed URL - /v1/users/sample@sample.com/details
 //
-// It replaces the value of the key while composing the request URL. Also you can
-// override Path Params value, which was set at client instance level.
+//	client.R().SetPathParam("path", "groups/developers")
+//
+//	Result:
+//	   URL - /v1/users/{userId}/details
+//	   Composed URL - /v1/users/groups%2Fdevelopers/details
+//
+// It replaces the value of the key while composing the request URL.
+// The values will be escaped using `url.PathEscape` function.
+//
+// Also you can override Path Params value, which was set at client instance
+// level.
 func (r *Request) SetPathParam(param, value string) *Request {
 	r.PathParams[param] = value
 	return r
@@ -589,19 +599,73 @@ func (r *Request) SetPathParam(param, value string) *Request {
 // Resty current request instance.
 //
 //	client.R().SetPathParams(map[string]string{
-//	   "userId": "sample@sample.com",
-//	   "subAccountId": "100002",
+//		"userId":       "sample@sample.com",
+//		"subAccountId": "100002",
+//		"path":         "groups/developers",
 //	})
 //
 //	Result:
-//	   URL - /v1/users/{userId}/{subAccountId}/details
-//	   Composed URL - /v1/users/sample@sample.com/100002/details
+//	   URL - /v1/users/{userId}/{subAccountId}/{path}/details
+//	   Composed URL - /v1/users/sample@sample.com/100002/groups%2Fdevelopers/details
 //
-// It replaces the value of the key while composing request URL. Also you can
-// override Path Params value, which was set at client instance level.
+// It replaces the value of the key while composing request URL.
+// The value will be used as it is and will not be escaped.
+//
+// Also you can override Path Params value, which was set at client instance
+// level.
 func (r *Request) SetPathParams(params map[string]string) *Request {
 	for p, v := range params {
 		r.SetPathParam(p, v)
+	}
+	return r
+}
+
+// SetRawPathParam method sets single URL path key-value pair in the
+// Resty current request instance.
+//
+//	client.R().SetPathParam("userId", "sample@sample.com")
+//
+//	Result:
+//	   URL - /v1/users/{userId}/details
+//	   Composed URL - /v1/users/sample@sample.com/details
+//
+//	client.R().SetPathParam("path", "groups/developers")
+//
+//	Result:
+//	   URL - /v1/users/{userId}/details
+//	   Composed URL - /v1/users/groups/developers/details
+//
+// It replaces the value of the key while composing the request URL.
+// The value will be used as it is and will not be escaped.
+//
+// Also you can override Path Params value, which was set at client instance
+// level.
+func (r *Request) SetRawPathParam(param, value string) *Request {
+	r.RawPathParams[param] = value
+	return r
+}
+
+// SetRawPathParams method sets multiple URL path key-value pairs at one go in the
+// Resty current request instance.
+//
+//	client.R().SetPathParams(map[string]string{
+//		"userId": "sample@sample.com",
+//		"subAccountId": "100002",
+//		"path":         "groups/developers",
+//	})
+//
+//	Result:
+//	   URL - /v1/users/{userId}/{subAccountId}/{path}/details
+//	   Composed URL - /v1/users/sample@sample.com/100002/groups/developers/details
+//
+// It replaces the value of the key while composing request URL.
+// The values will be used as they are and will not be escaped.
+//
+// Also you can override Path Params value, which was set at client instance
+// level.
+func (r *Request) SetRawPathParams(params map[string]string) *Request {
+	for p, v := range params {
+		r.SetRawPathParam(p, v)
 	}
 	return r
 }

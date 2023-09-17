@@ -38,6 +38,18 @@ func parseRequestURL(c *Client, r *Request) error {
 		}
 	}
 
+	// GitHub #663 Raw Path Params
+	if len(r.RawPathParams) > 0 {
+		for p, v := range r.RawPathParams {
+			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+		}
+	}
+	if len(c.RawPathParams) > 0 {
+		for p, v := range c.RawPathParams {
+			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+		}
+	}
+
 	// Parsing request URL
 	reqURL, err := url.Parse(r.URL)
 	if err != nil {
