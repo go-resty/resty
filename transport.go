@@ -25,7 +25,7 @@ func createTransport(localAddr net.Addr) *http.Transport {
 	}
 	return &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           dialer.DialContext,
+		DialContext:           transportDialContext(dialer),
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
