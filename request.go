@@ -930,7 +930,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 			resp, err = r.client.execute(r)
 			if err != nil {
-				r.log.Errorf("%v, Attempt %v", err, r.Attempt)
+				r.log.Warnf("%v, Attempt %v", err, r.Attempt)
 			}
 
 			return resp, err
@@ -942,6 +942,10 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		RetryHooks(r.client.RetryHooks),
 		ResetMultipartReaders(r.client.RetryResetReaders),
 	)
+
+	if err != nil {
+		r.log.Errorf("%v", err)
+	}
 
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
 	return resp, unwrapNoRetryErr(err)
