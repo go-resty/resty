@@ -163,7 +163,9 @@ CL:
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
 	if r.bodyBuf == nil {
-		if c.setContentLength || r.setContentLength {
+		if reader, ok := r.Body.(io.Reader); ok {
+			r.RawRequest, err = http.NewRequest(r.Method, r.URL, reader)
+		} else if c.setContentLength || r.setContentLength {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, http.NoBody)
 		} else {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, nil)
@@ -441,9 +443,14 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	r.bodyBuf = nil
 
 	if reader, ok := r.Body.(io.Reader); ok {
-		r.bodyBuf = acquireBuffer()
-		_, err = r.bodyBuf.ReadFrom(reader)
-		r.Body = nil
+		if c.setContentLength || r.setContentLength { // keep backward compatibility
+			r.bodyBuf = acquireBuffer()
+			_, err = r.bodyBuf.ReadFrom(reader)
+			r.Body = nil
+		} else {
+			// Otherwise buffer less processing for `io.Reader`, sounds good.
+			return
+		}
 	} else if b, ok := r.Body.([]byte); ok {
 		bodyBytes = b
 	} else if s, ok := r.Body.(string); ok {
