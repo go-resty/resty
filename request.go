@@ -44,6 +44,7 @@ type Request struct {
 	SRV           *SRVRecord
 	UserInfo      *User
 	Cookies       []*http.Cookie
+	Debug         bool
 
 	// Attempt is to represent the request attempt made during a Resty
 	// request execution flow, including retry count.
@@ -738,6 +739,17 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 // Compliant to interface `resty.Logger`.
 func (r *Request) SetLogger(l Logger) *Request {
 	r.log = l
+	return r
+}
+
+// SetDebug method enables the debug mode on current request Resty request, It logs
+// the details current request and response.
+// For `Request` it logs information such as HTTP verb, Relative URL path, Host, Headers, Body if it has one.
+// For `Response` it logs information such as Status, Response Time, Headers, Body if it has one.
+//
+//	client.R().SetDebug(true)
+func (r *Request) SetDebug(d bool) *Request {
+	r.Debug = d
 	return r
 }
 

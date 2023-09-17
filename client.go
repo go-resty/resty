@@ -561,6 +561,8 @@ func (c *Client) SetPreRequestHook(h PreRequestHook) *Client {
 // For `Response` it logs information such as Status, Response Time, Headers, Body if it has one.
 //
 //	client.SetDebug(true)
+//
+// Also it can be enabled at request level for particular request, see `Request.SetDebug`.
 func (c *Client) SetDebug(d bool) *Client {
 	c.Debug = d
 	return c
