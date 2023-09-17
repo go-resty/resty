@@ -334,6 +334,7 @@ func responseLogger(c *Client, res *Response) error {
 
 func parseResponseBody(c *Client, res *Response) (err error) {
 	if res.StatusCode() == http.StatusNoContent {
+		res.Request.Error = nil
 		return
 	}
 	// Handles only JSON or XML content type
