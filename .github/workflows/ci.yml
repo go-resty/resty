@@ -32,9 +32,11 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: Format
         run: diff -u <(echo -n) <(go fmt $(go list ./...))
