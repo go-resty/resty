@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -360,7 +359,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 			if res.Request.Error != nil {
 				unmarshalErr := Unmarshalc(c, ct, res.body, res.Request.Error)
 				if unmarshalErr != nil {
-					log.Printf("[WARN] Cannot unmarshal response body: %s", unmarshalErr)
+					c.log.Warnf("Cannot unmarshal response body: %s", unmarshalErr)
 				}
 			}
 		}
