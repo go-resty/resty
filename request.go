@@ -489,7 +489,7 @@ func (r *Request) SetAuthToken(token string) *Request {
 //
 //	client.R().SetAuthScheme("OAuth")
 //
-// This auth header scheme gets added to all the request rasied from this client instance.
+// This auth header scheme gets added to all the request raised from this client instance.
 // Also it can be overridden or set one at the request level is supported.
 //
 // Information about Auth schemes can be found in RFC7235 which is linked to below along with the page containing
@@ -641,6 +641,8 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 //
 // Also you can override Path Params value, which was set at client instance
 // level.
+//
+// Since v2.8.0
 func (r *Request) SetRawPathParam(param, value string) *Request {
 	r.RawPathParams[param] = value
 	return r
@@ -664,6 +666,8 @@ func (r *Request) SetRawPathParam(param, value string) *Request {
 //
 // Also you can override Path Params value, which was set at client instance
 // level.
+//
+// Since v2.8.0
 func (r *Request) SetRawPathParams(params map[string]string) *Request {
 	for p, v := range params {
 		r.SetRawPathParam(p, v)

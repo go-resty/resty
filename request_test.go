@@ -1317,7 +1317,7 @@ func TestDetectContentTypeForPointer(t *testing.T) {
 }
 
 type ExampleUser struct {
-	FirstName string `json:"frist_name"`
+	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	ZipCode   string `json:"zip_code"`
 }

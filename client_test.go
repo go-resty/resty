@@ -711,12 +711,12 @@ func TestLogCallbacks(t *testing.T) {
 	c.outputLogTo(&lgr)
 
 	c.OnRequestLog(func(r *RequestLog) error {
-		// masking authorzation header
+		// masking authorization header
 		r.Header.Set("Authorization", "Bearer *******************************")
 		return nil
 	})
 	c.OnResponseLog(func(r *ResponseLog) error {
-		r.Header.Add("X-Debug-Resposne-Log", "Modified :)")
+		r.Header.Add("X-Debug-Response-Log", "Modified :)")
 		r.Body += "\nModified the response body content"
 		return nil
 	})
@@ -734,7 +734,7 @@ func TestLogCallbacks(t *testing.T) {
 	// Validating debug log updates
 	logInfo := lgr.String()
 	assertEqual(t, true, strings.Contains(logInfo, "Bearer *******************************"))
-	assertEqual(t, true, strings.Contains(logInfo, "X-Debug-Resposne-Log"))
+	assertEqual(t, true, strings.Contains(logInfo, "X-Debug-Response-Log"))
 	assertEqual(t, true, strings.Contains(logInfo, "Modified the response body content"))
 
 	// Error scenario
