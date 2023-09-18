@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	// Since v2.8.0
 	ErrAutoRedirectDisabled = errors.New("auto redirect is disabled")
 )
 
@@ -20,7 +21,7 @@ type (
 	// RedirectPolicy to regulate the redirects in the resty client.
 	// Objects implementing the RedirectPolicy interface can be registered as
 	//
-	// Apply function should return nil to continue the redirect jounery, otherwise
+	// Apply function should return nil to continue the redirect journey, otherwise
 	// return error to stop the redirect.
 	RedirectPolicy interface {
 		Apply(req *http.Request, via []*http.Request) error
@@ -92,7 +93,7 @@ func getHostname(host string) (hostname string) {
 }
 
 // By default Golang will not redirect request headers
-// after go throughing various discussion comments from thread
+// after go throwing various discussion comments from thread
 // https://github.com/golang/go/issues/4800
 // Resty will add all the headers during a redirect for the same host
 func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {

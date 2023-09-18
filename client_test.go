@@ -543,6 +543,22 @@ func TestClientAllowsGetMethodPayload(t *testing.T) {
 	assertEqual(t, payload, resp.String())
 }
 
+func TestClientAllowsGetMethodPayloadIoReader(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetAllowGetMethodPayload(true)
+
+	payload := "test-payload"
+	body := bytes.NewReader([]byte(payload))
+	resp, err := c.R().SetBody(body).Get(ts.URL + "/get-method-payload-test")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, payload, resp.String())
+}
+
 func TestClientAllowsGetMethodPayloadDisabled(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
@@ -695,12 +711,12 @@ func TestLogCallbacks(t *testing.T) {
 	c.outputLogTo(&lgr)
 
 	c.OnRequestLog(func(r *RequestLog) error {
-		// masking authorzation header
+		// masking authorization header
 		r.Header.Set("Authorization", "Bearer *******************************")
 		return nil
 	})
 	c.OnResponseLog(func(r *ResponseLog) error {
-		r.Header.Add("X-Debug-Resposne-Log", "Modified :)")
+		r.Header.Add("X-Debug-Response-Log", "Modified :)")
 		r.Body += "\nModified the response body content"
 		return nil
 	})
@@ -718,7 +734,7 @@ func TestLogCallbacks(t *testing.T) {
 	// Validating debug log updates
 	logInfo := lgr.String()
 	assertEqual(t, true, strings.Contains(logInfo, "Bearer *******************************"))
-	assertEqual(t, true, strings.Contains(logInfo, "X-Debug-Resposne-Log"))
+	assertEqual(t, true, strings.Contains(logInfo, "X-Debug-Response-Log"))
 	assertEqual(t, true, strings.Contains(logInfo, "Modified the response body content"))
 
 	// Error scenario
@@ -836,6 +852,7 @@ func TestClientOnResponseError(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var assertErrorHook = func(r *Request, err error) {
 				assertNotNil(t, r)
 				v, ok := err.(*ResponseError)
