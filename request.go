@@ -44,6 +44,7 @@ type Request struct {
 	SRV           *SRVRecord
 	UserInfo      *User
 	Cookies       []*http.Cookie
+	Debug         bool
 
 	// Attempt is to represent the request attempt made during a Resty
 	// request execution flow, including retry count.
@@ -488,7 +489,7 @@ func (r *Request) SetAuthToken(token string) *Request {
 //
 //	client.R().SetAuthScheme("OAuth")
 //
-// This auth header scheme gets added to all the request rasied from this client instance.
+// This auth header scheme gets added to all the request raised from this client instance.
 // Also it can be overridden or set one at the request level is supported.
 //
 // Information about Auth schemes can be found in RFC7235 which is linked to below along with the page containing
@@ -640,6 +641,8 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 //
 // Also you can override Path Params value, which was set at client instance
 // level.
+//
+// Since v2.8.0
 func (r *Request) SetRawPathParam(param, value string) *Request {
 	r.RawPathParams[param] = value
 	return r
@@ -663,6 +666,8 @@ func (r *Request) SetRawPathParam(param, value string) *Request {
 //
 // Also you can override Path Params value, which was set at client instance
 // level.
+//
+// Since v2.8.0
 func (r *Request) SetRawPathParams(params map[string]string) *Request {
 	for p, v := range params {
 		r.SetRawPathParam(p, v)
@@ -738,6 +743,17 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 // Compliant to interface `resty.Logger`.
 func (r *Request) SetLogger(l Logger) *Request {
 	r.log = l
+	return r
+}
+
+// SetDebug method enables the debug mode on current request Resty request, It logs
+// the details current request and response.
+// For `Request` it logs information such as HTTP verb, Relative URL path, Host, Headers, Body if it has one.
+// For `Response` it logs information such as Status, Response Time, Headers, Body if it has one.
+//
+//	client.R().SetDebug(true)
+func (r *Request) SetDebug(d bool) *Request {
+	r.Debug = d
 	return r
 }
 

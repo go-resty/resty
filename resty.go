@@ -14,7 +14,7 @@ import (
 )
 
 // Version # of resty
-const Version = "2.7.0"
+const Version = "2.8.0"
 
 // New method creates a new Resty client.
 func New() *Client {
