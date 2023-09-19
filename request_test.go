@@ -711,11 +711,11 @@ func TestFormDataDisableWarn(t *testing.T) {
 	c := dc()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
 		SetContentLength(true).
-		SetDebug(true).
 		SetDisableWarn(true)
 	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
+		SetDebug(true).
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
 		SetBasicAuth("myuser", "mypass").
 		Post(ts.URL + "/profile")
@@ -1317,7 +1317,7 @@ func TestDetectContentTypeForPointer(t *testing.T) {
 }
 
 type ExampleUser struct {
-	FirstName string `json:"frist_name"`
+	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	ZipCode   string `json:"zip_code"`
 }
@@ -1636,7 +1636,7 @@ func TestGetPathParamAndPathParams(t *testing.T) {
 	defer ts.Close()
 
 	c := dc().
-		SetHostURL(ts.URL).
+		SetBaseURL(ts.URL).
 		SetPathParam("userId", "sample@sample.com")
 
 	resp, err := c.R().SetPathParam("subAccountId", "100002").
@@ -1748,22 +1748,49 @@ func TestPathParamURLInput(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().SetDebug(true).
-		SetHostURL(ts.URL).
+	c := dc().
+		SetBaseURL(ts.URL).
 		SetPathParams(map[string]string{
 			"userId": "sample@sample.com",
+			"path":   "users/developers",
 		})
 
 	resp, err := c.R().
+		SetDebug(true).
 		SetPathParams(map[string]string{
 			"subAccountId": "100002",
 			"website":      "https://example.com",
-		}).Get("/v1/users/{userId}/{subAccountId}/{website}")
+		}).Get("/v1/users/{userId}/{subAccountId}/{path}/{website}")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
-	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/https:%2F%2Fexample.com"))
+	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users%2Fdevelopers/https:%2F%2Fexample.com"))
+
+	logResponse(t, resp)
+}
+
+func TestRawPathParamURLInput(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc().SetDebug(true).
+		SetBaseURL(ts.URL).
+		SetRawPathParams(map[string]string{
+			"userId": "sample@sample.com",
+			"path":   "users/developers",
+		})
+
+	resp, err := c.R().
+		SetRawPathParams(map[string]string{
+			"subAccountId": "100002",
+			"website":      "https://example.com",
+		}).Get("/v1/users/{userId}/{subAccountId}/{path}/{website}")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
+	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users/developers/https://example.com"))
 
 	logResponse(t, resp)
 }
@@ -1874,7 +1901,8 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 
 	// upload a text file with no more than 512 bytes
 	output = bytes.NewBufferString("")
-	resp, err = New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+	resp, err = New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+		SetDebug(true).
 		SetFile("file", filepath.Join(getTestDataPath(), "text-file.txt")).
 		SetHeader("Content-Type", "text/plain").
 		Post(ts.URL + "/upload")
@@ -1901,7 +1929,8 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 
 	// post form with no more than 512 bytes data
 	output = bytes.NewBufferString("")
-	resp, err = New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+	resp, err = New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+		SetDebug(true).
 		SetFormData(map[string]string{
 			"first_name": "Alex",
 			"last_name":  "C",
@@ -1928,7 +1957,8 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 
 	// post slice with more than 512 bytes data
 	output = bytes.NewBufferString("")
-	resp, err = New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+	resp, err = New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+		SetDebug(true).
 		SetBody([]string{strings.Repeat("C", int(debugBodySizeLimit))}).
 		SetBasicAuth("myuser", "mypass").
 		Post(formTs.URL + "/profile")

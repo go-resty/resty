@@ -20,19 +20,23 @@ jobs:
     name: Build
     strategy:
       matrix:
-        go: [ '1.20.x', '1.19.x' ]
+        go: [ '1.21.x']
         os: [ ubuntu-latest ]
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: Format
         run: diff -u <(echo -n) <(go fmt $(go list ./...))

@@ -38,6 +38,18 @@ func parseRequestURL(c *Client, r *Request) error {
 		}
 	}
 
+	// GitHub #663 Raw Path Params
+	if len(r.RawPathParams) > 0 {
+		for p, v := range r.RawPathParams {
+			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+		}
+	}
+	if len(c.RawPathParams) > 0 {
+		for p, v := range c.RawPathParams {
+			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+		}
+	}
+
 	// Parsing request URL
 	reqURL, err := url.Parse(r.URL)
 	if err != nil {
@@ -163,7 +175,9 @@ CL:
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
 	if r.bodyBuf == nil {
-		if c.setContentLength || r.setContentLength {
+		if reader, ok := r.Body.(io.Reader); ok && isPayloadSupported(r.Method, c.AllowGetMethodPayload) {
+			r.RawRequest, err = http.NewRequest(r.Method, r.URL, reader)
+		} else if c.setContentLength || r.setContentLength {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, http.NoBody)
 		} else {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, nil)
@@ -264,7 +278,7 @@ func addCredentials(c *Client, r *Request) error {
 }
 
 func requestLogger(c *Client, r *Request) error {
-	if c.Debug {
+	if c.Debug || r.Debug {
 		rr := r.RawRequest
 		rl := &RequestLog{Header: copyHeaders(rr.Header), Body: r.fmtBodyString(c.debugBodySizeLimit)}
 		if c.requestLog != nil {
@@ -294,7 +308,7 @@ func requestLogger(c *Client, r *Request) error {
 //_______________________________________________________________________
 
 func responseLogger(c *Client, res *Response) error {
-	if c.Debug {
+	if c.Debug || res.Request.Debug {
 		rl := &ResponseLog{Header: copyHeaders(res.Header()), Body: res.fmtBodyString(c.debugBodySizeLimit)}
 		if c.responseLog != nil {
 			if err := c.responseLog(rl); err != nil {
@@ -325,6 +339,7 @@ func responseLogger(c *Client, res *Response) error {
 
 func parseResponseBody(c *Client, res *Response) (err error) {
 	if res.StatusCode() == http.StatusNoContent {
+		res.Request.Error = nil
 		return
 	}
 	// Handles only JSON or XML content type
@@ -446,9 +461,14 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 	r.bodyBuf = nil
 
 	if reader, ok := r.Body.(io.Reader); ok {
-		r.bodyBuf = acquireBuffer()
-		_, err = r.bodyBuf.ReadFrom(reader)
-		r.Body = nil
+		if c.setContentLength || r.setContentLength { // keep backward compatibility
+			r.bodyBuf = acquireBuffer()
+			_, err = r.bodyBuf.ReadFrom(reader)
+			r.Body = nil
+		} else {
+			// Otherwise buffer less processing for `io.Reader`, sounds good.
+			return
+		}
 	} else if b, ok := r.Body.([]byte); ok {
 		bodyBytes = b
 	} else if s, ok := r.Body.(string); ok {
