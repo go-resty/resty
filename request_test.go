@@ -1744,6 +1744,54 @@ func TestHostHeaderOverride(t *testing.T) {
 	logResponse(t, resp)
 }
 
+type HTTPErrorResponse struct {
+	Error string `json:"error,omitempty"`
+}
+
+func TestNotFoundWithError(t *testing.T) {
+	var httpError HTTPErrorResponse
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dc().R().
+		SetHeader(hdrContentTypeKey, "application/json").
+		SetError(&httpError).
+		Get(ts.URL + "/not-found-with-error")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusNotFound, resp.StatusCode())
+	assertEqual(t, "404 Not Found", resp.Status())
+	assertNotNil(t, resp.Body())
+	assertEqual(t, "{\"error\": \"Not found\"}", resp.String())
+	assertNotNil(t, httpError)
+	assertEqual(t, "Not found", httpError.Error)
+
+	logResponse(t, resp)
+}
+
+func TestNotFoundWithoutError(t *testing.T) {
+	var httpError HTTPErrorResponse
+
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc().outputLogTo(os.Stdout)
+	resp, err := c.R().
+		SetError(&httpError).
+		SetHeader(hdrContentTypeKey, "application/json").
+		Get(ts.URL + "/not-found-no-error")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusNotFound, resp.StatusCode())
+	assertEqual(t, "404 Not Found", resp.Status())
+	assertNotNil(t, resp.Body())
+	assertEqual(t, 0, len(resp.Body()))
+	assertNotNil(t, httpError)
+	assertEqual(t, "", httpError.Error)
+
+	logResponse(t, resp)
+}
+
 func TestPathParamURLInput(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
