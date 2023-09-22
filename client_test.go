@@ -488,6 +488,17 @@ func TestClientOptions(t *testing.T) {
 	assertEqual(t, client.closeConnection, true)
 }
 
+func TestContentLengthWhenBodyIsNil(t *testing.T) {
+	client := dc()
+
+	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
+		assertEqual(t, "0", r.Header.Get(hdrContentLengthKey))
+		return nil
+	})
+
+	client.R().SetContentLength(true).SetBody(nil).Get("http://localhost")
+}
+
 func TestClientPreRequestHook(t *testing.T) {
 	client := dc()
 	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
