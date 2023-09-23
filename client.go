@@ -455,9 +455,9 @@ func (c *Client) NewRequest() *Request {
 	return c.R()
 }
 
-// OnBeforeRequest method appends request middleware into the before request chain.
-// Its gets applied after default Resty request middlewares and before request
-// been sent from Resty to host server.
+// OnBeforeRequest method appends a request middleware into the before request chain.
+// The user defined middlewares get applied before the default Resty request middlewares.
+// After all middlewares have been applied, the request is sent from Resty to the host server.
 //
 //	client.OnBeforeRequest(func(c *resty.Client, r *resty.Request) error {
 //			// Now you have access to Client and Request instance
