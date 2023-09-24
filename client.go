@@ -433,17 +433,18 @@ func (c *Client) SetDigestAuth(username, password string) *Client {
 // R method creates a new request instance, its used for Get, Post, Put, Delete, Patch, Head, Options, etc.
 func (c *Client) R() *Request {
 	r := &Request{
-		QueryParam: url.Values{},
-		FormData:   url.Values{},
-		Header:     http.Header{},
-		Cookies:    make([]*http.Cookie, 0),
+		QueryParam:    url.Values{},
+		FormData:      url.Values{},
+		Header:        http.Header{},
+		Cookies:       make([]*http.Cookie, 0),
+		PathParams:    map[string]string{},
+		RawPathParams: map[string]string{},
+		Debug:         c.Debug,
 
 		client:          c,
 		multipartFiles:  []*File{},
 		multipartFields: []*MultipartField{},
-		PathParams:      map[string]string{},
-		RawPathParams:   map[string]string{},
-		jsonEscapeHTML:  true,
+		jsonEscapeHTML:  c.jsonEscapeHTML,
 		log:             c.log,
 	}
 	return r
