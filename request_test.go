@@ -47,6 +47,25 @@ func TestGet(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestGetGH524(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dc().R().
+		SetPathParams((map[string]string{
+			"userId":       "sample@sample.com",
+			"subAccountId": "100002",
+			"path":         "groups/developers",
+		})).
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+		SetDebug(true).
+		Get(ts.URL + "/v1/users/{userId}/{subAccountId}/{path}/details")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, resp.Request.Header.Get("Content-Type"), "") //  unable to reproduce reported issue
+}
+
 func TestIllegalRetryCount(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
