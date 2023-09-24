@@ -1017,3 +1017,31 @@ func TestPostRedirectWithBody(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestUnixSocket(t *testing.T) {
+	unixSocketAddr := createUnixSocketEchoServer(t)
+	defer os.Remove(unixSocketAddr)
+
+	// Create a Go's http.Transport so we can set it in resty.
+	transport := http.Transport{
+		Dial: func(_, _ string) (net.Conn, error) {
+			return net.Dial("unix", unixSocketAddr)
+		},
+	}
+
+	// Create a Resty Client
+	client := New()
+
+	// Set the previous transport that we created, set the scheme of the communication to the
+	// socket and set the unixSocket as the HostURL.
+	client.SetTransport(&transport).SetScheme("http").SetHostURL(unixSocketAddr)
+
+	// No need to write the host's URL on the request, just the path.
+	res, err := client.R().Get("http://localhost/")
+	assertNil(t, err)
+	assertEqual(t, "Hi resty client from a server running on Unix domain socket!", res.String())
+
+	res, err = client.R().Get("http://localhost/hello")
+	assertNil(t, err)
+	assertEqual(t, "Hello resty client from a server running on endpoint /hello!", res.String())
+}
