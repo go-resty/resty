@@ -27,25 +27,25 @@ const debugRequestLogKey = "__restyDebugRequestLog"
 
 func parseRequestURL(c *Client, r *Request) error {
 	// GitHub #103 Path Params
-	if len(c.PathParams) > 0 {
-		for p, v := range c.PathParams {
-			r.URL = strings.Replace(r.URL, "{"+p+"}", url.PathEscape(v), -1)
-		}
-	}
 	if len(r.PathParams) > 0 {
 		for p, v := range r.PathParams {
 			r.URL = strings.Replace(r.URL, "{"+p+"}", url.PathEscape(v), -1)
 		}
 	}
+	if len(c.PathParams) > 0 {
+		for p, v := range c.PathParams {
+			r.URL = strings.Replace(r.URL, "{"+p+"}", url.PathEscape(v), -1)
+		}
+	}
 
 	// GitHub #663 Raw Path Params
-	if len(c.RawPathParams) > 0 {
-		for p, v := range c.RawPathParams {
+	if len(r.RawPathParams) > 0 {
+		for p, v := range r.RawPathParams {
 			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
 		}
 	}
-	if len(r.RawPathParams) > 0 {
-		for p, v := range r.RawPathParams {
+	if len(c.RawPathParams) > 0 {
+		for p, v := range c.RawPathParams {
 			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
 		}
 	}
