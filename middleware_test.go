@@ -237,6 +237,30 @@ func Test_parseRequestURL(t *testing.T) {
 	}
 }
 
+func Benchmark_parseRequestURL_PathParams(b *testing.B) {
+	c := New().SetPathParams(map[string]string{
+		"foo": "1",
+		"bar": "2",
+	}).SetRawPathParams(map[string]string{
+		"foo": "3",
+		"xyz": "4",
+	})
+	r := c.R().SetPathParams(map[string]string{
+		"foo": "5",
+		"qwe": "6",
+	}).SetRawPathParams(map[string]string{
+		"foo": "7",
+		"asd": "8",
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r.URL = "https://example.com/{foo}/{bar}/{xyz}/{qwe}/{asd}"
+		if err := parseRequestURL(c, r); err != nil {
+			b.Errorf("parseRequestURL() error = %v", err)
+		}
+	}
+}
+
 func Test_parseRequestHeader(t *testing.T) {
 	for _, tt := range []struct {
 		name           string
@@ -865,6 +889,7 @@ func Benchmark_parseRequestBody_reader_with_SetContentLength(b *testing.B) {
 		}
 	}
 }
+
 func Benchmark_parseRequestBody_reader_without_SetContentLength(b *testing.B) {
 	c := New()
 	r := c.R()
