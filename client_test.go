@@ -780,9 +780,6 @@ func TestNewWithLocalAddr(t *testing.T) {
 }
 
 func TestClientOnResponseError(t *testing.T) {
-	ts := createAuthServer(t)
-	defer ts.Close()
-
 	tests := []struct {
 		name        string
 		setup       func(*Client)
@@ -862,8 +859,12 @@ func TestClientOnResponseError(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
+			ts := createAuthServer(t)
+			defer ts.Close()
+
 			var assertErrorHook = func(r *Request, err error) {
 				assertNotNil(t, r)
 				v, ok := err.(*ResponseError)
