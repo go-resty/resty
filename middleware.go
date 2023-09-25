@@ -27,27 +27,80 @@ const debugRequestLogKey = "__restyDebugRequestLog"
 //_______________________________________________________________________
 
 func parseRequestURL(c *Client, r *Request) error {
-	// GitHub #103 Path Params
-	if len(r.PathParams) > 0 {
-		for p, v := range r.PathParams {
-			r.URL = strings.Replace(r.URL, "{"+p+"}", url.PathEscape(v), -1)
-		}
-	}
-	if len(c.PathParams) > 0 {
-		for p, v := range c.PathParams {
-			r.URL = strings.Replace(r.URL, "{"+p+"}", url.PathEscape(v), -1)
-		}
-	}
+	if l := len(c.PathParams) + len(c.RawPathParams) + len(r.PathParams) + len(r.RawPathParams); l > 0 {
+		params := make(map[string]string, l)
 
-	// GitHub #663 Raw Path Params
-	if len(r.RawPathParams) > 0 {
-		for p, v := range r.RawPathParams {
-			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+		// GitHub #103 Path Params
+		for p, v := range r.PathParams {
+			if _, ok := params[p]; !ok {
+				params[p] = url.PathEscape(v)
+			}
 		}
-	}
-	if len(c.RawPathParams) > 0 {
+		for p, v := range c.PathParams {
+			if _, ok := params[p]; !ok {
+				params[p] = url.PathEscape(v)
+			}
+		}
+
+		// GitHub #663 Raw Path Params
+		for p, v := range r.RawPathParams {
+			if _, ok := params[p]; !ok {
+				params[p] = v
+			}
+		}
 		for p, v := range c.RawPathParams {
-			r.URL = strings.Replace(r.URL, "{"+p+"}", v, -1)
+			if _, ok := params[p]; !ok {
+				params[p] = v
+			}
+		}
+
+		if len(params) > 0 {
+			var (
+				prev int
+				buf  bytes.Buffer
+			)
+			buf.Grow(len(r.URL))
+			// search for the next or first opened curly bracket
+			for curr := strings.Index(r.URL, "{"); curr > prev; curr = prev + strings.Index(r.URL[prev:], "{") {
+				// write everything form the previous position up to the current
+				if curr > prev {
+					buf.WriteString(r.URL[prev:curr])
+				}
+				// search for the closed curly bracket from current position
+				next := curr + strings.Index(r.URL[curr:], "}")
+				// if not found, then write the remainder and exit
+				if next < curr {
+					buf.WriteString(r.URL[curr:])
+					prev = len(r.URL)
+					break
+				}
+				// special case for {}, without parameter's name
+				if next == curr+1 {
+					buf.WriteString("{}")
+				} else {
+					// check for the replacement
+					key := r.URL[curr+1 : next]
+					value, ok := params[key]
+					/// keep the original string if the replacement not found
+					if !ok {
+						value = r.URL[curr : next+1]
+					}
+					buf.WriteString(value)
+				}
+
+				// set the previous position after the closed curly bracket
+				prev = next + 1
+				if prev >= len(r.URL) {
+					break
+				}
+			}
+			if buf.Len() > 0 {
+				// write remainder
+				if prev < len(r.URL) {
+					buf.WriteString(r.URL[prev:])
+				}
+				r.URL = buf.String()
+			}
 		}
 	}
 
