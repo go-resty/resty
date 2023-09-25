@@ -55,11 +55,9 @@ func parseRequestURL(c *Client, r *Request) error {
 		}
 
 		if len(params) > 0 {
-			var (
-				prev int
-				buf  bytes.Buffer
-			)
-			buf.Grow(len(r.URL))
+			var prev int
+			buf := acquireBuffer()
+			defer releaseBuffer(buf)
 			// search for the next or first opened curly bracket
 			for curr := strings.Index(r.URL, "{"); curr > prev; curr = prev + strings.Index(r.URL[prev:], "{") {
 				// write everything form the previous position up to the current
