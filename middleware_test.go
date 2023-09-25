@@ -275,22 +275,8 @@ func Test_parseRequestURL(t *testing.T) {
 			if expectedURL.String() != actualURL.String() {
 				t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
 			}
-			if len(expectedQuery) != len(actualQuery) {
+			if !reflect.DeepEqual(expectedQuery, actualQuery) {
 				t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
-			}
-			for name, expected := range expectedQuery {
-				actual, ok := actualQuery[name]
-				if !ok {
-					t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
-				}
-				if len(expected) != len(actual) {
-					t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
-				}
-				for i, v := range expected {
-					if v != actual[i] {
-						t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
-					}
-				}
 			}
 		})
 	}
