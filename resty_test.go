@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -113,6 +114,13 @@ func createGetServer(t *testing.T) *httptest.Server {
 				_, _ = w.Write(body)
 			case "/host-header":
 				_, _ = w.Write([]byte(r.Host))
+			case "/not-found-with-error":
+				w.Header().Set(hdrContentTypeKey, "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error": "Not found"}`))
+			case "/not-found-no-error":
+				w.Header().Set(hdrContentTypeKey, "application/json")
+				w.WriteHeader(http.StatusNotFound)
 			}
 
 			switch {
@@ -621,6 +629,34 @@ func createRedirectServer(t *testing.T) *httptest.Server {
 	})
 
 	return ts
+}
+
+func createUnixSocketEchoServer(t *testing.T) string {
+	socketPath := filepath.Join(os.TempDir(), strconv.FormatInt(time.Now().Unix(), 10)) + ".sock"
+
+	// Create a Unix domain socket and listen for incoming connections.
+	socket, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := http.NewServeMux()
+	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hi resty client from a server running on Unix domain socket!\n"))
+	})
+
+	m.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello resty client from a server running on endpoint /hello!\n"))
+	})
+
+	go func(t *testing.T) {
+		server := http.Server{Handler: m}
+		if err := server.Serve(socket); err != nil {
+			t.Error(err)
+		}
+	}(t)
+
+	return socketPath
 }
 
 type digestServerConfig struct {

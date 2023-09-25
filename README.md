@@ -864,7 +864,7 @@ client := resty.New()
 client.SetTransport(&transport).SetScheme("http").SetHostURL(unixSocket)
 
 // No need to write the host's URL on the request, just the path.
-client.R().Get("/index.html")
+client.R().Get("http://localhost/index.html")
 ```
 
 #### Bazel Support

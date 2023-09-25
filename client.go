@@ -62,8 +62,8 @@ var (
 	jsonContentType = "application/json"
 	formContentType = "application/x-www-form-urlencoded"
 
-	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(json|.*\+json|json\-.*)(;|$))`)
-	xmlCheck  = regexp.MustCompile(`(?i:(application|text)/(xml|.*\+xml)(;|$))`)
+	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(.*json.*)(;|$))`)
+	xmlCheck  = regexp.MustCompile(`(?i:(application|text)/(.*xml.*)(;|$))`)
 
 	hdrUserAgentValue = "go-resty/" + Version + " (https://github.com/go-resty/resty)"
 	bufPool           = &sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
@@ -433,17 +433,18 @@ func (c *Client) SetDigestAuth(username, password string) *Client {
 // R method creates a new request instance, its used for Get, Post, Put, Delete, Patch, Head, Options, etc.
 func (c *Client) R() *Request {
 	r := &Request{
-		QueryParam: url.Values{},
-		FormData:   url.Values{},
-		Header:     http.Header{},
-		Cookies:    make([]*http.Cookie, 0),
+		QueryParam:    url.Values{},
+		FormData:      url.Values{},
+		Header:        http.Header{},
+		Cookies:       make([]*http.Cookie, 0),
+		PathParams:    map[string]string{},
+		RawPathParams: map[string]string{},
+		Debug:         c.Debug,
 
 		client:          c,
 		multipartFiles:  []*File{},
 		multipartFields: []*MultipartField{},
-		PathParams:      map[string]string{},
-		RawPathParams:   map[string]string{},
-		jsonEscapeHTML:  true,
+		jsonEscapeHTML:  c.jsonEscapeHTML,
 		log:             c.log,
 	}
 	return r
@@ -455,9 +456,9 @@ func (c *Client) NewRequest() *Request {
 	return c.R()
 }
 
-// OnBeforeRequest method appends request middleware into the before request chain.
-// Its gets applied after default Resty request middlewares and before request
-// been sent from Resty to host server.
+// OnBeforeRequest method appends a request middleware into the before request chain.
+// The user defined middlewares get applied before the default Resty request middlewares.
+// After all middlewares have been applied, the request is sent from Resty to the host server.
 //
 //	client.OnBeforeRequest(func(c *resty.Client, r *resty.Request) error {
 //			// Now you have access to Client and Request instance

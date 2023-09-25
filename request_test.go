@@ -47,6 +47,25 @@ func TestGet(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestGetGH524(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dc().R().
+		SetPathParams((map[string]string{
+			"userId":       "sample@sample.com",
+			"subAccountId": "100002",
+			"path":         "groups/developers",
+		})).
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+		SetDebug(true).
+		Get(ts.URL + "/v1/users/{userId}/{subAccountId}/{path}/details")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, resp.Request.Header.Get("Content-Type"), "") //  unable to reproduce reported issue
+}
+
 func TestIllegalRetryCount(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
@@ -1740,6 +1759,54 @@ func TestHostHeaderOverride(t *testing.T) {
 	assertEqual(t, "200 OK", resp.Status())
 	assertNotNil(t, resp.Body())
 	assertEqual(t, "myhostname", resp.String())
+
+	logResponse(t, resp)
+}
+
+type HTTPErrorResponse struct {
+	Error string `json:"error,omitempty"`
+}
+
+func TestNotFoundWithError(t *testing.T) {
+	var httpError HTTPErrorResponse
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	resp, err := dc().R().
+		SetHeader(hdrContentTypeKey, "application/json").
+		SetError(&httpError).
+		Get(ts.URL + "/not-found-with-error")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusNotFound, resp.StatusCode())
+	assertEqual(t, "404 Not Found", resp.Status())
+	assertNotNil(t, resp.Body())
+	assertEqual(t, "{\"error\": \"Not found\"}", resp.String())
+	assertNotNil(t, httpError)
+	assertEqual(t, "Not found", httpError.Error)
+
+	logResponse(t, resp)
+}
+
+func TestNotFoundWithoutError(t *testing.T) {
+	var httpError HTTPErrorResponse
+
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc().outputLogTo(os.Stdout)
+	resp, err := c.R().
+		SetError(&httpError).
+		SetHeader(hdrContentTypeKey, "application/json").
+		Get(ts.URL + "/not-found-no-error")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusNotFound, resp.StatusCode())
+	assertEqual(t, "404 Not Found", resp.Status())
+	assertNotNil(t, resp.Body())
+	assertEqual(t, 0, len(resp.Body()))
+	assertNotNil(t, httpError)
+	assertEqual(t, "", httpError.Error)
 
 	logResponse(t, resp)
 }
