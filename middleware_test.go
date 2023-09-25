@@ -261,6 +261,24 @@ func Benchmark_parseRequestURL_PathParams(b *testing.B) {
 	}
 }
 
+func Benchmark_parseRequestURL_QueryParams(b *testing.B) {
+	c := New().SetQueryParams(map[string]string{
+		"foo": "1",
+		"bar": "2",
+	})
+	r := c.R().SetQueryParams(map[string]string{
+		"foo": "5",
+		"qwe": "6",
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r.URL = "https://example.com/"
+		if err := parseRequestURL(c, r); err != nil {
+			b.Errorf("parseRequestURL() error = %v", err)
+		}
+	}
+}
+
 func Test_parseRequestHeader(t *testing.T) {
 	for _, tt := range []struct {
 		name           string
