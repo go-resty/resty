@@ -135,32 +135,31 @@ func parseRequestURL(c *Client, r *Request) error {
 	}
 
 	// Adding Query Param
-	query := make(url.Values)
-	for k, v := range c.QueryParam {
-		for _, iv := range v {
-			query.Add(k, iv)
+	if l := len(c.QueryParam) + len(r.QueryParam); l > 0 {
+		query := make(url.Values, l)
+		for k, v := range r.QueryParam {
+			query[k] = v[:]
 		}
-	}
 
-	for k, v := range r.QueryParam {
-		// remove query param from client level by key
-		// since overrides happens for that key in the request
-		query.Del(k)
+		for k, v := range c.QueryParam {
+			// skip query parameter if it was set from request
+			if _, ok := query[k]; ok {
+				continue
+			}
 
-		for _, iv := range v {
-			query.Add(k, iv)
+			query[k] = v[:]
 		}
-	}
 
-	// GitHub #123 Preserve query string order partially.
-	// Since not feasible in `SetQuery*` resty methods, because
-	// standard package `url.Encode(...)` sorts the query params
-	// alphabetically
-	if len(query) > 0 {
-		if IsStringEmpty(reqURL.RawQuery) {
-			reqURL.RawQuery = query.Encode()
-		} else {
-			reqURL.RawQuery = reqURL.RawQuery + "&" + query.Encode()
+		// GitHub #123 Preserve query string order partially.
+		// Since not feasible in `SetQuery*` resty methods, because
+		// standard package `url.Encode(...)` sorts the query params
+		// alphabetically
+		if len(query) > 0 {
+			if IsStringEmpty(reqURL.RawQuery) {
+				reqURL.RawQuery = query.Encode()
+			} else {
+				reqURL.RawQuery = reqURL.RawQuery + "&" + query.Encode()
+			}
 		}
 	}
 

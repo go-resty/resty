@@ -229,12 +229,31 @@ func Test_parseRequestURL(t *testing.T) {
 					"foo": "1", // ignored, because of the "foo" parameter in request
 					"bar": "2",
 				})
-				c.SetQueryParams(map[string]string{
+				r.SetQueryParams(map[string]string{
 					"foo": "3",
 				})
 				r.URL = "https://example.com/"
 			},
 			expectedURL: "https://example.com/?foo=3&bar=2",
+		},
+		{
+			name: "adding query parameters by request to URL with existent",
+			init: func(c *Client, r *Request) {
+				r.SetQueryParams(map[string]string{
+					"bar": "2",
+				})
+				r.URL = "https://example.com/?foo=1"
+			},
+			expectedURL: "https://example.com/?foo=1&bar=2",
+		},
+		{
+			name: "adding query parameters by request with multiple values",
+			init: func(c *Client, r *Request) {
+				r.QueryParam.Add("foo", "1")
+				r.QueryParam.Add("foo", "2")
+				r.URL = "https://example.com/"
+			},
+			expectedURL: "https://example.com/?foo=1&foo=2",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
