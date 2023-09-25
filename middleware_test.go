@@ -1,6 +1,7 @@
 package resty
 
 import (
+	"bytes"
 	"net/url"
 	"testing"
 )
@@ -223,6 +224,50 @@ func Test_parseRequestURL(t *testing.T) {
 						t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
 					}
 				}
+			}
+		})
+	}
+}
+
+func Test_createHTTPRequest(t *testing.T) {
+	type args struct {
+		c *Client
+		r *Request
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "bodyBuf is not nil, deep copy",
+			args: args{
+				c: &Client{},
+				r: func() *Request {
+					req := &Request{}
+					req.bodyBuf = bytes.NewBufferString("test")
+					return req
+				}(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "bodyBuf is nil, deep copy",
+			args: args{
+				c: &Client{},
+				r: func() *Request {
+					req := &Request{}
+					req.bodyBuf = nil
+					return req
+				}(),
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := createHTTPRequest(tt.args.c, tt.args.r); (err != nil) != tt.wantErr {
+				t.Errorf("createHTTPRequest() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
