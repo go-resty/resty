@@ -1,7 +1,9 @@
 package resty
 
 import (
+	"net/http"
 	"net/url"
+	"reflect"
 	"testing"
 )
 
@@ -225,5 +227,119 @@ func Test_parseRequestURL(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func Test_parseRequestHeader(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		init           func(c *Client, r *Request)
+		expectedHeader http.Header
+	}{
+		{
+			name: "headers in request",
+			init: func(c *Client, r *Request) {
+				r.SetHeaders(map[string]string{
+					"foo": "1",
+					"bar": "2",
+				})
+			},
+			expectedHeader: http.Header{
+				http.CanonicalHeaderKey("foo"):           []string{"1"},
+				http.CanonicalHeaderKey("bar"):           []string{"2"},
+				http.CanonicalHeaderKey(hdrUserAgentKey): []string{hdrUserAgentValue},
+			},
+		},
+		{
+			name: "headers in client",
+			init: func(c *Client, r *Request) {
+				c.SetHeaders(map[string]string{
+					"foo": "1",
+					"bar": "2",
+				})
+			},
+			expectedHeader: http.Header{
+				http.CanonicalHeaderKey("foo"):           []string{"1"},
+				http.CanonicalHeaderKey("bar"):           []string{"2"},
+				http.CanonicalHeaderKey(hdrUserAgentKey): []string{hdrUserAgentValue},
+			},
+		},
+		{
+			name: "headers in client and request",
+			init: func(c *Client, r *Request) {
+				c.SetHeaders(map[string]string{
+					"foo": "1", // ignored, because of the same header in the request
+					"bar": "2",
+				})
+				r.SetHeaders(map[string]string{
+					"foo": "3",
+					"xyz": "4",
+				})
+			},
+			expectedHeader: http.Header{
+				http.CanonicalHeaderKey("foo"):           []string{"3"},
+				http.CanonicalHeaderKey("bar"):           []string{"2"},
+				http.CanonicalHeaderKey("xyz"):           []string{"4"},
+				http.CanonicalHeaderKey(hdrUserAgentKey): []string{hdrUserAgentValue},
+			},
+		},
+		{
+			name: "no headers",
+			init: func(c *Client, r *Request) {},
+			expectedHeader: http.Header{
+				http.CanonicalHeaderKey(hdrUserAgentKey): []string{hdrUserAgentValue},
+			},
+		},
+		{
+			name: "user agent",
+			init: func(c *Client, r *Request) {
+				c.SetHeader(hdrUserAgentKey, "foo bar")
+			},
+			expectedHeader: http.Header{
+				http.CanonicalHeaderKey(hdrUserAgentKey): []string{"foo bar"},
+			},
+		},
+		{
+			name: "json content type",
+			init: func(c *Client, r *Request) {
+				c.SetHeader(hdrContentTypeKey, "application/json")
+			},
+			expectedHeader: http.Header{
+				http.CanonicalHeaderKey(hdrContentTypeKey): []string{"application/json"},
+				http.CanonicalHeaderKey(hdrAcceptKey):      []string{"application/json"},
+				http.CanonicalHeaderKey(hdrUserAgentKey):   []string{hdrUserAgentValue},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := New()
+			r := c.R()
+			tt.init(c, r)
+			if err := parseRequestHeader(c, r); err != nil {
+				t.Errorf("parseRequestHeader() error = %v", err)
+			}
+			if !reflect.DeepEqual(tt.expectedHeader, r.Header) {
+				t.Errorf("r.Header = %#+v does not match expected %#+v", r.Header, tt.expectedHeader)
+			}
+		})
+	}
+}
+
+func Benchmark_parseRequestHeader(b *testing.B) {
+	c := New()
+	r := c.R()
+	c.SetHeaders(map[string]string{
+		"foo": "1", // ignored, because of the same header in the request
+		"bar": "2",
+	})
+	r.SetHeaders(map[string]string{
+		"foo": "3",
+		"xyz": "4",
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := parseRequestHeader(c, r); err != nil {
+			b.Errorf("parseRequestHeader() error = %v", err)
+		}
 	}
 }
