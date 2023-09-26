@@ -116,27 +116,20 @@ func parseRequestURL(c *Client, r *Request) error {
 }
 
 func parseRequestHeader(c *Client, r *Request) error {
-	hdr := make(http.Header)
-	for k := range c.Header {
-		hdr[k] = append(hdr[k], c.Header[k]...)
+	for k, v := range c.Header {
+		if _, ok := r.Header[k]; ok {
+			continue
+		}
+		r.Header[k] = v[:]
 	}
 
-	for k := range r.Header {
-		hdr.Del(k)
-		hdr[k] = append(hdr[k], r.Header[k]...)
+	if IsStringEmpty(r.Header.Get(hdrUserAgentKey)) {
+		r.Header.Set(hdrUserAgentKey, hdrUserAgentValue)
 	}
 
-	if IsStringEmpty(hdr.Get(hdrUserAgentKey)) {
-		hdr.Set(hdrUserAgentKey, hdrUserAgentValue)
+	if ct := r.Header.Get(hdrContentTypeKey); IsStringEmpty(r.Header.Get(hdrAcceptKey)) && !IsStringEmpty(ct) && (IsJSONType(ct) || IsXMLType(ct)) {
+		r.Header.Set(hdrAcceptKey, r.Header.Get(hdrContentTypeKey))
 	}
-
-	ct := hdr.Get(hdrContentTypeKey)
-	if IsStringEmpty(hdr.Get(hdrAcceptKey)) && !IsStringEmpty(ct) &&
-		(IsJSONType(ct) || IsXMLType(ct)) {
-		hdr.Set(hdrAcceptKey, hdr.Get(hdrContentTypeKey))
-	}
-
-	r.Header = hdr
 
 	return nil
 }
