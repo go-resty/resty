@@ -424,24 +424,19 @@ func handleMultipart(c *Client, r *Request) (err error) {
 
 func handleFormData(c *Client, r *Request) {
 	formData := url.Values{}
+	for k, v := range r.FormData {
+		formData[k] = v[:]
+	}
 
 	for k, v := range c.FormData {
-		for _, iv := range v {
-			formData.Add(k, iv)
+		if _, ok := formData[k]; ok {
+			continue
 		}
+		formData[k] = v[:]
 	}
 
-	for k, v := range r.FormData {
-		// remove form data field from client level by key
-		// since overrides happens for that key in the request
-		formData.Del(k)
-
-		for _, iv := range v {
-			formData.Add(k, iv)
-		}
-	}
-
-	r.bodyBuf = bytes.NewBuffer([]byte(formData.Encode()))
+	r.bodyBuf = acquireBuffer()
+	r.bodyBuf.WriteString(formData.Encode())
 	r.Header.Set(hdrContentTypeKey, formContentType)
 	r.isFormData = true
 }
