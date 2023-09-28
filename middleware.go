@@ -449,45 +449,43 @@ func handleContentType(c *Client, r *Request) {
 	}
 }
 
-func handleRequestBody(c *Client, r *Request) (err error) {
+func handleRequestBody(c *Client, r *Request) error {
 	var bodyBytes []byte
-	contentType := r.Header.Get(hdrContentTypeKey)
-	kind := kindOf(r.Body)
+	releaseBuffer(r.bodyBuf)
 	r.bodyBuf = nil
 
-	if reader, ok := r.Body.(io.Reader); ok {
+	switch body := r.Body.(type) {
+	case io.Reader:
 		if c.setContentLength || r.setContentLength { // keep backward compatibility
 			r.bodyBuf = acquireBuffer()
-			_, err = r.bodyBuf.ReadFrom(reader)
+			if _, err := r.bodyBuf.ReadFrom(body); err != nil {
+				return err
+			}
 			r.Body = nil
 		} else {
 			// Otherwise buffer less processing for `io.Reader`, sounds good.
-			return
+			return nil
 		}
-	} else if b, ok := r.Body.([]byte); ok {
-		bodyBytes = b
-	} else if s, ok := r.Body.(string); ok {
-		bodyBytes = []byte(s)
-	} else if IsJSONType(contentType) &&
-		(kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
-		r.bodyBuf, err = jsonMarshal(c, r, r.Body)
-		if err != nil {
-			return
+	case []byte:
+		bodyBytes = body
+	case string:
+		bodyBytes = []byte(body)
+	default:
+		contentType := r.Header.Get(hdrContentTypeKey)
+		kind := kindOf(r.Body)
+		var err error
+		if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
+			r.bodyBuf, err = jsonMarshal(c, r, r.Body)
+		} else if IsXMLType(contentType) && (kind == reflect.Struct) {
+			bodyBytes, err = c.XMLMarshal(r.Body)
 		}
-	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-		bodyBytes, err = c.XMLMarshal(r.Body)
 		if err != nil {
-			return
+			return err
 		}
 	}
 
 	if bodyBytes == nil && r.bodyBuf == nil {
-		err = errors.New("unsupported 'Body' type/value")
-	}
-
-	// if any errors during body bytes handling, return it
-	if err != nil {
-		return
+		return errors.New("unsupported 'Body' type/value")
 	}
 
 	// []byte into Buffer
@@ -496,7 +494,7 @@ func handleRequestBody(c *Client, r *Request) (err error) {
 		_, _ = r.bodyBuf.Write(bodyBytes)
 	}
 
-	return
+	return nil
 }
 
 func saveResponseIntoFile(c *Client, res *Response) error {
