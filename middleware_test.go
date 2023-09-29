@@ -3,6 +3,7 @@ package resty
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -350,6 +351,12 @@ func Benchmark_parseRequestHeader(b *testing.B) {
 	}
 }
 
+type errorReader struct{}
+
+func (errorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("fake")
+}
+
 func Test_parseRequestBody(t *testing.T) {
 	for _, tt := range []struct {
 		name                  string
@@ -357,6 +364,7 @@ func Test_parseRequestBody(t *testing.T) {
 		expectedBodyBuf       []byte
 		expectedContentLength string
 		expectedContentType   string
+		wantErr               bool
 	}{
 		{
 			name: "empty body",
@@ -691,13 +699,73 @@ func Test_parseRequestBody(t *testing.T) {
 			expectedContentType:   "multipart/form-data; boundary=",
 			expectedContentLength: "412",
 		},
+		{
+			name: "body with errorReader",
+			init: func(c *Client, r *Request) {
+				r.SetBody(&errorReader{}).SetContentLength(true)
+			},
+			wantErr: true,
+		},
+		{
+			name: "unsupported type",
+			init: func(c *Client, r *Request) {
+				r.SetBody(1)
+			},
+			wantErr: true,
+		},
+		{
+			name: "unsupported xml",
+			init: func(c *Client, r *Request) {
+				r.SetBody(struct {
+					Foo string `xml:"foo"`
+					Bar string `xml:"bar"`
+				}{
+					Foo: "1",
+					Bar: "2",
+				}).Header.Set(hdrContentTypeKey, "text/xml")
+			},
+			wantErr: true,
+		},
+		{
+			name: "multipart fields with errorReader",
+			init: func(c *Client, r *Request) {
+				r.SetMultipartFields(&MultipartField{
+					Param:       "foo",
+					ContentType: "text/plain",
+					Reader:      &errorReader{},
+				})
+			},
+			wantErr: true,
+		},
+		{
+			name: "multipart files with errorReader",
+			init: func(c *Client, r *Request) {
+				r.SetFileReader("foo", "foo.txt", &errorReader{})
+			},
+			wantErr: true,
+		},
+		{
+			name: "multipart with file not found",
+			init: func(c *Client, r *Request) {
+				r.SetFormData(map[string]string{
+					"@foo": "foo.txt",
+				})
+				r.isMultiPart = true
+			},
+			wantErr: true,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c := New()
 			r := c.R()
 			tt.init(c, r)
 			if err := parseRequestBody(c, r); err != nil {
+				if tt.wantErr {
+					return
+				}
 				t.Errorf("parseRequestBody() error = %v", err)
+			} else if tt.wantErr {
+				t.Errorf("wanted error, but got nil")
 			}
 			switch {
 			case r.bodyBuf == nil && tt.expectedBodyBuf != nil:
