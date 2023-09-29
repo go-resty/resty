@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -134,45 +135,34 @@ func parseRequestHeader(c *Client, r *Request) error {
 	return nil
 }
 
-func parseRequestBody(c *Client, r *Request) (err error) {
+func parseRequestBody(c *Client, r *Request) error {
 	if isPayloadSupported(r.Method, c.AllowGetMethodPayload) {
-		// Handling Multipart
-		if r.isMultiPart {
-			if err = handleMultipart(c, r); err != nil {
-				return
+		switch {
+		case r.isMultiPart: // Handling Multipart
+			if err := handleMultipart(c, r); err != nil {
+				return err
 			}
-
-			goto CL
-		}
-
-		// Handling Form Data
-		if len(c.FormData) > 0 || len(r.FormData) > 0 {
+		case len(c.FormData) > 0 || len(r.FormData) > 0: // Handling Form Data
 			handleFormData(c, r)
-
-			goto CL
-		}
-
-		// Handling Request body
-		if r.Body != nil {
+		case r.Body != nil: // Handling Request body
 			handleContentType(c, r)
 
-			if err = handleRequestBody(c, r); err != nil {
-				return
+			if err := handleRequestBody(c, r); err != nil {
+				return err
 			}
 		}
 	}
 
-CL:
 	// by default resty won't set content length, you can if you want to :)
 	if c.setContentLength || r.setContentLength {
 		if r.bodyBuf == nil {
 			r.Header.Set(hdrContentLengthKey, "0")
 		} else {
-			r.Header.Set(hdrContentLengthKey, fmt.Sprintf("%d", r.bodyBuf.Len()))
+			r.Header.Set(hdrContentLengthKey, strconv.Itoa(r.bodyBuf.Len()))
 		}
 	}
 
-	return
+	return nil
 }
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
@@ -370,13 +360,13 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 	return
 }
 
-func handleMultipart(c *Client, r *Request) (err error) {
+func handleMultipart(c *Client, r *Request) error {
 	r.bodyBuf = acquireBuffer()
 	w := multipart.NewWriter(r.bodyBuf)
 
 	for k, v := range c.FormData {
 		for _, iv := range v {
-			if err = w.WriteField(k, iv); err != nil {
+			if err := w.WriteField(k, iv); err != nil {
 				return err
 			}
 		}
@@ -385,12 +375,11 @@ func handleMultipart(c *Client, r *Request) (err error) {
 	for k, v := range r.FormData {
 		for _, iv := range v {
 			if strings.HasPrefix(k, "@") { // file
-				err = addFile(w, k[1:], iv)
-				if err != nil {
-					return
+				if err := addFile(w, k[1:], iv); err != nil {
+					return err
 				}
 			} else { // form value
-				if err = w.WriteField(k, iv); err != nil {
+				if err := w.WriteField(k, iv); err != nil {
 					return err
 				}
 			}
@@ -398,28 +387,21 @@ func handleMultipart(c *Client, r *Request) (err error) {
 	}
 
 	// #21 - adding io.Reader support
-	if len(r.multipartFiles) > 0 {
-		for _, f := range r.multipartFiles {
-			err = addFileReader(w, f)
-			if err != nil {
-				return
-			}
+	for _, f := range r.multipartFiles {
+		if err := addFileReader(w, f); err != nil {
+			return err
 		}
 	}
 
 	// GitHub #130 adding multipart field support with content type
-	if len(r.multipartFields) > 0 {
-		for _, mf := range r.multipartFields {
-			if err = addMultipartFormField(w, mf); err != nil {
-				return
-			}
+	for _, mf := range r.multipartFields {
+		if err := addMultipartFormField(w, mf); err != nil {
+			return err
 		}
 	}
 
 	r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
-	err = w.Close()
-
-	return
+	return w.Close()
 }
 
 func handleFormData(c *Client, r *Request) {
