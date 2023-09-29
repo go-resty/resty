@@ -23,8 +23,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
 const (
@@ -154,7 +152,7 @@ type Client struct {
 	errorHooks          []ErrorHook
 	invalidHooks        []ErrorHook
 	panicHooks          []ErrorHook
-	rateLimiter         *rate.Limiter
+	rateLimiter         RateLimiter
 }
 
 // User type is to hold an username and password information
@@ -923,9 +921,9 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 	return c
 }
 
-// SetRateLimiter sets an optional `*rate.Limiter`. If set the rate limiter will control
+// SetRateLimiter sets an optional `RateLimiter`. If set the rate limiter will control
 // all requests made with this client.
-func (c *Client) SetRateLimiter(rl *rate.Limiter) *Client {
+func (c *Client) SetRateLimiter(rl RateLimiter) *Client {
 	c.rateLimiter = rl
 	return c
 }
