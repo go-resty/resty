@@ -923,6 +923,8 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 
 // SetRateLimiter sets an optional `RateLimiter`. If set the rate limiter will control
 // all requests made with this client.
+//
+// Since v2.9.0
 func (c *Client) SetRateLimiter(rl RateLimiter) *Client {
 	c.rateLimiter = rl
 	return c
