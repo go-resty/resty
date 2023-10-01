@@ -153,6 +153,7 @@ type Client struct {
 	invalidHooks        []ErrorHook
 	panicHooks          []ErrorHook
 	rateLimiter         RateLimiter
+	lock                *sync.Mutex
 }
 
 // User type is to hold an username and password information
@@ -207,6 +208,9 @@ func (c *Client) SetBaseURL(url string) *Client {
 //		SetHeader("Content-Type", "application/json").
 //		SetHeader("Accept", "application/json")
 func (c *Client) SetHeader(header, value string) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	c.Header.Set(header, value)
 	return c
 }
@@ -1363,6 +1367,7 @@ func createClient(hc *http.Client) *Client {
 		jsonEscapeHTML:     true,
 		httpClient:         hc,
 		debugBodySizeLimit: math.MaxInt32,
+		lock:               &sync.Mutex{},
 	}
 
 	// Logger
