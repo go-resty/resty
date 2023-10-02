@@ -133,30 +133,25 @@ func parseRequestURL(c *Client, r *Request) error {
 	}
 
 	// Adding Query Param
-	if l := len(c.QueryParam) + len(r.QueryParam); l > 0 {
-		query := make(url.Values, l)
-		for k, v := range r.QueryParam {
-			query[k] = v[:]
-		}
-
+	if len(c.QueryParam)+len(r.QueryParam) > 0 {
 		for k, v := range c.QueryParam {
-			// skip query parameter if it was set from request
-			if _, ok := query[k]; ok {
+			// skip query parameter if it was set in request
+			if _, ok := r.QueryParam[k]; ok {
 				continue
 			}
 
-			query[k] = v[:]
+			r.QueryParam[k] = v[:]
 		}
 
 		// GitHub #123 Preserve query string order partially.
 		// Since not feasible in `SetQuery*` resty methods, because
 		// standard package `url.Encode(...)` sorts the query params
 		// alphabetically
-		if len(query) > 0 {
+		if len(r.QueryParam) > 0 {
 			if IsStringEmpty(reqURL.RawQuery) {
-				reqURL.RawQuery = query.Encode()
+				reqURL.RawQuery = r.QueryParam.Encode()
 			} else {
-				reqURL.RawQuery = reqURL.RawQuery + "&" + query.Encode()
+				reqURL.RawQuery = reqURL.RawQuery + "&" + r.QueryParam.Encode()
 			}
 		}
 	}
