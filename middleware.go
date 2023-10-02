@@ -405,20 +405,15 @@ func handleMultipart(c *Client, r *Request) error {
 }
 
 func handleFormData(c *Client, r *Request) {
-	formData := url.Values{}
-	for k, v := range r.FormData {
-		formData[k] = v[:]
-	}
-
 	for k, v := range c.FormData {
-		if _, ok := formData[k]; ok {
+		if _, ok := r.FormData[k]; ok {
 			continue
 		}
-		formData[k] = v[:]
+		r.FormData[k] = v[:]
 	}
 
 	r.bodyBuf = acquireBuffer()
-	r.bodyBuf.WriteString(formData.Encode())
+	r.bodyBuf.WriteString(r.FormData.Encode())
 	r.Header.Set(hdrContentTypeKey, formContentType)
 	r.isFormData = true
 }
