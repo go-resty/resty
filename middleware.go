@@ -32,9 +32,7 @@ func parseRequestURL(c *Client, r *Request) error {
 
 		// GitHub #103 Path Params
 		for p, v := range r.PathParams {
-			if _, ok := params[p]; !ok {
-				params[p] = url.PathEscape(v)
-			}
+			params[p] = url.PathEscape(v)
 		}
 		for p, v := range c.PathParams {
 			if _, ok := params[p]; !ok {
