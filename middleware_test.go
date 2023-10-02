@@ -106,6 +106,46 @@ func Test_parseRequestURL(t *testing.T) {
 			expectedURL: "https://example.com/4%2F5/6/7",
 		},
 		{
+			name: "empty path parameter in URL",
+			init: func(c *Client, r *Request) {
+				r.SetPathParams(map[string]string{
+					"bar": "4",
+				})
+				r.URL = "https://example.com/{}/{bar}"
+			},
+			expectedURL: "https://example.com/%7B%7D/4",
+		},
+		{
+			name: "not closed path parameter in URL",
+			init: func(c *Client, r *Request) {
+				r.SetPathParams(map[string]string{
+					"foo": "4",
+				})
+				r.URL = "https://example.com/{foo}/{bar/1"
+			},
+			expectedURL: "https://example.com/4/%7Bbar/1",
+		},
+		{
+			name: "extra path parameter in URL",
+			init: func(c *Client, r *Request) {
+				r.SetPathParams(map[string]string{
+					"foo": "1",
+				})
+				r.URL = "https://example.com/{foo}/{bar}"
+			},
+			expectedURL: "https://example.com/1/%7Bbar%7D",
+		},
+		{
+			name: " path parameter with remainder",
+			init: func(c *Client, r *Request) {
+				r.SetPathParams(map[string]string{
+					"foo": "1",
+				})
+				r.URL = "https://example.com/{foo}/2"
+			},
+			expectedURL: "https://example.com/1/2",
+		},
+		{
 			name: "using BaseURL with absolute URL in request",
 			init: func(c *Client, r *Request) {
 				c.SetBaseURL("https://foo.bar") // ignored
@@ -189,12 +229,31 @@ func Test_parseRequestURL(t *testing.T) {
 					"foo": "1", // ignored, because of the "foo" parameter in request
 					"bar": "2",
 				})
-				c.SetQueryParams(map[string]string{
+				r.SetQueryParams(map[string]string{
 					"foo": "3",
 				})
 				r.URL = "https://example.com/"
 			},
 			expectedURL: "https://example.com/?foo=3&bar=2",
+		},
+		{
+			name: "adding query parameters by request to URL with existent",
+			init: func(c *Client, r *Request) {
+				r.SetQueryParams(map[string]string{
+					"bar": "2",
+				})
+				r.URL = "https://example.com/?foo=1"
+			},
+			expectedURL: "https://example.com/?foo=1&bar=2",
+		},
+		{
+			name: "adding query parameters by request with multiple values",
+			init: func(c *Client, r *Request) {
+				r.QueryParam.Add("foo", "1")
+				r.QueryParam.Add("foo", "2")
+				r.URL = "https://example.com/"
+			},
+			expectedURL: "https://example.com/?foo=1&foo=2",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -216,24 +275,52 @@ func Test_parseRequestURL(t *testing.T) {
 			if expectedURL.String() != actualURL.String() {
 				t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
 			}
-			if len(expectedQuery) != len(actualQuery) {
+			if !reflect.DeepEqual(expectedQuery, actualQuery) {
 				t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
 			}
-			for name, expected := range expectedQuery {
-				actual, ok := actualQuery[name]
-				if !ok {
-					t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
-				}
-				if len(expected) != len(actual) {
-					t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
-				}
-				for i, v := range expected {
-					if v != actual[i] {
-						t.Errorf("r.URL = %q does not match expected %q", r.URL, tt.expectedURL)
-					}
-				}
-			}
 		})
+	}
+}
+
+func Benchmark_parseRequestURL_PathParams(b *testing.B) {
+	c := New().SetPathParams(map[string]string{
+		"foo": "1",
+		"bar": "2",
+	}).SetRawPathParams(map[string]string{
+		"foo": "3",
+		"xyz": "4",
+	})
+	r := c.R().SetPathParams(map[string]string{
+		"foo": "5",
+		"qwe": "6",
+	}).SetRawPathParams(map[string]string{
+		"foo": "7",
+		"asd": "8",
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r.URL = "https://example.com/{foo}/{bar}/{xyz}/{qwe}/{asd}"
+		if err := parseRequestURL(c, r); err != nil {
+			b.Errorf("parseRequestURL() error = %v", err)
+		}
+	}
+}
+
+func Benchmark_parseRequestURL_QueryParams(b *testing.B) {
+	c := New().SetQueryParams(map[string]string{
+		"foo": "1",
+		"bar": "2",
+	})
+	r := c.R().SetQueryParams(map[string]string{
+		"foo": "5",
+		"qwe": "6",
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r.URL = "https://example.com/"
+		if err := parseRequestURL(c, r); err != nil {
+			b.Errorf("parseRequestURL() error = %v", err)
+		}
 	}
 }
 
@@ -865,6 +952,7 @@ func Benchmark_parseRequestBody_reader_with_SetContentLength(b *testing.B) {
 		}
 	}
 }
+
 func Benchmark_parseRequestBody_reader_without_SetContentLength(b *testing.B) {
 	c := New()
 	r := c.R()
