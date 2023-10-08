@@ -37,6 +37,18 @@ func (r *Response) Body() []byte {
 	return r.body
 }
 
+// SetBody method is to set Response body in byte slice. Typically,
+// its helpful for test cases.
+//
+//	resp.SetBody([]byte("This is test body content"))
+//	resp.SetBody(nil)
+//
+// Since v2.10.0
+func (r *Response) SetBody(b []byte) *Response {
+	r.body = b
+	return r
+}
+
 // Status method returns the HTTP status string for the executed request.
 //
 //	Example: 200 OK
