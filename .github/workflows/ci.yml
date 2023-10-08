@@ -3,12 +3,13 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - v2
     paths-ignore:
       - '**.md'
   pull_request:
     branches:
-      - master
+      - main
+      - v2
     paths-ignore:
       - '**.md'
 
