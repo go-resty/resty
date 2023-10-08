@@ -310,13 +310,23 @@ func addCredentials(c *Client, r *Request) error {
 func requestLogger(c *Client, r *Request) error {
 	if r.Debug {
 		rr := r.RawRequest
-		rl := &RequestLog{Header: copyHeaders(rr.Header), Body: r.fmtBodyString(c.debugBodySizeLimit)}
+		rh := copyHeaders(rr.Header)
+		if c.GetClient().Jar != nil {
+			for _, cookie := range c.GetClient().Jar.Cookies(r.RawRequest.URL) {
+				s := fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
+				if c := rh.Get("Cookie"); c != "" {
+					rh.Set("Cookie", c+"; "+s)
+				} else {
+					rh.Set("Cookie", s)
+				}
+			}
+		}
+		rl := &RequestLog{Header: rh, Body: r.fmtBodyString(c.debugBodySizeLimit)}
 		if c.requestLog != nil {
 			if err := c.requestLog(rl); err != nil {
 				return err
 			}
 		}
-		// fmt.Sprintf("COOKIES:\n%s\n", composeCookies(c.GetClient().Jar, *rr.URL)) +
 
 		reqLog := "\n==============================================================================\n" +
 			"~~~ REQUEST ~~~\n" +
