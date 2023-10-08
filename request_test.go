@@ -1228,7 +1228,7 @@ func TestPatchMethod(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	resp.body = nil
+	resp.SetBody(nil)
 	assertEqual(t, "", resp.String())
 }
 

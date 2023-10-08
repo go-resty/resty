@@ -616,18 +616,18 @@ func TestClientRetryPost(t *testing.T) {
 
 	if resp != nil {
 		if resp.StatusCode() == http.StatusInternalServerError {
-			t.Logf("Got response body: %s", string(resp.body))
+			t.Logf("Got response body: %s", resp.String())
 			var usersResponse []map[string]interface{}
 			err := json.Unmarshal(resp.body, &usersResponse)
 			assertError(t, err)
 
 			if !reflect.DeepEqual(users, usersResponse) {
-				t.Errorf("Expected request body to be echoed back as response body. Instead got: %s", string(resp.body))
+				t.Errorf("Expected request body to be echoed back as response body. Instead got: %s", resp.String())
 			}
 
 			return
 		}
-		t.Errorf("Got unexpected response code: %d with body: %s", resp.StatusCode(), string(resp.body))
+		t.Errorf("Got unexpected response code: %d with body: %s", resp.StatusCode(), resp.String())
 	}
 }
 
