@@ -55,6 +55,17 @@ func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		req2.Header[k] = s
 	}
 
+	// Fix http: ContentLength=xxx with Body length 0
+	if req2.Body == nil {
+		req2.ContentLength = 0
+	} else if req2.GetBody != nil {
+		var err error
+		req2.Body, err = req2.GetBody()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Make a request to get the 401 that contains the challenge.
 	resp, err := dt.transport.RoundTrip(req)
 	if err != nil || resp.StatusCode != http.StatusUnauthorized {
