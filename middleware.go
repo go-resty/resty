@@ -307,6 +307,13 @@ func addCredentials(c *Client, r *Request) error {
 	return nil
 }
 
+func createCurlCmd(c *Client, r *Request) (err error) {
+	if r.resultCurlCmd!=nil{
+		*r.resultCurlCmd = BuildCurlRequest(r.RawRequest, c.httpClient.Jar)
+	}
+	return nil
+}
+
 func requestLogger(c *Client, r *Request) error {
 	if r.Debug {
 		rr := r.RawRequest
