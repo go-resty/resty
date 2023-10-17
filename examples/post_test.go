@@ -1,7 +1,6 @@
 package examples
 
 import (
-	ejson "encoding/json"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -86,19 +85,17 @@ func TestPostJson(t *testing.T) {
 	json := MapString{
 		"name": "Alex",
 	}
-	data := struct {
-		Body string
+	result := struct {
+		Json map[string]string
 	}{}
-	r:=resty.New().R().SetBody(json).SetResult(&data)
+	r:=resty.New().R().SetBody(json).SetResult(&result)
 	resp, err := r.Post(ts.URL+"/post")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-
-	// is expected results
-	jsonData, _ := ejson.Marshal(json) // if data.Data!= "{\"name\":\"Alex\"}"{
-	if data.Body != string(jsonData) {
+	// test response
+	if result.Json["name"] != "Alex" {
 		t.Error("invalid response body:", resp.String())
 	}
 }
@@ -111,15 +108,17 @@ func TestRawBytes(t *testing.T) {
 
 	rawText := "raw data: Hi, Jack!"
 	var data = struct {
-		Body string
+		Data string
 	}{}
-	r:=resty.New().R().SetBody([]byte(rawText)).SetResult(&data)
+	var curlCmd string
+	r:=resty.New().R().SetBody([]byte(rawText)).SetResult(&data).
+	SetResultCurlCmd(&curlCmd)
 	resp, err := r.Post(ts.URL+"/post")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if data.Body != rawText {
-		t.Error("invalid response body:", resp.String())
+	if data.Data != rawText {
+		t.Errorf("invalid response body:%s, curl: %s", resp.String(), curlCmd)
 	}
 }
 
