@@ -31,7 +31,7 @@ func TestPostFile(t *testing.T) {
 	SetResult(&data)
 
 	// 2. Post file
-	resp, err := r.Post( ts.URL+"/file",)
+	resp, err := r.Post( ts.URL+"/post",)
 	if err != nil {
 		t.Fatal(err)
 	}

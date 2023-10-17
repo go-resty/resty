@@ -17,6 +17,7 @@ import (
 
 const maxMultipartMemory = 4 << 30 // 4MB
 
+
 // tlsCert:
 //
 //	0 no certificate
@@ -24,15 +25,11 @@ const maxMultipartMemory = 4 << 30 // 4MB
 //	2 with custom certificate from CA
 func createHttpbinServer(tlsCert int) (ts *httptest.Server) {
 	ts = createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		const pathPattern = "^/(get|post|put|patch|delete)$"
+		isMethodPath, _:= regexp.MatchString(pathPattern, r.URL.Path)
 		switch path := r.URL.Path; {
-		case path == "/get":
-			getHandler(w, r)
-		case path == "/post":
-			postHandler(w, r)
-		case path == "/delete":
-			postHandler(w, r)
-		case path == "/file":
-			fileHandler(w, r)
+		case isMethodPath:
+			httpbinHandler(w, r)
 		case strings.HasPrefix(path, "/sleep/"): //sleep/3
 			sleepHandler(w, r)
 		case path == "/cookie/count":
@@ -46,22 +43,49 @@ func createHttpbinServer(tlsCert int) (ts *httptest.Server) {
 	return ts
 }
 
-func postHandler(w http.ResponseWriter, r *http.Request) {
+func httpbinHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	body, _ := ioutil.ReadAll(r.Body)
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(body)) // important!!
 	m := map[string]interface{}{
 		"headers": dumpRequestHeader(r),
 		"args":    parseRequestArgs(r),
 		"body":    string(body),
 		"method":  r.Method,
 	}
+
+	// 1. parse text/plain
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "text/plain") {
+		m["data"] = string(body)
+	}
+
+	// 2. parse application/json
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		var data interface{}
+		if err := json.Unmarshal(body, &data); err!=nil{
+			m["err"] = err.Error()
+		}else{
+			m["json"] = data
+		}
+	}
+
+	// 3. parse application/x-www-form-urlencoded
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
+		m["form"] = parseQueryString(string(body))
+	}
+
+	// 4. parse multipart/form-data
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		form, files:= readMultipartForm(r)
+		m["form"] = form
+		m["files"] = files
+	}
 	buf, _ := json.Marshal(m)
 	_, _ = w.Write(buf)
 }
 
 
-func fileHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func readMultipartForm(r *http.Request) (map[string]string, map[string]string){
 	if err := r.ParseMultipartForm(maxMultipartMemory); err != nil {
 		if err != http.ErrNotMultipart {
 			panic(fmt.Sprintf("error on parse multipart form array: %v", err))
@@ -83,16 +107,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 			files[key] = fhs[0].Filename
 		}
 	}
-
-	//output
-	m := map[string]interface{}{
-		"headers": dumpRequestHeader(r),
-		"args":    parseRequestArgs(r),
-		"form":    formData,
-		"files":   files,
-	}
-	buf, _ := json.Marshal(m)
-	_, _ = w.Write(buf)
+	return formData, files
 }
 
 func sleepHandler(w http.ResponseWriter, r *http.Request) {
@@ -106,18 +121,6 @@ func sleepHandler(w http.ResponseWriter, r *http.Request) {
 	time.Sleep(time.Duration(miliseconds) * time.Microsecond)
 	out := fmt.Sprintf("sleep %d ms", miliseconds)
 	_, _ = w.Write([]byte(out))
-}
-
-func getHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	body, _ := ioutil.ReadAll(r.Body)
-	m := map[string]interface{}{
-		"headers": dumpRequestHeader(r),
-		"args":    parseRequestArgs(r),
-		"body":    string(body),
-	}
-	buf, _ := json.Marshal(m)
-	_, _ = w.Write(buf)
 }
 
 func cookieHandler(w http.ResponseWriter, r *http.Request) {
@@ -192,8 +195,13 @@ func createEchoServer() (ts *httptest.Server) {
 
 	return ts
 }
+
 func parseRequestArgs(request *http.Request) map[string]string {
 	query := request.URL.RawQuery
+	return parseQueryString(query)
+}
+
+func parseQueryString(query string) map[string]string {
 	params := map[string]string{}
 	paramsList, _ := url.ParseQuery(query)
 	for key, vals := range paramsList {
