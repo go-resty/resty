@@ -110,7 +110,7 @@ Resty author also published following projects for Go Community.
 
 ```bash
 # Go Modules
-require github.com/go-resty/resty/v2 v2.7.0
+require github.com/go-resty/resty/v2 v2.10.0
 ```
 
 ## Usage
