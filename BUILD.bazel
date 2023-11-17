@@ -9,6 +9,7 @@ go_library(
     name = "resty",
     srcs = [
         "client.go",
+        "digest.go",
         "middleware.go",
         "redirect.go",
         "request.go",
@@ -16,6 +17,8 @@ go_library(
         "resty.go",
         "retry.go",
         "trace.go",
+        "transport_js.go",
+        "transport_other.go",
         "transport.go",
         "transport112.go",
         "util.go",
