@@ -481,7 +481,6 @@ func handleContentType(c *Client, r *Request) {
 
 func handleRequestBody(c *Client, r *Request) error {
 	var bodyBytes []byte
-	releaseBuffer(r.bodyBuf)
 	r.bodyBuf = nil
 
 	switch body := r.Body.(type) {
