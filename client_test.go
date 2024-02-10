@@ -1069,3 +1069,29 @@ func TestUnixSocket(t *testing.T) {
 	assertNil(t, err)
 	assertEqual(t, "Hello resty client from a server running on endpoint /hello!", res.String())
 }
+
+func TestClone(t *testing.T) {
+	parent := New()
+
+	// set a non-interface field
+	parent.SetBaseURL("http://localhost")
+
+	// set an interface field
+	parent.UserInfo = &User{
+		Username: "parent",
+	}
+
+	clone := parent.Clone()
+	// update value of non-interface type - change will only happen on clone
+	clone.SetBaseURL("https://local.host")
+	// update value of interface type - change will also happen on parent
+	clone.UserInfo.Username = "clone"
+
+	// asert non-interface type
+	assertEqual(t, "http://localhost", parent.BaseURL)
+	assertEqual(t, "https://local.host", clone.BaseURL)
+
+	// assert interface type
+	assertEqual(t, "clone", parent.UserInfo.Username)
+	assertEqual(t, "clone", clone.UserInfo.Username)
+}
