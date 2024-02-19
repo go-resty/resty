@@ -797,7 +797,7 @@ client.SetTimeout(1 * time.Minute)
 // You can override all below settings and options at request level if you want to
 //--------------------------------------------------------------------------------
 // Host URL for all request. So you can use relative URL in the request
-client.SetHostURL("http://httpbin.org")
+client.SetBaseURL("http://httpbin.org")
 
 // Headers for all request
 client.SetHeader("Accept", "application/json")
@@ -861,7 +861,7 @@ client := resty.New()
 
 // Set the previous transport that we created, set the scheme of the communication to the
 // socket and set the unixSocket as the HostURL.
-client.SetTransport(&transport).SetScheme("http").SetHostURL(unixSocket)
+client.SetTransport(&transport).SetScheme("http").SetBaseURL(unixSocket)
 
 // No need to write the host's URL on the request, just the path.
 client.R().Get("http://localhost/index.html")
