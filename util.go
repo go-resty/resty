@@ -216,7 +216,7 @@ func writeMultipartFormFile(w *multipart.Writer, fieldName, fileName string, r i
 		return err
 	}
 
-	partWriter, err := w.CreatePart(createMultipartHeader(fieldName, fileName, http.DetectContentType(cbuf)))
+	partWriter, err := w.CreatePart(createMultipartHeader(fieldName, fileName, http.DetectContentType(cbuf[:size])))
 	if err != nil {
 		return err
 	}
