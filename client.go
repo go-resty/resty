@@ -1125,6 +1125,25 @@ func (c *Client) GetClient() *http.Client {
 	return c.httpClient
 }
 
+// Clone returns a clone of the original client.
+//
+// Be carefull when using this function:
+// - Interface values are not deeply cloned. Thus, both the original and the clone will use the
+// same value.
+// - This function is not safe for concurrent use. You should only use this when you are sure that
+// the client is not being used by any other goroutine.
+//
+// Since v2.12.0
+func (c *Client) Clone() *Client {
+	// dereference the pointer and copy the value
+	cc := *c
+
+	// lock values should not be copied - thus new values are used.
+	cc.afterResponseLock = &sync.RWMutex{}
+	cc.udBeforeRequestLock = &sync.RWMutex{}
+	return &cc
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Client Unexported methods
 //_______________________________________________________________________
