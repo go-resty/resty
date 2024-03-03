@@ -142,11 +142,11 @@ type Client struct {
 	proxyURL            *url.URL
 	beforeRequest       []RequestMiddleware
 	udBeforeRequest     []RequestMiddleware
-	udBeforeRequestLock sync.RWMutex
+	udBeforeRequestLock *sync.RWMutex
 	preReqHook          PreRequestHook
 	successHooks        []SuccessHook
 	afterResponse       []ResponseMiddleware
-	afterResponseLock   sync.RWMutex
+	afterResponseLock   *sync.RWMutex
 	requestLog          RequestLogCallback
 	responseLog         ResponseLogCallback
 	errorHooks          []ErrorHook
@@ -1360,9 +1360,11 @@ func createClient(hc *http.Client) *Client {
 		XMLUnmarshal:           xml.Unmarshal,
 		HeaderAuthorizationKey: http.CanonicalHeaderKey("Authorization"),
 
-		jsonEscapeHTML:     true,
-		httpClient:         hc,
-		debugBodySizeLimit: math.MaxInt32,
+		jsonEscapeHTML:      true,
+		httpClient:          hc,
+		debugBodySizeLimit:  math.MaxInt32,
+		udBeforeRequestLock: &sync.RWMutex{},
+		afterResponseLock:   &sync.RWMutex{},
 	}
 
 	// Logger
