@@ -722,6 +722,25 @@ func TestRequestDigestAuthFail(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestRequestDigestAuthWithBody(t *testing.T) {
+	conf := defaultDigestServerConf()
+	ts := createDigestServer(t, nil)
+	defer ts.Close()
+
+	resp, err := dclr().
+		SetDigestAuth(conf.username, conf.password).
+		SetResult(&AuthSuccess{}).
+		SetHeader(hdrContentTypeKey, "application/json").
+		SetBody(map[string]interface{}{"zip_code": "00000", "city": "Los Angeles"}).
+		Post(ts.URL + conf.uri)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+}
+
 func TestFormData(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()

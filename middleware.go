@@ -58,7 +58,7 @@ func parseRequestURL(c *Client, r *Request) error {
 			defer releaseBuffer(buf)
 			// search for the next or first opened curly bracket
 			for curr := strings.Index(r.URL, "{"); curr > prev; curr = prev + strings.Index(r.URL[prev:], "{") {
-				// write everything form the previous position up to the current
+				// write everything from the previous position up to the current
 				if curr > prev {
 					buf.WriteString(r.URL[prev:curr])
 				}
@@ -310,13 +310,23 @@ func addCredentials(c *Client, r *Request) error {
 func requestLogger(c *Client, r *Request) error {
 	if r.Debug {
 		rr := r.RawRequest
-		rl := &RequestLog{Header: copyHeaders(rr.Header), Body: r.fmtBodyString(c.debugBodySizeLimit)}
+		rh := copyHeaders(rr.Header)
+		if c.GetClient().Jar != nil {
+			for _, cookie := range c.GetClient().Jar.Cookies(r.RawRequest.URL) {
+				s := fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
+				if c := rh.Get("Cookie"); c != "" {
+					rh.Set("Cookie", c+"; "+s)
+				} else {
+					rh.Set("Cookie", s)
+				}
+			}
+		}
+		rl := &RequestLog{Header: rh, Body: r.fmtBodyString(c.debugBodySizeLimit)}
 		if c.requestLog != nil {
 			if err := c.requestLog(rl); err != nil {
 				return err
 			}
 		}
-		// fmt.Sprintf("COOKIES:\n%s\n", composeCookies(c.GetClient().Jar, *rr.URL)) +
 
 		reqLog := "\n==============================================================================\n" +
 			"~~~ REQUEST ~~~\n" +
@@ -471,7 +481,6 @@ func handleContentType(c *Client, r *Request) {
 
 func handleRequestBody(c *Client, r *Request) error {
 	var bodyBytes []byte
-	releaseBuffer(r.bodyBuf)
 	r.bodyBuf = nil
 
 	switch body := r.Body.(type) {

@@ -216,7 +216,7 @@ func writeMultipartFormFile(w *multipart.Writer, fieldName, fileName string, r i
 		return err
 	}
 
-	partWriter, err := w.CreatePart(createMultipartHeader(fieldName, fileName, http.DetectContentType(cbuf)))
+	partWriter, err := w.CreatePart(createMultipartHeader(fieldName, fileName, http.DetectContentType(cbuf[:size])))
 	if err != nil {
 		return err
 	}
@@ -339,25 +339,7 @@ func silently(_ ...interface{}) {}
 func composeHeaders(c *Client, r *Request, hdrs http.Header) string {
 	str := make([]string, 0, len(hdrs))
 	for _, k := range sortHeaderKeys(hdrs) {
-		var v string
-		if k == "Cookie" {
-			cv := strings.TrimSpace(strings.Join(hdrs[k], ", "))
-			if c.GetClient().Jar != nil {
-				for _, c := range c.GetClient().Jar.Cookies(r.RawRequest.URL) {
-					if cv != "" {
-						cv = cv + "; " + c.String()
-					} else {
-						cv = c.String()
-					}
-				}
-			}
-			v = strings.TrimSpace(fmt.Sprintf("%25s: %s", k, cv))
-		} else {
-			v = strings.TrimSpace(fmt.Sprintf("%25s: %s", k, strings.Join(hdrs[k], ", ")))
-		}
-		if v != "" {
-			str = append(str, "\t"+v)
-		}
+		str = append(str, "\t"+strings.TrimSpace(fmt.Sprintf("%25s: %s", k, strings.Join(hdrs[k], ", "))))
 	}
 	return strings.Join(str, "\n")
 }

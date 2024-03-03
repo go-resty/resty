@@ -766,6 +766,29 @@ func TestLogCallbacks(t *testing.T) {
 	assertNotNil(t, resp)
 }
 
+func TestDebugLogSimultaneously(t *testing.T) {
+	ts := createGetServer(t)
+
+	c := New().
+		SetDebug(true).
+		SetBaseURL(ts.URL).
+		outputLogTo(io.Discard)
+
+	t.Cleanup(ts.Close)
+	for i := 0; i < 50; i++ {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			t.Parallel()
+			resp, err := c.R().
+				SetBody([]int{1, 2, 3}).
+				SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
+				Post("/")
+
+			assertError(t, err)
+			assertEqual(t, http.StatusOK, resp.StatusCode())
+		})
+	}
+}
+
 func TestNewWithLocalAddr(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()

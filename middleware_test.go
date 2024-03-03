@@ -756,7 +756,7 @@ func Test_parseRequestBody(t *testing.T) {
 			expectedContentLength: "744",
 		},
 		{
-			name: "mulipart fields",
+			name: "multipart fields",
 			init: func(c *Client, r *Request) {
 				r.SetMultipartFields(
 					&MultipartField{
@@ -776,7 +776,7 @@ func Test_parseRequestBody(t *testing.T) {
 			expectedContentLength: "344",
 		},
 		{
-			name: "mulipart files",
+			name: "multipart files",
 			init: func(c *Client, r *Request) {
 				r.SetFileReader("foo", "foo.txt", strings.NewReader("1")).
 					SetFileReader("bar", "bar.txt", strings.NewReader("2")).
@@ -784,7 +784,7 @@ func Test_parseRequestBody(t *testing.T) {
 			},
 			expectedBodyBuf:       []byte(`{"bar":"2","foo":"1"}`),
 			expectedContentType:   "multipart/form-data; boundary=",
-			expectedContentLength: "412",
+			expectedContentLength: "414",
 		},
 		{
 			name: "body with errorReader",

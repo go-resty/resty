@@ -55,6 +55,17 @@ func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		req2.Header[k] = s
 	}
 
+	// Fix http: ContentLength=xxx with Body length 0
+	if req2.Body == nil {
+		req2.ContentLength = 0
+	} else if req2.GetBody != nil {
+		var err error
+		req2.Body, err = req2.GetBody()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Make a request to get the 401 that contains the challenge.
 	resp, err := dt.transport.RoundTrip(req)
 	if err != nil || resp.StatusCode != http.StatusUnauthorized {
@@ -122,14 +133,17 @@ func parseChallenge(input string) (*challenge, error) {
 		return nil, ErrDigestBadChallenge
 	}
 	s = strings.Trim(s[7:], ws)
-	sl := strings.Split(s, ", ")
+	sl := strings.Split(s, ",")
 	c := &challenge{}
 	var r []string
 	for i := range sl {
+		sl[i] = strings.TrimSpace(sl[i])
 		r = strings.SplitN(sl[i], "=", 2)
 		if len(r) != 2 {
 			return nil, ErrDigestBadChallenge
 		}
+		r[0] = strings.TrimSpace(r[0])
+		r[1] = strings.TrimSpace(r[1])
 		switch r[0] {
 		case "realm":
 			c.realm = strings.Trim(r[1], qs)
@@ -140,9 +154,9 @@ func parseChallenge(input string) (*challenge, error) {
 		case "opaque":
 			c.opaque = strings.Trim(r[1], qs)
 		case "stale":
-			c.stale = r[1]
+			c.stale = strings.Trim(r[1], qs)
 		case "algorithm":
-			c.algorithm = r[1]
+			c.algorithm = strings.Trim(r[1], qs)
 		case "qop":
 			c.qop = strings.Trim(r[1], qs)
 		case "charset":
