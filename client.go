@@ -1148,9 +1148,7 @@ func (c *Client) Clone() *Client {
 // Client Unexported methods
 //_______________________________________________________________________
 
-// Executes method executes the given `Request` object and returns response
-// error.
-func (c *Client) execute(req *Request) (*Response, error) {
+func (c *Client) executeBefore(req *Request) (error) {
 	// Lock the user-defined pre-request hooks.
 	c.udBeforeRequestLock.RLock()
 	defer c.udBeforeRequestLock.RUnlock()
@@ -1166,7 +1164,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// to modify the *resty.Request object
 	for _, f := range c.udBeforeRequest {
 		if err = f(c, req); err != nil {
-			return nil, wrapNoRetryErr(err)
+			return wrapNoRetryErr(err)
 		}
 	}
 
@@ -1174,14 +1172,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// will return an error if the rate limit is exceeded.
 	if req.client.rateLimiter != nil {
 		if !req.client.rateLimiter.Allow() {
-			return nil, wrapNoRetryErr(ErrRateLimitExceeded)
+			return wrapNoRetryErr(ErrRateLimitExceeded)
 		}
 	}
 
 	// resty middlewares
 	for _, f := range c.beforeRequest {
 		if err = f(c, req); err != nil {
-			return nil, wrapNoRetryErr(err)
+			return wrapNoRetryErr(err)
 		}
 	}
 
@@ -1192,15 +1190,24 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// call pre-request if defined
 	if c.preReqHook != nil {
 		if err = c.preReqHook(c, req.RawRequest); err != nil {
-			return nil, wrapNoRetryErr(err)
+			return  wrapNoRetryErr(err)
 		}
 	}
 
 	if err = requestLogger(c, req); err != nil {
-		return nil, wrapNoRetryErr(err)
+		return wrapNoRetryErr(err)
 	}
 
 	req.RawRequest.Body = newRequestBodyReleaser(req.RawRequest.Body, req.bodyBuf)
+	return nil
+}
+
+// Executes method executes the given `Request` object and returns response
+// error.
+func (c *Client) execute(req *Request) (*Response, error) {
+	if err:= c.executeBefore(req);err!=nil{
+		return nil, err
+	}
 
 	req.Time = time.Now()
 	resp, err := c.httpClient.Do(req.RawRequest)
@@ -1396,6 +1403,7 @@ func createClient(hc *http.Client) *Client {
 		parseRequestBody,
 		createHTTPRequest,
 		addCredentials,
+		createCurlCmd,
 	}
 
 	// user defined request middlewares
