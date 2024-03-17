@@ -1127,7 +1127,7 @@ func (c *Client) GetClient() *http.Client {
 
 // Clone returns a clone of the original client.
 //
-// Be carefull when using this function:
+// Be careful when using this function:
 // - Interface values are not deeply cloned. Thus, both the original and the clone will use the
 // same value.
 // - This function is not safe for concurrent use. You should only use this when you are sure that
