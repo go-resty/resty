@@ -7,6 +7,7 @@ package resty
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -818,6 +820,31 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 		return c
 	}
 	transport.TLSClientConfig = config
+	return c
+}
+
+// SetResolver method set Custom DNS for resolver
+func (c *Client) SetResolver(dns string) *Client {
+	transport, err := c.transport()
+	if err != nil {
+		c.log.Errorf("%v", err)
+		return c
+	}
+
+	transport.DialContext = (&net.Dialer{
+		Timeout:   c.httpClient.Timeout,
+		KeepAlive: 30 * time.Second,
+		Resolver: &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{
+					Timeout: time.Duration(5000) * time.Millisecond,
+				}
+				return d.DialContext(ctx, "udp", fmt.Sprintf("%s:53", dns))
+			},
+		},
+	}).DialContext
+
 	return c
 }
 
