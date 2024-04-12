@@ -264,9 +264,10 @@ func (c *credentials) validateQop() error {
 	if c.messageQop == "" {
 		return ErrDigestNoQop
 	}
-	possibleQops := strings.Split(c.messageQop, ", ")
+	possibleQops := strings.Split(c.messageQop, ",")
 	var authSupport bool
 	for _, qop := range possibleQops {
+		qop = strings.TrimSpace(qop)
 		if qop == "auth" {
 			authSupport = true
 			break
