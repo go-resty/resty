@@ -104,6 +104,7 @@ func TestClientDigestAuth(t *testing.T) {
 func TestClientDigestSession(t *testing.T) {
 	conf := defaultDigestServerConf()
 	conf.algo = "MD5-sess"
+	conf.qop = "auth, auth-int"
 	ts := createDigestServer(t, conf)
 	defer ts.Close()
 
@@ -134,6 +135,7 @@ func TestClientDigestErrors(t *testing.T) {
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/bad" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/unknown_param" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/missing_value" }, expect: ErrDigestBadChallenge},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/unclosed_quote" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/no_challenge" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/status_500" }, expect: nil},
 	}

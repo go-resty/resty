@@ -700,6 +700,9 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 		case "/missing_value":
 			setWWWAuthHeader(w, `Digest realm="hello", domain`)
 			return
+		case "/unclosed_quote":
+			setWWWAuthHeader(w, `Digest realm="hello, qop=auth`)
+			return
 		case "/no_challenge":
 			setWWWAuthHeader(w, "")
 			return
