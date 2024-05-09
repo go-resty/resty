@@ -45,5 +45,7 @@ jobs:
       - name: Test
         run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic
 
-      - name: Coverage
-        run: bash <(curl -s https://codecov.io/bash)
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
