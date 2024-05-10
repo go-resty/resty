@@ -1,5 +1,6 @@
 // Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com)
 // 2023 Segev Dagan (https://github.com/segevda)
+// 2024 Philipp Wolfer (https://github.com/phw)
 // All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
@@ -125,48 +126,78 @@ type challenge struct {
 	userhash  string
 }
 
+func (c *challenge) setValue(k, v string) error {
+	switch k {
+	case "realm":
+		c.realm = v
+	case "domain":
+		c.domain = v
+	case "nonce":
+		c.nonce = v
+	case "opaque":
+		c.opaque = v
+	case "stale":
+		c.stale = v
+	case "algorithm":
+		c.algorithm = v
+	case "qop":
+		c.qop = v
+	case "charset":
+		if strings.ToUpper(v) != "UTF-8" {
+			return ErrDigestCharset
+		}
+	case "userhash":
+		c.userhash = v
+	default:
+		return ErrDigestBadChallenge
+	}
+	return nil
+}
+
 func parseChallenge(input string) (*challenge, error) {
 	const ws = " \n\r\t"
-	const qs = `"`
 	s := strings.Trim(input, ws)
 	if !strings.HasPrefix(s, "Digest ") {
 		return nil, ErrDigestBadChallenge
 	}
 	s = strings.Trim(s[7:], ws)
-	sl := strings.Split(s, ",")
 	c := &challenge{}
-	var r []string
-	for i := range sl {
-		sl[i] = strings.TrimSpace(sl[i])
-		r = strings.SplitN(sl[i], "=", 2)
-		if len(r) != 2 {
-			return nil, ErrDigestBadChallenge
-		}
-		r[0] = strings.TrimSpace(r[0])
-		r[1] = strings.TrimSpace(r[1])
-		switch r[0] {
-		case "realm":
-			c.realm = strings.Trim(r[1], qs)
-		case "domain":
-			c.domain = strings.Trim(r[1], qs)
-		case "nonce":
-			c.nonce = strings.Trim(r[1], qs)
-		case "opaque":
-			c.opaque = strings.Trim(r[1], qs)
-		case "stale":
-			c.stale = strings.Trim(r[1], qs)
-		case "algorithm":
-			c.algorithm = strings.Trim(r[1], qs)
-		case "qop":
-			c.qop = strings.Trim(r[1], qs)
-		case "charset":
-			if strings.ToUpper(strings.Trim(r[1], qs)) != "UTF-8" {
-				return nil, ErrDigestCharset
+	b := strings.Builder{}
+	key := ""
+	quoted := false
+	for _, r := range s {
+		switch r {
+		case '"':
+			quoted = !quoted
+		case ',':
+			if quoted {
+				b.WriteRune(r)
+			} else {
+				val := strings.Trim(b.String(), ws)
+				b.Reset()
+				if err := c.setValue(key, val); err != nil {
+					return nil, err
+				}
+				key = ""
 			}
-		case "userhash":
-			c.userhash = strings.Trim(r[1], qs)
+		case '=':
+			if quoted {
+				b.WriteRune(r)
+			} else {
+				key = strings.Trim(b.String(), ws)
+				b.Reset()
+			}
 		default:
-			return nil, ErrDigestBadChallenge
+			b.WriteRune(r)
+		}
+	}
+	if quoted || (key == "" && b.Len() > 0) {
+		return nil, ErrDigestBadChallenge
+	}
+	if key != "" {
+		val := strings.Trim(b.String(), ws)
+		if err := c.setValue(key, val); err != nil {
+			return nil, err
 		}
 	}
 	return c, nil
@@ -233,9 +264,10 @@ func (c *credentials) validateQop() error {
 	if c.messageQop == "" {
 		return ErrDigestNoQop
 	}
-	possibleQops := strings.Split(c.messageQop, ", ")
+	possibleQops := strings.Split(c.messageQop, ",")
 	var authSupport bool
 	for _, qop := range possibleQops {
+		qop = strings.TrimSpace(qop)
 		if qop == "auth" {
 			authSupport = true
 			break

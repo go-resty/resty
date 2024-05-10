@@ -146,6 +146,16 @@ func Test_parseRequestURL(t *testing.T) {
 			expectedURL: "https://example.com/1/2",
 		},
 		{
+			name: "using base url with path param at index 0",
+			init: func(c *Client, r *Request) {
+				c.SetBaseURL("https://example.com/prefix")
+				r.SetPathParam("first", "1").
+					SetPathParam("second", "2")
+				r.URL = "{first}/{second}"
+			},
+			expectedURL: "https://example.com/prefix/1/2",
+		},
+		{
 			name: "using BaseURL with absolute URL in request",
 			init: func(c *Client, r *Request) {
 				c.SetBaseURL("https://foo.bar") // ignored

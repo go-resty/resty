@@ -104,6 +104,7 @@ func TestClientDigestAuth(t *testing.T) {
 func TestClientDigestSession(t *testing.T) {
 	conf := defaultDigestServerConf()
 	conf.algo = "MD5-sess"
+	conf.qop = "auth, auth-int"
 	ts := createDigestServer(t, conf)
 	defer ts.Close()
 
@@ -134,6 +135,7 @@ func TestClientDigestErrors(t *testing.T) {
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/bad" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/unknown_param" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/missing_value" }, expect: ErrDigestBadChallenge},
+		{mutateConf: func(c *digestServerConfig) { c.uri = "/unclosed_quote" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/no_challenge" }, expect: ErrDigestBadChallenge},
 		{mutateConf: func(c *digestServerConfig) { c.uri = "/status_500" }, expect: nil},
 	}
@@ -1068,4 +1070,30 @@ func TestUnixSocket(t *testing.T) {
 	res, err = client.R().Get("http://localhost/hello")
 	assertNil(t, err)
 	assertEqual(t, "Hello resty client from a server running on endpoint /hello!", res.String())
+}
+
+func TestClone(t *testing.T) {
+	parent := New()
+
+	// set a non-interface field
+	parent.SetBaseURL("http://localhost")
+
+	// set an interface field
+	parent.UserInfo = &User{
+		Username: "parent",
+	}
+
+	clone := parent.Clone()
+	// update value of non-interface type - change will only happen on clone
+	clone.SetBaseURL("https://local.host")
+	// update value of interface type - change will also happen on parent
+	clone.UserInfo.Username = "clone"
+
+	// asert non-interface type
+	assertEqual(t, "http://localhost", parent.BaseURL)
+	assertEqual(t, "https://local.host", clone.BaseURL)
+
+	// assert interface type
+	assertEqual(t, "clone", parent.UserInfo.Username)
+	assertEqual(t, "clone", clone.UserInfo.Username)
 }
