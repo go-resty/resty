@@ -29,7 +29,7 @@ func TestClientBasicAuth(t *testing.T) {
 
 	c := dc()
 	c.SetBasicAuth("myuser", "basicauth").
-		SetHostURL(ts.URL).
+		SetBaseURL(ts.URL).
 		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
 
 	resp, err := c.R().
@@ -50,7 +50,7 @@ func TestClientAuthToken(t *testing.T) {
 	c := dc()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
-		SetHostURL(ts.URL + "/")
+		SetBaseURL(ts.URL + "/")
 
 	resp, err := c.R().Get("/profile")
 
@@ -66,7 +66,7 @@ func TestClientAuthScheme(t *testing.T) {
 	// Ensure default Bearer
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
-		SetHostURL(ts.URL + "/")
+		SetBaseURL(ts.URL + "/")
 
 	resp, err := c.R().Get("/profile")
 
@@ -384,8 +384,8 @@ func TestClientOptions(t *testing.T) {
 	client.SetContentLength(true)
 	assertEqual(t, client.setContentLength, true)
 
-	client.SetHostURL("http://httpbin.org")
-	assertEqual(t, "http://httpbin.org", client.HostURL)
+	client.SetBaseURL("http://httpbin.org")
+	assertEqual(t, "http://httpbin.org", client.BaseURL)
 
 	client.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8")
 	client.SetHeaders(map[string]string{
@@ -803,7 +803,7 @@ func TestNewWithTimeout(t *testing.T) {
 		TransportExpectContinueTimeout: 1 * time.Second,
 	}
 	client := NewWithTimeout(customTimeout)
-	client.SetHostURL(ts.URL)
+	client.SetBaseURL(ts.URL)
 
 	resp, err := client.R().Get("/")
 	assertNil(t, err)
@@ -819,7 +819,7 @@ func TestNewWithDialer(t *testing.T) {
 		KeepAlive: 15 * time.Second,
 	}
 	client := NewWithDialer(dialer)
-	client.SetHostURL(ts.URL)
+	client.SetBaseURL(ts.URL)
 
 	resp, err := client.R().Get("/")
 	assertNil(t, err)
@@ -832,7 +832,7 @@ func TestNewWithLocalAddr(t *testing.T) {
 
 	localAddress, _ := net.ResolveTCPAddr("tcp", "127.0.0.1")
 	client := NewWithLocalAddr(localAddress)
-	client.SetHostURL(ts.URL)
+	client.SetBaseURL(ts.URL)
 
 	resp, err := client.R().Get("/")
 	assertNil(t, err)
@@ -1047,7 +1047,7 @@ func TestHostURLForGH318AndGH407(t *testing.T) {
 	// assertNotNil(t, resp)
 
 	t.Log("with leading `/` on request & with trailing `/` on host url")
-	c.SetHostURL(ts.URL + "/")
+	c.SetBaseURL(ts.URL + "/")
 	resp, err := c.R().
 		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
 		Post("/login")
@@ -1095,7 +1095,7 @@ func TestUnixSocket(t *testing.T) {
 
 	// Set the previous transport that we created, set the scheme of the communication to the
 	// socket and set the unixSocket as the HostURL.
-	client.SetTransport(&transport).SetScheme("http").SetHostURL(unixSocketAddr)
+	client.SetTransport(&transport).SetScheme("http").SetBaseURL(unixSocketAddr)
 
 	// No need to write the host's URL on the request, just the path.
 	res, err := client.R().Get("http://localhost/")

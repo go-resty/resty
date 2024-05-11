@@ -164,7 +164,7 @@ func TestGetRelativePath(t *testing.T) {
 	defer ts.Close()
 
 	c := dc()
-	c.SetHostURL(ts.URL)
+	c.SetBaseURL(ts.URL)
 
 	resp, err := c.R().Get("mypage2")
 
@@ -594,7 +594,7 @@ func TestRequestBasicAuth(t *testing.T) {
 	defer ts.Close()
 
 	c := dc()
-	c.SetHostURL(ts.URL).
+	c.SetBaseURL(ts.URL).
 		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
 
 	resp, err := c.R().
@@ -618,7 +618,7 @@ func TestRequestInsecureBasicAuth(t *testing.T) {
 	logger.l.SetOutput(&logBuf)
 
 	c := dc()
-	c.SetHostURL(ts.URL)
+	c.SetBaseURL(ts.URL)
 
 	resp, err := c.R().
 		SetBasicAuth("myuser", "basicauth").
@@ -1039,7 +1039,7 @@ func TestGetWithCookie(t *testing.T) {
 	defer ts.Close()
 
 	c := dcl()
-	c.SetHostURL(ts.URL)
+	c.SetBaseURL(ts.URL)
 	c.SetCookie(&http.Cookie{
 		Name:  "go-resty-1",
 		Value: "This is cookie 1 value",
@@ -1070,7 +1070,7 @@ func TestGetWithCookies(t *testing.T) {
 	defer ts.Close()
 
 	c := dc()
-	c.SetHostURL(ts.URL).SetDebug(true)
+	c.SetBaseURL(ts.URL).SetDebug(true)
 
 	tu, _ := url.Parse(ts.URL)
 	c.GetClient().Jar.SetCookies(tu, []*http.Cookie{
@@ -1369,7 +1369,7 @@ func TestIncorrectURL(t *testing.T) {
 	assertEqual(t, true, (strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
 		strings.Contains(err.Error(), "parse \"//not.a.user@%66%6f%6f.com/just/a/path/also\"")))
 
-	c.SetHostURL("//not.a.user@%66%6f%6f.com")
+	c.SetBaseURL("//not.a.user@%66%6f%6f.com")
 	_, err1 := c.R().Get("/just/a/path/also")
 	assertEqual(t, true, (strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
 		strings.Contains(err1.Error(), "parse \"//not.a.user@%66%6f%6f.com/just/a/path/also\"")))
@@ -1765,7 +1765,7 @@ func TestRequestOverridesClientAuthorizationHeader(t *testing.T) {
 	c := dc()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 		SetHeader("Authorization", "some token").
-		SetHostURL(ts.URL + "/")
+		SetBaseURL(ts.URL + "/")
 
 	resp, err := c.R().
 		SetHeader("Authorization", "Bearer 004DDB79-6801-4587-B976-F093E6AC44FF").
@@ -1929,7 +1929,7 @@ func TestTraceInfo(t *testing.T) {
 	serverAddr := ts.URL[strings.LastIndex(ts.URL, "/")+1:]
 
 	client := dc()
-	client.SetHostURL(ts.URL).EnableTrace()
+	client.SetBaseURL(ts.URL).EnableTrace()
 	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
 		resp, err := client.R().Get(u)
 		assertNil(t, err)
@@ -1974,7 +1974,7 @@ func TestTraceInfoWithoutEnableTrace(t *testing.T) {
 	defer ts.Close()
 
 	client := dc()
-	client.SetHostURL(ts.URL)
+	client.SetBaseURL(ts.URL)
 	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
 		resp, err := client.R().Get(u)
 		assertNil(t, err)
@@ -1992,7 +1992,7 @@ func TestTraceInfoWithoutEnableTrace(t *testing.T) {
 
 func TestTraceInfoOnTimeout(t *testing.T) {
 	client := dc()
-	client.SetHostURL("http://resty-nowhere.local").EnableTrace()
+	client.SetBaseURL("http://resty-nowhere.local").EnableTrace()
 
 	resp, err := client.R().Get("/")
 	assertNotNil(t, err)

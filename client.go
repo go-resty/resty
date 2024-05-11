@@ -117,7 +117,6 @@ type ClientTimeoutSetting struct {
 // at request level.
 type Client struct {
 	BaseURL               string
-	HostURL               string // Deprecated: use BaseURL instead. To be removed in v3.0.0 release.
 	QueryParam            url.Values
 	FormData              url.Values
 	PathParams            map[string]string
@@ -182,21 +181,6 @@ type User struct {
 // Client methods
 //___________________________________
 
-// SetHostURL method is to set Host URL in the client instance. It will be used with request
-// raised from this client with relative URL
-//
-//	// Setting HTTP address
-//	client.SetHostURL("http://myjeeva.com")
-//
-//	// Setting HTTPS address
-//	client.SetHostURL("https://myjeeva.com")
-//
-// Deprecated: use SetBaseURL instead. To be removed in v3.0.0 release.
-func (c *Client) SetHostURL(url string) *Client {
-	c.SetBaseURL(url)
-	return c
-}
-
 // SetBaseURL method is to set Base URL in the client instance. It will be used with request
 // raised from this client with relative URL
 //
@@ -209,7 +193,6 @@ func (c *Client) SetHostURL(url string) *Client {
 // Since v2.7.0
 func (c *Client) SetBaseURL(url string) *Client {
 	c.BaseURL = strings.TrimRight(url, "/")
-	c.HostURL = c.BaseURL
 	return c
 }
 
