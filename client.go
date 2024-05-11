@@ -9,12 +9,9 @@ import (
 	"compress/gzip"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -91,6 +88,27 @@ type (
 	// SuccessHook type is for reacting to request success
 	SuccessHook func(*Client, *Response)
 )
+
+// ClientTimeoutSetting struct is used to define custom dialer and transport timeout
+// values for the Resty client initialization. The default dialer and transport
+// timeout values are -
+//
+//	defaultClientTimeout := &ClientTimeoutSetting{
+//		DialerTimeout:                  30 * time.Second,
+//		DialerKeepAlive:                30 * time.Second,
+//		TransportIdleConnTimeout:       90 * time.Second,
+//		TransportTLSHandshakeTimeout:   10 * time.Second,
+//		TransportExpectContinueTimeout: 1 * time.Second,
+//	}
+//
+// Since v3.0.0
+type ClientTimeoutSetting struct {
+	DialerTimeout                  time.Duration
+	DialerKeepAlive                time.Duration
+	TransportIdleConnTimeout       time.Duration
+	TransportTLSHandshakeTimeout   time.Duration
+	TransportExpectContinueTimeout time.Duration
+}
 
 // Client struct is used to create Resty client with client level settings,
 // these settings are applicable to all the request raised from the client.
@@ -1121,8 +1139,21 @@ func (c *Client) IsProxySet() bool {
 }
 
 // GetClient method returns the current `http.Client` used by the resty client.
+//
+// Since v1.1.0
 func (c *Client) GetClient() *http.Client {
 	return c.httpClient
+}
+
+// Transport method returns `*http.Transport` currently in use or error
+// in case currently used `transport` is not a `*http.Transport`.
+//
+// Since v2.8.0 become exported method.
+func (c *Client) Transport() (*http.Transport, error) {
+	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
+		return transport, nil
+	}
+	return nil, errors.New("current transport is not an *http.Transport instance")
 }
 
 // Clone returns a clone of the original client.
@@ -1263,17 +1294,6 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 	return transport.TLSClientConfig, nil
 }
 
-// Transport method returns `*http.Transport` currently in use or error
-// in case currently used `transport` is not a `*http.Transport`.
-//
-// Since v2.8.0 become exported method.
-func (c *Client) Transport() (*http.Transport, error) {
-	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
-		return transport, nil
-	}
-	return nil, errors.New("current transport is not an *http.Transport instance")
-}
-
 // just an internal helper method
 func (c *Client) outputLogTo(w io.Writer) *Client {
 	c.log.(*logger).l.SetOutput(w)
@@ -1353,60 +1373,4 @@ type MultipartField struct {
 	FileName    string
 	ContentType string
 	io.Reader
-}
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Unexported package methods
-//_______________________________________________________________________
-
-func createClient(hc *http.Client) *Client {
-	if hc.Transport == nil {
-		hc.Transport = createTransport(nil)
-	}
-
-	c := &Client{ // not setting lang default values
-		QueryParam:             url.Values{},
-		FormData:               url.Values{},
-		Header:                 http.Header{},
-		Cookies:                make([]*http.Cookie, 0),
-		RetryWaitTime:          defaultWaitTime,
-		RetryMaxWaitTime:       defaultMaxWaitTime,
-		PathParams:             make(map[string]string),
-		RawPathParams:          make(map[string]string),
-		JSONMarshal:            json.Marshal,
-		JSONUnmarshal:          json.Unmarshal,
-		XMLMarshal:             xml.Marshal,
-		XMLUnmarshal:           xml.Unmarshal,
-		HeaderAuthorizationKey: http.CanonicalHeaderKey("Authorization"),
-
-		jsonEscapeHTML:      true,
-		httpClient:          hc,
-		debugBodySizeLimit:  math.MaxInt32,
-		udBeforeRequestLock: &sync.RWMutex{},
-		afterResponseLock:   &sync.RWMutex{},
-	}
-
-	// Logger
-	c.SetLogger(createLogger())
-
-	// default before request middlewares
-	c.beforeRequest = []RequestMiddleware{
-		parseRequestURL,
-		parseRequestHeader,
-		parseRequestBody,
-		createHTTPRequest,
-		addCredentials,
-	}
-
-	// user defined request middlewares
-	c.udBeforeRequest = []RequestMiddleware{}
-
-	// default after response middlewares
-	c.afterResponse = []ResponseMiddleware{
-		responseLogger,
-		parseResponseBody,
-		saveResponseIntoFile,
-	}
-
-	return c
 }

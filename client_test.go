@@ -791,6 +791,41 @@ func TestDebugLogSimultaneously(t *testing.T) {
 	}
 }
 
+func TestNewWithTimeout(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	customTimeout := &ClientTimeoutSetting{
+		DialerTimeout:                  30 * time.Second,
+		DialerKeepAlive:                15 * time.Second,
+		TransportIdleConnTimeout:       120 * time.Second,
+		TransportTLSHandshakeTimeout:   20 * time.Second,
+		TransportExpectContinueTimeout: 1 * time.Second,
+	}
+	client := NewWithTimeout(customTimeout)
+	client.SetHostURL(ts.URL)
+
+	resp, err := client.R().Get("/")
+	assertNil(t, err)
+	assertEqual(t, resp.String(), "TestGet: text response")
+}
+
+func TestNewWithDialer(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	dialer := &net.Dialer{
+		Timeout:   15 * time.Second,
+		KeepAlive: 15 * time.Second,
+	}
+	client := NewWithDialer(dialer)
+	client.SetHostURL(ts.URL)
+
+	resp, err := client.R().Get("/")
+	assertNil(t, err)
+	assertEqual(t, resp.String(), "TestGet: text response")
+}
+
 func TestNewWithLocalAddr(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()

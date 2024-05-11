@@ -19,8 +19,6 @@ go_library(
         "trace.go",
         "transport_js.go",
         "transport_other.go",
-        "transport.go",
-        "transport112.go",
         "util.go",
     ],
     importpath = "github.com/go-resty/resty/v2",
