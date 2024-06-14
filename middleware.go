@@ -308,8 +308,11 @@ func addCredentials(c *Client, r *Request) error {
 }
 
 func createCurlCmd(c *Client, r *Request) (err error) {
-	if r.resultCurlCmd!=nil{
-		*r.resultCurlCmd = BuildCurlRequest(r.RawRequest, c.httpClient.Jar)
+	if r.trace {
+		if r.resultCurlCmd == nil {
+			r.resultCurlCmd = new(string)
+		}
+		*r.resultCurlCmd = buildCurlRequest(r.RawRequest, c.httpClient.Jar)
 	}
 	return nil
 }
@@ -337,7 +340,7 @@ func requestLogger(c *Client, r *Request) error {
 
 		reqLog := "\n==============================================================================\n" +
 			"~~~ REQUEST(curl) ~~~\n" +
-			fmt.Sprintf("CURL:\n	%v\n", BuildCurlRequest(r.RawRequest, r.client.httpClient.Jar)) +
+			fmt.Sprintf("CURL:\n	%v\n", buildCurlRequest(r.RawRequest, r.client.httpClient.Jar)) +
 			"~~~ REQUEST ~~~\n" +
 			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
 			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +

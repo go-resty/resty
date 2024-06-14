@@ -1148,7 +1148,7 @@ func (c *Client) Clone() *Client {
 // Client Unexported methods
 //_______________________________________________________________________
 
-func (c *Client) executeBefore(req *Request) (error) {
+func (c *Client) executeBefore(req *Request) error {
 	// Lock the user-defined pre-request hooks.
 	c.udBeforeRequestLock.RLock()
 	defer c.udBeforeRequestLock.RUnlock()
@@ -1190,7 +1190,7 @@ func (c *Client) executeBefore(req *Request) (error) {
 	// call pre-request if defined
 	if c.preReqHook != nil {
 		if err = c.preReqHook(c, req.RawRequest); err != nil {
-			return  wrapNoRetryErr(err)
+			return wrapNoRetryErr(err)
 		}
 	}
 
@@ -1205,7 +1205,7 @@ func (c *Client) executeBefore(req *Request) (error) {
 // Executes method executes the given `Request` object and returns response
 // error.
 func (c *Client) execute(req *Request) (*Response, error) {
-	if err:= c.executeBefore(req);err!=nil{
+	if err := c.executeBefore(req); err != nil {
 		return nil, err
 	}
 

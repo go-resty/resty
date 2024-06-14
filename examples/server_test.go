@@ -34,8 +34,8 @@ func httpbinHandler(w http.ResponseWriter, r *http.Request) {
 		"args":    parseRequestArgs(r),
 		"headers": dumpRequestHeader(r),
 		"data":    string(body),
-		"json": nil,
-		"form":   map[string]string{},
+		"json":    nil,
+		"form":    map[string]string{},
 		"files":   map[string]string{},
 		"method":  r.Method,
 		"origin":  r.RemoteAddr,
@@ -153,7 +153,7 @@ func createTestServer(fn func(w http.ResponseWriter, r *http.Request), tlsCert i
 	if tlsCert == 0 {
 		// 1. http test server
 		ts = httptest.NewServer(http.HandlerFunc(fn))
-	} else if tlsCert == 1{
+	} else if tlsCert == 1 {
 		// 2. https test server: https://stackoverflow.com/questions/54899550/create-https-test-server-for-any-client
 		ts = httptest.NewUnstartedServer(http.HandlerFunc(fn))
 		ts.StartTLS()

@@ -74,18 +74,22 @@ type Request struct {
 	retryConditions     []RetryConditionFunc
 }
 
-func (r *Request) GetCurlCmd() string {
-	// trigger beforeRequest from middleware
-	if r.RawRequest == nil {
-		r.client.executeBefore(r) // mock r.Get("/")
+// Generate curl command for the request.
+func (r *Request) GenerateCurlCommand() string {
+	if r.resultCurlCmd != nil {
+		return *r.resultCurlCmd
+	} else {
+		if r.RawRequest == nil {
+			r.client.executeBefore(r) // mock with r.Get("/")
+		}
+		if r.resultCurlCmd == nil {
+			r.resultCurlCmd = new(string)
+		}
+		if *r.resultCurlCmd == "" {
+			*r.resultCurlCmd = buildCurlRequest(r.RawRequest, r.client.httpClient.Jar)
+		}
+		return *r.resultCurlCmd
 	}
-	if r.resultCurlCmd == nil {
-		r.resultCurlCmd = new(string)
-	}
-	if *r.resultCurlCmd == "" {
-		*r.resultCurlCmd = BuildCurlRequest(r.RawRequest, r.client.httpClient.Jar)
-	}
-	return *r.resultCurlCmd
 }
 
 // Context method returns the Context if its already set in request
@@ -345,12 +349,6 @@ func (r *Request) SetResult(res interface{}) *Request {
 	if res != nil {
 		r.Result = getPointer(res)
 	}
-	return r
-}
-
-// This method is to register curl cmd for request executed.
-func (r *Request) SetResultCurlCmd(curlCmd *string) *Request {
-	r.resultCurlCmd = curlCmd
 	return r
 }
 

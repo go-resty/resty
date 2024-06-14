@@ -12,7 +12,7 @@ import (
 	"github.com/go-resty/resty/v2/shellescape"
 )
 
-func BuildCurlRequest(req *http.Request, httpCookiejar http.CookieJar) (curl string) {
+func buildCurlRequest(req *http.Request, httpCookiejar http.CookieJar) (curl string) {
 	// 1. Generate curl raw headers
 	curl = "curl -X " + req.Method + " "
 	// req.Host + req.URL.Path + "?" + req.URL.RawQuery + " " + req.Proto + " "
@@ -22,13 +22,12 @@ func BuildCurlRequest(req *http.Request, httpCookiejar http.CookieJar) (curl str
 	}
 
 	// 2. Generate curl cookies
-	if cookieJar, ok := httpCookiejar.(*cookiejar.Jar); ok{
+	if cookieJar, ok := httpCookiejar.(*cookiejar.Jar); ok {
 		cookies := cookieJar.Cookies(req.URL)
 		if len(cookies) > 0 {
 			curl += ` -H ` + shellescape.Quote(dumpCurlCookies(cookies)) + " "
 		}
 	}
-
 
 	// 3. Generate curl body
 	if req.Body != nil {
@@ -38,8 +37,8 @@ func BuildCurlRequest(req *http.Request, httpCookiejar http.CookieJar) (curl str
 	}
 
 	urlString := shellescape.Quote(req.URL.String())
-	if urlString == "''"{
-		urlString = "'http://unexecuted-url'"
+	if urlString == "''" {
+		urlString = "'http://unexecuted-request'"
 	}
 	curl += " " + urlString
 	return curl
