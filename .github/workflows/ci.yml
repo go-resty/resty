@@ -43,7 +43,7 @@ jobs:
         run: diff -u <(echo -n) <(go fmt $(go list ./...))
 
       - name: Test
-        run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic
+        run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... 
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

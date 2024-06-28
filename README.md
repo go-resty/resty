@@ -131,6 +131,11 @@ client := resty.New()
 resp, err := client.R().
     EnableTrace().
     Get("https://httpbin.org/get")
+curlCmdExecuted := resp.Request.GenerateCurlCommand()
+
+
+// Explore curl command
+fmt.Println("Curl Command:\n  ", curlCmdExecuted+"\n")
 
 // Explore response object
 fmt.Println("Response Info:")
@@ -160,6 +165,9 @@ fmt.Println("  RequestAttempt:", ti.RequestAttempt)
 fmt.Println("  RemoteAddr    :", ti.RemoteAddr.String())
 
 /* Output
+Curl Command:
+  curl -X GET -H 'User-Agent: go-resty/2.12.0 (https://github.com/go-resty/resty)'  https://httpbin.org/get
+
 Response Info:
   Error      : <nil>
   Status Code: 200
