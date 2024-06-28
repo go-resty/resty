@@ -22,6 +22,8 @@ go_library(
         "transport.go",
         "transport112.go",
         "util.go",
+        "util_curl.go",
+        "shellescape/shellescape.go"
     ],
     importpath = "github.com/go-resty/resty/v2",
     visibility = ["//visibility:public"],
