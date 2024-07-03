@@ -103,7 +103,7 @@ func TestDebugModeCurl(t *testing.T) {
 }
 
 func captureStderr() (getOutput func() string, restore func()) {
-	old := os.Stdout
+	old := os.Stderr
 	r, w, err := os.Pipe()
 	if err != nil {
 		panic(err)
