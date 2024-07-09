@@ -905,7 +905,7 @@ func (r *Request) Patch(url string) (*Response, error) {
 // for current `Request`.
 //
 //	req := client.R()
-//	req.Method = resty.GET
+//	req.Method = resty.MethodGet
 //	req.URL = "http://httpbin.org/get"
 //	resp, err := req.Send()
 func (r *Request) Send() (*Response, error) {
@@ -915,7 +915,7 @@ func (r *Request) Send() (*Response, error) {
 // Execute method performs the HTTP request with given HTTP method and URL
 // for current `Request`.
 //
-//	resp, err := client.R().Execute(resty.GET, "http://httpbin.org/get")
+//	resp, err := client.R().Execute(resty.MethodGet, "http://httpbin.org/get")
 func (r *Request) Execute(method, url string) (*Response, error) {
 	var addrs []*net.SRV
 	var resp *Response
