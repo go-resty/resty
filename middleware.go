@@ -114,12 +114,7 @@ func parseRequestURL(c *Client, r *Request) error {
 			r.URL = "/" + r.URL
 		}
 
-		// TODO: change to use c.BaseURL only in v3.0.0
-		baseURL := c.BaseURL
-		if len(baseURL) == 0 {
-			baseURL = c.HostURL
-		}
-		reqURL, err = url.Parse(baseURL + r.URL)
+		reqURL, err = url.Parse(c.BaseURL + r.URL)
 		if err != nil {
 			return err
 		}

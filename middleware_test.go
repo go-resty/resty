@@ -182,7 +182,7 @@ func Test_parseRequestURL(t *testing.T) {
 		{
 			name: "using deprecated HostURL with relative path in request URL",
 			init: func(c *Client, r *Request) {
-				c.HostURL = "https://example.com"
+				c.BaseURL = "https://example.com"
 				r.URL = "foo/bar"
 			},
 			expectedURL: "https://example.com/foo/bar",
