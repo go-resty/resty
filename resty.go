@@ -62,9 +62,17 @@ func NewWithClient(hc *http.Client) *Client {
 //
 // Since v3.0.0
 func NewWithDialer(dialer *net.Dialer) *Client {
+	return NewWithDialerAndTimeout(dialer, defaultClientTimeout)
+}
+
+// NewWithDialer method creates a new Resty client with given Local Address
+// to dial from.
+//
+// Since v3.0.0
+func NewWithDialerAndTimeout(dialer *net.Dialer, timeoutSetting *ClientTimeoutSetting) *Client {
 	return createClient(&http.Client{
 		Jar:       createCookieJar(),
-		Transport: createTransport(dialer, defaultClientTimeout),
+		Transport: createTransport(dialer, timeoutSetting),
 	})
 }
 
