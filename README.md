@@ -62,6 +62,7 @@
     * goroutine concurrent safe
     * Resty Client trace, see [Client.EnableTrace](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.EnableTrace) and [Request.EnableTrace](https://pkg.go.dev/github.com/go-resty/resty/v2#Request.EnableTrace)
       * Since v2.4.0, trace info contains a `RequestAttempt` value, and the `Request` object contains an `Attempt` attribute
+    * Supports `GenerateCurlCommand`(**You should turn on `EnableTrace`**, otherwise the curl command will not contain the body) 
     * Debug mode - clean and informative logging presentation
     * Gzip - Go does it automatically also resty has fallback handling too
     * Works fine with `HTTP/2` and `HTTP/1.1`
@@ -122,17 +123,18 @@ The following samples will assist you to become as comfortable as possible with 
 import "github.com/go-resty/resty/v2"
 ```
 
-#### Simple GET
+#### Simple POST
+>Refer: [debug_curl_test.go](https://github.com/go-resty/resty/blob/v2/examples/debug_curl_test.go)
 
 ```go
 // Create a Resty Client
 client := resty.New()
 
 resp, err := client.R().
-    EnableTrace().
-    Get("https://httpbin.org/get")
+    EnableTrace(). // You should turn on `EnableTrace`, otherwise the curl command will not contain the body
+    SetBody(map[string]string{"name": "Alex"}).
+    Post("https://httpbin.org/post")
 curlCmdExecuted := resp.Request.GenerateCurlCommand()
-
 
 // Explore curl command
 fmt.Println("Curl Command:\n  ", curlCmdExecuted+"\n")
@@ -166,7 +168,7 @@ fmt.Println("  RemoteAddr    :", ti.RemoteAddr.String())
 
 /* Output
 Curl Command:
-  curl -X GET -H 'User-Agent: go-resty/2.12.0 (https://github.com/go-resty/resty)'  https://httpbin.org/get
+   curl -X POST -H 'Content-Type: application/json' -H 'User-Agent: go-resty/2.14.0 (https://github.com/go-resty/resty)' -d '{"name":"Alex"}' https://httpbin.org/post
 
 Response Info:
   Error      : <nil>
@@ -174,19 +176,27 @@ Response Info:
   Status     : 200 OK
   Proto      : HTTP/2.0
   Time       : 457.034718ms
-  Received At: 2020-09-14 15:35:29.784681 -0700 PDT m=+0.458137045
+  Received At: 2024-08-09 13:02:57.187544 +0800 CST m=+1.304888501
   Body       :
-  {
-    "args": {},
-    "headers": {
-      "Accept-Encoding": "gzip",
-      "Host": "httpbin.org",
-      "User-Agent": "go-resty/2.4.0 (https://github.com/go-resty/resty)",
-      "X-Amzn-Trace-Id": "Root=1-5f5ff031-000ff6292204aa6898e4de49"
-    },
-    "origin": "0.0.0.0",
-    "url": "https://httpbin.org/get"
-  }
+ {
+  "args": {}, 
+  "data": "{\"name\":\"Alex\"}", 
+  "files": {}, 
+  "form": {}, 
+  "headers": {
+    "Accept-Encoding": "gzip", 
+    "Content-Length": "15", 
+    "Content-Type": "application/json", 
+    "Host": "httpbin.org", 
+    "User-Agent": "go-resty/2.14.0 (https://github.com/go-resty/resty)", 
+    "X-Amzn-Trace-Id": "Root=1-66b5a301-567c83c86562abd3092f5e19"
+  }, 
+  "json": {
+    "name": "Alex"
+  }, 
+  "origin": "0.0.0.0",
+  "url": "https://httpbin.org/post"
+}
 
 Request Trace Info:
   DNSLookup     : 4.074657ms
