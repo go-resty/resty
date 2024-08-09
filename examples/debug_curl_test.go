@@ -15,13 +15,15 @@ func TestGenerateUnexcutedCurl(t *testing.T) {
 	ts := createHttpbinServer(0)
 	defer ts.Close()
 
-	req := resty.New().R().SetBody(map[string]string{
-		"name": "Alex",
-	}).SetCookies(
-		[]*http.Cookie{
-			{Name: "count", Value: "1"},
-		},
-	)
+	req := resty.New().R().
+		SetBody(map[string]string{
+			"name": "Alex",
+		}).
+		SetCookies(
+			[]*http.Cookie{
+				{Name: "count", Value: "1"},
+			},
+		)
 
 	curlCmdUnexecuted := req.GenerateCurlCommand()
 
@@ -43,11 +45,13 @@ func TestGenerateExecutedCurl(t *testing.T) {
 	data := map[string]string{
 		"name": "Alex",
 	}
-	req := resty.New().R().SetBody(data).SetCookies(
-		[]*http.Cookie{
-			{Name: "count", Value: "1"},
-		},
-	)
+	req := resty.New().R().
+		SetBody(data).
+		SetCookies(
+			[]*http.Cookie{
+				{Name: "count", Value: "1"},
+			},
+		)
 
 	url := ts.URL + "/post"
 	resp, err := req.
@@ -77,13 +81,15 @@ func TestDebugModeCurl(t *testing.T) {
 	defer restore()
 
 	// 2. Build request
-	req := resty.New().R().SetBody(map[string]string{
-		"name": "Alex",
-	}).SetCookies(
-		[]*http.Cookie{
-			{Name: "count", Value: "1"},
-		},
-	)
+	req := resty.New().R().
+		SetBody(map[string]string{
+			"name": "Alex",
+		}).
+		SetCookies(
+			[]*http.Cookie{
+				{Name: "count", Value: "1"},
+			},
+		)
 
 	// 3. Execute request: set debug mode
 	url := ts.URL + "/post"
