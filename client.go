@@ -129,6 +129,8 @@ type Client struct {
 	// value when `SetAuthToken` option is used.
 	HeaderAuthorizationKey string
 
+	responseBodyLimit int64
+
 	jsonEscapeHTML      bool
 	setContentLength    bool
 	closeConnection     bool
@@ -1238,7 +1240,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			}
 		}
 
-		if response.body, err = io.ReadAll(body); err != nil {
+		if response.body, err = readAllWithLimit(body, c.responseBodyLimit); err != nil {
 			response.setReceivedAt()
 			return response, err
 		}
@@ -1256,6 +1258,38 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	return response, wrapNoRetryErr(err)
+}
+
+var ErrResponseBodyTooLarge = errors.New("resty: response body too large")
+
+// https://github.com/golang/go/issues/51115
+// [io.LimitedReader] can only return [io.EOF]
+func readAllWithLimit(r io.Reader, maxSize int64) ([]byte, error) {
+	if maxSize <= 0 {
+		return io.ReadAll(r)
+	}
+
+	result := make([]byte, 0, 512)
+	total := 0
+	buf := make([]byte, 512)
+	for {
+		n, err := r.Read(buf)
+		total += n
+		if int64(total) > maxSize {
+			return nil, ErrResponseBodyTooLarge
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		result = append(result, buf[:n]...)
+	}
+
+	return result, nil
 }
 
 // getting TLS client config if not exists then create one
