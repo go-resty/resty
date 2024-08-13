@@ -69,6 +69,7 @@ type Request struct {
 	bodyBuf             *bytes.Buffer
 	clientTrace         *clientTrace
 	log                 Logger
+	multipartBoundary   string
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
@@ -455,6 +456,13 @@ func (r *Request) SetMultipartField(param, fileName, contentType string, reader 
 func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 	r.isMultiPart = true
 	r.multipartFields = append(r.multipartFields, fields...)
+	return r
+}
+
+// SetBoundary method sets the multipart boundary for the request
+// By default a random boundary will be generated in `mime/multipart`.
+func (r *Request) SetBoundary(boundary string) *Request {
+	r.multipartBoundary = boundary
 	return r
 }
 

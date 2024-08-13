@@ -429,6 +429,13 @@ func handleMultipart(c *Client, r *Request) error {
 	r.bodyBuf = acquireBuffer()
 	w := multipart.NewWriter(r.bodyBuf)
 
+	// Set boundary if not set by user
+	if r.multipartBoundary != "" {
+		if err := w.SetBoundary(r.multipartBoundary); err != nil {
+			return err
+		}
+	}
+
 	for k, v := range c.FormData {
 		for _, iv := range v {
 			if err := w.WriteField(k, iv); err != nil {

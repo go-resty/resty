@@ -1034,6 +1034,29 @@ func TestMultiPartMultipartFields(t *testing.T) {
 	assertEqual(t, true, strings.Contains(responseStr, "upload-file-2.json"))
 }
 
+func TestMultiPartCustomBoundary(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
+
+	_, err := dclr().
+		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
+		SetBoundary(`"my-custom-boundary"`).
+		SetBasicAuth("myuser", "mypass").
+		Post(ts.URL + "/profile")
+
+	assertEqual(t, "mime: invalid boundary character", err.Error())
+
+	resp, err := dclr().
+		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
+		SetBoundary("my-custom-boundary").
+		Post(ts.URL + "/profile")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "Success", resp.String())
+}
+
 func TestGetWithCookie(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
