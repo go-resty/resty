@@ -1041,7 +1041,7 @@ func TestMultiPartCustomBoundary(t *testing.T) {
 
 	_, err := dclr().
 		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
-		SetBoundary(`"my-custom-boundary"`).
+		SetMultipartBoundary(`"my-custom-boundary"`).
 		SetBasicAuth("myuser", "mypass").
 		Post(ts.URL + "/profile")
 
@@ -1049,7 +1049,7 @@ func TestMultiPartCustomBoundary(t *testing.T) {
 
 	resp, err := dclr().
 		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
-		SetBoundary("my-custom-boundary").
+		SetMultipartBoundary("my-custom-boundary").
 		Post(ts.URL + "/profile")
 
 	assertError(t, err)

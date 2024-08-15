@@ -459,9 +459,11 @@ func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 	return r
 }
 
-// SetBoundary method sets the multipart boundary for the request
-// By default a random boundary will be generated in `mime/multipart`.
-func (r *Request) SetBoundary(boundary string) *Request {
+// SetMultipartBoundary method sets the custom multipart boundary for the multipart request.
+// Typically, the `mime/multipart` package generates a random multipart boundary, if not provided.
+//
+// Since v2.15.0
+func (r *Request) SetMultipartBoundary(boundary string) *Request {
 	r.multipartBoundary = boundary
 	return r
 }
