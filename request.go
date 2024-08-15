@@ -69,6 +69,7 @@ type Request struct {
 	bodyBuf             *bytes.Buffer
 	clientTrace         *clientTrace
 	log                 Logger
+	multipartBoundary   string
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
@@ -455,6 +456,15 @@ func (r *Request) SetMultipartField(param, fileName, contentType string, reader 
 func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 	r.isMultiPart = true
 	r.multipartFields = append(r.multipartFields, fields...)
+	return r
+}
+
+// SetMultipartBoundary method sets the custom multipart boundary for the multipart request.
+// Typically, the `mime/multipart` package generates a random multipart boundary, if not provided.
+//
+// Since v2.15.0
+func (r *Request) SetMultipartBoundary(boundary string) *Request {
+	r.multipartBoundary = boundary
 	return r
 }
 
