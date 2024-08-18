@@ -351,7 +351,7 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				for _, fhdrs := range r.MultipartForm.File {
 					for _, hdr := range fhdrs {
 						t.Logf("Name: %v", hdr.Filename)
-						t.Logf("Header: %v", hdr.Header)
+						t.Logf("header: %v", hdr.Header)
 						dotPos := strings.LastIndex(hdr.Filename, ".")
 
 						fname := fmt.Sprintf("%s-%v%s", hdr.Filename[:dotPos], time.Now().Unix(), hdr.Filename[dotPos:])
@@ -399,7 +399,7 @@ func createFormPatchServer(t *testing.T) *httptest.Server {
 				for _, fhdrs := range r.MultipartForm.File {
 					for _, hdr := range fhdrs {
 						t.Logf("Name: %v", hdr.Filename)
-						t.Logf("Header: %v", hdr.Header)
+						t.Logf("header: %v", hdr.Header)
 						dotPos := strings.LastIndex(hdr.Filename, ".")
 
 						fname := fmt.Sprintf("%s-%v%s", hdr.Filename[:dotPos], time.Now().Unix(), hdr.Filename[dotPos:])
@@ -880,7 +880,7 @@ func logResponse(t *testing.T, resp *Response) {
 	t.Logf("Response Status: %v", resp.Status())
 	t.Logf("Response Time: %v", resp.Time())
 	t.Logf("Response Headers: %v", resp.Header())
-	t.Logf("Response Cookies: %v", resp.Cookies())
+	t.Logf("Response cookies: %v", resp.Cookies())
 	t.Logf("Response Body: %v", resp)
 }
 

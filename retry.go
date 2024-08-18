@@ -178,7 +178,7 @@ func sleepDuration(resp *Response, min, max time.Duration, attempt int) (time.Du
 		return jitterBackoff(min, max, attempt), nil
 	}
 
-	retryAfterFunc := resp.Request.client.RetryAfter
+	retryAfterFunc := resp.Request.client.retryAfter
 
 	// Check for custom callback
 	if retryAfterFunc == nil {

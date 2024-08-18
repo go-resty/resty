@@ -960,7 +960,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	r.Method = method
 	r.URL = r.selectAddr(addrs, url, 0)
 
-	if r.client.RetryCount == 0 {
+	if r.client.retryCount == 0 {
 		r.Attempt = 1
 		resp, err = r.client.execute(r)
 		r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
@@ -980,12 +980,12 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 			return resp, err
 		},
-		Retries(r.client.RetryCount),
-		WaitTime(r.client.RetryWaitTime),
-		MaxWaitTime(r.client.RetryMaxWaitTime),
-		RetryConditions(append(r.retryConditions, r.client.RetryConditions...)),
-		RetryHooks(r.client.RetryHooks),
-		ResetMultipartReaders(r.client.RetryResetReaders),
+		Retries(r.client.retryCount),
+		WaitTime(r.client.retryWaitTime),
+		MaxWaitTime(r.client.retryMaxWaitTime),
+		RetryConditions(append(r.retryConditions, r.client.retryConditions...)),
+		RetryHooks(r.client.retryHooks),
+		ResetMultipartReaders(r.client.retryResetReaders),
 	)
 
 	if err != nil {
@@ -1013,7 +1013,7 @@ type SRVRecord struct {
 
 func (r *Request) fmtBodyString(sl int64) (body string) {
 	body = "***** NO CONTENT *****"
-	if !isPayloadSupported(r.Method, r.client.AllowGetMethodPayload) {
+	if !isPayloadSupported(r.Method, r.client.allowGetMethodPayload) {
 		return
 	}
 

@@ -98,7 +98,7 @@ func Test_parseRequestURL(t *testing.T) {
 				r.SetPathParams(map[string]string{
 					"foo": "4/5",
 				}).SetRawPathParams(map[string]string{
-					"foo": "4/5", // ignored, because the PathParams takes precedence over the RawPathParams
+					"foo": "4/5", // ignored, because the pathParams takes precedence over the rawPathParams
 					"bar": "6/7",
 				})
 				r.URL = "https://example.com/{foo}/{bar}"
@@ -156,7 +156,7 @@ func Test_parseRequestURL(t *testing.T) {
 			expectedURL: "https://example.com/prefix/1/2",
 		},
 		{
-			name: "using BaseURL with absolute URL in request",
+			name: "using baseURL with absolute URL in request",
 			init: func(c *Client, r *Request) {
 				c.SetBaseURL("https://foo.bar") // ignored
 				r.URL = "https://example.com/"
@@ -164,7 +164,7 @@ func Test_parseRequestURL(t *testing.T) {
 			expectedURL: "https://example.com/",
 		},
 		{
-			name: "using BaseURL with relative path in request URL without leading slash",
+			name: "using baseURL with relative path in request URL without leading slash",
 			init: func(c *Client, r *Request) {
 				c.SetBaseURL("https://example.com")
 				r.URL = "foo/bar"
@@ -172,7 +172,7 @@ func Test_parseRequestURL(t *testing.T) {
 			expectedURL: "https://example.com/foo/bar",
 		},
 		{
-			name: "using BaseURL with relative path in request URL wit leading slash",
+			name: "using baseURL with relative path in request URL wit leading slash",
 			init: func(c *Client, r *Request) {
 				c.SetBaseURL("https://example.com")
 				r.URL = "/foo/bar"
@@ -180,9 +180,9 @@ func Test_parseRequestURL(t *testing.T) {
 			expectedURL: "https://example.com/foo/bar",
 		},
 		{
-			name: "using deprecated HostURL with relative path in request URL",
+			name: "using deprecated hostURL with relative path in request URL",
 			init: func(c *Client, r *Request) {
-				c.HostURL = "https://example.com"
+				c.hostURL = "https://example.com"
 				r.URL = "foo/bar"
 			},
 			expectedURL: "https://example.com/foo/bar",
@@ -195,7 +195,7 @@ func Test_parseRequestURL(t *testing.T) {
 			expectedURL: "/example.com/foo/bar",
 		},
 		{
-			name: "BaseURL without scheme",
+			name: "baseURL without scheme",
 			init: func(c *Client, r *Request) {
 				c.SetBaseURL("example.com")
 				r.URL = "foo/bar"
@@ -203,7 +203,7 @@ func Test_parseRequestURL(t *testing.T) {
 			expectedURL: "example.com/foo/bar",
 		},
 		{
-			name: "using SetScheme and BaseURL without scheme",
+			name: "using SetScheme and baseURL without scheme",
 			init: func(c *Client, r *Request) {
 				c.SetBaseURL("example.com").SetScheme("https")
 				r.URL = "foo/bar"
@@ -423,7 +423,7 @@ func Test_parseRequestHeader(t *testing.T) {
 				t.Errorf("parseRequestHeader() error = %v", err)
 			}
 			if !reflect.DeepEqual(tt.expectedHeader, r.Header) {
-				t.Errorf("r.Header = %#+v does not match expected %#+v", r.Header, tt.expectedHeader)
+				t.Errorf("r.header = %#+v does not match expected %#+v", r.Header, tt.expectedHeader)
 			}
 		})
 	}
@@ -497,7 +497,7 @@ func Test_parseRequestBody(t *testing.T) {
 			},
 		},
 		{
-			name: "string body with GET method and AllowGetMethodPayload",
+			name: "string body with GET method and allowGetMethodPayload",
 			init: func(c *Client, r *Request) {
 				c.SetAllowGetMethodPayload(true)
 				r.SetBody("foo")
