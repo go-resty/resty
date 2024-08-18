@@ -47,7 +47,7 @@ func TestBackoffNoWaitForLastRetry(t *testing.T) {
 		Request: &Request{
 			ctx: canceledCtx,
 			client: &Client{
-				RetryAfter: func(*Client, *Response) (time.Duration, error) {
+				retryAfter: func(*Client, *Response) (time.Duration, error) {
 					return 6, nil
 				},
 			},
@@ -543,7 +543,8 @@ func TestClientRetryWaitCallbackSwitchToDefault(t *testing.T) {
 
 		// Ensure that client has slept some duration between
 		// waitTime and maxWaitTime for consequent requests
-		if slept < expected/2-5*time.Millisecond || expected+5*time.Millisecond < slept {
+		// Increase the boundary to adjust the extra time consumption introduced by mutex
+		if slept < expected/2-5*time.Millisecond || expected+20*time.Millisecond < slept {
 			t.Errorf("Client has slept %f seconds before retry %d", slept.Seconds(), i)
 		}
 	}
