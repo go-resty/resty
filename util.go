@@ -117,9 +117,9 @@ func IsXMLType(ct string) bool {
 // Unmarshalc content into object from JSON or XML
 func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
 	if IsJSONType(ct) {
-		err = c.JSONUnmarshal(b, d)
+		err = c.jsonUnmarshal(b, d)
 	} else if IsXMLType(ct) {
-		err = c.XMLUnmarshal(b, d)
+		err = c.xmlUnmarshal(b, d)
 	}
 
 	return
@@ -155,7 +155,7 @@ func jsonMarshal(c *Client, r *Request, d interface{}) (*bytes.Buffer, error) {
 		return noescapeJSONMarshal(d)
 	}
 
-	data, err := c.JSONMarshal(d)
+	data, err := c.jsonMarshal(d)
 	if err != nil {
 		return nil, err
 	}

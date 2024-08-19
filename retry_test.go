@@ -47,7 +47,7 @@ func TestBackoffNoWaitForLastRetry(t *testing.T) {
 		Request: &Request{
 			ctx: canceledCtx,
 			client: &Client{
-				RetryAfter: func(*Client, *Response) (time.Duration, error) {
+				retryAfter: func(*Client, *Response) (time.Duration, error) {
 					return 6, nil
 				},
 			},
