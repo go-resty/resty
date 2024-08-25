@@ -309,6 +309,56 @@ func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
 	assertNil(t, transport)
 }
 
+func TestClientSetClientRootCertificate(t *testing.T) {
+	client := dc()
+	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
+
+	transport, err := client.Transport()
+
+	assertNil(t, err)
+	assertNotNil(t, transport.TLSClientConfig.ClientCAs)
+}
+
+func TestClientSetClientRootCertificateNotExists(t *testing.T) {
+	client := dc()
+	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
+
+	transport, err := client.Transport()
+
+	assertNil(t, err)
+	assertNil(t, transport.TLSClientConfig)
+}
+
+func TestClientSetClientRootCertificateFromString(t *testing.T) {
+	client := dc()
+	rootPemData, err := os.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	assertNil(t, err)
+
+	client.SetClientRootCertificateFromString(string(rootPemData))
+
+	transport, err := client.Transport()
+
+	assertNil(t, err)
+	assertNotNil(t, transport.TLSClientConfig.ClientCAs)
+}
+
+func TestClientSetClientRootCertificateFromStringErrorTls(t *testing.T) {
+	client := NewWithClient(&http.Client{})
+	client.outputLogTo(io.Discard)
+
+	rootPemData, err := os.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	assertNil(t, err)
+	rt := &CustomRoundTripper{}
+	client.SetTransport(rt)
+	transport, err := client.Transport()
+
+	client.SetClientRootCertificateFromString(string(rootPemData))
+
+	assertNotNil(t, rt)
+	assertNotNil(t, err)
+	assertNil(t, transport)
+}
+
 func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
