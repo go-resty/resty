@@ -1090,7 +1090,7 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 	return c
 }
 
-// SetResponseBodyLimit set a response body size limit, avoid reading too many data to memory.
+// SetResponseBodyLimit set a max body size limit on response, avoid reading too many data to memory.
 //
 // Client will return [ErrResponseBodyTooLarge] if uncompressed response body size if larger than limit.
 // Body size limit will not be enforced in following case:
