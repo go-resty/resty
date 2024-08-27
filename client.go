@@ -128,8 +128,7 @@ type Client struct {
 	// HeaderAuthorizationKey is used to set/access Request Authorization header
 	// value when `SetAuthToken` option is used.
 	HeaderAuthorizationKey string
-
-	responseBodyLimit int64
+	ResponseBodyLimit      int64
 
 	jsonEscapeHTML      bool
 	setContentLength    bool
@@ -1091,6 +1090,18 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 	return c
 }
 
+// SetResponseBodyLimit set a response body size limit, avoid reading too many data to memory.
+//
+// Client will return [ErrResponseBodyTooLarge] if uncompressed response body size if larger than limit.
+// Body size limit will not be enforced in following case:
+// - ResponseBodyLimit is 0, which is the default behavior.
+// - [Response.SetOutput] is called to save a response data to file.
+// - `DoNotParseResponse` is set for client or request.
+func (c *Client) SetResponseBodyLimit(v int64) *Client {
+	c.ResponseBodyLimit = v
+	return c
+}
+
 // EnableTrace method enables the Resty client trace for the requests fired from
 // the client using `httptrace.ClientTrace` and provides insights.
 //
@@ -1240,7 +1251,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			}
 		}
 
-		if response.body, err = readAllWithLimit(body, c.responseBodyLimit); err != nil {
+		if response.body, err = readAllWithLimit(body, c.ResponseBodyLimit); err != nil {
 			response.setReceivedAt()
 			return response, err
 		}
