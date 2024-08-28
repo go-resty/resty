@@ -128,7 +128,7 @@ type Client struct {
 	// HeaderAuthorizationKey is used to set/access Request Authorization header
 	// value when `SetAuthToken` option is used.
 	HeaderAuthorizationKey string
-	ResponseBodyLimit      int64
+	ResponseBodyLimit      int
 
 	jsonEscapeHTML      bool
 	setContentLength    bool
@@ -1100,7 +1100,7 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 //   - "DoNotParseResponse" is set for client or request.
 //
 // this can be overridden at client level with [Request.SetResponseBodyLimit]
-func (c *Client) SetResponseBodyLimit(v int64) *Client {
+func (c *Client) SetResponseBodyLimit(v int) *Client {
 	c.ResponseBodyLimit = v
 	return c
 }
@@ -1278,7 +1278,7 @@ var ErrResponseBodyTooLarge = errors.New("resty: response body too large")
 
 // https://github.com/golang/go/issues/51115
 // [io.LimitedReader] can only return [io.EOF]
-func readAllWithLimit(r io.Reader, maxSize int64) ([]byte, error) {
+func readAllWithLimit(r io.Reader, maxSize int) ([]byte, error) {
 	if maxSize <= 0 {
 		return io.ReadAll(r)
 	}
@@ -1289,7 +1289,7 @@ func readAllWithLimit(r io.Reader, maxSize int64) ([]byte, error) {
 	for {
 		n, err := r.Read(buf)
 		total += n
-		if int64(total) > maxSize {
+		if total > maxSize {
 			return nil, ErrResponseBodyTooLarge
 		}
 

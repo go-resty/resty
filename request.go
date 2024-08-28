@@ -73,7 +73,7 @@ type Request struct {
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
-	responseBodyLimit   int64
+	responseBodyLimit   int
 }
 
 // Generate curl command for the request.
@@ -610,7 +610,7 @@ func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 //   - "DoNotParseResponse" is set for client or request.
 //
 // This will override Client config.
-func (r *Request) SetResponseBodyLimit(v int64) *Request {
+func (r *Request) SetResponseBodyLimit(v int) *Request {
 	r.responseBodyLimit = v
 	return r
 }
