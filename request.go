@@ -73,6 +73,7 @@ type Request struct {
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
+	responseBodyLimit   int64
 }
 
 // Generate curl command for the request.
@@ -597,6 +598,20 @@ func (r *Request) SetSRV(srv *SRVRecord) *Request {
 // taken over the control of response parsing from `Resty`.
 func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 	r.notParseResponse = parse
+	return r
+}
+
+// SetResponseBodyLimit set a max body size limit on response, avoid reading too many data to memory.
+//
+// Request will return [resty.ErrResponseBodyTooLarge] if uncompressed response body size if larger than limit.
+// Body size limit will not be enforced in following case:
+//   - ResponseBodyLimit <= 0, which is the default behavior.
+//   - [Request.SetOutput] is called to save a response data to file.
+//   - "DoNotParseResponse" is set for client or request.
+//
+// Request can override Client config with [Request.SetResponseBodyLimit]
+func (r *Request) SetResponseBodyLimit(v int64) *Request {
+	r.responseBodyLimit = v
 	return r
 }
 

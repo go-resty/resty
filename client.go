@@ -443,11 +443,12 @@ func (c *Client) R() *Request {
 		RawPathParams: map[string]string{},
 		Debug:         c.Debug,
 
-		client:          c,
-		multipartFiles:  []*File{},
-		multipartFields: []*MultipartField{},
-		jsonEscapeHTML:  c.jsonEscapeHTML,
-		log:             c.log,
+		client:            c,
+		multipartFiles:    []*File{},
+		multipartFields:   []*MultipartField{},
+		jsonEscapeHTML:    c.jsonEscapeHTML,
+		log:               c.log,
+		responseBodyLimit: c.ResponseBodyLimit,
 	}
 	return r
 }
@@ -1092,11 +1093,11 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 
 // SetResponseBodyLimit set a max body size limit on response, avoid reading too many data to memory.
 //
-// Client will return [ErrResponseBodyTooLarge] if uncompressed response body size if larger than limit.
+// Client will return [resty.ErrResponseBodyTooLarge] if uncompressed response body size if larger than limit.
 // Body size limit will not be enforced in following case:
-// - ResponseBodyLimit is 0, which is the default behavior.
-// - [Response.SetOutput] is called to save a response data to file.
-// - `DoNotParseResponse` is set for client or request.
+//   - ResponseBodyLimit <= 0, which is the default behavior.
+//   - [Request.SetOutput] is called to save a response data to file.
+//   - "DoNotParseResponse" is set for client or request.
 func (c *Client) SetResponseBodyLimit(v int64) *Client {
 	c.ResponseBodyLimit = v
 	return c
@@ -1251,7 +1252,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			}
 		}
 
-		if response.body, err = readAllWithLimit(body, c.ResponseBodyLimit); err != nil {
+		if response.body, err = readAllWithLimit(body, req.responseBodyLimit); err != nil {
 			response.setReceivedAt()
 			return response, err
 		}

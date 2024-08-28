@@ -7,6 +7,7 @@ package resty
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -822,4 +823,34 @@ func TestResetMultipartReaders(t *testing.T) {
 
 	assertEqual(t, 500, resp.StatusCode())
 	assertNil(t, err)
+}
+
+func TestResponseBodyLimit(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		io.CopyN(w, rand.Reader, 100*1024)
+	})
+	defer ts.Close()
+
+	t.Run("Client body limit", func(t *testing.T) {
+		c := dc().SetResponseBodyLimit(1024)
+
+		_, err := c.R().Get(ts.URL + "/")
+		assertNotNil(t, err)
+		assertEqual(t, err, ErrResponseBodyTooLarge)
+	})
+
+	t.Run("request body limit", func(t *testing.T) {
+		c := dc()
+
+		_, err := c.R().SetResponseBodyLimit(1024).Get(ts.URL + "/")
+		assertNotNil(t, err)
+		assertEqual(t, err, ErrResponseBodyTooLarge)
+	})
+
+	t.Run("no body limit", func(t *testing.T) {
+		c := dc()
+
+		_, err := c.R().Get(ts.URL + "/")
+		assertNil(t, err)
+	})
 }
