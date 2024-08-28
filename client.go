@@ -1098,6 +1098,8 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 //   - ResponseBodyLimit <= 0, which is the default behavior.
 //   - [Request.SetOutput] is called to save a response data to file.
 //   - "DoNotParseResponse" is set for client or request.
+//
+// this can be overridden at client level with [Request.SetResponseBodyLimit]
 func (c *Client) SetResponseBodyLimit(v int64) *Client {
 	c.ResponseBodyLimit = v
 	return c

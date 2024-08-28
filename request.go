@@ -609,7 +609,7 @@ func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 //   - [Request.SetOutput] is called to save a response data to file.
 //   - "DoNotParseResponse" is set for client or request.
 //
-// Request can override Client config with [Request.SetResponseBodyLimit]
+// This will override Client config.
 func (r *Request) SetResponseBodyLimit(v int64) *Request {
 	r.responseBodyLimit = v
 	return r
