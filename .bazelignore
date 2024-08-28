@@ -1,0 +1,11 @@
+# Please type full path
+
+.bazel
+.vscode
+.idea
+.idea_modules
+.ijwd
+bazel-bin
+bazel-resty
+bazel-out
+bazel-testlogs
