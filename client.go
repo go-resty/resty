@@ -980,8 +980,8 @@ func (c *Client) SetCloseConnection(close bool) *Client {
 //
 // Note: Response middlewares are not applicable, if you use this option. Basically you have
 // taken over the control of response parsing from `Resty`.
-func (c *Client) SetDoNotParseResponse(parse bool) *Client {
-	c.notParseResponse = parse
+func (c *Client) SetDoNotParseResponse(notParse bool) *Client {
+	c.notParseResponse = notParse
 	return c
 }
 
@@ -1234,6 +1234,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
+		err = errors.Join(err, responseLogger(c, response))
 		response.setReceivedAt()
 		return response, err
 	}
@@ -1247,6 +1248,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
+					err = errors.Join(err, responseLogger(c, response))
 					response.setReceivedAt()
 					return response, err
 				}
@@ -1255,6 +1257,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 
 		if response.body, err = readAllWithLimit(body, req.responseBodyLimit); err != nil {
+			err = errors.Join(err, responseLogger(c, response))
 			response.setReceivedAt()
 			return response, err
 		}
@@ -1265,6 +1268,11 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	response.setReceivedAt() // after we read the body
 
 	// Apply Response middleware
+	err = responseLogger(c, response)
+	if err != nil {
+		return response, err
+	}
+
 	for _, f := range c.afterResponse {
 		if err = f(c, response); err != nil {
 			break
@@ -1460,7 +1468,6 @@ func createClient(hc *http.Client) *Client {
 
 	// default after response middlewares
 	c.afterResponse = []ResponseMiddleware{
-		responseLogger,
 		parseResponseBody,
 		saveResponseIntoFile,
 	}
