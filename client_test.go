@@ -6,6 +6,7 @@ package resty
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/rand"
 	"crypto/tls"
 	"errors"
@@ -1139,24 +1140,15 @@ func TestResponseBodyLimit(t *testing.T) {
 
 	t.Run("read error", func(t *testing.T) {
 		tse := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-			hj, ok := w.(http.Hijacker)
-			if !ok {
-				t.Error("webserver doesn't support hijacking")
-				t.FailNow()
-			}
-			conn, _, err := hj.Hijack()
-			if err != nil {
-				t.Error("failed to hijack connection", err)
-				t.FailNow()
-			}
-
-			conn.Close()
+			w.Header().Set(hdrContentEncodingKey, "gzip")
+			var buf [1024]byte
+			w.Write(buf[:])
 		})
 		defer tse.Close()
 
 		c := dc()
 
 		_, err := c.R().Get(tse.URL + "/")
-		assertNotNil(t, err)
+		assertErrorIs(t, err, gzip.ErrHeader)
 	})
 }
