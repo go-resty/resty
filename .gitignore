@@ -29,6 +29,3 @@ coverage.txt
 # Exclude IDE folders
 .idea/*
 .vscode/*
-
-# Exclude Bazel folders
-bazel-*
