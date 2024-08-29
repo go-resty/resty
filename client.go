@@ -1283,11 +1283,11 @@ func readAllWithLimit(r io.Reader, maxSize int) ([]byte, error) {
 		return io.ReadAll(r)
 	}
 
+	var buf [512]byte // make buf stack allocated
 	result := make([]byte, 0, 512)
 	total := 0
-	buf := make([]byte, 512)
 	for {
-		n, err := r.Read(buf)
+		n, err := r.Read(buf[:])
 		total += n
 		if total > maxSize {
 			return nil, ErrResponseBodyTooLarge
