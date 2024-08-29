@@ -809,6 +809,7 @@ func dclr() *Request {
 }
 
 func assertNil(t *testing.T, v interface{}) {
+	t.Helper()
 	if !isNil(v) {
 		t.Errorf("[%v] was expected to be nil", v)
 	}
@@ -841,6 +842,7 @@ func assertErrorIs(t *testing.T, e, g error) (r bool) {
 }
 
 func assertEqual(t *testing.T, e, g interface{}) (r bool) {
+	t.Helper()
 	if !equal(e, g) {
 		t.Errorf("Expected [%v], got [%v]", e, g)
 	}

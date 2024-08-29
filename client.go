@@ -128,6 +128,7 @@ type Client struct {
 	// HeaderAuthorizationKey is used to set/access Request Authorization header
 	// value when `SetAuthToken` option is used.
 	HeaderAuthorizationKey string
+	ResponseBodyLimit      int
 
 	jsonEscapeHTML      bool
 	setContentLength    bool
@@ -442,11 +443,12 @@ func (c *Client) R() *Request {
 		RawPathParams: map[string]string{},
 		Debug:         c.Debug,
 
-		client:          c,
-		multipartFiles:  []*File{},
-		multipartFields: []*MultipartField{},
-		jsonEscapeHTML:  c.jsonEscapeHTML,
-		log:             c.log,
+		client:            c,
+		multipartFiles:    []*File{},
+		multipartFields:   []*MultipartField{},
+		jsonEscapeHTML:    c.jsonEscapeHTML,
+		log:               c.log,
+		responseBodyLimit: c.ResponseBodyLimit,
 	}
 	return r
 }
@@ -1089,6 +1091,20 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 	return c
 }
 
+// SetResponseBodyLimit set a max body size limit on response, avoid reading too many data to memory.
+//
+// Client will return [resty.ErrResponseBodyTooLarge] if uncompressed response body size if larger than limit.
+// Body size limit will not be enforced in following case:
+//   - ResponseBodyLimit <= 0, which is the default behavior.
+//   - [Request.SetOutput] is called to save a response data to file.
+//   - "DoNotParseResponse" is set for client or request.
+//
+// this can be overridden at client level with [Request.SetResponseBodyLimit]
+func (c *Client) SetResponseBodyLimit(v int) *Client {
+	c.ResponseBodyLimit = v
+	return c
+}
+
 // EnableTrace method enables the Resty client trace for the requests fired from
 // the client using `httptrace.ClientTrace` and provides insights.
 //
@@ -1238,7 +1254,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			}
 		}
 
-		if response.body, err = io.ReadAll(body); err != nil {
+		if response.body, err = readAllWithLimit(body, req.responseBodyLimit); err != nil {
 			response.setReceivedAt()
 			return response, err
 		}
@@ -1256,6 +1272,39 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	return response, wrapNoRetryErr(err)
+}
+
+var ErrResponseBodyTooLarge = errors.New("resty: response body too large")
+
+// https://github.com/golang/go/issues/51115
+// [io.LimitedReader] can only return [io.EOF]
+func readAllWithLimit(r io.Reader, maxSize int) ([]byte, error) {
+	if maxSize <= 0 {
+		return io.ReadAll(r)
+	}
+
+	var buf [512]byte // make buf stack allocated
+	result := make([]byte, 0, 512)
+	total := 0
+	for {
+		n, err := r.Read(buf[:])
+		total += n
+		if total > maxSize {
+			return nil, ErrResponseBodyTooLarge
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				result = append(result, buf[:n]...)
+				break
+			}
+			return nil, err
+		}
+
+		result = append(result, buf[:n]...)
+	}
+
+	return result, nil
 }
 
 // getting TLS client config if not exists then create one
