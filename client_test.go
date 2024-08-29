@@ -6,6 +6,7 @@ package resty
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/rand"
 	"crypto/tls"
 	"errors"
@@ -1135,5 +1136,19 @@ func TestResponseBodyLimit(t *testing.T) {
 		res, err := c.R().Get(ts.URL + "/")
 		assertNil(t, err)
 		assertEqual(t, 800*100, len(res.body))
+	})
+
+	t.Run("read error", func(t *testing.T) {
+		tse := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(hdrContentEncodingKey, "gzip")
+			var buf [1024]byte
+			w.Write(buf[:])
+		})
+		defer tse.Close()
+
+		c := dc()
+
+		_, err := c.R().Get(tse.URL + "/")
+		assertErrorIs(t, err, gzip.ErrHeader)
 	})
 }
