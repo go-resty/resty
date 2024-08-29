@@ -1148,7 +1148,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		c := dc()
 
-		_, err := c.R().Get(tse.URL + "/")
+		_, err := c.R().SetResponseBodyLimit(10240).Get(tse.URL + "/")
 		assertErrorIs(t, err, gzip.ErrHeader)
 	})
 }
