@@ -1295,6 +1295,7 @@ func readAllWithLimit(r io.Reader, maxSize int) ([]byte, error) {
 
 		if err != nil {
 			if err == io.EOF {
+				result = append(result, buf[:n]...)
 				break
 			}
 			return nil, err
