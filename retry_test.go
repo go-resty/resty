@@ -43,14 +43,14 @@ func TestBackoffNoWaitForLastRetry(t *testing.T) {
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	client := New()
+	client.SetRetryAfter(func(*Client, *Response) (time.Duration, error) {
+		return 6, nil
+	})
 	resp := &Response{
 		Request: &Request{
-			ctx: canceledCtx,
-			client: &Client{
-				retryAfter: func(*Client, *Response) (time.Duration, error) {
-					return 6, nil
-				},
-			},
+			ctx:    canceledCtx,
+			client: client,
 		},
 	}
 
