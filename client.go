@@ -1234,9 +1234,16 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
-		err = errors.Join(err, responseLogger(c, response))
+		logErr := responseLogger(c, response)
 		response.setReceivedAt()
-		return response, err
+		switch {
+		case err != nil && logErr != nil:
+			return response, errJoin(err, logErr)
+		case logErr != nil:
+			return response, wrapNoRetryErr(logErr)
+		default:
+			return response, err
+		}
 	}
 
 	if !req.isSaveResponse {
@@ -1248,7 +1255,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
-					err = errors.Join(err, responseLogger(c, response))
+					err = errJoin(err, responseLogger(c, response))
 					response.setReceivedAt()
 					return response, err
 				}
@@ -1257,7 +1264,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 
 		if response.body, err = readAllWithLimit(body, req.responseBodyLimit); err != nil {
-			err = errors.Join(err, responseLogger(c, response))
+			err = errJoin(err, responseLogger(c, response))
 			response.setReceivedAt()
 			return response, err
 		}
@@ -1270,7 +1277,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// Apply Response middleware
 	err = responseLogger(c, response)
 	if err != nil {
-		return response, err
+		return response, wrapNoRetryErr(err)
 	}
 
 	for _, f := range c.afterResponse {

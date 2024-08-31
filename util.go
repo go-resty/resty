@@ -382,3 +382,49 @@ func unwrapNoRetryErr(err error) error {
 	}
 	return err
 }
+
+type joinErr struct {
+	errs []error
+}
+
+// NOTE(kon3gor): errros.Join was added only in go1.20
+func errJoin(errs ...error) error {
+	n := 0
+	for _, err := range errs {
+		if err != nil {
+			n++
+		}
+	}
+	if n == 0 {
+		return nil
+	}
+	e := &joinErr{
+		errs: make([]error, 0, n),
+	}
+	for _, err := range errs {
+		if err != nil {
+			e.errs = append(e.errs, err)
+		}
+	}
+	return e
+}
+
+func (e *joinErr) Error() string {
+	// Since errJoin returns nil if every value in errs is nil,
+	// e.errs cannot be empty.
+	if len(e.errs) == 1 {
+		return e.errs[0].Error()
+	}
+
+	var sb strings.Builder
+	sb.WriteString(e.errs[0].Error())
+	for _, err := range e.errs[1:] {
+		sb.WriteByte('\n')
+		sb.WriteString(err.Error())
+	}
+	return sb.String()
+}
+
+func (e *joinErr) Unwrap() []error {
+	return e.errs
+}
