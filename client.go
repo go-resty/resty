@@ -270,20 +270,6 @@ func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 	return c
 }
 
-// UserInfo method gets the user information in the client instance.
-func (c *Client) UserInfo() *User {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.userInfo
-}
-
-func (c *Client) SetUserInfo(user *User) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.userInfo = user
-	return c
-}
-
 // SetCookieJar method sets custom http.CookieJar in the resty client. Its way to override default.
 //
 // For Example: sometimes we don't want to save cookies in api contacting, we can remove the default
@@ -1330,9 +1316,9 @@ func (c *Client) SetPathParams(params map[string]string) *Client {
 	return c
 }
 
-// RawPathParam method gets single URL path key-value pair in the
+// RawPathParams method gets single URL path key-value pair in the
 // Resty client instance.
-func (c *Client) RawPathParam() map[string]string {
+func (c *Client) RawPathParams() map[string]string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.rawPathParams

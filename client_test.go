@@ -75,6 +75,7 @@ func TestClientAuthScheme(t *testing.T) {
 
 	// Ensure setting the scheme works as well
 	c.SetAuthScheme("Bearer")
+	assertEqual(t, "Bearer", c.AuthScheme())
 
 	resp2, err2 := c.R().Get("/profile")
 	assertError(t, err2)
@@ -422,7 +423,7 @@ func TestClientOptions(t *testing.T) {
 	assertEqual(t, rTime, client.FormData().Get("r_time"))
 
 	client.SetBasicAuth("myuser", "mypass")
-	assertEqual(t, "myuser", client.UserInfo().Username)
+	assertEqual(t, "myuser", client.BasicAuth().Username)
 
 	client.SetAuthToken("AC75BD37F019E08FBC594900518B4F7E")
 	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", client.Token())
@@ -1114,21 +1115,19 @@ func TestClone(t *testing.T) {
 	parent.SetBaseURL("http://localhost")
 
 	// set an interface field
-	parent.SetUserInfo(&User{
-		Username: "parent",
-	})
+	parent.SetBasicAuth("parent", "")
 
 	clone := parent.Clone()
 	// update value of non-interface type - change will only happen on clone
 	clone.SetBaseURL("https://local.host")
 	// update value of interface type - change will also happen on parent
-	clone.UserInfo().Username = "clone"
+	clone.BasicAuth().Username = "clone"
 
 	// asert non-interface type
 	assertEqual(t, "http://localhost", parent.BaseURL())
 	assertEqual(t, "https://local.host", clone.BaseURL())
 
 	// assert interface type
-	assertEqual(t, "clone", parent.UserInfo().Username)
-	assertEqual(t, "clone", clone.UserInfo().Username)
+	assertEqual(t, "clone", parent.BasicAuth().Username)
+	assertEqual(t, "clone", clone.BasicAuth().Username)
 }
