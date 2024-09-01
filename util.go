@@ -383,48 +383,41 @@ func unwrapNoRetryErr(err error) error {
 	return err
 }
 
-type joinErr struct {
-	errs []error
+// Code to backfill until Resty go minimum version gets updated to go1.20
+// TODO: Replace with errors.Join
+type responseLogErr struct {
+	internalErr error
+	logErr      error
 }
 
-// NOTE(kon3gor): errros.Join was added only in go1.20
-func errJoin(errs ...error) error {
-	n := 0
-	for _, err := range errs {
-		if err != nil {
-			n++
-		}
+func wrapResponseLogErr(err error, logErr error) error {
+	if logErr == nil {
+		return err
 	}
-	if n == 0 {
-		return nil
+
+	if err == nil {
+		return logErr
 	}
-	e := &joinErr{
-		errs: make([]error, 0, n),
+
+	return &responseLogErr{
+		logErr:      logErr,
+		internalErr: err,
 	}
-	for _, err := range errs {
-		if err != nil {
-			e.errs = append(e.errs, err)
-		}
+}
+
+func (e *responseLogErr) Wrap(other error) error {
+	if e == nil {
+		return other
 	}
+
+	e.internalErr = other
 	return e
 }
 
-func (e *joinErr) Error() string {
-	// Since errJoin returns nil if every value in errs is nil,
-	// e.errs cannot be empty.
-	if len(e.errs) == 1 {
-		return e.errs[0].Error()
+func (e *responseLogErr) Error() string {
+	if e.internalErr != nil {
+		return fmt.Sprintf("got log error along with: %s. Log error was: %s", e.internalErr.Error(), e.logErr.Error())
 	}
 
-	var sb strings.Builder
-	sb.WriteString(e.errs[0].Error())
-	for _, err := range e.errs[1:] {
-		sb.WriteByte('\n')
-		sb.WriteString(err.Error())
-	}
-	return sb.String()
-}
-
-func (e *joinErr) Unwrap() []error {
-	return e.errs
+	return e.logErr.Error()
 }

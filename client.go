@@ -1238,7 +1238,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		response.setReceivedAt()
 		switch {
 		case err != nil && logErr != nil:
-			return response, errJoin(err, logErr)
+			return response, wrapResponseLogErr(err, logErr)
 		case logErr != nil:
 			return response, wrapNoRetryErr(logErr)
 		default:
@@ -1255,7 +1255,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
-					err = errJoin(err, responseLogger(c, response))
+					err = wrapResponseLogErr(err, responseLogger(c, response))
 					response.setReceivedAt()
 					return response, err
 				}
@@ -1264,7 +1264,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 
 		if response.body, err = readAllWithLimit(body, req.responseBodyLimit); err != nil {
-			err = errJoin(err, responseLogger(c, response))
+			err = wrapResponseLogErr(err, responseLogger(c, response))
 			response.setReceivedAt()
 			return response, err
 		}
