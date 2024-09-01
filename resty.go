@@ -23,33 +23,15 @@ import (
 // Version # of resty
 const Version = "3.0.0-dev"
 
-var (
-	defaultClientTimeout = &ClientTimeoutSetting{
-		DialerTimeout:                  30 * time.Second,
-		DialerKeepAlive:                30 * time.Second,
-		TransportIdleConnTimeout:       90 * time.Second,
-		TransportTLSHandshakeTimeout:   10 * time.Second,
-		TransportExpectContinueTimeout: 1 * time.Second,
-	}
-)
-
 // New method creates a new Resty client.
 func New() *Client {
-	return NewWithTimeout(defaultClientTimeout)
+	return NewWithTransportSettings(nil)
 }
 
-// NewWithTimeout method creates a new Resty client with provided
+// NewWithTransportSettings method creates a new Resty client with provided
 // timeout values.
-//
-// Since v3.0.0
-func NewWithTimeout(timeoutSetting *ClientTimeoutSetting) *Client {
-	return createClient(&http.Client{
-		Jar: createCookieJar(),
-		Transport: createTransport(
-			createDialer(nil, timeoutSetting),
-			timeoutSetting,
-		),
-	})
+func NewWithTransportSettings(transportSettings *TransportSettings) *Client {
+	return NewWithDialerAndTransportSettings(nil, transportSettings)
 }
 
 // NewWithClient method creates a new Resty client with given `http.Client`.
@@ -59,32 +41,25 @@ func NewWithClient(hc *http.Client) *Client {
 
 // NewWithDialer method creates a new Resty client with given Local Address
 // to dial from.
-//
-// Since v3.0.0
 func NewWithDialer(dialer *net.Dialer) *Client {
-	return NewWithDialerAndTimeout(dialer, defaultClientTimeout)
-}
-
-// NewWithDialer method creates a new Resty client with given Local Address
-// to dial from.
-//
-// Since v3.0.0
-func NewWithDialerAndTimeout(dialer *net.Dialer, timeoutSetting *ClientTimeoutSetting) *Client {
-	return createClient(&http.Client{
-		Jar:       createCookieJar(),
-		Transport: createTransport(dialer, timeoutSetting),
-	})
+	return NewWithDialerAndTransportSettings(dialer, nil)
 }
 
 // NewWithLocalAddr method creates a new Resty client with given Local Address
 // to dial from.
 func NewWithLocalAddr(localAddr net.Addr) *Client {
+	return NewWithDialerAndTransportSettings(
+		&net.Dialer{LocalAddr: localAddr},
+		nil,
+	)
+}
+
+// NewWithDialerAndTransportSettings method creates a new Resty client with given Local Address
+// to dial from.
+func NewWithDialerAndTransportSettings(dialer *net.Dialer, transportSettings *TransportSettings) *Client {
 	return createClient(&http.Client{
-		Jar: createCookieJar(),
-		Transport: createTransport(
-			createDialer(localAddr, defaultClientTimeout),
-			defaultClientTimeout,
-		),
+		Jar:       createCookieJar(),
+		Transport: createTransport(dialer, transportSettings),
 	})
 }
 
@@ -92,28 +67,91 @@ func NewWithLocalAddr(localAddr net.Addr) *Client {
 // Unexported methods
 //_______________________________________________________________________
 
-func createDialer(localAddr net.Addr, timeoutSetting *ClientTimeoutSetting) *net.Dialer {
-	dialer := &net.Dialer{
-		Timeout:   timeoutSetting.DialerTimeout,
-		KeepAlive: timeoutSetting.DialerKeepAlive,
+func createTransport(dialer *net.Dialer, transportSettings *TransportSettings) *http.Transport {
+	if transportSettings == nil {
+		transportSettings = &TransportSettings{}
 	}
-	if localAddr != nil {
-		dialer.LocalAddr = localAddr
-	}
-	return dialer
-}
 
-func createTransport(dialer *net.Dialer, timeoutSetting *ClientTimeoutSetting) *http.Transport {
-	return &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           transportDialContext(dialer),
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       timeoutSetting.TransportIdleConnTimeout,
-		TLSHandshakeTimeout:   timeoutSetting.TransportTLSHandshakeTimeout,
-		ExpectContinueTimeout: timeoutSetting.TransportExpectContinueTimeout,
-		MaxIdleConnsPerHost:   runtime.GOMAXPROCS(0) + 1,
+	// Dialer
+
+	if dialer == nil {
+		dialer = &net.Dialer{}
 	}
+
+	if transportSettings.DialerTimeout > 0 {
+		dialer.Timeout = transportSettings.DialerTimeout
+	} else {
+		dialer.Timeout = 30 * time.Second
+	}
+
+	if transportSettings.DialerKeepAlive > 0 {
+		dialer.KeepAlive = transportSettings.DialerKeepAlive
+	} else {
+		dialer.KeepAlive = 30 * time.Second
+	}
+
+	// Transport
+	t := &http.Transport{
+		Proxy:              http.ProxyFromEnvironment,
+		DialContext:        transportDialContext(dialer),
+		DisableKeepAlives:  transportSettings.DisableKeepAlives,
+		DisableCompression: transportSettings.DisableCompression,
+		ForceAttemptHTTP2:  true,
+	}
+
+	if transportSettings.IdleConnTimeout > 0 {
+		t.IdleConnTimeout = transportSettings.IdleConnTimeout
+	} else {
+		t.IdleConnTimeout = 90 * time.Second
+	}
+
+	if transportSettings.TLSHandshakeTimeout > 0 {
+		t.TLSHandshakeTimeout = transportSettings.TLSHandshakeTimeout
+	} else {
+		t.TLSHandshakeTimeout = 10 * time.Second
+	}
+
+	if transportSettings.ExpectContinueTimeout > 0 {
+		t.ExpectContinueTimeout = transportSettings.ExpectContinueTimeout
+	} else {
+		t.ExpectContinueTimeout = 1 * time.Second
+	}
+
+	if transportSettings.MaxIdleConns > 0 {
+		t.MaxIdleConns = transportSettings.MaxIdleConns
+	} else {
+		t.MaxIdleConns = 100
+	}
+
+	if transportSettings.MaxIdleConnsPerHost > 0 {
+		t.MaxIdleConnsPerHost = transportSettings.MaxIdleConnsPerHost
+	} else {
+		t.MaxIdleConnsPerHost = runtime.GOMAXPROCS(0) + 1
+	}
+
+	//
+	// No default value in Resty for following settings, added to
+	// provide ability to set value otherwise the Go HTTP client
+	// default value applies.
+	//
+
+	if transportSettings.ResponseHeaderTimeout > 0 {
+		t.ResponseHeaderTimeout = transportSettings.ResponseHeaderTimeout
+	}
+
+	if transportSettings.MaxResponseHeaderBytes > 0 {
+		t.MaxResponseHeaderBytes = transportSettings.MaxResponseHeaderBytes
+	}
+
+	if transportSettings.WriteBufferSize > 0 {
+		t.WriteBufferSize = transportSettings.WriteBufferSize
+	}
+
+	if transportSettings.ReadBufferSize > 0 {
+		t.ReadBufferSize = transportSettings.ReadBufferSize
+	}
+
+	return t
 }
 
 func createCookieJar() *cookiejar.Jar {
