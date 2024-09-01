@@ -6,12 +6,16 @@ on:
       - v2
     paths-ignore:
       - '**.md'
+      - '**.bazel'
+      - 'WORKSPACE'
   pull_request:
     branches:
       - main
       - v2
     paths-ignore:
       - '**.md'
+      - '**.bazel'
+      - 'WORKSPACE'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -21,7 +25,7 @@ jobs:
     name: Build
     strategy:
       matrix:
-        go: [ '1.21.x']
+        go: [ 'stable', '1.19.x' ]
         os: [ ubuntu-latest ]
 
     runs-on: ${{ matrix.os }}
@@ -43,7 +47,7 @@ jobs:
         run: diff -u <(echo -n) <(go fmt $(go list ./...))
 
       - name: Test
-        run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic
+        run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

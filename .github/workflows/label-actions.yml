@@ -3,12 +3,16 @@ name: 'Label'
 on:
   pull_request:
     types: [labeled]
+    paths-ignore:
+      - '**.md'
+      - '**.bazel'
+      - 'WORKSPACE'
 
 jobs:
   build:
     strategy:
       matrix:
-        go: [ '1.21.x']
+        go: [ 'stable', '1.19.x' ]
         os: [ ubuntu-latest ]
 
     name: Run Build
@@ -28,8 +32,13 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Test
-        run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic
+      - name: Format
+        run: diff -u <(echo -n) <(go fmt $(go list ./...))
 
-      - name: Coverage
-        run: bash <(curl -s https://codecov.io/bash)
+      - name: Test
+        run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
