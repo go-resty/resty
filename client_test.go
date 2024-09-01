@@ -791,23 +791,52 @@ func TestDebugLogSimultaneously(t *testing.T) {
 	}
 }
 
-func TestNewWithTimeout(t *testing.T) {
+func TestCustomTransportSettings(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	customTimeout := &ClientTimeoutSetting{
-		DialerTimeout:                  30 * time.Second,
-		DialerKeepAlive:                15 * time.Second,
-		TransportIdleConnTimeout:       120 * time.Second,
-		TransportTLSHandshakeTimeout:   20 * time.Second,
-		TransportExpectContinueTimeout: 1 * time.Second,
+	customTransportSettings := &TransportSettings{
+		DialerTimeout:          30 * time.Second,
+		DialerKeepAlive:        15 * time.Second,
+		IdleConnTimeout:        120 * time.Second,
+		TLSHandshakeTimeout:    20 * time.Second,
+		ExpectContinueTimeout:  1 * time.Second,
+		MaxIdleConns:           50,
+		MaxIdleConnsPerHost:    3,
+		ResponseHeaderTimeout:  10 * time.Second,
+		MaxResponseHeaderBytes: 1 << 10,
+		WriteBufferSize:        2 << 10,
+		ReadBufferSize:         2 << 10,
 	}
-	client := NewWithTimeout(customTimeout)
+	client := NewWithTransportSettings(customTransportSettings)
 	client.SetBaseURL(ts.URL)
 
 	resp, err := client.R().Get("/")
 	assertNil(t, err)
 	assertEqual(t, resp.String(), "TestGet: text response")
+}
+
+func TestDefaultDialerTransportSettings(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	t.Run("transport-default", func(t *testing.T) {
+		client := NewWithTransportSettings(nil)
+		client.SetBaseURL(ts.URL)
+
+		resp, err := client.R().Get("/")
+		assertNil(t, err)
+		assertEqual(t, resp.String(), "TestGet: text response")
+	})
+
+	t.Run("dialer-transport-default", func(t *testing.T) {
+		client := NewWithDialerAndTransportSettings(nil, nil)
+		client.SetBaseURL(ts.URL)
+
+		resp, err := client.R().Get("/")
+		assertNil(t, err)
+		assertEqual(t, resp.String(), "TestGet: text response")
+	})
 }
 
 func TestNewWithDialer(t *testing.T) {

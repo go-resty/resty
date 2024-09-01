@@ -89,25 +89,58 @@ type (
 	SuccessHook func(*Client, *Response)
 )
 
-// ClientTimeoutSetting struct is used to define custom dialer and transport timeout
-// values for the Resty client initialization. The default dialer and transport
-// timeout values are -
+// TransportSettings struct is used to define custom dialer and transport
+// values for the Resty client. Please refer to individual
+// struct fields to know the default values.
 //
-//	defaultClientTimeout := &ClientTimeoutSetting{
-//		DialerTimeout:                  30 * time.Second,
-//		DialerKeepAlive:                30 * time.Second,
-//		TransportIdleConnTimeout:       90 * time.Second,
-//		TransportTLSHandshakeTimeout:   10 * time.Second,
-//		TransportExpectContinueTimeout: 1 * time.Second,
-//	}
-//
-// Since v3.0.0
-type ClientTimeoutSetting struct {
-	DialerTimeout                  time.Duration
-	DialerKeepAlive                time.Duration
-	TransportIdleConnTimeout       time.Duration
-	TransportTLSHandshakeTimeout   time.Duration
-	TransportExpectContinueTimeout time.Duration
+// Also, refer to https://pkg.go.dev/net/http#Transport for more details.
+type TransportSettings struct {
+	// DialerTimeout, default value is `30` seconds.
+	DialerTimeout time.Duration
+
+	// DialerKeepAlive, default value is `30` seconds.
+	DialerKeepAlive time.Duration
+
+	// IdleConnTimeout, default value is `90` seconds.
+	IdleConnTimeout time.Duration
+
+	// TLSHandshakeTimeout, default value is `10` seconds.
+	TLSHandshakeTimeout time.Duration
+
+	// ExpectContinueTimeout, default value is `1` seconds.
+	ExpectContinueTimeout time.Duration
+
+	// ResponseHeaderTimeout, added to provide ability to
+	// set value. No default value in Resty, the Go
+	// HTTP client default value applies.
+	ResponseHeaderTimeout time.Duration
+
+	// MaxIdleConns, default value is `100`.
+	MaxIdleConns int
+
+	// MaxIdleConnsPerHost, default value is `runtime.GOMAXPROCS(0) + 1`.
+	MaxIdleConnsPerHost int
+
+	// DisableKeepAlives, default value is `false`.
+	DisableKeepAlives bool
+
+	// DisableCompression, default value is `false`.
+	DisableCompression bool
+
+	// MaxResponseHeaderBytes, added to provide ability to
+	// set value. No default value in Resty, the Go
+	// HTTP client default value applies.
+	MaxResponseHeaderBytes int64
+
+	// WriteBufferSize, added to provide ability to
+	// set value. No default value in Resty, the Go
+	// HTTP client default value applies.
+	WriteBufferSize int
+
+	// ReadBufferSize, added to provide ability to
+	// set value. No default value in Resty, the Go
+	// HTTP client default value applies.
+	ReadBufferSize int
 }
 
 // Client struct is used to create Resty client with client level settings,
