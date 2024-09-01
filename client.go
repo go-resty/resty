@@ -186,7 +186,7 @@ type Client struct {
 	closeConnection     bool
 	notParseResponse    bool
 	trace               bool
-	debugBodySizeLimit  int64
+	debugBodySizeLimit  int
 	outputDirectory     string
 	scheme              string
 	log                 Logger
@@ -565,16 +565,20 @@ func (c *Client) R() *Request {
 		FormData:      url.Values{},
 		Header:        http.Header{},
 		Cookies:       make([]*http.Cookie, 0),
-		PathParams:    map[string]string{},
-		RawPathParams: map[string]string{},
+		PathParams:    make(map[string]string),
+		RawPathParams: make(map[string]string),
 		Debug:         c.debug,
 
-		client:            c,
-		multipartFiles:    []*File{},
-		multipartFields:   []*MultipartField{},
-		jsonEscapeHTML:    c.jsonEscapeHTML,
-		log:               c.log,
-		responseBodyLimit: c.responseBodyLimit,
+		client:             c,
+		multipartFiles:     []*File{},
+		multipartFields:    []*MultipartField{},
+		jsonEscapeHTML:     c.jsonEscapeHTML,
+		log:                c.log,
+		setContentLength:   c.setContentLength,
+		trace:              c.trace,
+		notParseResponse:   c.notParseResponse,
+		debugBodySizeLimit: c.debugBodySizeLimit,
+		responseBodyLimit:  c.responseBodyLimit,
 	}
 	return r
 }
@@ -726,7 +730,7 @@ func (c *Client) SetDebug(d bool) *Client {
 // SetDebugBodyLimit sets the maximum size for which the response and request body will be logged in debug mode.
 //
 //	client.SetDebugBodyLimit(1000000)
-func (c *Client) SetDebugBodyLimit(sl int64) *Client {
+func (c *Client) SetDebugBodyLimit(sl int) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.debugBodySizeLimit = sl
@@ -1601,7 +1605,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		RawResponse: resp,
 	}
 
-	if err != nil || req.notParseResponse || c.notParseResponse {
+	if err != nil || req.notParseResponse {
 		response.setReceivedAt()
 		return response, err
 	}

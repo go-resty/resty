@@ -167,9 +167,9 @@ func (r *Response) setReceivedAt() {
 	}
 }
 
-func (r *Response) fmtBodyString(sl int64) string {
+func (r *Response) fmtBodyString(sl int) string {
 	if len(r.body) > 0 {
-		if int64(len(r.body)) > sl {
+		if len(r.body) > sl {
 			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", len(r.body))
 		}
 		ct := r.Header().Get(hdrContentTypeKey)

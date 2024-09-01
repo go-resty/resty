@@ -479,7 +479,7 @@ func TestClientOptions(t *testing.T) {
 	client.SetDebug(true)
 	assertEqual(t, client.Debug(), true)
 
-	var sl int64 = 1000000
+	var sl int = 1000000
 	client.SetDebugBodyLimit(sl)
 	assertEqual(t, client.debugBodySizeLimit, sl)
 

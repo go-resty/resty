@@ -39,7 +39,6 @@ type Request struct {
 	Time          time.Time
 	Body          interface{}
 	Result        interface{}
-	resultCurlCmd *string
 	Error         interface{}
 	RawRequest    *http.Request
 	SRV           *SRVRecord
@@ -73,7 +72,9 @@ type Request struct {
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
+	debugBodySizeLimit  int
 	responseBodyLimit   int
+	resultCurlCmd       *string
 }
 
 // Generate curl command for the request.
@@ -1026,7 +1027,7 @@ type SRVRecord struct {
 // Request Unexported methods
 //_______________________________________________________________________
 
-func (r *Request) fmtBodyString(sl int64) (body string) {
+func (r *Request) fmtBodyString(sl int) (body string) {
 	body = "***** NO CONTENT *****"
 	if !isPayloadSupported(r.Method, r.client.allowGetMethodPayload) {
 		return
@@ -1039,7 +1040,7 @@ func (r *Request) fmtBodyString(sl int64) (body string) {
 
 	// multipart or form-data
 	if r.isMultiPart || r.isFormData {
-		bodySize := int64(r.bodyBuf.Len())
+		bodySize := r.bodyBuf.Len()
 		if bodySize > sl {
 			body = fmt.Sprintf("***** REQUEST TOO LARGE (size - %d) *****", bodySize)
 			return
@@ -1087,7 +1088,7 @@ func (r *Request) fmtBodyString(sl int64) (body string) {
 	}
 
 	if len(body) > 0 {
-		bodySize := int64(len([]byte(body)))
+		bodySize := len([]byte(body))
 		if bodySize > sl {
 			body = fmt.Sprintf("***** REQUEST TOO LARGE (size - %d) *****", bodySize)
 		}
