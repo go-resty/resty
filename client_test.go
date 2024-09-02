@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 
@@ -6,6 +6,8 @@ package resty
 
 import (
 	"bytes"
+	"compress/gzip"
+	"crypto/rand"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -792,23 +794,52 @@ func TestDebugLogSimultaneously(t *testing.T) {
 	}
 }
 
-func TestNewWithTimeout(t *testing.T) {
+func TestCustomTransportSettings(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	customTimeout := &ClientTimeoutSetting{
-		DialerTimeout:                  30 * time.Second,
-		DialerKeepAlive:                15 * time.Second,
-		TransportIdleConnTimeout:       120 * time.Second,
-		TransportTLSHandshakeTimeout:   20 * time.Second,
-		TransportExpectContinueTimeout: 1 * time.Second,
+	customTransportSettings := &TransportSettings{
+		DialerTimeout:          30 * time.Second,
+		DialerKeepAlive:        15 * time.Second,
+		IdleConnTimeout:        120 * time.Second,
+		TLSHandshakeTimeout:    20 * time.Second,
+		ExpectContinueTimeout:  1 * time.Second,
+		MaxIdleConns:           50,
+		MaxIdleConnsPerHost:    3,
+		ResponseHeaderTimeout:  10 * time.Second,
+		MaxResponseHeaderBytes: 1 << 10,
+		WriteBufferSize:        2 << 10,
+		ReadBufferSize:         2 << 10,
 	}
-	client := NewWithTimeout(customTimeout)
+	client := NewWithTransportSettings(customTransportSettings)
 	client.SetBaseURL(ts.URL)
 
 	resp, err := client.R().Get("/")
 	assertNil(t, err)
 	assertEqual(t, resp.String(), "TestGet: text response")
+}
+
+func TestDefaultDialerTransportSettings(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	t.Run("transport-default", func(t *testing.T) {
+		client := NewWithTransportSettings(nil)
+		client.SetBaseURL(ts.URL)
+
+		resp, err := client.R().Get("/")
+		assertNil(t, err)
+		assertEqual(t, resp.String(), "TestGet: text response")
+	})
+
+	t.Run("dialer-transport-default", func(t *testing.T) {
+		client := NewWithDialerAndTransportSettings(nil, nil)
+		client.SetBaseURL(ts.URL)
+
+		resp, err := client.R().Get("/")
+		assertNil(t, err)
+		assertEqual(t, resp.String(), "TestGet: text response")
+	})
 }
 
 func TestNewWithDialer(t *testing.T) {
@@ -1130,4 +1161,57 @@ func TestClone(t *testing.T) {
 	// assert interface type
 	assertEqual(t, "clone", parent.BasicAuth().Username)
 	assertEqual(t, "clone", clone.BasicAuth().Username)
+}
+
+func TestResponseBodyLimit(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		io.CopyN(w, rand.Reader, 100*800)
+	})
+	defer ts.Close()
+
+	t.Run("Client body limit", func(t *testing.T) {
+		c := dc().SetResponseBodyLimit(1024)
+
+		_, err := c.R().Get(ts.URL + "/")
+		assertNotNil(t, err)
+		assertEqual(t, err, ErrResponseBodyTooLarge)
+	})
+
+	t.Run("request body limit", func(t *testing.T) {
+		c := dc()
+
+		_, err := c.R().SetResponseBodyLimit(1024).Get(ts.URL + "/")
+		assertNotNil(t, err)
+		assertEqual(t, err, ErrResponseBodyTooLarge)
+	})
+
+	t.Run("body less than limit", func(t *testing.T) {
+		c := dc()
+
+		res, err := c.R().SetResponseBodyLimit(800*100 + 10).Get(ts.URL + "/")
+		assertNil(t, err)
+		assertEqual(t, 800*100, len(res.body))
+	})
+
+	t.Run("no body limit", func(t *testing.T) {
+		c := dc()
+
+		res, err := c.R().Get(ts.URL + "/")
+		assertNil(t, err)
+		assertEqual(t, 800*100, len(res.body))
+	})
+
+	t.Run("read error", func(t *testing.T) {
+		tse := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(hdrContentEncodingKey, "gzip")
+			var buf [1024]byte
+			w.Write(buf[:])
+		})
+		defer tse.Close()
+
+		c := dc()
+
+		_, err := c.R().SetResponseBodyLimit(10240).Get(tse.URL + "/")
+		assertErrorIs(t, err, gzip.ErrHeader)
+	})
 }
