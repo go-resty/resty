@@ -43,14 +43,14 @@ func TestBackoffNoWaitForLastRetry(t *testing.T) {
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	client := New()
+	client.SetRetryAfter(func(*Client, *Response) (time.Duration, error) {
+		return 6, nil
+	})
 	resp := &Response{
 		Request: &Request{
-			ctx: canceledCtx,
-			client: &Client{
-				RetryAfter: func(*Client, *Response) (time.Duration, error) {
-					return 6, nil
-				},
-			},
+			ctx:    canceledCtx,
+			client: client,
 		},
 	}
 
@@ -724,14 +724,21 @@ func TestClientRetryHook(t *testing.T) {
 
 	attempt := 0
 
+	retryHook := func(r *Response, _ error) {
+		attempt++
+	}
+
 	c := dc().
 		SetRetryCount(2).
 		SetTimeout(time.Second * 3).
-		AddRetryHook(
-			func(r *Response, _ error) {
-				attempt++
-			},
-		)
+		AddRetryHook(retryHook)
+
+	// Since reflect.DeepEqual can not compare two functions
+	// just compare pointers of the two hooks
+	originHookPointer := reflect.ValueOf(retryHook).Pointer()
+	getterHookPointer := reflect.ValueOf(c.RetryHooks()[0]).Pointer()
+
+	assertEqual(t, originHookPointer, getterHookPointer)
 
 	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")
 	assertEqual(t, "", resp.Status())
@@ -783,6 +790,8 @@ func TestResetMultipartReaderSeekStartError(t *testing.T) {
 		SetRetryResetReaders(true).
 		AddRetryAfterErrorCondition()
 
+	assertEqual(t, true, c.RetryResetReaders())
+
 	resp, err := c.R().
 		SetFileReader("name", "filename", testSeeker).
 		Post(ts.URL + "/set-reset-multipart-readers-test")
@@ -815,6 +824,8 @@ func TestResetMultipartReaders(t *testing.T) {
 				assertEqual(t, str, string(bufCpy))
 			},
 		)
+
+	assertEqual(t, true, c.RetryResetReaders())
 
 	resp, err := c.R().
 		SetFileReader("name", "filename", bufReader).

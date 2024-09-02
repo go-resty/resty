@@ -77,6 +77,7 @@ func TestClientAuthScheme(t *testing.T) {
 
 	// Ensure setting the scheme works as well
 	c.SetAuthScheme("Bearer")
+	assertEqual(t, "Bearer", c.AuthScheme())
 
 	resp2, err2 := c.R().Get("/profile")
 	assertError(t, err2)
@@ -240,7 +241,7 @@ func TestClientProxy(t *testing.T) {
 	assertNotNil(t, resp)
 	assertNotNil(t, err)
 
-	// Error
+	// error
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
 
 	resp, err = c.R().
@@ -339,9 +340,9 @@ func TestClientSetHeaderVerbatim(t *testing.T) {
 		SetHeader("header-lowercase", "value_standard")
 
 	//lint:ignore SA1008 valid one, so ignore this!
-	unConventionHdrValue := strings.Join(c.Header["header-lowercase"], "")
+	unConventionHdrValue := strings.Join(c.Header()["header-lowercase"], "")
 	assertEqual(t, "value_lowercase", unConventionHdrValue)
-	assertEqual(t, "value_standard", c.Header.Get("Header-Lowercase"))
+	assertEqual(t, "value_standard", c.Header().Get("Header-Lowercase"))
 }
 
 func TestClientSetTransport(t *testing.T) {
@@ -387,20 +388,20 @@ func TestClientOptions(t *testing.T) {
 	assertEqual(t, client.setContentLength, true)
 
 	client.SetBaseURL("http://httpbin.org")
-	assertEqual(t, "http://httpbin.org", client.BaseURL)
+	assertEqual(t, "http://httpbin.org", client.BaseURL())
 
 	client.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8")
 	client.SetHeaders(map[string]string{
 		hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1",
 		"X-Request-Id":  strconv.FormatInt(time.Now().UnixNano(), 10),
 	})
-	assertEqual(t, "application/json; charset=utf-8", client.Header.Get(hdrContentTypeKey))
+	assertEqual(t, "application/json; charset=utf-8", client.Header().Get(hdrContentTypeKey))
 
 	client.SetCookie(&http.Cookie{
 		Name:  "default-cookie",
 		Value: "This is cookie default-cookie value",
 	})
-	assertEqual(t, "default-cookie", client.Cookies[0].Name)
+	assertEqual(t, "default-cookie", client.Cookies()[0].Name)
 
 	cookies := []*http.Cookie{
 		{
@@ -412,45 +413,45 @@ func TestClientOptions(t *testing.T) {
 		},
 	}
 	client.SetCookies(cookies)
-	assertEqual(t, "default-cookie-1", client.Cookies[1].Name)
-	assertEqual(t, "default-cookie-2", client.Cookies[2].Name)
+	assertEqual(t, "default-cookie-1", client.Cookies()[1].Name)
+	assertEqual(t, "default-cookie-2", client.Cookies()[2].Name)
 
 	client.SetQueryParam("test_param_1", "Param_1")
 	client.SetQueryParams(map[string]string{"test_param_2": "Param_2", "test_param_3": "Param_3"})
-	assertEqual(t, "Param_3", client.QueryParam.Get("test_param_3"))
+	assertEqual(t, "Param_3", client.QueryParam().Get("test_param_3"))
 
 	rTime := strconv.FormatInt(time.Now().UnixNano(), 10)
 	client.SetFormData(map[string]string{"r_time": rTime})
-	assertEqual(t, rTime, client.FormData.Get("r_time"))
+	assertEqual(t, rTime, client.FormData().Get("r_time"))
 
 	client.SetBasicAuth("myuser", "mypass")
-	assertEqual(t, "myuser", client.UserInfo.Username)
+	assertEqual(t, "myuser", client.BasicAuth().Username)
 
 	client.SetAuthToken("AC75BD37F019E08FBC594900518B4F7E")
-	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", client.Token)
+	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", client.Token())
 
 	client.SetDisableWarn(true)
-	assertEqual(t, client.DisableWarn, true)
+	assertEqual(t, client.DisableWarn(), true)
 
 	client.SetRetryCount(3)
-	assertEqual(t, 3, client.RetryCount)
+	assertEqual(t, 3, client.RetryCount())
 
 	rwt := time.Duration(1000) * time.Millisecond
 	client.SetRetryWaitTime(rwt)
-	assertEqual(t, rwt, client.RetryWaitTime)
+	assertEqual(t, rwt, client.RetryWaitTime())
 
 	mrwt := time.Duration(2) * time.Second
 	client.SetRetryMaxWaitTime(mrwt)
-	assertEqual(t, mrwt, client.RetryMaxWaitTime)
+	assertEqual(t, mrwt, client.RetryMaxWaitTime())
 
 	client.AddRetryAfterErrorCondition()
-	equal(client.RetryConditions[0], func(response *Response, err error) bool {
+	equal(client.RetryConditions()[0], func(response *Response, err error) bool {
 		return response.IsError()
 	})
 
 	err := &AuthError{}
 	client.SetError(err)
-	if reflect.TypeOf(err) == client.Error {
+	if reflect.TypeOf(err) == client.Error() {
 		t.Error("SetError failed")
 	}
 
@@ -476,14 +477,14 @@ func TestClientOptions(t *testing.T) {
 	client.SetContentLength(true)
 
 	client.SetDebug(true)
-	assertEqual(t, client.Debug, true)
+	assertEqual(t, client.Debug(), true)
 
 	var sl int64 = 1000000
 	client.SetDebugBodyLimit(sl)
 	assertEqual(t, client.debugBodySizeLimit, sl)
 
 	client.SetAllowGetMethodPayload(true)
-	assertEqual(t, client.AllowGetMethodPayload, true)
+	assertEqual(t, client.AllowGetMethodPayload(), true)
 
 	client.SetScheme("http")
 	assertEqual(t, client.scheme, "http")
@@ -617,7 +618,7 @@ func TestClientNewRequest(t *testing.T) {
 func TestClientSetJSONMarshaler(t *testing.T) {
 	m := func(v interface{}) ([]byte, error) { return nil, nil }
 	c := New().SetJSONMarshaler(m)
-	p1 := fmt.Sprintf("%p", c.JSONMarshal)
+	p1 := fmt.Sprintf("%p", c.JSONMarshaler())
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
@@ -625,7 +626,7 @@ func TestClientSetJSONMarshaler(t *testing.T) {
 func TestClientSetJSONUnmarshaler(t *testing.T) {
 	m := func([]byte, interface{}) error { return nil }
 	c := New().SetJSONUnmarshaler(m)
-	p1 := fmt.Sprintf("%p", c.JSONUnmarshal)
+	p1 := fmt.Sprintf("%p", c.JSONUnmarshaler())
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
@@ -633,7 +634,7 @@ func TestClientSetJSONUnmarshaler(t *testing.T) {
 func TestClientSetXMLMarshaler(t *testing.T) {
 	m := func(v interface{}) ([]byte, error) { return nil, nil }
 	c := New().SetXMLMarshaler(m)
-	p1 := fmt.Sprintf("%p", c.XMLMarshal)
+	p1 := fmt.Sprintf("%p", c.XMLMarshaler())
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
@@ -641,7 +642,7 @@ func TestClientSetXMLMarshaler(t *testing.T) {
 func TestClientSetXMLUnmarshaler(t *testing.T) {
 	m := func([]byte, interface{}) error { return nil }
 	c := New().SetXMLUnmarshaler(m)
-	p1 := fmt.Sprintf("%p", c.XMLUnmarshal)
+	p1 := fmt.Sprintf("%p", c.XMLUnmarshaler())
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
@@ -1145,23 +1146,21 @@ func TestClone(t *testing.T) {
 	parent.SetBaseURL("http://localhost")
 
 	// set an interface field
-	parent.UserInfo = &User{
-		Username: "parent",
-	}
+	parent.SetBasicAuth("parent", "")
 
 	clone := parent.Clone()
 	// update value of non-interface type - change will only happen on clone
 	clone.SetBaseURL("https://local.host")
 	// update value of interface type - change will also happen on parent
-	clone.UserInfo.Username = "clone"
+	clone.BasicAuth().Username = "clone"
 
 	// asert non-interface type
-	assertEqual(t, "http://localhost", parent.BaseURL)
-	assertEqual(t, "https://local.host", clone.BaseURL)
+	assertEqual(t, "http://localhost", parent.BaseURL())
+	assertEqual(t, "https://local.host", clone.BaseURL())
 
 	// assert interface type
-	assertEqual(t, "clone", parent.UserInfo.Username)
-	assertEqual(t, "clone", clone.UserInfo.Username)
+	assertEqual(t, "clone", parent.BasicAuth().Username)
+	assertEqual(t, "clone", clone.BasicAuth().Username)
 }
 
 func TestResponseBodyLimit(t *testing.T) {
@@ -1172,7 +1171,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 	t.Run("Client body limit", func(t *testing.T) {
 		c := dc().SetResponseBodyLimit(1024)
-
+		assertEqual(t, 1024, c.ResponseBodyLimit())
 		_, err := c.R().Get(ts.URL + "/")
 		assertNotNil(t, err)
 		assertEqual(t, err, ErrResponseBodyTooLarge)

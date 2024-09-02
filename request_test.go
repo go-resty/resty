@@ -1740,6 +1740,8 @@ func TestGetPathParamAndPathParams(t *testing.T) {
 		SetBaseURL(ts.URL).
 		SetPathParam("userId", "sample@sample.com")
 
+	assertEqual(t, "sample@sample.com", c.PathParam()["userId"])
+
 	resp, err := c.R().SetPathParam("subAccountId", "100002").
 		Get("/v1/users/{userId}/{subAccountId}/details")
 
@@ -1929,6 +1931,9 @@ func TestRawPathParamURLInput(t *testing.T) {
 			"userId": "sample@sample.com",
 			"path":   "users/developers",
 		})
+
+	assertEqual(t, "sample@sample.com", c.RawPathParams()["userId"])
+	assertEqual(t, "users/developers", c.RawPathParams()["path"])
 
 	resp, err := c.R().
 		SetRawPathParams(map[string]string{

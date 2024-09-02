@@ -98,7 +98,7 @@ func Test_parseRequestURL(t *testing.T) {
 				r.SetPathParams(map[string]string{
 					"foo": "4/5",
 				}).SetRawPathParams(map[string]string{
-					"foo": "4/5", // ignored, because the PathParams takes precedence over the RawPathParams
+					"foo": "4/5", // ignored, because the pathParams takes precedence over the rawPathParams
 					"bar": "6/7",
 				})
 				r.URL = "https://example.com/{foo}/{bar}"
@@ -182,7 +182,7 @@ func Test_parseRequestURL(t *testing.T) {
 		{
 			name: "using deprecated HostURL with relative path in request URL",
 			init: func(c *Client, r *Request) {
-				c.BaseURL = "https://example.com"
+				c.SetBaseURL("https://example.com")
 				r.URL = "foo/bar"
 			},
 			expectedURL: "https://example.com/foo/bar",
