@@ -179,8 +179,7 @@ type Client struct {
 	// value when `SetAuthToken` option is used.
 
 	headerAuthorizationKey string
-	ResponseBodyLimit      int
-
+	responseBodyLimit      int
 
 	jsonEscapeHTML      bool
 	setContentLength    bool
@@ -575,7 +574,7 @@ func (c *Client) R() *Request {
 		multipartFields:   []*MultipartField{},
 		jsonEscapeHTML:    c.jsonEscapeHTML,
 		log:               c.log,
-		responseBodyLimit: c.ResponseBodyLimit,
+		responseBodyLimit: c.responseBodyLimit,
 	}
 	return r
 }
@@ -1427,6 +1426,13 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 	return c
 }
 
+// ResponseBodyLimit gets the max body size limit on response.
+func (c *Client) ResponseBodyLimit() int {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.responseBodyLimit
+}
+
 // SetResponseBodyLimit set a max body size limit on response, avoid reading too many data to memory.
 //
 // Client will return [resty.ErrResponseBodyTooLarge] if uncompressed response body size if larger than limit.
@@ -1437,7 +1443,9 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 //
 // this can be overridden at client level with [Request.SetResponseBodyLimit]
 func (c *Client) SetResponseBodyLimit(v int) *Client {
-	c.ResponseBodyLimit = v
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.responseBodyLimit = v
 	return c
 }
 

@@ -1171,7 +1171,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 	t.Run("Client body limit", func(t *testing.T) {
 		c := dc().SetResponseBodyLimit(1024)
-
+		assertEqual(t, 1024, c.ResponseBodyLimit())
 		_, err := c.R().Get(ts.URL + "/")
 		assertNotNil(t, err)
 		assertEqual(t, err, ErrResponseBodyTooLarge)
