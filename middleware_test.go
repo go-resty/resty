@@ -454,10 +454,11 @@ func (errorReader) Read(p []byte) (n int, err error) {
 	return 0, errors.New("fake")
 }
 
-func Test_parseRequestBody(t *testing.T) {
+func TestParseRequestBody(t *testing.T) {
 	for _, tt := range []struct {
 		name                  string
-		init                  func(c *Client, r *Request)
+		initClient            func(c *Client)
+		initRequest           func(r *Request)
 		expectedBodyBuf       []byte
 		expectedContentLength string
 		expectedContentType   string
@@ -465,25 +466,24 @@ func Test_parseRequestBody(t *testing.T) {
 	}{
 		{
 			name: "empty body",
-			init: func(c *Client, r *Request) {},
 		},
 		{
 			name: "empty body with SetContentLength by request",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetContentLength(true)
 			},
 			expectedContentLength: "0",
 		},
 		{
 			name: "empty body with SetContentLength by client",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetContentLength(true)
 			},
 			expectedContentLength: "0",
 		},
 		{
 			name: "string body",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 			},
 			expectedBodyBuf:     []byte("foo"),
@@ -491,15 +491,17 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "string body with GET method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodGet
 			},
 		},
 		{
 			name: "string body with GET method and AllowGetMethodPayload",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetAllowGetMethodPayload(true)
+			},
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodGet
 			},
@@ -508,21 +510,21 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "string body with HEAD method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodHead
 			},
 		},
 		{
 			name: "string body with OPTIONS method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodOptions
 			},
 		},
 		{
 			name: "string body with POST method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodPost
 			},
@@ -531,7 +533,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "string body with PATCH method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodPatch
 			},
@@ -540,7 +542,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "string body with PUT method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodPut
 			},
@@ -549,7 +551,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "string body with DELETE method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodDelete
 			},
@@ -558,7 +560,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "string body with CONNECT method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodConnect
 			},
@@ -567,7 +569,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "string body with TRACE method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = http.MethodTrace
 			},
@@ -576,7 +578,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "string body with BAR method",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody("foo")
 				r.Method = "BAR"
 			},
@@ -585,7 +587,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "byte body",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody([]byte("foo"))
 			},
 			expectedBodyBuf:     []byte("foo"),
@@ -593,14 +595,14 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "io.Reader body, no bodyBuf",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody(bytes.NewBufferString("foo"))
 			},
 			expectedContentType: jsonContentType,
 		},
 		{
 			name: "io.Reader body with SetContentLength by request",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody(bytes.NewBufferString("foo")).
 					SetContentLength(true)
 			},
@@ -610,8 +612,10 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "io.Reader body with SetContentLength by client",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetContentLength(true)
+			},
+			initRequest: func(r *Request) {
 				r.SetBody(bytes.NewBufferString("foo"))
 			},
 			expectedBodyBuf:       []byte("foo"),
@@ -620,7 +624,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "form data by request",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetFormData(map[string]string{
 					"foo": "1",
 					"bar": "2",
@@ -631,7 +635,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "form data by client",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetFormData(map[string]string{
 					"foo": "1",
 					"bar": "2",
@@ -642,11 +646,13 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "form data by client and request",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetFormData(map[string]string{
 					"foo": "1",
 					"bar": "2",
 				})
+			},
+			initRequest: func(r *Request) {
 				r.SetFormData(map[string]string{
 					"foo": "3",
 					"baz": "4",
@@ -657,7 +663,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "json from struct",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody(struct {
 					Foo string `json:"foo"`
 					Bar string `json:"bar"`
@@ -672,7 +678,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "json from slice",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody([]string{"foo", "bar"}).SetContentLength(true)
 			},
 			expectedBodyBuf:       []byte(`["foo","bar"]`),
@@ -681,7 +687,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "json from map",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody(map[string]interface{}{
 					"foo": "1",
 					"bar": []int{1, 2, 3},
@@ -697,7 +703,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "json from map",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody(map[string]interface{}{
 					"foo": "1",
 					"bar": []int{1, 2, 3},
@@ -713,7 +719,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "json from map",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody(map[string]interface{}{
 					"foo": "1",
 					"bar": []int{1, 2, 3},
@@ -729,7 +735,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "xml from struct",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				type FooBar struct {
 					Foo string `xml:"foo"`
 					Bar string `xml:"bar"`
@@ -746,12 +752,14 @@ func Test_parseRequestBody(t *testing.T) {
 			expectedContentLength: "41",
 		},
 		{
-			name: "mulipart form data",
-			init: func(c *Client, r *Request) {
+			name: "multipart form data",
+			initClient: func(c *Client) {
 				c.SetFormData(map[string]string{
 					"foo": "1",
 					"bar": "2",
 				})
+			},
+			initRequest: func(r *Request) {
 				r.SetFormData(map[string]string{
 					"foo": "3",
 					"baz": "4",
@@ -767,7 +775,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "multipart fields",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetMultipartFields(
 					&MultipartField{
 						Param:       "foo",
@@ -787,7 +795,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "multipart files",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetFileReader("foo", "foo.txt", strings.NewReader("1")).
 					SetFileReader("bar", "bar.txt", strings.NewReader("2")).
 					SetContentLength(true)
@@ -798,21 +806,21 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "body with errorReader",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody(&errorReader{}).SetContentLength(true)
 			},
 			wantErr: true,
 		},
 		{
 			name: "unsupported type",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody(1)
 			},
 			wantErr: true,
 		},
 		{
 			name: "unsupported xml",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetBody(struct {
 					Foo string `xml:"foo"`
 					Bar string `xml:"bar"`
@@ -825,7 +833,7 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "multipart fields with errorReader",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetMultipartFields(&MultipartField{
 					Param:       "foo",
 					ContentType: "text/plain",
@@ -836,14 +844,14 @@ func Test_parseRequestBody(t *testing.T) {
 		},
 		{
 			name: "multipart files with errorReader",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetFileReader("foo", "foo.txt", &errorReader{})
 			},
 			wantErr: true,
 		},
 		{
 			name: "multipart with file not found",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetFormData(map[string]string{
 					"@foo": "foo.txt",
 				})
@@ -854,8 +862,15 @@ func Test_parseRequestBody(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c := New()
+			if tt.initClient != nil {
+				tt.initClient(c)
+			}
+
 			r := c.R()
-			tt.init(c, r)
+			if tt.initRequest != nil {
+				tt.initRequest(r)
+			}
+
 			if err := parseRequestBody(c, r); err != nil {
 				if tt.wantErr {
 					return

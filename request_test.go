@@ -2041,84 +2041,97 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	ts := createFilePostServer(t)
 	defer ts.Close()
 
-	debugBodySizeLimit := int64(512)
+	debugBodySizeLimit := 512
 
-	// upload an image with more than 512 bytes
-	output := bytes.NewBufferString("")
-	resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
-		SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
-		SetHeader("Content-Type", "image/png").
-		Post(ts.URL + "/upload")
-	assertNil(t, err)
-	assertNotNil(t, resp)
-	assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+	t.Run("upload an image with more than 512 bytes", func(t *testing.T) {
+		// upload an image with more than 512 bytes
+		output := bytes.NewBufferString("")
+		resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
+			SetHeader("Content-Type", "image/png").
+			Post(ts.URL + "/upload")
+		assertNil(t, err)
+		assertNotNil(t, resp)
+		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+	})
 
-	// upload a text file with no more than 512 bytes
-	output = bytes.NewBufferString("")
-	resp, err = New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
-		SetDebug(true).
-		SetFile("file", filepath.Join(getTestDataPath(), "text-file.txt")).
-		SetHeader("Content-Type", "text/plain").
-		Post(ts.URL + "/upload")
-	assertNil(t, err)
-	assertNotNil(t, resp)
-	assertEqual(t, true, strings.Contains(output.String(), " THIS IS TEXT FILE FOR MULTIPART UPLOAD TEST "))
+	t.Run("upload a text file with no more than 512 bytes", func(t *testing.T) {
+		// upload a text file with no more than 512 bytes
+		output := bytes.NewBufferString("")
+		resp, err := New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+			SetDebug(true).
+			SetFile("file", filepath.Join(getTestDataPath(), "text-file.txt")).
+			SetHeader("Content-Type", "text/plain").
+			Post(ts.URL + "/upload")
+		assertNil(t, err)
+		assertNotNil(t, resp)
+		assertEqual(t, true, strings.Contains(output.String(), " THIS IS TEXT FILE FOR MULTIPART UPLOAD TEST "))
+	})
 
 	formTs := createFormPostServer(t)
 	defer formTs.Close()
 
-	// post form with more than 512 bytes data
-	output = bytes.NewBufferString("")
-	resp, err = New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
-		SetFormData(map[string]string{
-			"first_name": "Alex",
-			"last_name":  strings.Repeat("C", int(debugBodySizeLimit)),
-			"zip_code":   "00001",
-		}).
-		SetBasicAuth("myuser", "mypass").
-		Post(formTs.URL + "/profile")
-	assertNil(t, err)
-	assertNotNil(t, resp)
-	assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+	t.Run("post form with more than 512 bytes data", func(t *testing.T) {
+		// post form with more than 512 bytes data
+		output := bytes.NewBufferString("")
+		resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+			SetFormData(map[string]string{
+				"first_name": "Alex",
+				"last_name":  strings.Repeat("C", int(debugBodySizeLimit)),
+				"zip_code":   "00001",
+			}).
+			SetBasicAuth("myuser", "mypass").
+			Post(formTs.URL + "/profile")
+		assertNil(t, err)
+		assertNotNil(t, resp)
+		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+	})
 
-	// post form with no more than 512 bytes data
-	output = bytes.NewBufferString("")
-	resp, err = New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
-		SetDebug(true).
-		SetFormData(map[string]string{
-			"first_name": "Alex",
-			"last_name":  "C",
-			"zip_code":   "00001",
-		}).
-		SetBasicAuth("myuser", "mypass").
-		Post(formTs.URL + "/profile")
-	assertNil(t, err)
-	assertNotNil(t, resp)
-	assertEqual(t, true, strings.Contains(output.String(), "Alex"))
+	t.Run("post form with no more than 512 bytes data", func(t *testing.T) {
+		// post form with no more than 512 bytes data
+		output := bytes.NewBufferString("")
+		resp, err := New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+			SetDebug(true).
+			SetFormData(map[string]string{
+				"first_name": "Alex",
+				"last_name":  "C",
+				"zip_code":   "00001",
+			}).
+			SetBasicAuth("myuser", "mypass").
+			Post(formTs.URL + "/profile")
+		assertNil(t, err)
+		assertNotNil(t, resp)
+		assertEqual(t, true, strings.Contains(output.String(), "Alex"))
+	})
 
-	// post string with more than 512 bytes data
-	output = bytes.NewBufferString("")
-	resp, err = New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
-		SetBody(`{
+	t.Run("post string with more than 512 bytes data", func(t *testing.T) {
+		// post string with more than 512 bytes data
+		output := bytes.NewBufferString("")
+		resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+			SetBody(`{
 			"first_name": "Alex",
 			"last_name": "`+strings.Repeat("C", int(debugBodySizeLimit))+`C",
 			"zip_code": "00001"}`).
-		SetBasicAuth("myuser", "mypass").
-		Post(formTs.URL + "/profile")
-	assertNil(t, err)
-	assertNotNil(t, resp)
-	assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+			SetBasicAuth("myuser", "mypass").
+			Post(formTs.URL + "/profile")
+		assertNil(t, err)
+		assertNotNil(t, resp)
+		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+	})
 
-	// post slice with more than 512 bytes data
-	output = bytes.NewBufferString("")
-	resp, err = New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
-		SetDebug(true).
-		SetBody([]string{strings.Repeat("C", int(debugBodySizeLimit))}).
-		SetBasicAuth("myuser", "mypass").
-		Post(formTs.URL + "/profile")
-	assertNil(t, err)
-	assertNotNil(t, resp)
-	assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+	t.Run("post slice with more than 512 bytes data", func(t *testing.T) {
+		// post slice with more than 512 bytes data
+		output := bytes.NewBufferString("")
+		resp, err := New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
+			SetDebug(true).
+			SetBody([]string{strings.Repeat("C", int(debugBodySizeLimit))}).
+			SetBasicAuth("myuser", "mypass").
+			Post(formTs.URL + "/profile")
+		assertNil(t, err)
+		assertNotNil(t, resp)
+		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+	})
+
 }
 
 func TestPostMapTemporaryRedirect(t *testing.T) {

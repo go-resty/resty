@@ -192,7 +192,7 @@ func parseRequestBody(c *Client, r *Request) error {
 	}
 
 	// by default resty won't set content length, you can if you want to :)
-	if c.setContentLength || r.setContentLength {
+	if r.setContentLength {
 		if r.bodyBuf == nil {
 			r.Header.Set(hdrContentLengthKey, "0")
 		} else {
@@ -207,7 +207,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	if r.bodyBuf == nil {
 		if reader, ok := r.Body.(io.Reader); ok && isPayloadSupported(r.Method, c.allowGetMethodPayload) {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, reader)
-		} else if c.setContentLength || r.setContentLength {
+		} else if r.setContentLength {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, http.NoBody)
 		} else {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, nil)
@@ -239,7 +239,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	}
 
 	// Enable trace
-	if c.trace || r.trace {
+	if r.trace {
 		r.clientTrace = &clientTrace{}
 		r.ctx = r.clientTrace.createContext(r.Context())
 	}
@@ -326,7 +326,7 @@ func requestLogger(c *Client, r *Request) error {
 				}
 			}
 		}
-		rl := &RequestLog{Header: rh, Body: r.fmtBodyString(c.debugBodySizeLimit)}
+		rl := &RequestLog{Header: rh, Body: r.fmtBodyString(r.debugBodySizeLimit)}
 		if c.requestLog != nil {
 			if err := c.requestLog(rl); err != nil {
 				return err
@@ -356,7 +356,7 @@ func requestLogger(c *Client, r *Request) error {
 
 func responseLogger(c *Client, res *Response) error {
 	if res.Request.Debug {
-		rl := &ResponseLog{Header: copyHeaders(res.Header()), Body: res.fmtBodyString(c.debugBodySizeLimit)}
+		rl := &ResponseLog{Header: copyHeaders(res.Header()), Body: res.fmtBodyString(res.Request.debugBodySizeLimit)}
 		if c.responseLog != nil {
 			if err := c.responseLog(rl); err != nil {
 				return err
@@ -411,7 +411,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 			if res.Request.Error != nil {
 				unmarshalErr := Unmarshalc(c, ct, res.body, res.Request.Error)
 				if unmarshalErr != nil {
-					c.log.Warnf("Cannot unmarshal response body: %s", unmarshalErr)
+					res.Request.log.Warnf("Cannot unmarshal response body: %s", unmarshalErr)
 				}
 			}
 		}
@@ -499,7 +499,7 @@ func handleRequestBody(c *Client, r *Request) error {
 
 	switch body := r.Body.(type) {
 	case io.Reader:
-		if c.setContentLength || r.setContentLength { // keep backward compatibility
+		if r.setContentLength { // keep backward compatibility
 			r.bodyBuf = acquireBuffer()
 			if _, err := r.bodyBuf.ReadFrom(body); err != nil {
 				return err

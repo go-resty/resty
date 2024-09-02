@@ -1,6 +1,6 @@
 module github.com/go-resty/resty/v3
 
-go 1.19
+go 1.20
 
 require (
 	golang.org/x/net v0.27.0
