@@ -8,8 +8,8 @@ package resty
 
 import (
 	"context"
+	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -208,9 +208,5 @@ func TestRequestContext(t *testing.T) {
 }
 
 func errIsContextCanceled(err error) bool {
-	ue, ok := err.(*url.Error)
-	if !ok {
-		return false
-	}
-	return ue.Err == context.Canceled
+	return errors.Is(err, context.Canceled)
 }

@@ -1111,7 +1111,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		_, err := c.R().Get(ts.URL + "/")
 		assertNotNil(t, err)
-		assertEqual(t, err, ErrResponseBodyTooLarge)
+		assertErrorIs(t, ErrResponseBodyTooLarge, err)
 	})
 
 	t.Run("request body limit", func(t *testing.T) {
@@ -1119,7 +1119,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		_, err := c.R().SetResponseBodyLimit(1024).Get(ts.URL + "/")
 		assertNotNil(t, err)
-		assertEqual(t, err, ErrResponseBodyTooLarge)
+		assertErrorIs(t, ErrResponseBodyTooLarge, err)
 	})
 
 	t.Run("body less than limit", func(t *testing.T) {
@@ -1149,6 +1149,6 @@ func TestResponseBodyLimit(t *testing.T) {
 		c := dc()
 
 		_, err := c.R().SetResponseBodyLimit(10240).Get(tse.URL + "/")
-		assertErrorIs(t, err, gzip.ErrHeader)
+		assertErrorIs(t, gzip.ErrHeader, err)
 	})
 }
