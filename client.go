@@ -1236,14 +1236,10 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	if err != nil || req.notParseResponse || c.notParseResponse {
 		logErr := responseLogger(c, response)
 		response.setReceivedAt()
-		switch {
-		case err != nil && logErr != nil:
-			return response, wrapResponseLogErr(err, logErr)
-		case logErr != nil:
-			return response, wrapNoRetryErr(logErr)
-		default:
-			return response, err
+		if err != nil {
+			return response, errors.Join(err, logErr)
 		}
+		return response, wrapNoRetryErr(logErr)
 	}
 
 	if !req.isSaveResponse {
