@@ -12,7 +12,7 @@ jobs:
   build:
     strategy:
       matrix:
-        go: [ 'stable', '1.19.x' ]
+        go: [ 'stable', '1.20.x' ]
         os: [ ubuntu-latest ]
 
     name: Run Build
