@@ -1255,7 +1255,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
-					err = wrapResponseLogErr(err, responseLogger(c, response))
+					err = errors.Join(err, responseLogger(c, response))
 					response.setReceivedAt()
 					return response, err
 				}
@@ -1264,7 +1264,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 
 		if response.body, err = readAllWithLimit(body, req.responseBodyLimit); err != nil {
-			err = wrapResponseLogErr(err, responseLogger(c, response))
+			err = errors.Join(err, responseLogger(c, response))
 			response.setReceivedAt()
 			return response, err
 		}
