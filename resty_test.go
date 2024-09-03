@@ -308,6 +308,16 @@ func createPostServer(t *testing.T) *httptest.Server {
 				body, _ := io.ReadAll(r.Body)
 				assertEqual(t, r.URL.Query().Get("body"), string(body))
 				w.WriteHeader(http.StatusOK)
+			case "/curl-cmd-post":
+				cookie := http.Cookie{
+					Name:    "testserver",
+					Domain:  "localhost",
+					Path:    "/",
+					Expires: time.Now().AddDate(0, 0, 1),
+					Value:   "yes",
+				}
+				http.SetCookie(w, &cookie)
+				w.WriteHeader(http.StatusOK)
 			}
 		}
 	})
