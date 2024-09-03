@@ -1496,3 +1496,7 @@ func createClient(hc *http.Client) *Client {
 
 	return c
 }
+
+func CookieJar(c *Client) *http.CookieJar {
+	return &c.httpClient.Jar
+}
