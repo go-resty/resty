@@ -154,6 +154,7 @@ type Client struct {
 	invalidHooks        []ErrorHook
 	panicHooks          []ErrorHook
 	rateLimiter         RateLimiter
+	generateCurlOnDebug bool
 }
 
 // User type is to hold an username and password information
@@ -443,12 +444,13 @@ func (c *Client) R() *Request {
 		RawPathParams: map[string]string{},
 		Debug:         c.Debug,
 
-		client:            c,
-		multipartFiles:    []*File{},
-		multipartFields:   []*MultipartField{},
-		jsonEscapeHTML:    c.jsonEscapeHTML,
-		log:               c.log,
-		responseBodyLimit: c.ResponseBodyLimit,
+		client:              c,
+		multipartFiles:      []*File{},
+		multipartFields:     []*MultipartField{},
+		jsonEscapeHTML:      c.jsonEscapeHTML,
+		log:                 c.log,
+		responseBodyLimit:   c.ResponseBodyLimit,
+		generateCurlOnDebug: c.generateCurlOnDebug,
 	}
 	return r
 }
@@ -1127,6 +1129,23 @@ func (c *Client) EnableTrace() *Client {
 // Since v2.0.0
 func (c *Client) DisableTrace() *Client {
 	c.trace = false
+	return c
+}
+
+// EnableGenerateCurlOnDebug method enables the generation of CURL commands in the debug log.
+// It works in conjunction with debug mode.
+//
+// NOTE: Use with care.
+//   - Potential to leak sensitive data in the debug log from [Request] and [Response].
+//   - Beware of memory usage since the request body is reread.
+func (c *Client) EnableGenerateCurlOnDebug() *Client {
+	c.generateCurlOnDebug = true
+	return c
+}
+
+// DisableGenerateCurlOnDebug method disables the option set by [Client.EnableGenerateCurlOnDebug].
+func (c *Client) DisableGenerateCurlOnDebug() *Client {
+	c.generateCurlOnDebug = false
 	return c
 }
 

@@ -14,6 +14,7 @@ import (
 
 func buildCurlRequest(req *http.Request, httpCookiejar http.CookieJar) (curl string) {
 	// 1. Generate curl raw headers
+
 	curl = "curl -X " + req.Method + " "
 	// req.Host + req.URL.Path + "?" + req.URL.RawQuery + " " + req.Proto + " "
 	headers := dumpCurlHeaders(req)
@@ -22,6 +23,7 @@ func buildCurlRequest(req *http.Request, httpCookiejar http.CookieJar) (curl str
 	}
 
 	// 2. Generate curl cookies
+	// TODO validate this block of code, I think its not required since cookie captured via Headers
 	if cookieJar, ok := httpCookiejar.(*cookiejar.Jar); ok {
 		cookies := cookieJar.Cookies(req.URL)
 		if len(cookies) > 0 {

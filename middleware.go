@@ -308,7 +308,7 @@ func addCredentials(c *Client, r *Request) error {
 }
 
 func createCurlCmd(c *Client, r *Request) (err error) {
-	if r.trace {
+	if r.Debug && r.generateCurlOnDebug {
 		if r.resultCurlCmd == nil {
 			r.resultCurlCmd = new(string)
 		}
@@ -338,10 +338,14 @@ func requestLogger(c *Client, r *Request) error {
 			}
 		}
 
-		reqLog := "\n==============================================================================\n" +
-			"~~~ REQUEST(curl) ~~~\n" +
-			fmt.Sprintf("CURL:\n	%v\n", buildCurlRequest(r.RawRequest, r.client.httpClient.Jar)) +
-			"~~~ REQUEST ~~~\n" +
+		reqLog := "\n==============================================================================\n"
+
+		if r.Debug && r.generateCurlOnDebug {
+			reqLog += "~~~ REQUEST(CURL) ~~~\n" +
+				fmt.Sprintf("	%v\n", *r.resultCurlCmd)
+		}
+
+		reqLog += "~~~ REQUEST ~~~\n" +
 			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
 			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
 			fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(c, r, rl.Header)) +

@@ -74,24 +74,27 @@ type Request struct {
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
 	responseBodyLimit   int
+	generateCurlOnDebug bool
 }
 
 // Generate curl command for the request.
 func (r *Request) GenerateCurlCommand() string {
+	if !(r.Debug && r.generateCurlOnDebug) {
+		return ""
+	}
+
 	if r.resultCurlCmd != nil {
 		return *r.resultCurlCmd
-	} else {
-		if r.RawRequest == nil {
-			r.client.executeBefore(r) // mock with r.Get("/")
-		}
-		if r.resultCurlCmd == nil {
-			r.resultCurlCmd = new(string)
-		}
-		if *r.resultCurlCmd == "" {
-			*r.resultCurlCmd = buildCurlRequest(r.RawRequest, r.client.httpClient.Jar)
-		}
-		return *r.resultCurlCmd
 	}
+
+	if r.RawRequest == nil {
+		r.client.executeBefore(r) // mock with r.Get("/")
+	}
+	if r.resultCurlCmd == nil {
+		r.resultCurlCmd = new(string)
+	}
+	*r.resultCurlCmd = buildCurlRequest(r.RawRequest, r.client.httpClient.Jar)
+	return *r.resultCurlCmd
 }
 
 // Context method returns the Context if its already set in request
@@ -831,6 +834,24 @@ func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 // Since v2.0.0
 func (r *Request) EnableTrace() *Request {
 	r.trace = true
+	return r
+}
+
+// EnableGenerateCurlOnDebug method enables the generation of CURL commands in the debug log.
+// It works in conjunction with debug mode. It overrides the options set by the [Client].
+//
+// NOTE: Use with care.
+//   - Potential to leak sensitive data in the debug log from [Request] and [Response].
+//   - Beware of memory usage since the request body is reread.
+func (r *Request) EnableGenerateCurlOnDebug() *Request {
+	r.generateCurlOnDebug = true
+	return r
+}
+
+// DisableGenerateCurlOnDebug method disables the option set by [Request.EnableGenerateCurlOnDebug].
+// It overrides the options set by the [Client].
+func (r *Request) DisableGenerateCurlOnDebug() *Request {
+	r.generateCurlOnDebug = false
 	return r
 }
 
