@@ -31,7 +31,12 @@ func buildCurlRequest(req *http.Request, httpCookiejar http.CookieJar) (curl str
 
 	// 3. Generate curl body
 	if req.Body != nil {
-		buf, _ := io.ReadAll(req.Body)
+		// httpclient.Do method will read the entire body and make it empty
+		// thus using req.GetBody() instead of req.Body since req.Body
+		// is empty after Do method.
+		// body here is a copy of original body
+		body, _ := req.GetBody()
+		buf, _ := io.ReadAll(body)
 		req.Body = io.NopCloser(bytes.NewBuffer(buf)) // important!!
 		curl += `-d ` + shellescape.Quote(string(buf))
 	}
