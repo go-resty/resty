@@ -193,6 +193,7 @@ func createClient(hc *http.Client) *Client {
 		parseRequestBody,
 		createHTTPRequest,
 		addCredentials,
+		createCurlCmd,
 	}
 
 	// user defined request middlewares

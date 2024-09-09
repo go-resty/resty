@@ -1012,6 +1012,75 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	return resp, unwrapNoRetryErr(err)
 }
 
+// Clone returns a deep copy of r with it's context changed to ctx.
+// The method clones some important fields of the request:
+// - Header: a new header is created and all the values are copied.
+// - bodyBuf: a new buffer is created and the content is copied.
+// - RawRequest: a new RawRequest is created and the content is copied.
+// - ctx: the context is replaced with the new one.
+// The body is not copied, it's a reference to the original body.
+//
+//	request := client.R()
+//	request.SetBody("body")
+//	request.SetHeader("header", "value")
+//	clonedRequest := request.Clone(context.Background())
+func (r *Request) Clone(ctx context.Context) *Request {
+	rr := new(Request)
+	*rr = *r
+
+	// set new context
+	rr.ctx = ctx
+
+	// clone URL values
+	rr.FormData = cloneURLValues(r.FormData)
+	rr.QueryParam = cloneURLValues(r.QueryParam)
+
+	// clone path params
+	if r.PathParams != nil {
+		rr.PathParams = make(map[string]string, len(r.PathParams))
+		for k, v := range r.PathParams {
+			rr.PathParams[k] = v
+		}
+	}
+
+	// clone raw path params
+	if r.RawPathParams != nil {
+		rr.RawPathParams = make(map[string]string, len(r.RawPathParams))
+		for k, v := range r.RawPathParams {
+			rr.RawPathParams[k] = v
+		}
+	}
+
+	// clone basic auth
+	if r.UserInfo != nil {
+		rr.UserInfo = &User{Username: r.UserInfo.Username, Password: r.UserInfo.Password}
+	}
+
+	// clone the SRV record
+	if r.SRV != nil {
+		rr.SRV = &SRVRecord{Service: r.SRV.Service, Domain: r.SRV.Domain}
+	}
+
+	// clone header
+	if r.Header != nil {
+		rr.Header = r.Header.Clone()
+	}
+
+	// copy bodyBuf since it's an interface value
+	// if a request is used, the bodyBuf will be nil and
+	// any clone will have an empty bodyBuf
+	if r.bodyBuf != nil {
+		rr.bodyBuf = acquireBuffer()
+		rr.bodyBuf.Write(r.bodyBuf.Bytes())
+	}
+
+	// copy raw request to reuse it
+	if r.RawRequest != nil {
+		rr.RawRequest = r.RawRequest.Clone(ctx)
+	}
+	return rr
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // SRVRecord struct
 //_______________________________________________________________________

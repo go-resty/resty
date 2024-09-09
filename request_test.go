@@ -6,6 +6,7 @@ package resty
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/xml"
 	"errors"
@@ -2175,4 +2176,49 @@ func TestSetResultMustNotPanicOnNil(t *testing.T) {
 		}
 	}()
 	dc().R().SetResult(nil)
+}
+
+func TestRequestClone(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc()
+	parent := c.R()
+
+	// set an non-interface value
+	parent.URL = ts.URL
+	parent.SetPathParams(map[string]string{"name": "parent"})
+	// set http header
+	parent.SetHeader("X-Header", "parent")
+	// set an interface value
+	parent.SetBasicAuth("parent", "")
+
+	clone := parent.Clone(context.Background())
+
+	// assume parent request is used
+	_, _ = parent.Get(ts.URL)
+
+	// update value of non-interface type - change will only happen on clone
+	clone.URL = "http://localhost.clone"
+	clone.PathParams["name"] = "clone"
+	// update value of http header - change will only happen on clone
+	clone.SetHeader("X-Header", "clone")
+	// update value of interface type - change will only happen on clone
+	clone.UserInfo.Username = "clone"
+
+	// assert non-interface type
+	assertEqual(t, "http://localhost.clone", clone.URL)
+	assertEqual(t, ts.URL, parent.URL)
+	assertEqual(t, "clone", clone.PathParams["name"])
+	assertEqual(t, "parent", parent.PathParams["name"])
+	// assert http header
+	assertEqual(t, "parent", parent.Header.Get("X-Header"))
+	assertEqual(t, "clone", clone.Header.Get("X-Header"))
+	// assert interface type
+	assertEqual(t, "parent", parent.UserInfo.Username)
+	assertEqual(t, "clone", clone.UserInfo.Username)
+
+	// parent request should have raw request while clone should not
+	assertNil(t, clone.RawRequest)
+	assertNotNil(t, parent.RawRequest)
 }
