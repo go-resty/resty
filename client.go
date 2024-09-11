@@ -915,6 +915,46 @@ func (c *Client) SetRootCertificateFromString(pemContent string) *Client {
 	return c
 }
 
+// SetClientRootCertificate method helps to add one or more client's root certificates into Resty client
+//
+//	client.SetClientRootCertificate("/path/to/root/pemFile.pem")
+func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
+	rootPemData, err := os.ReadFile(pemFilePath)
+	if err != nil {
+		c.log.Errorf("%v", err)
+		return c
+	}
+
+	config, err := c.tlsConfig()
+	if err != nil {
+		c.log.Errorf("%v", err)
+		return c
+	}
+	if config.ClientCAs == nil {
+		config.ClientCAs = x509.NewCertPool()
+	}
+
+	config.ClientCAs.AppendCertsFromPEM(rootPemData)
+	return c
+}
+
+// SetClientRootCertificateFromString method helps to add one or more client's root certificates into Resty client
+//
+//	client.SetClientRootCertificateFromString("pem file content")
+func (c *Client) SetClientRootCertificateFromString(pemContent string) *Client {
+	config, err := c.tlsConfig()
+	if err != nil {
+		c.log.Errorf("%v", err)
+		return c
+	}
+	if config.ClientCAs == nil {
+		config.ClientCAs = x509.NewCertPool()
+	}
+
+	config.ClientCAs.AppendCertsFromPEM([]byte(pemContent))
+	return c
+}
+
 // SetOutputDirectory method sets output directory for saving HTTP response into file.
 // If the output directory not exists then resty creates one. This setting is optional one,
 // if you're planning using absolute path in `Request.SetOutput` and can used together.
