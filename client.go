@@ -884,34 +884,15 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 		c.log.Errorf("%v", err)
 		return c
 	}
-
-	config, err := c.tlsConfig()
-	if err != nil {
-		c.log.Errorf("%v", err)
-		return c
-	}
-	if config.RootCAs == nil {
-		config.RootCAs = x509.NewCertPool()
-	}
-
-	config.RootCAs.AppendCertsFromPEM(rootPemData)
+	c.handleCAs("root", rootPemData)
 	return c
 }
 
 // SetRootCertificateFromString method helps to add one or more root certificates into Resty client
 //
-//	client.SetRootCertificateFromString("pem file content")
-func (c *Client) SetRootCertificateFromString(pemContent string) *Client {
-	config, err := c.tlsConfig()
-	if err != nil {
-		c.log.Errorf("%v", err)
-		return c
-	}
-	if config.RootCAs == nil {
-		config.RootCAs = x509.NewCertPool()
-	}
-
-	config.RootCAs.AppendCertsFromPEM([]byte(pemContent))
+//	client.SetRootCertificateFromString("pem certs content")
+func (c *Client) SetRootCertificateFromString(pemCerts string) *Client {
+	c.handleCAs("root", []byte(pemCerts))
 	return c
 }
 
@@ -924,35 +905,37 @@ func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
 		c.log.Errorf("%v", err)
 		return c
 	}
-
-	config, err := c.tlsConfig()
-	if err != nil {
-		c.log.Errorf("%v", err)
-		return c
-	}
-	if config.ClientCAs == nil {
-		config.ClientCAs = x509.NewCertPool()
-	}
-
-	config.ClientCAs.AppendCertsFromPEM(rootPemData)
+	c.handleCAs("client", rootPemData)
 	return c
 }
 
 // SetClientRootCertificateFromString method helps to add one or more client's root certificates into Resty client
 //
-//	client.SetClientRootCertificateFromString("pem file content")
-func (c *Client) SetClientRootCertificateFromString(pemContent string) *Client {
+//	client.SetClientRootCertificateFromString("pem certs content")
+func (c *Client) SetClientRootCertificateFromString(pemCerts string) *Client {
+	c.handleCAs("client", []byte(pemCerts))
+	return c
+}
+
+func (c *Client) handleCAs(scope string, permCerts []byte) {
 	config, err := c.tlsConfig()
 	if err != nil {
 		c.log.Errorf("%v", err)
-		return c
-	}
-	if config.ClientCAs == nil {
-		config.ClientCAs = x509.NewCertPool()
+		return
 	}
 
-	config.ClientCAs.AppendCertsFromPEM([]byte(pemContent))
-	return c
+	switch scope {
+	case "root":
+		if config.RootCAs == nil {
+			config.RootCAs = x509.NewCertPool()
+		}
+		config.RootCAs.AppendCertsFromPEM(permCerts)
+	case "client":
+		if config.ClientCAs == nil {
+			config.ClientCAs = x509.NewCertPool()
+		}
+		config.ClientCAs.AppendCertsFromPEM(permCerts)
+	}
 }
 
 // SetOutputDirectory method sets output directory for saving HTTP response into file.
