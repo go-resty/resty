@@ -29,7 +29,7 @@ type Response struct {
 
 // Body method returns HTTP response as []byte array for the executed request.
 //
-// Note: `Response.Body` might be nil, if `Request.SetOutput` is used.
+// NOTE: [Response.Body] might be nil, if [Request.SetOutput] is used.
 func (r *Response) Body() []byte {
 	if r.RawResponse == nil {
 		return []byte{}
@@ -37,13 +37,11 @@ func (r *Response) Body() []byte {
 	return r.body
 }
 
-// SetBody method is to set Response body in byte slice. Typically,
+// SetBody method is to set [Response] body in byte slice. Typically,
 // its helpful for test cases.
 //
 //	resp.SetBody([]byte("This is test body content"))
 //	resp.SetBody(nil)
-//
-// Since v2.10.0
 func (r *Response) SetBody(b []byte) *Response {
 	r.body = b
 	return r
@@ -113,7 +111,7 @@ func (r *Response) String() string {
 
 // Time method returns the time of HTTP response time that from request we sent and received a request.
 //
-// See `Response.ReceivedAt` to know when client received response and see `Response.Request.Time` to know
+// See [Response.ReceivedAt] to know when client received response and see `Response.Request.Time` to know
 // when client sent a request.
 func (r *Response) Time() time.Duration {
 	if r.Request.clientTrace != nil {
@@ -134,7 +132,8 @@ func (r *Response) Size() int64 {
 	return r.size
 }
 
-// RawBody method exposes the HTTP raw response body. Use this method in-conjunction with `SetDoNotParseResponse`
+// RawBody method exposes the HTTP raw response body. Use this method in-conjunction with
+// [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse]
 // option otherwise you get an error as `read err: http: read on closed response body`.
 //
 // Do not forget to close the body, otherwise you might get into connection leaks, no connection reuse.
@@ -155,10 +154,6 @@ func (r *Response) IsSuccess() bool {
 func (r *Response) IsError() bool {
 	return r.StatusCode() > 399
 }
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Response Unexported methods
-//_______________________________________________________________________
 
 func (r *Response) setReceivedAt() {
 	r.receivedAt = time.Now()

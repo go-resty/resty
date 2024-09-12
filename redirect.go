@@ -13,13 +13,12 @@ import (
 )
 
 var (
-	// Since v2.8.0
 	ErrAutoRedirectDisabled = errors.New("auto redirect is disabled")
 )
 
 type (
 	// RedirectPolicy to regulate the redirects in the resty client.
-	// Objects implementing the RedirectPolicy interface can be registered as
+	// Objects implementing the [RedirectPolicy] interface can be registered as
 	//
 	// Apply function should return nil to continue the redirect journey, otherwise
 	// return error to stop the redirect.
@@ -27,7 +26,7 @@ type (
 		Apply(req *http.Request, via []*http.Request) error
 	}
 
-	// The RedirectPolicyFunc type is an adapter to allow the use of ordinary functions as RedirectPolicy.
+	// The [RedirectPolicyFunc] type is an adapter to allow the use of ordinary functions as [RedirectPolicy].
 	// If f is a function with the appropriate signature, RedirectPolicyFunc(f) is a RedirectPolicy object that calls f.
 	RedirectPolicyFunc func(*http.Request, []*http.Request) error
 )

@@ -96,7 +96,7 @@ type (
 // these settings are applicable to all the request raised from the client.
 //
 // Resty also provides an options to override most of the client settings
-// at request level.
+// at [Request] level.
 type Client struct {
 	BaseURL               string
 	HostURL               string // Deprecated: use BaseURL instead. To be removed in v3.0.0 release.
@@ -175,7 +175,7 @@ type User struct {
 //	// Setting HTTPS address
 //	client.SetHostURL("https://myjeeva.com")
 //
-// Deprecated: use SetBaseURL instead. To be removed in v3.0.0 release.
+// Deprecated: use [Client.SetBaseURL] instead. To be removed in v3.0.0 release.
 func (c *Client) SetHostURL(url string) *Client {
 	c.SetBaseURL(url)
 	return c
@@ -189,8 +189,6 @@ func (c *Client) SetHostURL(url string) *Client {
 //
 //	// Setting HTTPS address
 //	client.SetBaseURL("https://myjeeva.com")
-//
-// Since v2.7.0
 func (c *Client) SetBaseURL(url string) *Client {
 	c.BaseURL = strings.TrimRight(url, "/")
 	c.HostURL = c.BaseURL
@@ -201,7 +199,7 @@ func (c *Client) SetBaseURL(url string) *Client {
 // These headers will be applied to all requests raised from this client instance.
 // Also it can be overridden at request level header options.
 //
-// See `Request.SetHeader` or `Request.SetHeaders`.
+// See [Request.SetHeader] or [Request.SetHeaders].
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`
 //
@@ -217,7 +215,7 @@ func (c *Client) SetHeader(header, value string) *Client {
 // These headers will be applied to all requests raised from this client instance. Also it can be
 // overridden at request level headers options.
 //
-// See `Request.SetHeaders` or `Request.SetHeader`.
+// See [Request.SetHeaders] or [Request.SetHeader].
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`
 //
@@ -241,16 +239,14 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 //		SetHeaderVerbatim("UPPERCASE", "available")
 //
 // Also you can override header value, which was set at client instance level.
-//
-// Since v2.6.0
 func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 	c.Header[header] = []string{value}
 	return c
 }
 
-// SetCookieJar method sets custom http.CookieJar in the resty client. Its way to override default.
+// SetCookieJar method sets custom [http.CookieJar] in the resty client. Its way to override default.
 //
-// For Example: sometimes we don't want to save cookies in api contacting, we can remove the default
+// For Example: sometimes we don't want to save cookies in API mode, we can remove the default
 // CookieJar in resty client.
 //
 //	client.SetCookieJar(nil)
@@ -295,11 +291,12 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 // SetQueryParam method sets single parameter and its value in the client instance.
 // It will be formed as query string for the request.
 //
-// For Example: `search=kitchen%20papers&size=large`
-// in the URL after `?` mark. These query params will be added to all the request raised from
+//	For Example: `search=kitchen%20papers&size=large`
+//
+// In the URL after `?` mark. These query params will be added to all the request raised from
 // this client instance. Also it can be overridden at request level Query Param options.
 //
-// See `Request.SetQueryParam` or `Request.SetQueryParams`.
+// See [Request.SetQueryParam] or [Request.SetQueryParams].
 //
 //	client.
 //		SetQueryParam("search", "kitchen papers").
@@ -312,11 +309,12 @@ func (c *Client) SetQueryParam(param, value string) *Client {
 // SetQueryParams method sets multiple parameters and their values at one go in the client instance.
 // It will be formed as query string for the request.
 //
-// For Example: `search=kitchen%20papers&size=large`
-// in the URL after `?` mark. These query params will be added to all the request raised from this
+//	For Example: `search=kitchen%20papers&size=large`
+//
+// In the URL after `?` mark. These query params will be added to all the request raised from this
 // client instance. Also it can be overridden at request level Query Param options.
 //
-// See `Request.SetQueryParams` or `Request.SetQueryParam`.
+// See [Request.SetQueryParams] or [Request.SetQueryParam].
 //
 //	client.SetQueryParams(map[string]string{
 //			"search": "kitchen papers",
@@ -334,7 +332,7 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 // `application/x-www-form-urlencoded`. These form data will be added to all the request raised from
 // this client instance. Also it can be overridden at request level form data.
 //
-// See `Request.SetFormData`.
+// See [Request.SetFormData].
 //
 //	client.SetFormData(map[string]string{
 //			"access_token": "BC594900-518B-4F7E-AC75-BD37F019E08F",
@@ -358,14 +356,14 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 // This basic auth information gets added to all the request raised from this client instance.
 // Also it can be overridden or set one at the request level is supported.
 //
-// See `Request.SetBasicAuth`.
+// See [Request.SetBasicAuth].
 func (c *Client) SetBasicAuth(username, password string) *Client {
 	c.UserInfo = &User{Username: username, Password: password}
 	return c
 }
 
 // SetAuthToken method sets the auth token of the `Authorization` header for all HTTP requests.
-// The default auth scheme is `Bearer`, it can be customized with the method `SetAuthScheme`. For Example:
+// The default auth scheme is `Bearer`, it can be customized with the method [Client.SetAuthScheme]. For Example:
 //
 //	Authorization: <auth-scheme> <auth-token-value>
 //
@@ -376,7 +374,7 @@ func (c *Client) SetBasicAuth(username, password string) *Client {
 // This auth token gets added to all the requests raised from this client instance.
 // Also it can be overridden or set one at the request level is supported.
 //
-// See `Request.SetAuthToken`.
+// See [Request.SetAuthToken].
 func (c *Client) SetAuthToken(token string) *Client {
 	c.Token = token
 	return c
@@ -393,13 +391,12 @@ func (c *Client) SetAuthToken(token string) *Client {
 // This auth scheme gets added to all the requests raised from this client instance.
 // Also it can be overridden or set one at the request level is supported.
 //
-// Information about auth schemes can be found in RFC7235 which is linked to below
-// along with the page containing the currently defined official authentication schemes:
+// Information about auth schemes can be found in [RFC 7235], IANA [HTTP Auth schemes].
 //
-//	https://tools.ietf.org/html/rfc7235
-//	https://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml#authschemes
+// See [Request.SetAuthToken].
 //
-// See `Request.SetAuthToken`.
+// [RFC 7235]: https://tools.ietf.org/html/rfc7235
+// [HTTP Auth schemes]: https://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml#authschemes
 func (c *Client) SetAuthScheme(scheme string) *Client {
 	c.AuthScheme = scheme
 	return c
@@ -412,11 +409,11 @@ func (c *Client) SetAuthScheme(scheme string) *Client {
 //
 //	client.SetDigestAuth("Mufasa", "Circle Of Life")
 //
-// Information about Digest Access Authentication can be found in RFC7616:
+// Information about Digest Access Authentication can be found in [RFC 7616].
 //
-//	https://datatracker.ietf.org/doc/html/rfc7616
+// See [Request.SetDigestAuth].
 //
-// See `Request.SetDigestAuth`.
+// [RFC 7616]: https://datatracker.ietf.org/doc/html/rfc7616
 func (c *Client) SetDigestAuth(username, password string) *Client {
 	oldTransport := c.httpClient.Transport
 	c.OnBeforeRequest(func(c *Client, _ *Request) error {
@@ -501,7 +498,7 @@ func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 
 // OnError method adds a callback that will be run whenever a request execution fails.
 // This is called after all retries have been attempted (if any).
-// If there was a response from the server, the error will be wrapped in *ResponseError
+// If there was a response from the server, the error will be wrapped in [ResponseError]
 // which has the last response received from the server.
 //
 //	client.OnError(func(req *resty.Request, err error) {
@@ -511,8 +508,8 @@ func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 //		// Log the error, increment a metric, etc...
 //	})
 //
-// Out of the OnSuccess, OnError, OnInvalid, OnPanic callbacks, exactly one
-// set will be invoked for each call to Request.Execute() that completes.
+// Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
+// callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
 func (c *Client) OnError(h ErrorHook) *Client {
 	c.errorHooks = append(c.errorHooks, h)
 	return c
@@ -521,10 +518,8 @@ func (c *Client) OnError(h ErrorHook) *Client {
 // OnSuccess method adds a callback that will be run whenever a request execution
 // succeeds.  This is called after all retries have been attempted (if any).
 //
-// Out of the OnSuccess, OnError, OnInvalid, OnPanic callbacks, exactly one
-// set will be invoked for each call to Request.Execute() that completes.
-//
-// Since v2.8.0
+// Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
+// callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
 func (c *Client) OnSuccess(h SuccessHook) *Client {
 	c.successHooks = append(c.successHooks, h)
 	return c
@@ -533,10 +528,8 @@ func (c *Client) OnSuccess(h SuccessHook) *Client {
 // OnInvalid method adds a callback that will be run whenever a request execution
 // fails before it starts because the request is invalid.
 //
-// Out of the OnSuccess, OnError, OnInvalid, OnPanic callbacks, exactly one
-// set will be invoked for each call to Request.Execute() that completes.
-//
-// Since v2.8.0
+// Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
+// callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
 func (c *Client) OnInvalid(h ErrorHook) *Client {
 	c.invalidHooks = append(c.invalidHooks, h)
 	return c
@@ -545,12 +538,11 @@ func (c *Client) OnInvalid(h ErrorHook) *Client {
 // OnPanic method adds a callback that will be run whenever a request execution
 // panics.
 //
-// Out of the OnSuccess, OnError, OnInvalid, OnPanic callbacks, exactly one
-// set will be invoked for each call to Request.Execute() that completes.
-// If an OnSuccess, OnError, or OnInvalid callback panics, then the exactly
-// one rule can be violated.
+// Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
+// callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
 //
-// Since v2.8.0
+// If an [Client.OnSuccess], [Client.OnError], or [Client.OnInvalid] callback panics,
+// then the exactly one rule can be violated.
 func (c *Client) OnPanic(h ErrorHook) *Client {
 	c.panicHooks = append(c.panicHooks, h)
 	return c
@@ -559,7 +551,7 @@ func (c *Client) OnPanic(h ErrorHook) *Client {
 // SetPreRequestHook method sets the given pre-request function into resty client.
 // It is called right before the request is fired.
 //
-// Note: Only one pre-request hook can be registered. Use `client.OnBeforeRequest` for multiple.
+// NOTE: Only one pre-request hook can be registered. Use [Client.OnBeforeRequest] for multiple.
 func (c *Client) SetPreRequestHook(h PreRequestHook) *Client {
 	if c.preReqHook != nil {
 		c.log.Warnf("Overwriting an existing pre-request hook: %s", functionName(h))
@@ -569,12 +561,12 @@ func (c *Client) SetPreRequestHook(h PreRequestHook) *Client {
 }
 
 // SetDebug method enables the debug mode on Resty client. Client logs details of every request and response.
-// For `Request` it logs information such as HTTP verb, Relative URL path, Host, Headers, Body if it has one.
-// For `Response` it logs information such as Status, Response Time, Headers, Body if it has one.
+// For [Request] it logs information such as HTTP verb, Relative URL path, Host, Headers, Body if it has one.
+// For [Response] it logs information such as Status, Response Time, Headers, Body if it has one.
 //
 //	client.SetDebug(true)
 //
-// Also it can be enabled at request level for particular request, see `Request.SetDebug`.
+// Also it can be enabled at request level for particular request, see [Request.SetDebug].
 func (c *Client) SetDebug(d bool) *Client {
 	c.Debug = d
 	return c
@@ -632,7 +624,7 @@ func (c *Client) SetAllowGetMethodPayload(a bool) *Client {
 
 // SetLogger method sets given writer for logging Resty request and response details.
 //
-// Compliant to interface `resty.Logger`.
+// Compliant to interface [resty.Logger]
 func (c *Client) SetLogger(l Logger) *Client {
 	c.log = l
 	return c
@@ -643,7 +635,7 @@ func (c *Client) SetLogger(l Logger) *Client {
 //
 //	client.SetContentLength(true)
 //
-// Also you have an option to enable for particular request. See `Request.SetContentLength`
+// Also you have an option to enable for particular request. See [Request.SetContentLength]
 func (c *Client) SetContentLength(l bool) *Client {
 	c.setContentLength = l
 	return c
@@ -729,36 +721,28 @@ func (c *Client) SetRetryAfter(callback RetryAfterFunc) *Client {
 }
 
 // SetJSONMarshaler method sets the JSON marshaler function to marshal the request body.
-// By default, Resty uses `encoding/json` package to marshal the request body.
-//
-// Since v2.8.0
+// By default, Resty uses [encoding/json] package to marshal the request body.
 func (c *Client) SetJSONMarshaler(marshaler func(v interface{}) ([]byte, error)) *Client {
 	c.JSONMarshal = marshaler
 	return c
 }
 
 // SetJSONUnmarshaler method sets the JSON unmarshaler function to unmarshal the response body.
-// By default, Resty uses `encoding/json` package to unmarshal the response body.
-//
-// Since v2.8.0
+// By default, Resty uses [encoding/json] package to unmarshal the response body.
 func (c *Client) SetJSONUnmarshaler(unmarshaler func(data []byte, v interface{}) error) *Client {
 	c.JSONUnmarshal = unmarshaler
 	return c
 }
 
 // SetXMLMarshaler method sets the XML marshaler function to marshal the request body.
-// By default, Resty uses `encoding/xml` package to marshal the request body.
-//
-// Since v2.8.0
+// By default, Resty uses [encoding/xml] package to marshal the request body.
 func (c *Client) SetXMLMarshaler(marshaler func(v interface{}) ([]byte, error)) *Client {
 	c.XMLMarshal = marshaler
 	return c
 }
 
 // SetXMLUnmarshaler method sets the XML unmarshaler function to unmarshal the response body.
-// By default, Resty uses `encoding/xml` package to unmarshal the response body.
-//
-// Since v2.8.0
+// By default, Resty uses [encoding/xml] package to unmarshal the response body.
 func (c *Client) SetXMLUnmarshaler(unmarshaler func(data []byte, v interface{}) error) *Client {
 	c.XMLUnmarshal = unmarshaler
 	return c
@@ -768,8 +752,8 @@ func (c *Client) SetXMLUnmarshaler(unmarshaler func(data []byte, v interface{}) 
 // that are checked to determine if the request is retried. The request will
 // retry if any of the functions return true and error is nil.
 //
-// Note: These retry conditions are applied on all Request made using this Client.
-// For Request specific retry conditions check *Request.AddRetryCondition
+// NOTE: These retry conditions are applied on all Request made using this Client.
+// For [Request] specific retry conditions check [Request.AddRetryCondition]
 func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 	c.RetryConditions = append(c.RetryConditions, condition)
 	return c
@@ -777,8 +761,6 @@ func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 
 // AddRetryAfterErrorCondition adds the basic condition of retrying after encountering
 // an error from the http response
-//
-// Since v2.6.0
 func (c *Client) AddRetryAfterErrorCondition() *Client {
 	c.AddRetryCondition(func(response *Response, err error) bool {
 		return response.IsError()
@@ -788,17 +770,13 @@ func (c *Client) AddRetryAfterErrorCondition() *Client {
 
 // AddRetryHook adds a side-effecting retry hook to an array of hooks
 // that will be executed on each retry.
-//
-// Since v2.6.0
 func (c *Client) AddRetryHook(hook OnRetryFunc) *Client {
 	c.RetryHooks = append(c.RetryHooks, hook)
 	return c
 }
 
 // SetRetryResetReaders method enables the Resty client to seek the start of all
-// file readers given as multipart files, if the given object implements `io.ReadSeeker`.
-//
-// Since ...
+// file readers given as multipart files, if the given object implements [io.ReadSeeker].
 func (c *Client) SetRetryResetReaders(b bool) *Client {
 	c.RetryResetReaders = b
 	return c
@@ -814,7 +792,7 @@ func (c *Client) SetRetryResetReaders(b bool) *Client {
 //	// or One can disable security check (https)
 //	client.SetTLSClientConfig(&tls.Config{ InsecureSkipVerify: true })
 //
-// Note: This method overwrites existing `TLSClientConfig`.
+// NOTE: This method overwrites existing [http.Transport.TLSClientConfig]
 func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	transport, err := c.Transport()
 	if err != nil {
@@ -829,9 +807,7 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 //
 //	client.SetProxy("http://proxyserver:8888")
 //
-// OR Without this `SetProxy` method, you could also set Proxy via environment variable.
-//
-// Refer to godoc `http.ProxyFromEnvironment`.
+// OR you could also set Proxy via environment variable, refer to [http.ProxyFromEnvironment]
 func (c *Client) SetProxy(proxyURL string) *Client {
 	transport, err := c.Transport()
 	if err != nil {
@@ -940,7 +916,7 @@ func (c *Client) handleCAs(scope string, permCerts []byte) {
 
 // SetOutputDirectory method sets output directory for saving HTTP response into file.
 // If the output directory not exists then resty creates one. This setting is optional one,
-// if you're planning using absolute path in `Request.SetOutput` and can used together.
+// if you're planning using absolute path in [Request.SetOutput] and can used together.
 //
 //	client.SetOutputDirectory("/save/http/response/here")
 func (c *Client) SetOutputDirectory(dirPath string) *Client {
@@ -948,24 +924,15 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 	return c
 }
 
-// SetRateLimiter sets an optional `RateLimiter`. If set the rate limiter will control
+// SetRateLimiter sets an optional [RateLimiter]. If set the rate limiter will control
 // all requests made with this client.
-//
-// Since v2.9.0
 func (c *Client) SetRateLimiter(rl RateLimiter) *Client {
 	c.rateLimiter = rl
 	return c
 }
 
-// SetTransport method sets custom `*http.Transport` or any `http.RoundTripper`
+// SetTransport method sets custom [http.Transport] or any [http.RoundTripper]
 // compatible interface implementation in the resty client.
-//
-// Note:
-//
-// - If transport is not type of `*http.Transport` then you may not be able to
-// take advantage of some of the Resty client settings.
-//
-// - It overwrites the Resty client transport instance and it's configurations.
 //
 //	transport := &http.Transport{
 //		// something like Proxying to httptest.Server, etc...
@@ -973,8 +940,12 @@ func (c *Client) SetRateLimiter(rl RateLimiter) *Client {
 //			return url.Parse(server.URL)
 //		},
 //	}
-//
 //	client.SetTransport(transport)
+//
+// NOTE:
+//   - If transport is not type of `*http.Transport` then you may not be able to
+//     take advantage of some of the Resty client settings.
+//   - It overwrites the Resty client transport instance and it's configurations.
 func (c *Client) SetTransport(transport http.RoundTripper) *Client {
 	if transport != nil {
 		c.httpClient.Transport = transport
@@ -1000,10 +971,10 @@ func (c *Client) SetCloseConnection(close bool) *Client {
 }
 
 // SetDoNotParseResponse method instructs `Resty` not to parse the response body automatically.
-// Resty exposes the raw response body as `io.ReadCloser`. Also do not forget to close the body,
+// Resty exposes the raw response body as [io.ReadCloser]. Also do not forget to close the body,
 // otherwise you might get into connection leaks, no connection reuse.
 //
-// Note: Response middlewares are not applicable, if you use this option. Basically you have
+// NOTE: [Response] middlewares are not applicable, if you use this option. Basically you have
 // taken over the control of response parsing from `Resty`.
 func (c *Client) SetDoNotParseResponse(notParse bool) *Client {
 	c.notParseResponse = notParse
@@ -1020,10 +991,10 @@ func (c *Client) SetDoNotParseResponse(notParse bool) *Client {
 //	   Composed URL - /v1/users/sample@sample.com/details
 //
 // It replaces the value of the key while composing the request URL.
-// The value will be escaped using `url.PathEscape` function.
+// The value will be escaped using [url.PathEscape] function.
 //
 // Also it can be overridden at request level Path Params options,
-// see `Request.SetPathParam` or `Request.SetPathParams`.
+// see [Request.SetPathParam] or [Request.SetPathParams]
 func (c *Client) SetPathParam(param, value string) *Client {
 	c.PathParams[param] = value
 	return c
@@ -1043,10 +1014,10 @@ func (c *Client) SetPathParam(param, value string) *Client {
 //	   Composed URL - /v1/users/sample@sample.com/100002/groups%2Fdevelopers/details
 //
 // It replaces the value of the key while composing the request URL.
-// The values will be escaped using `url.PathEscape` function.
+// The values will be escaped using [url.PathEscape] function.
 //
 // Also it can be overridden at request level Path Params options,
-// see `Request.SetPathParam` or `Request.SetPathParams`.
+// see [Request.SetPathParam] or [Request.SetPathParams]
 func (c *Client) SetPathParams(params map[string]string) *Client {
 	for p, v := range params {
 		c.SetPathParam(p, v)
@@ -1073,9 +1044,7 @@ func (c *Client) SetPathParams(params map[string]string) *Client {
 // The value will be used as it is and will not be escaped.
 //
 // Also it can be overridden at request level Path Params options,
-// see `Request.SetPathParam` or `Request.SetPathParams`.
-//
-// Since v2.8.0
+// see [Request.SetRawPathParam] or [Request.SetRawPathParams]
 func (c *Client) SetRawPathParam(param, value string) *Client {
 	c.RawPathParams[param] = value
 	return c
@@ -1098,9 +1067,7 @@ func (c *Client) SetRawPathParam(param, value string) *Client {
 // The values will be used as they are and will not be escaped.
 //
 // Also it can be overridden at request level Path Params options,
-// see `Request.SetPathParam` or `Request.SetPathParams`.
-//
-// Since v2.8.0
+// see [Request.SetRawPathParam] or [Request.SetRawPathParams]
 func (c *Client) SetRawPathParams(params map[string]string) *Client {
 	for p, v := range params {
 		c.SetRawPathParam(p, v)
@@ -1110,7 +1077,7 @@ func (c *Client) SetRawPathParams(params map[string]string) *Client {
 
 // SetJSONEscapeHTML method is to enable/disable the HTML escape on JSON marshal.
 //
-// Note: This option only applicable to standard JSON Marshaller.
+// NOTE: This option only applicable to standard JSON Marshaller.
 func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 	c.jsonEscapeHTML = b
 	return c
@@ -1131,7 +1098,7 @@ func (c *Client) SetResponseBodyLimit(v int) *Client {
 }
 
 // EnableTrace method enables the Resty client trace for the requests fired from
-// the client using `httptrace.ClientTrace` and provides insights.
+// the client using [httptrace.ClientTrace] and provides insights.
 //
 //	client := resty.New().EnableTrace()
 //
@@ -1139,17 +1106,13 @@ func (c *Client) SetResponseBodyLimit(v int) *Client {
 //	fmt.Println("Error:", err)
 //	fmt.Println("Trace Info:", resp.Request.TraceInfo())
 //
-// Also `Request.EnableTrace` available too to get trace info for single request.
-//
-// Since v2.0.0
+// Also [Request.EnableTrace] available too to get trace info for single request.
 func (c *Client) EnableTrace() *Client {
 	c.trace = true
 	return c
 }
 
-// DisableTrace method disables the Resty client trace. Refer to `Client.EnableTrace`.
-//
-// Since v2.0.0
+// DisableTrace method disables the Resty client trace. Refer to [Client.EnableTrace].
 func (c *Client) DisableTrace() *Client {
 	c.trace = false
 	return c
@@ -1173,25 +1136,23 @@ func (c *Client) DisableGenerateCurlOnDebug() *Client {
 }
 
 // IsProxySet method returns the true is proxy is set from resty client otherwise
-// false. By default proxy is set from environment, refer to `http.ProxyFromEnvironment`.
+// false. By default proxy is set from environment, refer to [http.ProxyFromEnvironment].
 func (c *Client) IsProxySet() bool {
 	return c.proxyURL != nil
 }
 
-// GetClient method returns the current `http.Client` used by the resty client.
+// GetClient method returns the current [http.Client] used by the resty client.
 func (c *Client) GetClient() *http.Client {
 	return c.httpClient
 }
 
 // Clone returns a clone of the original client.
 //
-// Be careful when using this function:
-// - Interface values are not deeply cloned. Thus, both the original and the clone will use the
-// same value.
-// - This function is not safe for concurrent use. You should only use this when you are sure that
-// the client is not being used by any other goroutine.
-//
-// Since v2.12.0
+// NOTE: Use with care:
+//   - Interface values are not deeply cloned. Thus, both the original and the
+//     clone will use the same value.
+//   - This function is not safe for concurrent use. You should only use this
+//     when you are sure that the client is not being used by any other goroutine.
 func (c *Client) Clone() *Client {
 	// dereference the pointer and copy the value
 	cc := *c
@@ -1201,10 +1162,6 @@ func (c *Client) Clone() *Client {
 	cc.udBeforeRequestLock = &sync.RWMutex{}
 	return &cc
 }
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Client Unexported methods
-//_______________________________________________________________________
 
 func (c *Client) executeBefore(req *Request) error {
 	// Lock the user-defined pre-request hooks.
@@ -1372,8 +1329,8 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 	return transport.TLSClientConfig, nil
 }
 
-// Transport method returns `*http.Transport` currently in use or error
-// in case currently used `transport` is not a `*http.Transport`.
+// Transport method returns [http.Transport] currently in use or error
+// in case currently used `transport` is not a [http.Transport].
 //
 // Since v2.8.0 become exported method.
 func (c *Client) Transport() (*http.Transport, error) {
@@ -1405,7 +1362,7 @@ func (e *ResponseError) Unwrap() error {
 }
 
 // Helper to run errorHooks hooks.
-// It wraps the error in a ResponseError if the resp is not nil
+// It wraps the error in a [ResponseError] if the resp is not nil
 // so hooks can access it.
 func (c *Client) onErrorHooks(req *Request, resp *Response, err error) {
 	if err != nil {
@@ -1463,10 +1420,6 @@ type MultipartField struct {
 	ContentType string
 	io.Reader
 }
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Unexported package methods
-//_______________________________________________________________________
 
 func createClient(hc *http.Client) *Client {
 	if hc.Transport == nil {

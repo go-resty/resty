@@ -24,7 +24,7 @@ func New() *Client {
 	})
 }
 
-// NewWithClient method creates a new Resty client with given `http.Client`.
+// NewWithClient method creates a new Resty client with given [http.Client].
 func NewWithClient(hc *http.Client) *Client {
 	return createClient(hc)
 }
