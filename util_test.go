@@ -7,6 +7,7 @@ package resty
 import (
 	"bytes"
 	"mime/multipart"
+	"net/url"
 	"testing"
 )
 
@@ -88,4 +89,16 @@ func TestWriteMultipartFormFileReaderError(t *testing.T) {
 	err := writeMultipartFormFile(nil, "", "", &brokenReadCloser{})
 	assertNotNil(t, err)
 	assertEqual(t, "read error", err.Error())
+}
+
+func TestCloneURLValues(t *testing.T) {
+	v := url.Values{}
+	v.Add("foo", "bar")
+	v.Add("foo", "baz")
+	v.Add("qux", "quux")
+
+	c := cloneURLValues(v)
+	nilUrl := cloneURLValues(nil)
+	assertEqual(t, v, c)
+	assertNil(t, nilUrl)
 }

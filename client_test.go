@@ -1139,7 +1139,7 @@ func TestUnixSocket(t *testing.T) {
 	assertEqual(t, "Hello resty client from a server running on endpoint /hello!", res.String())
 }
 
-func TestClone(t *testing.T) {
+func TestClientClone(t *testing.T) {
 	parent := New()
 
 	// set a non-interface field
@@ -1154,7 +1154,7 @@ func TestClone(t *testing.T) {
 	// update value of interface type - change will also happen on parent
 	clone.BasicAuth().Username = "clone"
 
-	// asert non-interface type
+	// assert non-interface type
 	assertEqual(t, "http://localhost", parent.BaseURL())
 	assertEqual(t, "https://local.host", clone.BaseURL())
 

@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -381,4 +382,12 @@ func unwrapNoRetryErr(err error) error {
 		err = e.err
 	}
 	return err
+}
+
+// cloneURLValues is a helper function to deep copy url.Values.
+func cloneURLValues(v url.Values) url.Values {
+	if v == nil {
+		return nil
+	}
+	return url.Values(http.Header(v).Clone())
 }
