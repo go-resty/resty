@@ -1014,10 +1014,11 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 // Clone returns a deep copy of r with it's context changed to ctx.
 // The method clones some important fields of the request:
-// - Header: a new header is created and all the values are copied.
-// - bodyBuf: a new buffer is created and the content is copied.
-// - RawRequest: a new RawRequest is created and the content is copied.
-// - ctx: the context is replaced with the new one.
+//   - Header: a new header is created and all the values are copied.
+//   - bodyBuf: a new buffer is created and the content is copied.
+//   - RawRequest: a new RawRequest is created and the content is copied.
+//   - ctx: the context is replaced with the new one.
+//
 // The body is not copied, it's a reference to the original body.
 //
 //	request := client.R()
