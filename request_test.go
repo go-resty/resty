@@ -2193,6 +2193,10 @@ func TestRequestClone(t *testing.T) {
 	parent.SetHeader("X-Header", "parent")
 	// set an interface value
 	parent.SetBasicAuth("parent", "")
+	parent.bodyBuf = acquireBuffer()
+	parent.bodyBuf.WriteString("parent")
+	parent.RawRequest = &http.Request{}
+
 	clone := parent.Clone(context.Background())
 
 	// assume parent request is used
@@ -2206,6 +2210,8 @@ func TestRequestClone(t *testing.T) {
 	clone.SetHeader("X-Header", "clone")
 	// update value of interface type - change will only happen on clone
 	clone.UserInfo.Username = "clone"
+	clone.bodyBuf.Reset()
+	clone.bodyBuf.WriteString("clone")
 
 	// assert non-interface type
 	assertEqual(t, "http://localhost.clone", clone.URL)
@@ -2220,9 +2226,11 @@ func TestRequestClone(t *testing.T) {
 	// assert interface type
 	assertEqual(t, "parent", parent.UserInfo.Username)
 	assertEqual(t, "clone", clone.UserInfo.Username)
+	assertEqual(t, "", parent.bodyBuf.String())
+	assertEqual(t, "clone", clone.bodyBuf.String())
 
 	// parent request should have raw request while clone should not
-	assertNil(t, clone.RawRequest)
+	assertNotNil(t, clone.RawRequest)
 	assertNotNil(t, parent.RawRequest)
 	assertNotEqual(t, parent.RawRequest, clone.RawRequest)
 
