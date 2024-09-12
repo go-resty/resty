@@ -84,7 +84,7 @@ func RetryHooks(hooks []OnRetryFunc) Option {
 }
 
 // ResetMultipartReaders sets a boolean value which will lead the start being seeked out
-// on all multipart file readers, if they implement io.ReadSeeker
+// on all multipart file readers, if they implement [io.ReadSeeker]
 func ResetMultipartReaders(value bool) Option {
 	return func(o *Options) {
 		o.resetReaders = value
