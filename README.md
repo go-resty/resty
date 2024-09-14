@@ -4,7 +4,7 @@
 <p align="center"><a href="#features">Features</a> section describes in detail about Resty capabilities</p>
 </p>
 <p align="center">
-<p align="center"><a href="https://github.com/go-resty/resty/actions/workflows/ci.yml?query=branch%3Amaster"><img src="https://github.com/go-resty/resty/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a> <a href="https://codecov.io/gh/go-resty/resty/branch/master"><img src="https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg" alt="Code Coverage"></a> <a href="https://goreportcard.com/report/go-resty/resty"><img src="https://goreportcard.com/badge/go-resty/resty" alt="Go Report Card"></a> <a href="https://github.com/go-resty/resty/releases/latest"><img src="https://img.shields.io/badge/version-2.14.0-blue.svg" alt="Release Version"></a> <a href="https://pkg.go.dev/github.com/go-resty/resty/v2"><img src="https://pkg.go.dev/badge/github.com/go-resty/resty" alt="GoDoc"></a> <a href="LICENSE"><img src="https://img.shields.io/github/license/go-resty/resty.svg" alt="License"></a> <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a></p>
+<p align="center"><a href="https://github.com/go-resty/resty/actions/workflows/ci.yml?query=branch%3Amaster"><img src="https://github.com/go-resty/resty/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a> <a href="https://codecov.io/gh/go-resty/resty/branch/master"><img src="https://codecov.io/gh/go-resty/resty/branch/master/graph/badge.svg" alt="Code Coverage"></a> <a href="https://goreportcard.com/report/go-resty/resty"><img src="https://goreportcard.com/badge/go-resty/resty" alt="Go Report Card"></a> <a href="https://github.com/go-resty/resty/releases/latest"><img src="https://img.shields.io/badge/version-2.15.0-blue.svg" alt="Release Version"></a> <a href="https://pkg.go.dev/github.com/go-resty/resty/v2"><img src="https://pkg.go.dev/badge/github.com/go-resty/resty" alt="GoDoc"></a> <a href="LICENSE"><img src="https://img.shields.io/github/license/go-resty/resty.svg" alt="License"></a> <a href="https://github.com/avelino/awesome-go"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a></p>
 </p>
 <p align="center">
 <h4 align="center">Resty Communication Channels</h4>
@@ -13,7 +13,7 @@
 
 ## News
 
-  * v2.14.0 [released](https://github.com/go-resty/resty/releases/tag/v2.14.0) and tagged on Aug 04, 2024.
+  * v2.15.0 [released](https://github.com/go-resty/resty/releases/tag/v2.15.0) and tagged on Sep 14, 2024.
   * v2.0.0 [released](https://github.com/go-resty/resty/releases/tag/v2.0.0) and tagged on Jul 16, 2019.
   * v1.12.0 [released](https://github.com/go-resty/resty/releases/tag/v1.12.0) and tagged on Feb 27, 2019.
   * v1.0 released and tagged on Sep 25, 2017. - Resty's first version was released on Sep 15, 2015 then it grew gradually as a very handy and helpful library. Its been a two years since first release. I'm very thankful to Resty users and its [contributors](https://github.com/go-resty/resty/graphs/contributors).
@@ -62,10 +62,10 @@
     * goroutine concurrent safe
     * Resty Client trace, see [Client.EnableTrace](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.EnableTrace) and [Request.EnableTrace](https://pkg.go.dev/github.com/go-resty/resty/v2#Request.EnableTrace)
       * Since v2.4.0, trace info contains a `RequestAttempt` value, and the `Request` object contains an `Attempt` attribute
-    * Supports `GenerateCurlCommand`(**You should turn on `EnableTrace`**, otherwise the curl command will not contain the body) 
+    * Supports on-demand CURL command generation, see [Client.EnableGenerateCurlOnDebug](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.EnableGenerateCurlOnDebug), [Request.EnableGenerateCurlOnDebug](https://pkg.go.dev/github.com/go-resty/resty/v2#Request.EnableGenerateCurlOnDebug). It requires debug mode to be enabled.
     * Debug mode - clean and informative logging presentation
     * Gzip - Go does it automatically also resty has fallback handling too
-    * Works fine with `HTTP/2` and `HTTP/1.1`
+    * Works fine with `HTTP/2` and `HTTP/1.1`, also `HTTP/3` can be used with Resty, see this [comment](https://github.com/go-resty/resty/issues/846#issuecomment-2329696110)
   * [Bazel support](#bazel-support)
   * Easily mock Resty for testing, [for e.g.](#mocking-http-requests-using-httpmock-library)
   * Well tested client library
@@ -87,7 +87,7 @@
 
 #### Supported Go Versions
 
-Recommended to use `go1.16` and above.
+Recommended to use `go1.20` and above.
 
 Initially Resty started supporting `go modules` since `v1.10.0` release.
 
@@ -102,8 +102,6 @@ Starting Resty v2 and higher versions, it fully embraces [go modules](https://gi
 
 Resty author also published following projects for Go Community.
 
-  * [aah framework](https://aahframework.org) - A secure, flexible, rapid Go web framework.
-  * [THUMBAI](https://thumbai.app) - Go Mod Repository, Go Vanity Service and Simple Proxy Server.
   * [go-model](https://github.com/jeevatkm/go-model) - Robust & Easy to use model mapper and utility methods for Go `struct`.
 
 
@@ -111,7 +109,7 @@ Resty author also published following projects for Go Community.
 
 ```bash
 # Go Modules
-require github.com/go-resty/resty/v2 v2.11.0
+require github.com/go-resty/resty/v2 v2.15.0
 ```
 
 ## Usage
@@ -123,21 +121,15 @@ The following samples will assist you to become as comfortable as possible with 
 import "github.com/go-resty/resty/v2"
 ```
 
-#### Simple POST
->Refer: [debug_curl_test.go](https://github.com/go-resty/resty/blob/v2/examples/debug_curl_test.go)
+#### Simple GET
 
 ```go
 // Create a Resty Client
 client := resty.New()
 
 resp, err := client.R().
-    EnableTrace(). // You should turn on `EnableTrace`, otherwise the curl command will not contain the body
-    SetBody(map[string]string{"name": "Alex"}).
-    Post("https://httpbin.org/post")
-curlCmdExecuted := resp.Request.GenerateCurlCommand()
-
-// Explore curl command
-fmt.Println("Curl Command:\n  ", curlCmdExecuted+"\n")
+    EnableTrace().
+    Get("https://httpbin.org/get")
 
 // Explore response object
 fmt.Println("Response Info:")
@@ -167,36 +159,25 @@ fmt.Println("  RequestAttempt:", ti.RequestAttempt)
 fmt.Println("  RemoteAddr    :", ti.RemoteAddr.String())
 
 /* Output
-Curl Command:
-   curl -X POST -H 'Content-Type: application/json' -H 'User-Agent: go-resty/2.14.0 (https://github.com/go-resty/resty)' -d '{"name":"Alex"}' https://httpbin.org/post
-
 Response Info:
   Error      : <nil>
   Status Code: 200
   Status     : 200 OK
   Proto      : HTTP/2.0
   Time       : 457.034718ms
-  Received At: 2024-08-09 13:02:57.187544 +0800 CST m=+1.304888501
+  Received At: 2020-09-14 15:35:29.784681 -0700 PDT m=+0.458137045
   Body       :
- {
-  "args": {}, 
-  "data": "{\"name\":\"Alex\"}", 
-  "files": {}, 
-  "form": {}, 
-  "headers": {
-    "Accept-Encoding": "gzip", 
-    "Content-Length": "15", 
-    "Content-Type": "application/json", 
-    "Host": "httpbin.org", 
-    "User-Agent": "go-resty/2.14.0 (https://github.com/go-resty/resty)", 
-    "X-Amzn-Trace-Id": "Root=1-66b5a301-567c83c86562abd3092f5e19"
-  }, 
-  "json": {
-    "name": "Alex"
-  }, 
-  "origin": "0.0.0.0",
-  "url": "https://httpbin.org/post"
-}
+  {
+    "args": {},
+    "headers": {
+      "Accept-Encoding": "gzip",
+      "Host": "httpbin.org",
+      "User-Agent": "go-resty/2.4.0 (https://github.com/go-resty/resty)",
+      "X-Amzn-Trace-Id": "Root=1-5f5ff031-000ff6292204aa6898e4de49"
+    },
+    "origin": "0.0.0.0",
+    "url": "https://httpbin.org/get"
+  }
 
 Request Trace Info:
   DNSLookup     : 4.074657ms
@@ -574,6 +555,30 @@ client.OnError(func(req *resty.Request, err error) {
   }
   // Log the error, increment a metric, etc...
 })
+```
+
+#### Generate CURL Command
+>Refer: [curl_cmd_test.go](https://github.com/go-resty/resty/blob/v2/curl_cmd_test.go)
+
+```go
+// Create a Resty Client
+client := resty.New()
+
+resp, err := client.R().
+    SetDebug(true).
+    EnableGenerateCurlOnDebug(). // CURL command generated when debug mode enabled with this option
+    SetBody(map[string]string{"name": "Alex"}).
+    Post("https://httpbin.org/post")
+
+curlCmdExecuted := resp.Request.GenerateCurlCommand()
+
+// Explore curl command
+fmt.Println("Curl Command:\n  ", curlCmdExecuted+"\n")
+
+/* Output
+Curl Command:
+   curl -X POST -H 'Content-Type: application/json' -H 'User-Agent: go-resty/2.14.0 (https://github.com/go-resty/resty)' -d '{"name":"Alex"}' https://httpbin.org/post
+*/
 ```
 
 #### Redirect Policy
