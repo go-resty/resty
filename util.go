@@ -30,9 +30,9 @@ import (
 // Logger interface is to abstract the logging from Resty. Gives control to
 // the Resty users, choice of the logger.
 type Logger interface {
-	Errorf(format string, v ...interface{})
-	Warnf(format string, v ...interface{})
-	Debugf(format string, v ...interface{})
+	Errorf(format string, v ...any)
+	Warnf(format string, v ...any)
+	Debugf(format string, v ...any)
 }
 
 func createLogger() *logger {
@@ -46,19 +46,19 @@ type logger struct {
 	l *log.Logger
 }
 
-func (l *logger) Errorf(format string, v ...interface{}) {
+func (l *logger) Errorf(format string, v ...any) {
 	l.output("ERROR RESTY "+format, v...)
 }
 
-func (l *logger) Warnf(format string, v ...interface{}) {
+func (l *logger) Warnf(format string, v ...any) {
 	l.output("WARN RESTY "+format, v...)
 }
 
-func (l *logger) Debugf(format string, v ...interface{}) {
+func (l *logger) Debugf(format string, v ...any) {
 	l.output("DEBUG RESTY "+format, v...)
 }
 
-func (l *logger) output(format string, v ...interface{}) {
+func (l *logger) output(format string, v ...any) {
 	if len(v) == 0 {
 		l.l.Print(format)
 		return
@@ -86,7 +86,7 @@ func IsStringEmpty(str string) bool {
 }
 
 // DetectContentType method is used to figure out `Request.Body` content type for request header
-func DetectContentType(body interface{}) string {
+func DetectContentType(body any) string {
 	contentType := plainTextType
 	kind := kindOf(body)
 	switch kind {
@@ -116,7 +116,7 @@ func IsXMLType(ct string) bool {
 }
 
 // Unmarshalc content into object from JSON or XML
-func Unmarshalc(c *Client, ct string, b []byte, d interface{}) (err error) {
+func Unmarshalc(c *Client, ct string, b []byte, d any) (err error) {
 	if IsJSONType(ct) {
 		err = c.jsonUnmarshal(b, d)
 	} else if IsXMLType(ct) {
@@ -147,7 +147,7 @@ type ResponseLog struct {
 }
 
 // way to disable the HTML escape as opt-in
-func jsonMarshal(c *Client, r *Request, d interface{}) (*bytes.Buffer, error) {
+func jsonMarshal(c *Client, r *Request, d any) (*bytes.Buffer, error) {
 	if !r.jsonEscapeHTML {
 		return noescapeJSONMarshal(d)
 	}
@@ -282,7 +282,7 @@ func canJSONMarshal(contentType string, kind reflect.Kind) bool {
 	return IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice)
 }
 
-func functionName(i interface{}) string {
+func functionName(i any) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
@@ -325,13 +325,13 @@ func (rr *requestBodyReleaser) Close() error {
 	return err
 }
 
-func closeq(v interface{}) {
+func closeq(v any) {
 	if c, ok := v.(io.Closer); ok {
 		silently(c.Close())
 	}
 }
 
-func silently(_ ...interface{}) {}
+func silently(_ ...any) {}
 
 func composeHeaders(c *Client, r *Request, hdrs http.Header) string {
 	str := make([]string, 0, len(hdrs))

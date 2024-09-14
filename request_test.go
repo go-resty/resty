@@ -352,7 +352,7 @@ func TestPostJSONMapSuccess(t *testing.T) {
 	c.SetDebug(false)
 
 	resp, err := c.R().
-		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		SetResult(AuthSuccess{}).
 		Post(ts.URL + "/login")
 
@@ -369,7 +369,7 @@ func TestPostJSONMapInvalidResponseJson(t *testing.T) {
 	defer ts.Close()
 
 	resp, err := dclr().
-		SetBody(map[string]interface{}{"username": "testuser", "password": "invalidjson"}).
+		SetBody(map[string]any{"username": "testuser", "password": "invalidjson"}).
 		SetResult(&AuthSuccess{}).
 		Post(ts.URL + "/login")
 
@@ -425,7 +425,7 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	}))
 
 	resp, err := c.R().
-		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		SetResult(AuthSuccess{}).
 		ForceContentType("application/json").
 		Post(ts.URL + "/login-json-html")
@@ -584,7 +584,7 @@ func TestPostXMLMapNotSupported(t *testing.T) {
 
 	_, err := dclr().
 		SetHeader(hdrContentTypeKey, "application/xml").
-		SetBody(map[string]interface{}{"Username": "testuser", "Password": "testpass"}).
+		SetBody(map[string]any{"Username": "testuser", "Password": "testpass"}).
 		Post(ts.URL + "/login")
 
 	assertEqual(t, "unsupported 'Body' type/value", err.Error())
@@ -732,7 +732,7 @@ func TestRequestDigestAuthWithBody(t *testing.T) {
 		SetDigestAuth(conf.username, conf.password).
 		SetResult(&AuthSuccess{}).
 		SetHeader(hdrContentTypeKey, "application/json").
-		SetBody(map[string]interface{}{"zip_code": "00000", "city": "Los Angeles"}).
+		SetBody(map[string]any{"zip_code": "00000", "city": "Los Angeles"}).
 		Post(ts.URL + conf.uri)
 
 	assertError(t, err)
@@ -1450,13 +1450,13 @@ func TestDetectContentTypeForPointerWithSliceMap(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	usersmap := map[string]interface{}{
+	usersmap := map[string]any{
 		"user1": ExampleUser{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
 		"user2": &ExampleUser{FirstName: "firstname2", LastName: "lastname3", ZipCode: "10002"},
 		"user3": ExampleUser{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
 	}
 
-	var users []map[string]interface{}
+	var users []map[string]any
 	users = append(users, usersmap)
 
 	resp, err := dclr().

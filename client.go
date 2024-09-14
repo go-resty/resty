@@ -63,7 +63,7 @@ var (
 	xmlCheck  = regexp.MustCompile(`(?i:(application|text)/(.*xml.*)(;|$))`)
 
 	hdrUserAgentValue = "go-resty/" + Version + " (https://github.com/go-resty/resty)"
-	bufPool           = &sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
+	bufPool           = &sync.Pool{New: func() any { return &bytes.Buffer{} }}
 )
 
 type (
@@ -170,10 +170,10 @@ type Client struct {
 	retryHooks            []OnRetryFunc
 	retryAfter            RetryAfterFunc
 	retryResetReaders     bool
-	jsonMarshal           func(v interface{}) ([]byte, error)
-	jsonUnmarshal         func(data []byte, v interface{}) error
-	xmlMarshal            func(v interface{}) ([]byte, error)
-	xmlUnmarshal          func(data []byte, v interface{}) error
+	jsonMarshal           func(v any) ([]byte, error)
+	jsonUnmarshal         func(data []byte, v any) error
+	xmlMarshal            func(v any) ([]byte, error)
+	xmlUnmarshal          func(data []byte, v any) error
 
 	// headerAuthorizationKey is used to set/access Request Authorization header
 	// value when `SetAuthToken` option is used.
@@ -843,10 +843,10 @@ func (c *Client) Error() reflect.Type {
 //	client.SetError(&Error{})
 //	// OR
 //	client.SetError(Error{})
-func (c *Client) SetError(err interface{}) *Client {
+func (c *Client) SetError(v any) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.error = typeOf(err)
+	c.error = typeOf(v)
 	return c
 }
 
@@ -857,7 +857,7 @@ func (c *Client) SetError(err interface{}) *Client {
 //
 //	// Need multiple redirect policies together
 //	client.SetRedirectPolicy(FlexibleRedirectPolicy(20), DomainCheckRedirectPolicy("host1.com", "host2.net"))
-func (c *Client) SetRedirectPolicy(policies ...interface{}) *Client {
+func (c *Client) SetRedirectPolicy(policies ...any) *Client {
 	for _, p := range policies {
 		if _, ok := p.(RedirectPolicy); !ok {
 			c.log.Errorf("%v does not implement resty.RedirectPolicy (missing Apply method)",
@@ -945,7 +945,7 @@ func (c *Client) SetRetryAfter(callback RetryAfterFunc) *Client {
 }
 
 // JSONMarshaler method gets the JSON marshaler function to marshal the request body.
-func (c *Client) JSONMarshaler() func(v interface{}) ([]byte, error) {
+func (c *Client) JSONMarshaler() func(v any) ([]byte, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.jsonMarshal
@@ -953,7 +953,7 @@ func (c *Client) JSONMarshaler() func(v interface{}) ([]byte, error) {
 
 // SetJSONMarshaler method sets the JSON marshaler function to marshal the request body.
 // By default, Resty uses [encoding/json] package to marshal the request body.
-func (c *Client) SetJSONMarshaler(marshaler func(v interface{}) ([]byte, error)) *Client {
+func (c *Client) SetJSONMarshaler(marshaler func(v any) ([]byte, error)) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.jsonMarshal = marshaler
@@ -961,7 +961,7 @@ func (c *Client) SetJSONMarshaler(marshaler func(v interface{}) ([]byte, error))
 }
 
 // JSONUnmarshaler method gets the JSON unmarshaler function to unmarshal the response body.
-func (c *Client) JSONUnmarshaler() func([]byte, interface{}) error {
+func (c *Client) JSONUnmarshaler() func([]byte, any) error {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.jsonUnmarshal
@@ -969,7 +969,7 @@ func (c *Client) JSONUnmarshaler() func([]byte, interface{}) error {
 
 // SetJSONUnmarshaler method sets the JSON unmarshaler function to unmarshal the response body.
 // By default, Resty uses [encoding/json] package to unmarshal the response body.
-func (c *Client) SetJSONUnmarshaler(unmarshaler func(data []byte, v interface{}) error) *Client {
+func (c *Client) SetJSONUnmarshaler(unmarshaler func(data []byte, v any) error) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.jsonUnmarshal = unmarshaler
@@ -977,7 +977,7 @@ func (c *Client) SetJSONUnmarshaler(unmarshaler func(data []byte, v interface{})
 }
 
 // XMLMarshaler method gets the XML marshaler function to marshal the request body.
-func (c *Client) XMLMarshaler() func(interface{}) ([]byte, error) {
+func (c *Client) XMLMarshaler() func(any) ([]byte, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.xmlMarshal
@@ -985,7 +985,7 @@ func (c *Client) XMLMarshaler() func(interface{}) ([]byte, error) {
 
 // SetXMLMarshaler method sets the XML marshaler function to marshal the request body.
 // By default, Resty uses [encoding/xml] package to marshal the request body.
-func (c *Client) SetXMLMarshaler(marshaler func(v interface{}) ([]byte, error)) *Client {
+func (c *Client) SetXMLMarshaler(marshaler func(v any) ([]byte, error)) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.xmlMarshal = marshaler
@@ -993,7 +993,7 @@ func (c *Client) SetXMLMarshaler(marshaler func(v interface{}) ([]byte, error)) 
 }
 
 // XMLUnmarshaler method gets the XML unmarshaler function to unmarshal the response body.
-func (c *Client) XMLUnmarshaler() func([]byte, interface{}) error {
+func (c *Client) XMLUnmarshaler() func([]byte, any) error {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.xmlUnmarshal
@@ -1001,7 +1001,7 @@ func (c *Client) XMLUnmarshaler() func([]byte, interface{}) error {
 
 // SetXMLUnmarshaler method sets the XML unmarshaler function to unmarshal the response body.
 // By default, Resty uses [encoding/xml] package to unmarshal the response body.
-func (c *Client) SetXMLUnmarshaler(unmarshaler func(data []byte, v interface{}) error) *Client {
+func (c *Client) SetXMLUnmarshaler(unmarshaler func(data []byte, v any) error) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.xmlUnmarshal = unmarshaler

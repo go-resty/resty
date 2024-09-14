@@ -579,7 +579,7 @@ func TestClientPreRequestHook(t *testing.T) {
 
 	// Regular bodybuf use case
 	resp, _ := client.R().
-		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		Post(ts.URL + "/login")
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, `{ "id": "success", "message": "login successful" }`, resp.String())
@@ -666,7 +666,7 @@ func TestClientNewRequest(t *testing.T) {
 }
 
 func TestClientSetJSONMarshaler(t *testing.T) {
-	m := func(v interface{}) ([]byte, error) { return nil, nil }
+	m := func(v any) ([]byte, error) { return nil, nil }
 	c := New().SetJSONMarshaler(m)
 	p1 := fmt.Sprintf("%p", c.JSONMarshaler())
 	p2 := fmt.Sprintf("%p", m)
@@ -674,7 +674,7 @@ func TestClientSetJSONMarshaler(t *testing.T) {
 }
 
 func TestClientSetJSONUnmarshaler(t *testing.T) {
-	m := func([]byte, interface{}) error { return nil }
+	m := func([]byte, any) error { return nil }
 	c := New().SetJSONUnmarshaler(m)
 	p1 := fmt.Sprintf("%p", c.JSONUnmarshaler())
 	p2 := fmt.Sprintf("%p", m)
@@ -682,7 +682,7 @@ func TestClientSetJSONUnmarshaler(t *testing.T) {
 }
 
 func TestClientSetXMLMarshaler(t *testing.T) {
-	m := func(v interface{}) ([]byte, error) { return nil, nil }
+	m := func(v any) ([]byte, error) { return nil, nil }
 	c := New().SetXMLMarshaler(m)
 	p1 := fmt.Sprintf("%p", c.XMLMarshaler())
 	p2 := fmt.Sprintf("%p", m)
@@ -690,7 +690,7 @@ func TestClientSetXMLMarshaler(t *testing.T) {
 }
 
 func TestClientSetXMLUnmarshaler(t *testing.T) {
-	m := func([]byte, interface{}) error { return nil }
+	m := func([]byte, any) error { return nil }
 	c := New().SetXMLUnmarshaler(m)
 	p1 := fmt.Sprintf("%p", c.XMLUnmarshaler())
 	p2 := fmt.Sprintf("%p", m)
@@ -1131,7 +1131,7 @@ func TestHostURLForGH318AndGH407(t *testing.T) {
 	t.Log("with leading `/` on request & with trailing `/` on host url")
 	c.SetBaseURL(ts.URL + "/")
 	resp, err := c.R().
-		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		Post("/login")
 	assertNil(t, err)
 	assertNotNil(t, resp)

@@ -37,9 +37,9 @@ type Request struct {
 	RawPathParams map[string]string
 	Header        http.Header
 	Time          time.Time
-	Body          interface{}
-	Result        interface{}
-	Error         interface{}
+	Body          any
+	Result        any
+	Error         any
 	RawRequest    *http.Request
 	SRV           *SRVRecord
 	UserInfo      *User
@@ -61,7 +61,7 @@ type Request struct {
 	fallbackContentType string
 	forceContentType    string
 	ctx                 context.Context
-	values              map[string]interface{}
+	values              map[string]any
 	client              *Client
 	bodyBuf             *bytes.Buffer
 	clientTrace         *clientTrace
@@ -309,7 +309,7 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 // 'map` gets marshaled based on the request header `Content-Type`.
 //
 //	client.R().
-//		SetBody(map[string]interface{}{
+//		SetBody(map[string]any{
 //			"username": "jeeva@myjeeva.com",
 //			"password": "welcome2resty",
 //			"address": &Address{
@@ -335,7 +335,7 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 //		SetBody([]byte("This is my raw request, sent as-is"))
 //
 // and so on.
-func (r *Request) SetBody(body interface{}) *Request {
+func (r *Request) SetBody(body any) *Request {
 	r.Body = body
 	return r
 }
@@ -364,9 +364,9 @@ func (r *Request) SetBody(body interface{}) *Request {
 //
 //	// Can be accessed via -
 //	fmt.Println(response.Result().(*AuthToken))
-func (r *Request) SetResult(res interface{}) *Request {
-	if res != nil {
-		r.Result = getPointer(res)
+func (r *Request) SetResult(v any) *Request {
+	if v != nil {
+		r.Result = getPointer(v)
 	}
 	return r
 }
@@ -385,7 +385,7 @@ func (r *Request) SetResult(res interface{}) *Request {
 //	response.Error().(*AuthError)
 //
 // If this request Error object is nil, Resty will use the client-level error object Type if it is set.
-func (r *Request) SetError(err interface{}) *Request {
+func (r *Request) SetError(err any) *Request {
 	r.Error = getPointer(err)
 	return r
 }
@@ -1216,11 +1216,11 @@ func (r *Request) selectAddr(addrs []*net.SRV, path string, attempt int) string 
 
 func (r *Request) initValuesMap() {
 	if r.values == nil {
-		r.values = make(map[string]interface{})
+		r.values = make(map[string]any)
 	}
 }
 
-var noescapeJSONMarshal = func(v interface{}) (*bytes.Buffer, error) {
+var noescapeJSONMarshal = func(v any) (*bytes.Buffer, error) {
 	buf := acquireBuffer()
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
@@ -1232,7 +1232,7 @@ var noescapeJSONMarshal = func(v interface{}) (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-var noescapeJSONMarshalIndent = func(v interface{}) (*bytes.Buffer, error) {
+var noescapeJSONMarshalIndent = func(v any) (*bytes.Buffer, error) {
 	buf := acquireBuffer()
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)

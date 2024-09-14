@@ -271,7 +271,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 						return
 					}
 
-					var users []map[string]interface{}
+					var users []map[string]any
 					jd := json.NewDecoder(r.Body)
 					err := jd.Decode(&users)
 					w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
@@ -818,20 +818,20 @@ func dclr() *Request {
 	return c.R()
 }
 
-func assertNil(t *testing.T, v interface{}) {
+func assertNil(t *testing.T, v any) {
 	t.Helper()
 	if !isNil(v) {
 		t.Errorf("[%v] was expected to be nil", v)
 	}
 }
 
-func assertNotNil(t *testing.T, v interface{}) {
+func assertNotNil(t *testing.T, v any) {
 	if isNil(v) {
 		t.Errorf("[%v] was expected to be non-nil", v)
 	}
 }
 
-func assertType(t *testing.T, typ, v interface{}) {
+func assertType(t *testing.T, typ, v any) {
 	if reflect.DeepEqual(reflect.TypeOf(typ), reflect.TypeOf(v)) {
 		t.Errorf("Expected type %t, got %t", typ, v)
 	}
@@ -851,7 +851,7 @@ func assertErrorIs(t *testing.T, e, g error) (r bool) {
 	return true
 }
 
-func assertEqual(t *testing.T, e, g interface{}) (r bool) {
+func assertEqual(t *testing.T, e, g any) (r bool) {
 	t.Helper()
 	if !equal(e, g) {
 		t.Errorf("Expected [%v], got [%v]", e, g)
@@ -860,7 +860,7 @@ func assertEqual(t *testing.T, e, g interface{}) (r bool) {
 	return
 }
 
-func assertNotEqual(t *testing.T, e, g interface{}) (r bool) {
+func assertNotEqual(t *testing.T, e, g any) (r bool) {
 	if equal(e, g) {
 		t.Errorf("Expected [%v], got [%v]", e, g)
 	} else {
@@ -870,11 +870,11 @@ func assertNotEqual(t *testing.T, e, g interface{}) (r bool) {
 	return
 }
 
-func equal(expected, got interface{}) bool {
+func equal(expected, got any) bool {
 	return reflect.DeepEqual(expected, got)
 }
 
-func isNil(v interface{}) bool {
+func isNil(v any) bool {
 	if v == nil {
 		return true
 	}
