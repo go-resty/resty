@@ -23,9 +23,9 @@ import (
 // Request struct and methods
 //_______________________________________________________________________
 
-// Request struct is used to compose and fire individual request from
-// resty client. Request provides an options to override client level
-// settings and also an options for the request composition.
+// Request struct is used to compose and fire individual requests from
+// Resty client. The [Request] provides an option to override client-level
+// settings and also an option for the request composition.
 type Request struct {
 	URL           string
 	Method        string
@@ -75,7 +75,7 @@ type Request struct {
 	generateCurlOnDebug bool
 }
 
-// Generate curl command for the request.
+// GenerateCurlCommand method generates the CURL command for the request.
 func (r *Request) GenerateCurlCommand() string {
 	if !(r.Debug && r.generateCurlOnDebug) {
 		return ""
@@ -95,8 +95,8 @@ func (r *Request) GenerateCurlCommand() string {
 	return *r.resultCurlCmd
 }
 
-// Context method returns the Context if its already set in request
-// otherwise it creates new one using [context.Background].
+// Context method returns the Context if it is already set in the [Request]
+// otherwise, it creates a new one using [context.Background].
 func (r *Request) Context() context.Context {
 	if r.ctx == nil {
 		return context.Background()
@@ -105,15 +105,15 @@ func (r *Request) Context() context.Context {
 }
 
 // SetContext method sets the [context.Context] for current [Request]. It allows
-// to interrupt the request execution if ctx.Done() channel is closed.
-// See https://blog.golang.org/context article and the "context" package
+// to interrupt the request execution if `ctx.Done()` channel is closed.
+// See https://blog.golang.org/context article and the package [context]
 // documentation.
 func (r *Request) SetContext(ctx context.Context) *Request {
 	r.ctx = ctx
 	return r
 }
 
-// SetHeader method is to set a single header field and its value in the current request.
+// SetHeader method sets a single header field and its value in the current request.
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`.
 //
@@ -121,13 +121,13 @@ func (r *Request) SetContext(ctx context.Context) *Request {
 //		SetHeader("Content-Type", "application/json").
 //		SetHeader("Accept", "application/json")
 //
-// Also you can override header value, which was set at client instance level.
+// It overrides the header value set at the client instance level.
 func (r *Request) SetHeader(header, value string) *Request {
 	r.Header.Set(header, value)
 	return r
 }
 
-// SetHeaders method sets multiple headers field and its values at one go in the current request.
+// SetHeaders method sets multiple header fields and their values at one go in the current request.
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`
 //
@@ -137,7 +137,7 @@ func (r *Request) SetHeader(header, value string) *Request {
 //			"Accept": "application/json",
 //		})
 //
-// Also you can override header value, which was set at client instance level.
+// It overrides the header value set at the client instance level.
 func (r *Request) SetHeaders(headers map[string]string) *Request {
 	for h, v := range headers {
 		r.SetHeader(h, v)
@@ -145,7 +145,7 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 	return r
 }
 
-// SetHeaderMultiValues sets multiple headers fields and its values is list of strings at one go in the current request.
+// SetHeaderMultiValues sets multiple header fields and their values as a list of strings in the current request.
 //
 // For Example: To set `Accept` as `text/html, application/xhtml+xml, application/xml;q=0.9, image/webp, */*;q=0.8`
 //
@@ -154,7 +154,7 @@ func (r *Request) SetHeaders(headers map[string]string) *Request {
 //			"Accept": []string{"text/html", "application/xhtml+xml", "application/xml;q=0.9", "image/webp", "*/*;q=0.8"},
 //		})
 //
-// Also you can override header value, which was set at client instance level.
+// It overrides the header value set at the client instance level.
 func (r *Request) SetHeaderMultiValues(headers map[string][]string) *Request {
 	for key, values := range headers {
 		r.SetHeader(key, strings.Join(values, ", "))
@@ -162,7 +162,7 @@ func (r *Request) SetHeaderMultiValues(headers map[string][]string) *Request {
 	return r
 }
 
-// SetHeaderVerbatim method is to set a single header field and its value verbatim in the current request.
+// SetHeaderVerbatim method sets a single header field and its value verbatim in the current request.
 //
 // For Example: To set `all_lowercase` and `UPPERCASE` as `available`.
 //
@@ -170,31 +170,31 @@ func (r *Request) SetHeaderMultiValues(headers map[string][]string) *Request {
 //		SetHeaderVerbatim("all_lowercase", "available").
 //		SetHeaderVerbatim("UPPERCASE", "available")
 //
-// Also you can override header value, which was set at client instance level.
+// It overrides the header value set at the client instance level.
 func (r *Request) SetHeaderVerbatim(header, value string) *Request {
 	r.Header[header] = []string{value}
 	return r
 }
 
-// SetQueryParam method sets single parameter and its value in the current request.
-// It will be formed as query string for the request.
+// SetQueryParam method sets a single parameter and its value in the current request.
+// It will be formed as a query string for the request.
 //
-// For Example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
+// For Example: `search=kitchen%20papers&size=large` in the URL after the `?` mark.
 //
 //	client.R().
 //		SetQueryParam("search", "kitchen papers").
 //		SetQueryParam("size", "large")
 //
-// Also you can override query params value, which was set at client instance level.
+// It overrides the query parameter value set at the client instance level.
 func (r *Request) SetQueryParam(param, value string) *Request {
 	r.QueryParam.Set(param, value)
 	return r
 }
 
-// SetQueryParams method sets multiple parameters and its values at one go in the current request.
-// It will be formed as query string for the request.
+// SetQueryParams method sets multiple parameters and their values at one go in the current request.
+// It will be formed as a query string for the request.
 //
-// For Example: `search=kitchen%20papers&size=large` in the URL after `?` mark.
+// For Example: `search=kitchen%20papers&size=large` in the URL after the `?` mark.
 //
 //	client.R().
 //		SetQueryParams(map[string]string{
@@ -202,7 +202,7 @@ func (r *Request) SetQueryParam(param, value string) *Request {
 //			"size": "large",
 //		})
 //
-// Also you can override query params value, which was set at client instance level.
+// It overrides the query parameter value set at the client instance level.
 func (r *Request) SetQueryParams(params map[string]string) *Request {
 	for p, v := range params {
 		r.SetQueryParam(p, v)
@@ -214,14 +214,14 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 // ([url.Values]) at one go in the current request. It will be formed as
 // query string for the request.
 //
-// For Example: `status=pending&status=approved&status=open` in the URL after `?` mark.
+// For Example: `status=pending&status=approved&status=open` in the URL after the `?` mark.
 //
 //	client.R().
 //		SetQueryParamsFromValues(url.Values{
 //			"status": []string{"pending", "approved", "open"},
 //		})
 //
-// Also you can override query params value, which was set at client instance level.
+// It overrides the query parameter value set at the client instance level.
 func (r *Request) SetQueryParamsFromValues(params url.Values) *Request {
 	for p, v := range params {
 		for _, pv := range v {
@@ -231,12 +231,12 @@ func (r *Request) SetQueryParamsFromValues(params url.Values) *Request {
 	return r
 }
 
-// SetQueryString method provides ability to use string as an input to set URL query string for the request.
-//
-// Using String as an input
+// SetQueryString method provides the ability to use string as an input to set URL query string for the request.
 //
 //	client.R().
 //		SetQueryString("productId=232&template=fresh-sample&cat=resty&source=google&kw=buy a lot more")
+//
+// It overrides the query parameter value set at the client instance level.
 func (r *Request) SetQueryString(query string) *Request {
 	params, err := url.ParseQuery(strings.TrimSpace(query))
 	if err == nil {
@@ -251,9 +251,9 @@ func (r *Request) SetQueryString(query string) *Request {
 	return r
 }
 
-// SetFormData method sets Form parameters and their values in the current request.
-// It's applicable only HTTP method `POST` and `PUT` and requests content type would be set as
-// `application/x-www-form-urlencoded`.
+// SetFormData method sets Form parameters and their values for the current request.
+// It applies only to HTTP methods `POST` and `PUT`, and by default requests
+// content type would be set as `application/x-www-form-urlencoded`.
 //
 //	client.R().
 //		SetFormData(map[string]string{
@@ -261,7 +261,7 @@ func (r *Request) SetQueryString(query string) *Request {
 //			"user_id": "3455454545",
 //		})
 //
-// Also you can override form data value, which was set at client instance level.
+// It overrides the form data value set at the client instance level.
 func (r *Request) SetFormData(data map[string]string) *Request {
 	for k, v := range data {
 		r.FormData.Set(k, v)
@@ -277,7 +277,7 @@ func (r *Request) SetFormData(data map[string]string) *Request {
 //			"search_criteria": []string{"book", "glass", "pencil"},
 //		})
 //
-// Also you can override form data value, which was set at client instance level.
+// It overrides the form data value set at the client instance level.
 func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 	for k, v := range data {
 		for _, kv := range v {
@@ -287,14 +287,17 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 	return r
 }
 
-// SetBody method sets the request body for the request. It supports various realtime needs as easy.
-// We can say its quite handy or powerful. Supported request body data types is `string`,
-// `[]byte`, `struct`, `map`, `slice` and [io.Reader]. Body value can be pointer or non-pointer.
-// Automatic marshalling for JSON and XML content type, if it is `struct`, `map`, or `slice`.
+// SetBody method sets the request body for the request. It supports various practical needs as easy.
+// It's quite handy and powerful. Supported request body data types are `string`,
+// `[]byte`, `struct`, `map`, `slice` and [io.Reader].
 //
-// NOTE: [io.Reader] is processed as bufferless mode while sending request.
+// Body value can be pointer or non-pointer. Automatic marshalling for JSON and XML content type, if it is `struct`, `map`, or `slice`.
 //
-// For Example: Struct as a body input, based on content type, it will be marshalled.
+// NOTE: [io.Reader] is processed in bufferless mode while sending a request.
+//
+// For Example:
+//
+// `struct` gets marshaled based on the request header `Content-Type`.
 //
 //	client.R().
 //		SetBody(User{
@@ -302,7 +305,7 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 //			Password: "welcome2resty",
 //		})
 //
-// Map as a body input, based on content type, it will be marshalled.
+// 'map` gets marshaled based on the request header `Content-Type`.
 //
 //	client.R().
 //		SetBody(map[string]interface{}{
@@ -317,7 +320,7 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 //			},
 //		})
 //
-// String as a body input. Suitable for any need as a string input.
+// `string` as a body input. Suitable for any need as a string input.
 //
 //	client.R().
 //		SetBody(`{
@@ -325,27 +328,41 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 //			"password": "admin"
 //		}`)
 //
-// []byte as a body input. Suitable for raw request such as file upload, serialize & deserialize, etc.
+// `[]byte` as a body input. Suitable for raw requests such as file upload, serialize & deserialize, etc.
 //
 //	client.R().
 //		SetBody([]byte("This is my raw request, sent as-is"))
+//
+// and so on.
 func (r *Request) SetBody(body interface{}) *Request {
 	r.Body = body
 	return r
 }
 
-// SetResult method is to register the response `Result` object for automatic unmarshalling for the request,
-// if response status code is between 200 and 299 and content type either JSON or XML.
+// SetResult method is to register the response `Result` object for automatic
+// unmarshalling of the HTTP response if the response status code is
+// between 200 and 299, and the content type is JSON or XML.
 //
-// NOTE: Result object can be pointer or non-pointer.
+// Note: [Request.SetResult] input can be a pointer or non-pointer.
+//
+// The pointer with handle
+//
+//	authToken := &AuthToken{}
+//	client.R().SetResult(authToken)
+//
+//	// Can be accessed via -
+//	fmt.Println(authToken) OR fmt.Println(response.Result().(*AuthToken))
+//
+// OR -
+//
+// The pointer without handle or non-pointer
 //
 //	client.R().SetResult(&AuthToken{})
 //	// OR
 //	client.R().SetResult(AuthToken{})
 //
-// Accessing a result value from response instance.
-//
-//	response.Result().(*AuthToken)
+//	// Can be accessed via -
+//	fmt.Println(response.Result().(*AuthToken))
 func (r *Request) SetResult(res interface{}) *Request {
 	if res != nil {
 		r.Result = getPointer(res)
@@ -354,23 +371,25 @@ func (r *Request) SetResult(res interface{}) *Request {
 }
 
 // SetError method is to register the request `Error` object for automatic unmarshalling for the request,
-// if response status code is greater than 399 and content type either JSON or XML.
+// if the response status code is greater than 399 and the content type is either JSON or XML.
 //
-// NOTE: Error object can be pointer or non-pointer.
+// NOTE: [Request.SetError] input can be a pointer or non-pointer.
 //
 //	client.R().SetError(&AuthError{})
 //	// OR
 //	client.R().SetError(AuthError{})
 //
-// Accessing a error value from response instance.
+// Accessing an error value from response instance.
 //
 //	response.Error().(*AuthError)
+//
+// If this request Error object is nil, Resty will use the client-level error object Type if it is set.
 func (r *Request) SetError(err interface{}) *Request {
 	r.Error = getPointer(err)
 	return r
 }
 
-// SetFile method is to set single file field name and its path for multipart upload.
+// SetFile method sets a single file field name and its path for multipart upload.
 //
 //	client.R().
 //		SetFile("my_file", "/Users/jeeva/Gas Bill - Sep.pdf")
@@ -380,7 +399,7 @@ func (r *Request) SetFile(param, filePath string) *Request {
 	return r
 }
 
-// SetFiles method is to set multiple file field name and its path for multipart upload.
+// SetFiles method sets multiple file field names and their paths for multipart uploads.
 //
 //	client.R().
 //		SetFiles(map[string]string{
@@ -396,7 +415,7 @@ func (r *Request) SetFiles(files map[string]string) *Request {
 	return r
 }
 
-// SetFileReader method is to set single file using io.Reader for multipart upload.
+// SetFileReader method is to set a file using [io.Reader] for multipart upload.
 //
 //	client.R().
 //		SetFileReader("profile_img", "my-profile-img.png", bytes.NewReader(profileImgBytes)).
@@ -411,7 +430,8 @@ func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Reque
 	return r
 }
 
-// SetMultipartFormData method allows simple form data to be attached to the request as `multipart:form-data`
+// SetMultipartFormData method allows simple form data to be attached to the request
+// as `multipart:form-data`
 func (r *Request) SetMultipartFormData(data map[string]string) *Request {
 	for k, v := range data {
 		r = r.SetMultipartField(k, "", "", strings.NewReader(v))
@@ -420,7 +440,7 @@ func (r *Request) SetMultipartFormData(data map[string]string) *Request {
 	return r
 }
 
-// SetMultipartField method is to set custom data using io.Reader for multipart upload.
+// SetMultipartField method sets custom data with Content-Type using [io.Reader] for multipart upload.
 func (r *Request) SetMultipartField(param, fileName, contentType string, reader io.Reader) *Request {
 	r.isMultiPart = true
 	r.multipartFields = append(r.multipartFields, &MultipartField{
@@ -432,7 +452,7 @@ func (r *Request) SetMultipartField(param, fileName, contentType string, reader 
 	return r
 }
 
-// SetMultipartFields method is to set multiple data fields using [io.Reader] for multipart upload.
+// SetMultipartFields method sets multiple data fields using [io.Reader] for multipart upload.
 //
 // For Example:
 //
@@ -450,7 +470,7 @@ func (r *Request) SetMultipartField(param, fileName, contentType string, reader 
 //			Reader:      strings.NewReader(`{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`),
 //		})
 //
-// If you have slice already, then simply call-
+// If you have a `slice` of fields already, then call-
 //
 //	client.R().SetMultipartFields(fields...)
 func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
@@ -460,19 +480,20 @@ func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 }
 
 // SetMultipartBoundary method sets the custom multipart boundary for the multipart request.
-// Typically, the `mime/multipart` package generates a random multipart boundary, if not provided.
+// Typically, the `mime/multipart` package generates a random multipart boundary if not provided.
 func (r *Request) SetMultipartBoundary(boundary string) *Request {
 	r.multipartBoundary = boundary
 	return r
 }
 
-// SetContentLength method sets the HTTP header `Content-Length` value for current request.
-// By default Resty won't set `Content-Length`. Also you have an option to enable for every
-// request.
+// SetContentLength method sets the current request's HTTP header `Content-Length` value.
+// By default, Resty won't set `Content-Length`.
 //
 // See [Client.SetContentLength]
 //
 //	client.R().SetContentLength(true)
+//
+// It overrides the value set at the client instance level.
 func (r *Request) SetContentLength(l bool) *Request {
 	r.setContentLength = l
 	return r
@@ -488,7 +509,7 @@ func (r *Request) SetContentLength(l bool) *Request {
 //
 //	client.R().SetBasicAuth("go-resty", "welcome")
 //
-// This method overrides the credentials set by method [Client.SetBasicAuth].
+// It overrides the credentials set by method [Client.SetBasicAuth].
 func (r *Request) SetBasicAuth(username, password string) *Request {
 	r.UserInfo = &User{Username: username, Password: password}
 	return r
@@ -502,13 +523,15 @@ func (r *Request) SetBasicAuth(username, password string) *Request {
 //
 //	client.R().SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F")
 //
-// This method overrides the Auth token set by method [Client.SetAuthToken].
+// It overrides the Auth token set by method [Client.SetAuthToken].
 func (r *Request) SetAuthToken(token string) *Request {
 	r.Token = token
 	return r
 }
 
-// SetAuthScheme method sets the auth token scheme type in the HTTP request. For Example:
+// SetAuthScheme method sets the auth token scheme type in the HTTP request.
+//
+// Example Header value structure:
 //
 //	Authorization: <auth-scheme-value-set-here> <auth-token-value>
 //
@@ -516,12 +539,12 @@ func (r *Request) SetAuthToken(token string) *Request {
 //
 //	client.R().SetAuthScheme("OAuth")
 //
-// This auth header scheme gets added to all the request raised from this client instance.
-// Also it can be overridden or set one at the request level is supported.
+//	// The outcome will be -
+//	Authorization: OAuth <auth-token-value>
 //
 // Information about Auth schemes can be found in [RFC 7235], IANA [HTTP Auth schemes]
 //
-// This method overrides the Authorization scheme set by method [Client.SetAuthScheme].
+// It overrides the `Authorization` scheme set by method [Client.SetAuthScheme].
 //
 // [RFC 7235]: https://tools.ietf.org/html/rfc7235
 // [HTTP Auth schemes]: https://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml#authschemes
@@ -540,7 +563,7 @@ func (r *Request) SetAuthScheme(scheme string) *Request {
 //
 // Information about Digest Access Authentication can be found in [RFC 7616]
 //
-// This method overrides the username and password set by method [Client.SetDigestAuth].
+// It overrides the digest username and password set by method [Client.SetDigestAuth].
 //
 // [RFC 7616]: https://datatracker.ietf.org/doc/html/rfc7616
 func (r *Request) SetDigestAuth(username, password string) *Request {
@@ -560,9 +583,12 @@ func (r *Request) SetDigestAuth(username, password string) *Request {
 	return r
 }
 
-// SetOutput method sets the output file for current HTTP request. Current HTTP response will be
-// saved into given file. It is similar to `curl -o` flag. Absolute path or relative path can be used.
-// If is it relative path then output file goes under the output directory, as mentioned
+// SetOutput method sets the output file for the current HTTP request. The current
+// HTTP response will be saved in the given file. It is similar to the `curl -o` flag.
+//
+// Absolute path or relative path can be used.
+//
+// If it is a relative path, then the output file goes under the output directory, as mentioned
 // in the [Client.SetOutputDirectory].
 //
 //	client.R().
@@ -587,32 +613,35 @@ func (r *Request) SetSRV(srv *SRVRecord) *Request {
 	return r
 }
 
-// SetDoNotParseResponse method instructs `Resty` not to parse the response body automatically.
-// Resty exposes the raw response body as [io.ReadCloser]. Also do not forget to close the body,
-// otherwise you might get into connection leaks, no connection reuse.
+// SetDoNotParseResponse method instructs Resty not to parse the response body automatically.
+// Resty exposes the raw response body as [io.ReadCloser]. If you use it, do not
+// forget to close the body, otherwise, you might get into connection leaks, and connection
+// reuse may not happen.
 //
-// NOTE: [Response] middlewares are not applicable, if you use this option. Basically you have
-// taken over the control of response parsing from `Resty`.
+// NOTE: [Response] middlewares are not executed using this option. You have
+// taken over the control of response parsing from Resty.
 func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 	r.notParseResponse = parse
 	return r
 }
 
-// SetResponseBodyLimit set a max body size limit on response, avoid reading too many data to memory.
+// SetResponseBodyLimit method sets a maximum body size limit in bytes on response,
+// avoid reading too much data to memory.
 //
-// Request will return [resty.ErrResponseBodyTooLarge] if uncompressed response body size if larger than limit.
-// Body size limit will not be enforced in following case:
+// Client will return [resty.ErrResponseBodyTooLarge] if the body size of the body
+// in the uncompressed response is larger than the limit.
+// Body size limit will not be enforced in the following cases:
 //   - ResponseBodyLimit <= 0, which is the default behavior.
-//   - [Request.SetOutput] is called to save a response data to file.
+//   - [Request.SetOutput] is called to save response data to the file.
 //   - "DoNotParseResponse" is set for client or request.
 //
-// This will override Client config.
+// It overrides the value set at the client instance level. see [Client.SetResponseBodyLimit]
 func (r *Request) SetResponseBodyLimit(v int) *Request {
 	r.responseBodyLimit = v
 	return r
 }
 
-// SetPathParam method sets single URL path key-value pair in the
+// SetPathParam method sets a single URL path key-value pair in the
 // Resty current request instance.
 //
 //	client.R().SetPathParam("userId", "sample@sample.com")
@@ -628,10 +657,9 @@ func (r *Request) SetResponseBodyLimit(v int) *Request {
 //	   Composed URL - /v1/users/groups%2Fdevelopers/details
 //
 // It replaces the value of the key while composing the request URL.
-// The values will be escaped using `url.PathEscape` function.
+// The values will be escaped using function [url.PathEscape].
 //
-// Also you can override Path Params value, which was set at client instance
-// level.
+// It overrides the path parameter set at the client instance level.
 func (r *Request) SetPathParam(param, value string) *Request {
 	r.PathParams[param] = value
 	return r
@@ -650,11 +678,10 @@ func (r *Request) SetPathParam(param, value string) *Request {
 //	   URL - /v1/users/{userId}/{subAccountId}/{path}/details
 //	   Composed URL - /v1/users/sample@sample.com/100002/groups%2Fdevelopers/details
 //
-// It replaces the value of the key while composing request URL.
-// The value will be used as it is and will not be escaped.
+// It replaces the value of the key while composing the request URL.
+// The values will be escaped using function [url.PathEscape].
 //
-// Also you can override Path Params value, which was set at client instance
-// level.
+// It overrides the path parameter set at the client instance level.
 func (r *Request) SetPathParams(params map[string]string) *Request {
 	for p, v := range params {
 		r.SetPathParam(p, v)
@@ -662,7 +689,7 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 	return r
 }
 
-// SetRawPathParam method sets single URL path key-value pair in the
+// SetRawPathParam method sets a single URL path key-value pair in the
 // Resty current request instance.
 //
 //	client.R().SetPathParam("userId", "sample@sample.com")
@@ -678,10 +705,9 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 //	   Composed URL - /v1/users/groups/developers/details
 //
 // It replaces the value of the key while composing the request URL.
-// The value will be used as it is and will not be escaped.
+// The value will be used as-is and has not been escaped.
 //
-// Also you can override Path Params value, which was set at client instance
-// level.
+// It overrides the raw path parameter set at the client instance level.
 func (r *Request) SetRawPathParam(param, value string) *Request {
 	r.RawPathParams[param] = value
 	return r
@@ -700,11 +726,10 @@ func (r *Request) SetRawPathParam(param, value string) *Request {
 //	   URL - /v1/users/{userId}/{subAccountId}/{path}/details
 //	   Composed URL - /v1/users/sample@sample.com/100002/groups/developers/details
 //
-// It replaces the value of the key while composing request URL.
-// The values will be used as they are and will not be escaped.
+// It replaces the value of the key while composing the request URL.
+// The value will be used as-is and has not been escaped.
 //
-// Also you can override Path Params value, which was set at client instance
-// level.
+// It overrides the raw path parameter set at the client instance level.
 func (r *Request) SetRawPathParams(params map[string]string) *Request {
 	for p, v := range params {
 		r.SetRawPathParam(p, v)
@@ -713,23 +738,29 @@ func (r *Request) SetRawPathParams(params map[string]string) *Request {
 }
 
 // ExpectContentType method allows to provide fallback `Content-Type` for automatic unmarshalling
-// when `Content-Type` response header is unavailable.
+// when the `Content-Type` response header is unavailable.
 func (r *Request) ExpectContentType(contentType string) *Request {
 	r.fallbackContentType = contentType
 	return r
 }
 
-// ForceContentType method provides a strong sense of response `Content-Type` for automatic unmarshalling.
-// Resty gives this a higher priority than the `Content-Type` response header.  This means that if both
-// [Request.ForceContentType] is set and the response `Content-Type` is available, `ForceContentType` will win.
+// ForceContentType method provides a strong sense of response `Content-Type` for
+// automatic unmarshalling. Resty gives this a higher priority than the `Content-Type`
+// response header.
+//
+// This means that if both [Request.ForceContentType] is set and
+// the response `Content-Type` is available, `ForceContentType` will win.
 func (r *Request) ForceContentType(contentType string) *Request {
 	r.forceContentType = contentType
 	return r
 }
 
-// SetJSONEscapeHTML method is to enable/disable the HTML escape on JSON marshal.
+// SetJSONEscapeHTML method enables or disables the HTML escape on JSON marshal.
+// By default, escape HTML is false.
 //
-// NOTE: This option only applicable to standard JSON Marshaller.
+// NOTE: This option only applies to the standard JSON Marshaller used by Resty.
+//
+// It overrides the value set at the client instance level, see [Client.SetJSONEscapeHTML]
 func (r *Request) SetJSONEscapeHTML(b bool) *Request {
 	r.jsonEscapeHTML = b
 	return r
@@ -742,7 +773,7 @@ func (r *Request) SetJSONEscapeHTML(b bool) *Request {
 //				Value:"This is cookie value",
 //			})
 //
-// NOTE: Method appends the Cookie value into existing Cookie if already existing.
+// NOTE: Method appends the Cookie value into existing Cookie even if its already existing.
 func (r *Request) SetCookie(hc *http.Cookie) *Request {
 	r.Cookies = append(r.Cookies, hc)
 	return r
@@ -764,7 +795,7 @@ func (r *Request) SetCookie(hc *http.Cookie) *Request {
 //	// Setting a cookies into resty's current request
 //	client.R().SetCookies(cookies)
 //
-// NOTE: Method appends the Cookie value into existing Cookie if already existing.
+// NOTE: Method appends the Cookie value into existing Cookie even if its already existing.
 func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 	r.Cookies = append(r.Cookies, rs...)
 	return r
@@ -774,27 +805,34 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 // By default, requests and responses inherit their logger from the client.
 //
 // Compliant to interface [resty.Logger].
+//
+// It overrides the logger value set at the client instance level.
 func (r *Request) SetLogger(l Logger) *Request {
 	r.log = l
 	return r
 }
 
-// SetDebug method enables the debug mode on current request Resty request, It logs
+// SetDebug method enables the debug mode on the current request. It logs
 // the details current request and response.
-// For [Request] it logs information such as HTTP verb, Relative URL path, Host, Headers, Body if it has one.
-// For [Response] it logs information such as Status, Response Time, Headers, Body if it has one.
 //
-//	client.R().SetDebug(true)
+//	client.SetDebug(true)
+//
+// Also, it can be enabled at the request level for a particular request; see [Request.SetDebug].
+//   - For [Request], it logs information such as HTTP verb, Relative URL path,
+//     Host, Headers, and Body if it has one.
+//   - For [Response], it logs information such as Status, Response Time, Headers,
+//     and Body if it has one.
 func (r *Request) SetDebug(d bool) *Request {
 	r.Debug = d
 	return r
 }
 
 // AddRetryCondition method adds a retry condition function to the request's
-// array of functions that are checked to determine if the request is retried.
-// The request will retry if any of the functions return true and error is nil.
+// array of functions is checked to determine if the request can be retried.
+// The request will retry if any functions return true and the error is nil.
 //
-// NOTE: These retry conditions are checked before all retry conditions of the client.
+// NOTE: The request level retry conditions are checked before all retry
+// conditions from the client instance.
 func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 	r.retryConditions = append(r.retryConditions, condition)
 	return r
@@ -813,7 +851,7 @@ func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 //	fmt.Println("Error:", err)
 //	fmt.Println("Trace Info:", resp.Request.TraceInfo())
 //
-// See [Client.EnableTrace] available too to get trace info for all requests.
+// See [Client.EnableTrace] is also available to get trace info for all requests.
 func (r *Request) EnableTrace() *Request {
 	r.trace = true
 	return r
@@ -823,7 +861,7 @@ func (r *Request) EnableTrace() *Request {
 // It works in conjunction with debug mode. It overrides the options set by the [Client].
 //
 // NOTE: Use with care.
-//   - Potential to leak sensitive data in the debug log from [Request] and [Response].
+//   - Potential to leak sensitive data from [Request] and [Response] in the debug log.
 //   - Beware of memory usage since the request body is reread.
 func (r *Request) EnableGenerateCurlOnDebug() *Request {
 	r.generateCurlOnDebug = true
@@ -839,7 +877,7 @@ func (r *Request) DisableGenerateCurlOnDebug() *Request {
 
 // TraceInfo method returns the trace info for the request.
 // If either the [Client.EnableTrace] or [Request.EnableTrace] function has not been called
-// prior to the request being made, an empty [resty.TraceInfo] object will be returned.
+// before the request is made, an empty [resty.TraceInfo] object is returned.
 func (r *Request) TraceInfo() TraceInfo {
 	ct := r.clientTrace
 
@@ -938,7 +976,7 @@ func (r *Request) Send() (*Response, error) {
 	return r.Execute(r.Method, r.URL)
 }
 
-// Execute method performs the HTTP request with given HTTP method and URL
+// Execute method performs the HTTP request with the given HTTP method and URL
 // for current [Request].
 //
 //	resp, err := client.R().Execute(resty.MethodGet, "http://httpbin.org/get")

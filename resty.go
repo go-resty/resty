@@ -29,7 +29,7 @@ func NewWithClient(hc *http.Client) *Client {
 	return createClient(hc)
 }
 
-// NewWithLocalAddr method creates a new Resty client with given Local Address
+// NewWithLocalAddr method creates a new Resty client with the given Local Address.
 // to dial from.
 func NewWithLocalAddr(localAddr net.Addr) *Client {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
