@@ -88,7 +88,7 @@ func IsStringEmpty(str string) bool {
 // DetectContentType method is used to figure out `Request.Body` content type for request header
 func DetectContentType(body any) string {
 	contentType := plainTextType
-	kind := kindOf(body)
+	kind := inferKind(body)
 	switch kind {
 	case reflect.Struct, reflect.Map:
 		contentType = jsonContentType
@@ -239,32 +239,8 @@ func addFileReader(w *multipart.Writer, f *File) error {
 	return writeMultipartFormFile(w, f.ParamName, f.Name, f.Reader)
 }
 
-func getPointer(v interface{}) interface{} {
-	vv := valueOf(v)
-	if vv.Kind() == reflect.Ptr {
-		return v
-	}
-	return reflect.New(vv.Type()).Interface()
-}
-
 func isPayloadSupported(m string, allowMethodGet bool) bool {
 	return !(m == MethodHead || m == MethodOptions || (m == MethodGet && !allowMethodGet))
-}
-
-func typeOf(i interface{}) reflect.Type {
-	return indirect(valueOf(i)).Type()
-}
-
-func valueOf(i interface{}) reflect.Value {
-	return reflect.ValueOf(i)
-}
-
-func indirect(v reflect.Value) reflect.Value {
-	return reflect.Indirect(v)
-}
-
-func kindOf(v interface{}) reflect.Kind {
-	return typeOf(v).Kind()
 }
 
 func createDirectory(dir string) (err error) {
@@ -280,6 +256,22 @@ func createDirectory(dir string) (err error) {
 
 func canJSONMarshal(contentType string, kind reflect.Kind) bool {
 	return IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice)
+}
+
+func getPointer(v any) any {
+	vv := reflect.ValueOf(v)
+	if vv.Kind() == reflect.Ptr {
+		return v
+	}
+	return reflect.New(vv.Type()).Interface()
+}
+
+func inferType(v any) reflect.Type {
+	return reflect.Indirect(reflect.ValueOf(v)).Type()
+}
+
+func inferKind(v any) reflect.Kind {
+	return inferType(v).Kind()
 }
 
 func functionName(i any) string {

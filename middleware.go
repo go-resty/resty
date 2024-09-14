@@ -408,8 +408,8 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 		// HTTP status code > 399, considered as error
 		if res.IsError() {
 			// global error interface
-			if res.Request.Error == nil && c.error != nil {
-				res.Request.Error = reflect.New(c.error).Interface()
+			if res.Request.Error == nil {
+				res.Request.Error = c.newErrorInterface()
 			}
 
 			if res.Request.Error != nil {
@@ -519,7 +519,7 @@ func handleRequestBody(c *Client, r *Request) error {
 		bodyBytes = []byte(body)
 	default:
 		contentType := r.Header.Get(hdrContentTypeKey)
-		kind := kindOf(r.Body)
+		kind := inferKind(r.Body)
 		var err error
 		if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
 			r.bodyBuf, err = jsonMarshal(c, r, r.Body)

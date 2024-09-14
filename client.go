@@ -159,7 +159,7 @@ type Client struct {
 	token                 string
 	authScheme            string
 	cookies               []*http.Cookie
-	error                 reflect.Type
+	errorType             reflect.Type
 	debug                 bool
 	disableWarn           bool
 	allowGetMethodPayload bool
@@ -833,7 +833,7 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 func (c *Client) Error() reflect.Type {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.error
+	return c.errorType
 }
 
 // SetError method registers the global or client common `Error` object into Resty.
@@ -846,8 +846,16 @@ func (c *Client) Error() reflect.Type {
 func (c *Client) SetError(v any) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.error = typeOf(v)
+	c.errorType = inferType(v)
 	return c
+}
+
+func (c *Client) newErrorInterface() any {
+	e := c.Error()
+	if e == nil {
+		return e
+	}
+	return reflect.New(e).Interface()
 }
 
 // SetRedirectPolicy method sets the redirect policy for the client. Resty provides ready-to-use

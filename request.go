@@ -1162,7 +1162,7 @@ func (r *Request) fmtBodyString(sl int) (body string) {
 	var err error
 
 	contentType := r.Header.Get(hdrContentTypeKey)
-	kind := kindOf(r.Body)
+	kind := inferKind(r.Body)
 	if canJSONMarshal(contentType, kind) {
 		var bodyBuf *bytes.Buffer
 		bodyBuf, err = noescapeJSONMarshalIndent(&r.Body)
