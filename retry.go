@@ -23,7 +23,7 @@ type (
 	// Option is to create convenient retry options like wait time, max retries, etc.
 	Option func(*Options)
 
-	// RetryConditionFunc type is for retry condition function
+	// RetryConditionFunc type is for the retry condition function
 	// input: non-nil Response OR request execution error
 	RetryConditionFunc func(*Response, error) bool
 
@@ -33,8 +33,8 @@ type (
 	// RetryAfterFunc returns time to wait before retry
 	// For example, it can parse HTTP Retry-After header
 	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html
-	// Non-nil error is returned if it is found that request is not retryable
-	// (0, nil) is a special result means 'use default algorithm'
+	// Non-nil error is returned if it is found that the request is not retryable
+	// (0, nil) is a special result that means 'use default algorithm'
 	RetryAfterFunc func(*Client, *Response) (time.Duration, error)
 
 	// Options struct is used to hold retry settings.
@@ -69,7 +69,7 @@ func MaxWaitTime(value time.Duration) Option {
 	}
 }
 
-// RetryConditions sets the conditions that will be checked for retry.
+// RetryConditions sets the conditions that will be checked for retry
 func RetryConditions(conditions []RetryConditionFunc) Option {
 	return func(o *Options) {
 		o.retryConditions = conditions
@@ -84,7 +84,7 @@ func RetryHooks(hooks []OnRetryFunc) Option {
 }
 
 // ResetMultipartReaders sets a boolean value which will lead the start being seeked out
-// on all multipart file readers, if they implement io.ReadSeeker
+// on all multipart file readers if they implement [io.ReadSeeker]
 func ResetMultipartReaders(value bool) Option {
 	return func(o *Options) {
 		o.resetReaders = value
@@ -202,7 +202,7 @@ func sleepDuration(resp *Response, min, max time.Duration, attempt int) (time.Du
 }
 
 // Return capped exponential backoff with jitter
-// http://www.awsarchitectureblog.com/2015/03/backoff.html
+// https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
 func jitterBackoff(min, max time.Duration, attempt int) time.Duration {
 	base := float64(min)
 	capLevel := float64(max)

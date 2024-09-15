@@ -13,22 +13,22 @@ import (
 )
 
 var (
-	// Since v2.8.0
 	ErrAutoRedirectDisabled = errors.New("auto redirect is disabled")
 )
 
 type (
-	// RedirectPolicy to regulate the redirects in the resty client.
-	// Objects implementing the RedirectPolicy interface can be registered as
+	// RedirectPolicy to regulate the redirects in the Resty client.
+	// Objects implementing the [RedirectPolicy] interface can be registered as
 	//
-	// Apply function should return nil to continue the redirect journey, otherwise
+	// Apply function should return nil to continue the redirect journey; otherwise
 	// return error to stop the redirect.
 	RedirectPolicy interface {
 		Apply(req *http.Request, via []*http.Request) error
 	}
 
-	// The RedirectPolicyFunc type is an adapter to allow the use of ordinary functions as RedirectPolicy.
-	// If f is a function with the appropriate signature, RedirectPolicyFunc(f) is a RedirectPolicy object that calls f.
+	// The [RedirectPolicyFunc] type is an adapter to allow the use of ordinary
+	// functions as [RedirectPolicy]. If `f` is a function with the appropriate
+	// signature, RedirectPolicyFunc(f) is a RedirectPolicy object that calls `f`.
 	RedirectPolicyFunc func(*http.Request, []*http.Request) error
 )
 
@@ -37,7 +37,7 @@ func (f RedirectPolicyFunc) Apply(req *http.Request, via []*http.Request) error 
 	return f(req, via)
 }
 
-// NoRedirectPolicy is used to disable redirects in the HTTP client
+// NoRedirectPolicy is used to disable redirects in the Resty client
 //
 //	resty.SetRedirectPolicy(NoRedirectPolicy())
 func NoRedirectPolicy() RedirectPolicy {
@@ -46,7 +46,7 @@ func NoRedirectPolicy() RedirectPolicy {
 	})
 }
 
-// FlexibleRedirectPolicy is convenient method to create No of redirect policy for HTTP client.
+// FlexibleRedirectPolicy method is convenient for creating several redirect policies for Resty clients.
 //
 //	resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
 func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
@@ -59,8 +59,8 @@ func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 	})
 }
 
-// DomainCheckRedirectPolicy is convenient method to define domain name redirect rule in resty client.
-// Redirect is allowed for only mentioned host in the policy.
+// DomainCheckRedirectPolicy method is convenient for defining domain name redirect rules in Resty clients.
+// Redirect is allowed only for the host mentioned in the policy.
 //
 //	resty.SetRedirectPolicy(DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
 func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
@@ -80,10 +80,6 @@ func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 	return fn
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Package Unexported methods
-//_______________________________________________________________________
-
 func getHostname(host string) (hostname string) {
 	if strings.Index(host, ":") > 0 {
 		host, _, _ = net.SplitHostPort(host)
@@ -92,10 +88,11 @@ func getHostname(host string) (hostname string) {
 	return
 }
 
-// By default Golang will not redirect request headers
-// after go throwing various discussion comments from thread
+// By default, Golang will not redirect request headers.
+// After reading through the various discussion comments from the thread -
 // https://github.com/golang/go/issues/4800
-// Resty will add all the headers during a redirect for the same host
+// Resty will add all the headers during a redirect for the same host and
+// adds library user-agent if the Host is different.
 func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {
 	curHostname := getHostname(cur.URL.Host)
 	preHostname := getHostname(pre.URL.Host)

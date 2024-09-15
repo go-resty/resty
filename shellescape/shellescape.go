@@ -1,5 +1,11 @@
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com)
+// 2024 Ahuigo (https://github.com/ahuigo)
+// All rights reserved.
+// resty source code and usage is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 /*
-Package shellescape provides the shellescape.Quote to escape arbitrary
+Package shellescape provides the methods to escape arbitrary
 strings for a safe use as command line arguments in the most common
 POSIX shells.
 
@@ -19,8 +25,8 @@ func init() {
 	pattern = regexp.MustCompile(`[^\w@%+=:,./-]`)
 }
 
-// Quote returns a shell-escaped version of the string s. The returned value
-// is a string that can safely be used as one token in a shell command line.
+// Quote method returns a shell-escaped version of the string. The returned value
+// can safely be used as one token in a shell command line.
 func Quote(s string) string {
 	if len(s) == 0 {
 		return "''"

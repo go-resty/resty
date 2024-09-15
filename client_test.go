@@ -310,6 +310,56 @@ func TestClientSetRootCertificateFromStringErrorTls(t *testing.T) {
 	assertNil(t, transport)
 }
 
+func TestClientSetClientRootCertificate(t *testing.T) {
+	client := dc()
+	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
+
+	transport, err := client.Transport()
+
+	assertNil(t, err)
+	assertNotNil(t, transport.TLSClientConfig.ClientCAs)
+}
+
+func TestClientSetClientRootCertificateNotExists(t *testing.T) {
+	client := dc()
+	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
+
+	transport, err := client.Transport()
+
+	assertNil(t, err)
+	assertNil(t, transport.TLSClientConfig)
+}
+
+func TestClientSetClientRootCertificateFromString(t *testing.T) {
+	client := dc()
+	rootPemData, err := os.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	assertNil(t, err)
+
+	client.SetClientRootCertificateFromString(string(rootPemData))
+
+	transport, err := client.Transport()
+
+	assertNil(t, err)
+	assertNotNil(t, transport.TLSClientConfig.ClientCAs)
+}
+
+func TestClientSetClientRootCertificateFromStringErrorTls(t *testing.T) {
+	client := NewWithClient(&http.Client{})
+	client.outputLogTo(io.Discard)
+
+	rootPemData, err := os.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	assertNil(t, err)
+	rt := &CustomRoundTripper{}
+	client.SetTransport(rt)
+	transport, err := client.Transport()
+
+	client.SetClientRootCertificateFromString(string(rootPemData))
+
+	assertNotNil(t, rt)
+	assertNotNil(t, err)
+	assertNil(t, transport)
+}
+
 func TestClientOnBeforeRequestModification(t *testing.T) {
 	tc := dc()
 	tc.OnBeforeRequest(func(c *Client, r *Request) error {
@@ -1174,7 +1224,7 @@ func TestResponseBodyLimit(t *testing.T) {
 		assertEqual(t, 1024, c.ResponseBodyLimit())
 		_, err := c.R().Get(ts.URL + "/")
 		assertNotNil(t, err)
-		assertEqual(t, err, ErrResponseBodyTooLarge)
+		assertErrorIs(t, ErrResponseBodyTooLarge, err)
 	})
 
 	t.Run("request body limit", func(t *testing.T) {
@@ -1182,7 +1232,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		_, err := c.R().SetResponseBodyLimit(1024).Get(ts.URL + "/")
 		assertNotNil(t, err)
-		assertEqual(t, err, ErrResponseBodyTooLarge)
+		assertErrorIs(t, ErrResponseBodyTooLarge, err)
 	})
 
 	t.Run("body less than limit", func(t *testing.T) {
@@ -1212,6 +1262,6 @@ func TestResponseBodyLimit(t *testing.T) {
 		c := dc()
 
 		_, err := c.R().SetResponseBodyLimit(10240).Get(tse.URL + "/")
-		assertErrorIs(t, err, gzip.ErrHeader)
+		assertErrorIs(t, gzip.ErrHeader, err)
 	})
 }

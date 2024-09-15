@@ -17,7 +17,7 @@ import (
 // Response struct and methods
 //_______________________________________________________________________
 
-// Response struct holds response values of executed request.
+// Response struct holds response values of executed requests.
 type Response struct {
 	Request     *Request
 	RawResponse *http.Response
@@ -27,9 +27,10 @@ type Response struct {
 	receivedAt time.Time
 }
 
-// Body method returns HTTP response as []byte array for the executed request.
+// Body method returns the HTTP response as `[]byte` slice for the executed request.
 //
-// Note: `Response.Body` might be nil, if `Request.SetOutput` is used.
+// NOTE: [Response.Body] might be nil if [Request.SetOutput] is used.
+// Also see [Request.SetDoNotParseResponse], [Client.SetDoNotParseResponse]
 func (r *Response) Body() []byte {
 	if r.RawResponse == nil {
 		return []byte{}
@@ -37,13 +38,11 @@ func (r *Response) Body() []byte {
 	return r.body
 }
 
-// SetBody method is to set Response body in byte slice. Typically,
-// its helpful for test cases.
+// SetBody method sets [Response] body in byte slice. Typically,
+// It is helpful for test cases.
 //
 //	resp.SetBody([]byte("This is test body content"))
 //	resp.SetBody(nil)
-//
-// Since v2.10.0
 func (r *Response) SetBody(b []byte) *Response {
 	r.body = b
 	return r
@@ -78,11 +77,15 @@ func (r *Response) Proto() string {
 }
 
 // Result method returns the response value as an object if it has one
+//
+// See [Request.SetResult]
 func (r *Response) Result() interface{} {
 	return r.Request.Result
 }
 
 // Error method returns the error object if it has one
+//
+// See [Request.SetError], [Client.SetError]
 func (r *Response) Error() interface{} {
 	return r.Request.Error
 }
@@ -95,7 +98,7 @@ func (r *Response) Header() http.Header {
 	return r.RawResponse.Header
 }
 
-// Cookies method to access all the response cookies
+// Cookies method to returns all the response cookies
 func (r *Response) Cookies() []*http.Cookie {
 	if r.RawResponse == nil {
 		return make([]*http.Cookie, 0)
@@ -103,7 +106,8 @@ func (r *Response) Cookies() []*http.Cookie {
 	return r.RawResponse.Cookies()
 }
 
-// String method returns the body of the server response as String.
+// String method returns the body of the HTTP response as a `string`.
+// It returns an empty string if it is nil or the body is zero length.
 func (r *Response) String() string {
 	if len(r.body) == 0 {
 		return ""
@@ -111,10 +115,11 @@ func (r *Response) String() string {
 	return strings.TrimSpace(string(r.body))
 }
 
-// Time method returns the time of HTTP response time that from request we sent and received a request.
+// Time method returns the duration of HTTP response time from the request we sent
+// and received a request.
 //
-// See `Response.ReceivedAt` to know when client received response and see `Response.Request.Time` to know
-// when client sent a request.
+// See [Response.ReceivedAt] to know when the client received a response and see
+// `Response.Request.Time` to know when the client sent a request.
 func (r *Response) Time() time.Duration {
 	if r.Request.clientTrace != nil {
 		return r.Request.TraceInfo().TotalTime
@@ -122,23 +127,25 @@ func (r *Response) Time() time.Duration {
 	return r.receivedAt.Sub(r.Request.Time)
 }
 
-// ReceivedAt method returns when response got received from server for the request.
+// ReceivedAt method returns the time we received a response from the server for the request.
 func (r *Response) ReceivedAt() time.Time {
 	return r.receivedAt
 }
 
-// Size method returns the HTTP response size in bytes. Ya, you can relay on HTTP `Content-Length` header,
-// however it won't be good for chucked transfer/compressed response. Since Resty calculates response size
-// at the client end. You will get actual size of the http response.
+// Size method returns the HTTP response size in bytes. Yeah, you can rely on HTTP `Content-Length`
+// header, however it won't be available for chucked transfer/compressed response.
+// Since Resty captures response size details when processing the response body
+// when possible. So that users get the actual size of response bytes.
 func (r *Response) Size() int64 {
 	return r.size
 }
 
-// RawBody method exposes the HTTP raw response body. Use this method in-conjunction with `SetDoNotParseResponse`
-// option otherwise you get an error as `read err: http: read on closed response body`.
+// RawBody method exposes the HTTP raw response body. Use this method in conjunction with
+// [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse]
+// option; otherwise, you get an error as `read err: http: read on closed response body.`
 //
 // Do not forget to close the body, otherwise you might get into connection leaks, no connection reuse.
-// Basically you have taken over the control of response parsing from `Resty`.
+// You have taken over the control of response parsing from Resty.
 func (r *Response) RawBody() io.ReadCloser {
 	if r.RawResponse == nil {
 		return nil
@@ -155,10 +162,6 @@ func (r *Response) IsSuccess() bool {
 func (r *Response) IsError() bool {
 	return r.StatusCode() > 399
 }
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Response Unexported methods
-//_______________________________________________________________________
 
 func (r *Response) setReceivedAt() {
 	r.receivedAt = time.Now()

@@ -16,32 +16,30 @@ import (
 // TraceInfo struct
 //_______________________________________________________________________
 
-// TraceInfo struct is used provide request trace info such as DNS lookup
+// TraceInfo struct is used to provide request trace info such as DNS lookup
 // duration, Connection obtain duration, Server processing duration, etc.
-//
-// Since v2.0.0
 type TraceInfo struct {
-	// DNSLookup is a duration that transport took to perform
+	// DNSLookup is the duration that transport took to perform
 	// DNS lookup.
 	DNSLookup time.Duration
 
-	// ConnTime is a duration that took to obtain a successful connection.
+	// ConnTime is the duration it took to obtain a successful connection.
 	ConnTime time.Duration
 
-	// TCPConnTime is a duration that took to obtain the TCP connection.
+	// TCPConnTime is the duration it took to obtain the TCP connection.
 	TCPConnTime time.Duration
 
-	// TLSHandshake is a duration that TLS handshake took place.
+	// TLSHandshake is the duration of the TLS handshake.
 	TLSHandshake time.Duration
 
-	// ServerTime is a duration that server took to respond first byte.
+	// ServerTime is the server's duration for responding to the first byte.
 	ServerTime time.Duration
 
-	// ResponseTime is a duration since first response byte from server to
+	// ResponseTime is the duration since the first response byte from the server to
 	// request completion.
 	ResponseTime time.Duration
 
-	// TotalTime is a duration that total request took end-to-end.
+	// TotalTime is the duration of the total time request taken end-to-end.
 	TotalTime time.Duration
 
 	// IsConnReused is whether this connection has been previously
@@ -52,7 +50,7 @@ type TraceInfo struct {
 	// idle pool.
 	IsConnWasIdle bool
 
-	// ConnIdleTime is a duration how long the connection was previously
+	// ConnIdleTime is the duration how long the connection that was previously
 	// idle, if IsConnWasIdle is true.
 	ConnIdleTime time.Duration
 
@@ -68,9 +66,9 @@ type TraceInfo struct {
 // ClientTrace struct and its methods
 //_______________________________________________________________________
 
-// tracer struct maps the `httptrace.ClientTrace` hooks into Fields
-// with same naming for easy understanding. Plus additional insights
-// Request.
+// clientTrace struct maps the [httptrace.ClientTrace] hooks into Fields
+// with the same naming for easy understanding. Plus additional insights
+// [Request].
 type clientTrace struct {
 	getConn              time.Time
 	dnsStart             time.Time
@@ -83,10 +81,6 @@ type clientTrace struct {
 	endTime              time.Time
 	gotConnInfo          httptrace.GotConnInfo
 }
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Trace unexported methods
-//_______________________________________________________________________
 
 func (t *clientTrace) createContext(ctx context.Context) context.Context {
 	return httptrace.WithClientTrace(

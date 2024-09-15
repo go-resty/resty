@@ -1,4 +1,4 @@
-package examples
+package resty
 
 import (
 	"io"
@@ -6,16 +6,11 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/go-resty/resty/v3"
 )
 
 // 1. Generate curl for unexecuted request(dry-run)
-func TestGenerateUnexcutedCurl(t *testing.T) {
-	ts := createHttpbinServer(0)
-	defer ts.Close()
-
-	req := resty.New().R().
+func TestGenerateUnexecutedCurl(t *testing.T) {
+	req := dclr().
 		SetBody(map[string]string{
 			"name": "Alex",
 		}).
@@ -25,7 +20,8 @@ func TestGenerateUnexcutedCurl(t *testing.T) {
 			},
 		)
 
-	curlCmdUnexecuted := req.GenerateCurlCommand()
+	curlCmdUnexecuted := req.EnableGenerateCurlOnDebug().GenerateCurlCommand()
+	req.DisableGenerateCurlOnDebug()
 
 	if !strings.Contains(curlCmdUnexecuted, "Cookie: count=1") ||
 		!strings.Contains(curlCmdUnexecuted, "curl -X GET") ||
@@ -39,13 +35,14 @@ func TestGenerateUnexcutedCurl(t *testing.T) {
 
 // 2. Generate curl for executed request
 func TestGenerateExecutedCurl(t *testing.T) {
-	ts := createHttpbinServer(0)
+	ts := createPostServer(t)
 	defer ts.Close()
 
 	data := map[string]string{
 		"name": "Alex",
 	}
-	req := resty.New().R().
+	c := dcl()
+	req := c.R().
 		SetBody(data).
 		SetCookies(
 			[]*http.Cookie{
@@ -53,14 +50,17 @@ func TestGenerateExecutedCurl(t *testing.T) {
 			},
 		)
 
-	url := ts.URL + "/post"
+	url := ts.URL + "/curl-cmd-post"
 	resp, err := req.
-		EnableTrace().
+		EnableGenerateCurlOnDebug().
 		Post(url)
 	if err != nil {
 		t.Fatal(err)
 	}
 	curlCmdExecuted := resp.Request.GenerateCurlCommand()
+
+	c.DisableGenerateCurlOnDebug()
+	req.DisableGenerateCurlOnDebug()
 	if !strings.Contains(curlCmdExecuted, "Cookie: count=1") ||
 		!strings.Contains(curlCmdExecuted, "curl -X POST") ||
 		!strings.Contains(curlCmdExecuted, `-d '{"name":"Alex"}'`) ||
@@ -73,7 +73,7 @@ func TestGenerateExecutedCurl(t *testing.T) {
 
 // 3. Generate curl in debug mode
 func TestDebugModeCurl(t *testing.T) {
-	ts := createHttpbinServer(0)
+	ts := createPostServer(t)
 	defer ts.Close()
 
 	// 1. Capture stderr
@@ -81,7 +81,8 @@ func TestDebugModeCurl(t *testing.T) {
 	defer restore()
 
 	// 2. Build request
-	req := resty.New().R().
+	c := New()
+	req := c.EnableGenerateCurlOnDebug().R().
 		SetBody(map[string]string{
 			"name": "Alex",
 		}).
@@ -92,11 +93,14 @@ func TestDebugModeCurl(t *testing.T) {
 		)
 
 	// 3. Execute request: set debug mode
-	url := ts.URL + "/post"
+	url := ts.URL + "/curl-cmd-post"
 	_, err := req.SetDebug(true).Post(url)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	c.DisableGenerateCurlOnDebug()
+	req.DisableGenerateCurlOnDebug()
 
 	// 4. test output curl
 	output := getOutput()

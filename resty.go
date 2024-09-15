@@ -34,7 +34,7 @@ func NewWithTransportSettings(transportSettings *TransportSettings) *Client {
 	return NewWithDialerAndTransportSettings(nil, transportSettings)
 }
 
-// NewWithClient method creates a new Resty client with given `http.Client`.
+// NewWithClient method creates a new Resty client with given [http.Client].
 func NewWithClient(hc *http.Client) *Client {
 	return createClient(hc)
 }
@@ -45,8 +45,7 @@ func NewWithDialer(dialer *net.Dialer) *Client {
 	return NewWithDialerAndTransportSettings(dialer, nil)
 }
 
-// NewWithLocalAddr method creates a new Resty client with given Local Address
-// to dial from.
+// NewWithLocalAddr method creates a new Resty client with the given Local Address.
 func NewWithLocalAddr(localAddr net.Addr) *Client {
 	return NewWithDialerAndTransportSettings(
 		&net.Dialer{LocalAddr: localAddr},
