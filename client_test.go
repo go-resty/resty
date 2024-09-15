@@ -468,14 +468,14 @@ func TestClientOptions(t *testing.T) {
 
 	client.SetQueryParam("test_param_1", "Param_1")
 	client.SetQueryParams(map[string]string{"test_param_2": "Param_2", "test_param_3": "Param_3"})
-	assertEqual(t, "Param_3", client.QueryParam().Get("test_param_3"))
+	assertEqual(t, "Param_3", client.QueryParams().Get("test_param_3"))
 
 	rTime := strconv.FormatInt(time.Now().UnixNano(), 10)
 	client.SetFormData(map[string]string{"r_time": rTime})
 	assertEqual(t, rTime, client.FormData().Get("r_time"))
 
 	client.SetBasicAuth("myuser", "mypass")
-	assertEqual(t, "myuser", client.BasicAuth().Username)
+	assertEqual(t, "myuser", client.UserInfo().Username)
 
 	client.SetAuthToken("AC75BD37F019E08FBC594900518B4F7E")
 	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", client.Token())
@@ -579,7 +579,7 @@ func TestClientPreRequestHook(t *testing.T) {
 
 	// Regular bodybuf use case
 	resp, _ := client.R().
-		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		Post(ts.URL + "/login")
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, `{ "id": "success", "message": "login successful" }`, resp.String())
@@ -666,33 +666,33 @@ func TestClientNewRequest(t *testing.T) {
 }
 
 func TestClientSetJSONMarshaler(t *testing.T) {
-	m := func(v interface{}) ([]byte, error) { return nil, nil }
+	m := func(v any) ([]byte, error) { return nil, nil }
 	c := New().SetJSONMarshaler(m)
-	p1 := fmt.Sprintf("%p", c.JSONMarshaler())
+	p1 := fmt.Sprintf("%p", c.jsonMarshal)
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
 
 func TestClientSetJSONUnmarshaler(t *testing.T) {
-	m := func([]byte, interface{}) error { return nil }
+	m := func([]byte, any) error { return nil }
 	c := New().SetJSONUnmarshaler(m)
-	p1 := fmt.Sprintf("%p", c.JSONUnmarshaler())
+	p1 := fmt.Sprintf("%p", c.jsonUnmarshal)
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
 
 func TestClientSetXMLMarshaler(t *testing.T) {
-	m := func(v interface{}) ([]byte, error) { return nil, nil }
+	m := func(v any) ([]byte, error) { return nil, nil }
 	c := New().SetXMLMarshaler(m)
-	p1 := fmt.Sprintf("%p", c.XMLMarshaler())
+	p1 := fmt.Sprintf("%p", c.xmlMarshal)
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
 
 func TestClientSetXMLUnmarshaler(t *testing.T) {
-	m := func([]byte, interface{}) error { return nil }
+	m := func([]byte, any) error { return nil }
 	c := New().SetXMLUnmarshaler(m)
-	p1 := fmt.Sprintf("%p", c.XMLUnmarshaler())
+	p1 := fmt.Sprintf("%p", c.xmlUnmarshal)
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
@@ -1131,7 +1131,7 @@ func TestHostURLForGH318AndGH407(t *testing.T) {
 	t.Log("with leading `/` on request & with trailing `/` on host url")
 	c.SetBaseURL(ts.URL + "/")
 	resp, err := c.R().
-		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		Post("/login")
 	assertNil(t, err)
 	assertNotNil(t, resp)
@@ -1202,15 +1202,15 @@ func TestClientClone(t *testing.T) {
 	// update value of non-interface type - change will only happen on clone
 	clone.SetBaseURL("https://local.host")
 	// update value of interface type - change will also happen on parent
-	clone.BasicAuth().Username = "clone"
+	clone.UserInfo().Username = "clone"
 
 	// assert non-interface type
 	assertEqual(t, "http://localhost", parent.BaseURL())
 	assertEqual(t, "https://local.host", clone.BaseURL())
 
 	// assert interface type
-	assertEqual(t, "clone", parent.BasicAuth().Username)
-	assertEqual(t, "clone", clone.BasicAuth().Username)
+	assertEqual(t, "clone", parent.UserInfo().Username)
+	assertEqual(t, "clone", clone.UserInfo().Username)
 }
 
 func TestResponseBodyLimit(t *testing.T) {

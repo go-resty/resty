@@ -27,24 +27,32 @@ import (
 // Resty client. The [Request] provides an option to override client-level
 // settings and also an option for the request composition.
 type Request struct {
-	URL           string
-	Method        string
-	Token         string
-	AuthScheme    string
-	QueryParam    url.Values
-	FormData      url.Values
-	PathParams    map[string]string
-	RawPathParams map[string]string
-	Header        http.Header
-	Time          time.Time
-	Body          interface{}
-	Result        interface{}
-	Error         interface{}
-	RawRequest    *http.Request
-	SRV           *SRVRecord
-	UserInfo      *User
-	Cookies       []*http.Cookie
-	Debug         bool
+	URL              string
+	Method           string
+	Token            string
+	AuthScheme       string
+	QueryParams      url.Values
+	FormData         url.Values
+	PathParams       map[string]string
+	RawPathParams    map[string]string
+	Header           http.Header
+	Time             time.Time
+	Body             any
+	Result           any
+	Error            any
+	RawRequest       *http.Request
+	SRV              *SRVRecord
+	UserInfo         *User
+	Cookies          []*http.Cookie
+	Debug            bool
+	CloseConnection  bool
+	NotParseResponse bool
+
+	// Retry
+	RetryCount        int
+	RetryWaitTime     time.Duration
+	RetryMaxWaitTime  time.Duration
+	RetryResetReaders bool
 
 	// Attempt is to represent the request attempt made during a Resty
 	// request execution flow, including retry count.
@@ -54,14 +62,13 @@ type Request struct {
 	isFormData          bool
 	setContentLength    bool
 	isSaveResponse      bool
-	notParseResponse    bool
 	jsonEscapeHTML      bool
 	trace               bool
 	outputFile          string
 	fallbackContentType string
 	forceContentType    string
 	ctx                 context.Context
-	values              map[string]interface{}
+	values              map[string]any
 	client              *Client
 	bodyBuf             *bytes.Buffer
 	clientTrace         *clientTrace
@@ -188,7 +195,7 @@ func (r *Request) SetHeaderVerbatim(header, value string) *Request {
 //
 // It overrides the query parameter value set at the client instance level.
 func (r *Request) SetQueryParam(param, value string) *Request {
-	r.QueryParam.Set(param, value)
+	r.QueryParams.Set(param, value)
 	return r
 }
 
@@ -226,7 +233,7 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 func (r *Request) SetQueryParamsFromValues(params url.Values) *Request {
 	for p, v := range params {
 		for _, pv := range v {
-			r.QueryParam.Add(p, pv)
+			r.QueryParams.Add(p, pv)
 		}
 	}
 	return r
@@ -243,7 +250,7 @@ func (r *Request) SetQueryString(query string) *Request {
 	if err == nil {
 		for p, v := range params {
 			for _, pv := range v {
-				r.QueryParam.Add(p, pv)
+				r.QueryParams.Add(p, pv)
 			}
 		}
 	} else {
@@ -309,7 +316,7 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 // 'map` gets marshaled based on the request header `Content-Type`.
 //
 //	client.R().
-//		SetBody(map[string]interface{}{
+//		SetBody(map[string]any{
 //			"username": "jeeva@myjeeva.com",
 //			"password": "welcome2resty",
 //			"address": &Address{
@@ -335,7 +342,7 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 //		SetBody([]byte("This is my raw request, sent as-is"))
 //
 // and so on.
-func (r *Request) SetBody(body interface{}) *Request {
+func (r *Request) SetBody(body any) *Request {
 	r.Body = body
 	return r
 }
@@ -364,9 +371,9 @@ func (r *Request) SetBody(body interface{}) *Request {
 //
 //	// Can be accessed via -
 //	fmt.Println(response.Result().(*AuthToken))
-func (r *Request) SetResult(res interface{}) *Request {
-	if res != nil {
-		r.Result = getPointer(res)
+func (r *Request) SetResult(v any) *Request {
+	if v != nil {
+		r.Result = getPointer(v)
 	}
 	return r
 }
@@ -385,7 +392,7 @@ func (r *Request) SetResult(res interface{}) *Request {
 //	response.Error().(*AuthError)
 //
 // If this request Error object is nil, Resty will use the client-level error object Type if it is set.
-func (r *Request) SetError(err interface{}) *Request {
+func (r *Request) SetError(err any) *Request {
 	r.Error = getPointer(err)
 	return r
 }
@@ -614,6 +621,15 @@ func (r *Request) SetSRV(srv *SRVRecord) *Request {
 	return r
 }
 
+// SetCloseConnection method sets variable `Close` in HTTP request struct with the given
+// value. More info: https://golang.org/src/net/http/request.go
+//
+// It overrides the value set at the client instance level, see [Client.SetCloseConnection]
+func (r *Request) SetCloseConnection(close bool) *Request {
+	r.CloseConnection = close
+	return r
+}
+
 // SetDoNotParseResponse method instructs Resty not to parse the response body automatically.
 // Resty exposes the raw response body as [io.ReadCloser]. If you use it, do not
 // forget to close the body, otherwise, you might get into connection leaks, and connection
@@ -621,8 +637,8 @@ func (r *Request) SetSRV(srv *SRVRecord) *Request {
 //
 // NOTE: [Response] middlewares are not executed using this option. You have
 // taken over the control of response parsing from Resty.
-func (r *Request) SetDoNotParseResponse(parse bool) *Request {
-	r.notParseResponse = parse
+func (r *Request) SetDoNotParseResponse(notParse bool) *Request {
+	r.NotParseResponse = notParse
 	return r
 }
 
@@ -636,7 +652,7 @@ func (r *Request) SetDoNotParseResponse(parse bool) *Request {
 //   - [Request.SetOutput] is called to save response data to the file.
 //   - "DoNotParseResponse" is set for client or request.
 //
-// It overrides the value set at the client instance level. see [Client.SetResponseBodyLimit]
+// It overrides the value set at the client instance level, see [Client.SetResponseBodyLimit]
 func (r *Request) SetResponseBodyLimit(v int) *Request {
 	r.responseBodyLimit = v
 	return r
@@ -757,7 +773,7 @@ func (r *Request) ForceContentType(contentType string) *Request {
 }
 
 // SetJSONEscapeHTML method enables or disables the HTML escape on JSON marshal.
-// By default, escape HTML is false.
+// By default, escape HTML is `true`.
 //
 // NOTE: This option only applies to the standard JSON Marshaller used by Resty.
 //
@@ -1035,12 +1051,12 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 
 			return resp, err
 		},
-		Retries(r.client.retryCount),
-		WaitTime(r.client.retryWaitTime),
-		MaxWaitTime(r.client.retryMaxWaitTime),
-		RetryConditions(append(r.retryConditions, r.client.retryConditions...)),
-		RetryHooks(r.client.retryHooks),
-		ResetMultipartReaders(r.client.retryResetReaders),
+		Retries(r.RetryCount),
+		WaitTime(r.RetryWaitTime),
+		MaxWaitTime(r.RetryMaxWaitTime),
+		RetryConditions(append(r.retryConditions, r.client.RetryConditions()...)),
+		RetryHooks(r.client.RetryHooks()),
+		ResetMultipartReaders(r.RetryResetReaders),
 	)
 
 	if err != nil {
@@ -1073,7 +1089,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 
 	// clone URL values
 	rr.FormData = cloneURLValues(r.FormData)
-	rr.QueryParam = cloneURLValues(r.QueryParam)
+	rr.QueryParams = cloneURLValues(r.QueryParams)
 
 	// clone path params
 	if r.PathParams != nil {
@@ -1162,7 +1178,7 @@ func (r *Request) fmtBodyString(sl int) (body string) {
 	var err error
 
 	contentType := r.Header.Get(hdrContentTypeKey)
-	kind := kindOf(r.Body)
+	kind := inferKind(r.Body)
 	if canJSONMarshal(contentType, kind) {
 		var bodyBuf *bytes.Buffer
 		bodyBuf, err = noescapeJSONMarshalIndent(&r.Body)
@@ -1211,16 +1227,16 @@ func (r *Request) selectAddr(addrs []*net.SRV, path string, attempt int) string 
 	domain := strings.TrimRight(addrs[idx].Target, ".")
 	path = strings.TrimLeft(path, "/")
 
-	return fmt.Sprintf("%s://%s:%d/%s", r.client.scheme, domain, addrs[idx].Port, path)
+	return fmt.Sprintf("%s://%s:%d/%s", r.client.Scheme(), domain, addrs[idx].Port, path)
 }
 
 func (r *Request) initValuesMap() {
 	if r.values == nil {
-		r.values = make(map[string]interface{})
+		r.values = make(map[string]any)
 	}
 }
 
-var noescapeJSONMarshal = func(v interface{}) (*bytes.Buffer, error) {
+var noescapeJSONMarshal = func(v any) (*bytes.Buffer, error) {
 	buf := acquireBuffer()
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
@@ -1232,7 +1248,7 @@ var noescapeJSONMarshal = func(v interface{}) (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-var noescapeJSONMarshalIndent = func(v interface{}) (*bytes.Buffer, error) {
+var noescapeJSONMarshalIndent = func(v any) (*bytes.Buffer, error) {
 	buf := acquireBuffer()
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)

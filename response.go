@@ -79,14 +79,14 @@ func (r *Response) Proto() string {
 // Result method returns the response value as an object if it has one
 //
 // See [Request.SetResult]
-func (r *Response) Result() interface{} {
+func (r *Response) Result() any {
 	return r.Request.Result
 }
 
 // Error method returns the error object if it has one
 //
 // See [Request.SetError], [Client.SetError]
-func (r *Response) Error() interface{} {
+func (r *Response) Error() any {
 	return r.Request.Error
 }
 

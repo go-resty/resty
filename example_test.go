@@ -109,7 +109,7 @@ func Example_post() {
 
 	// POST Map, default is JSON content type. No need to set one
 	resp3, err3 := client.R().
-		SetBody(map[string]interface{}{"username": "testuser", "password": "testpass"}).
+		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		SetResult(&AuthSuccess{}). // or SetResult(AuthSuccess{}).
 		SetError(&AuthError{}).    // or SetError(AuthError{}).
 		Post("https://myapp.com/login")

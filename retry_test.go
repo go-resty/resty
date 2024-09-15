@@ -597,11 +597,11 @@ func TestClientRetryPost(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	usersmap := map[string]interface{}{
-		"user1": map[string]interface{}{"FirstName": "firstname1", "LastName": "lastname1", "ZipCode": "10001"},
+	usersmap := map[string]any{
+		"user1": map[string]any{"FirstName": "firstname1", "LastName": "lastname1", "ZipCode": "10001"},
 	}
 
-	var users []map[string]interface{}
+	var users []map[string]any
 	users = append(users, usersmap)
 
 	c := dc()
@@ -617,7 +617,7 @@ func TestClientRetryPost(t *testing.T) {
 	if resp != nil {
 		if resp.StatusCode() == http.StatusInternalServerError {
 			t.Logf("Got response body: %s", resp.String())
-			var usersResponse []map[string]interface{}
+			var usersResponse []map[string]any
 			err := json.Unmarshal(resp.body, &usersResponse)
 			assertError(t, err)
 

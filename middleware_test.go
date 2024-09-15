@@ -259,8 +259,8 @@ func Test_parseRequestURL(t *testing.T) {
 		{
 			name: "adding query parameters by request with multiple values",
 			init: func(c *Client, r *Request) {
-				r.QueryParam.Add("foo", "1")
-				r.QueryParam.Add("foo", "2")
+				r.QueryParams.Add("foo", "1")
+				r.QueryParams.Add("foo", "2")
 				r.URL = "https://example.com/"
 			},
 			expectedURL: "https://example.com/?foo=1&foo=2",
@@ -688,7 +688,7 @@ func TestParseRequestBody(t *testing.T) {
 		{
 			name: "json from map",
 			initRequest: func(r *Request) {
-				r.SetBody(map[string]interface{}{
+				r.SetBody(map[string]any{
 					"foo": "1",
 					"bar": []int{1, 2, 3},
 					"baz": map[string]string{
@@ -704,7 +704,7 @@ func TestParseRequestBody(t *testing.T) {
 		{
 			name: "json from map",
 			initRequest: func(r *Request) {
-				r.SetBody(map[string]interface{}{
+				r.SetBody(map[string]any{
 					"foo": "1",
 					"bar": []int{1, 2, 3},
 					"baz": map[string]string{
@@ -720,7 +720,7 @@ func TestParseRequestBody(t *testing.T) {
 		{
 			name: "json from map",
 			initRequest: func(r *Request) {
-				r.SetBody(map[string]interface{}{
+				r.SetBody(map[string]any{
 					"foo": "1",
 					"bar": []int{1, 2, 3},
 					"baz": map[string]string{
@@ -885,7 +885,7 @@ func TestParseRequestBody(t *testing.T) {
 			case r.bodyBuf != nil && tt.expectedBodyBuf == nil:
 				t.Errorf("bodyBuf is not nil, but expected nil: %s", r.bodyBuf.String())
 			case r.bodyBuf != nil && tt.expectedBodyBuf != nil:
-				var actual, expected interface{} = r.bodyBuf.Bytes(), tt.expectedBodyBuf
+				var actual, expected any = r.bodyBuf.Bytes(), tt.expectedBodyBuf
 				if r.isFormData {
 					var err error
 					actual, err = url.ParseQuery(r.bodyBuf.String())
@@ -906,7 +906,7 @@ func TestParseRequestBody(t *testing.T) {
 						t.Errorf("boundary not found in Content-Type header")
 					}
 					reader := multipart.NewReader(r.bodyBuf, boundary)
-					body := make(map[string]interface{})
+					body := make(map[string]any)
 					for part, perr := reader.NextPart(); perr != io.EOF; part, perr = reader.NextPart() {
 						if perr != nil {
 							t.Errorf("NextPart() error = %v", perr)
