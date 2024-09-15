@@ -114,7 +114,7 @@ func parseRequestURL(c *Client, r *Request) error {
 			r.URL = "/" + r.URL
 		}
 
-		reqURL, err = url.Parse(c.baseURL + r.URL)
+		reqURL, err = url.Parse(c.BaseURL() + r.URL)
 		if err != nil {
 			return err
 		}
@@ -223,7 +223,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	}
 
 	// Assign close connection option
-	r.RawRequest.Close = c.closeConnection
+	r.RawRequest.Close = r.CloseConnection
 
 	// Add headers into http request
 	r.RawRequest.Header = r.Header
@@ -287,7 +287,7 @@ func addCredentials(c *Client, r *Request) error {
 		} else {
 			authScheme = r.AuthScheme
 		}
-		r.RawRequest.Header.Set(c.headerAuthorizationKey, authScheme+" "+r.Token)
+		r.RawRequest.Header.Set(c.HeaderAuthorizationKey(), authScheme+" "+r.Token)
 	}
 
 	return nil
@@ -517,7 +517,9 @@ func handleRequestBody(c *Client, r *Request) error {
 		if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
 			r.bodyBuf, err = jsonMarshal(c, r, r.Body)
 		} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-			bodyBytes, err = c.XMLMarshaler()(r.Body)
+			c.lock.RLock()
+			bodyBytes, err = c.xmlMarshal(r.Body)
+			c.lock.RUnlock()
 		}
 		if err != nil {
 			return err

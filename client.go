@@ -554,16 +554,22 @@ func (c *Client) R() *Request {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	r := &Request{
-		QueryParams:   url.Values{},
-		FormData:      url.Values{},
-		Header:        http.Header{},
-		Cookies:       make([]*http.Cookie, 0),
-		PathParams:    make(map[string]string),
-		RawPathParams: make(map[string]string),
-		Debug:         c.debug,
-		AuthScheme:    c.authScheme,
-		Token:         c.token,
-		UserInfo:      c.userInfo,
+		QueryParams:       url.Values{},
+		FormData:          url.Values{},
+		Header:            http.Header{},
+		Cookies:           make([]*http.Cookie, 0),
+		PathParams:        make(map[string]string),
+		RawPathParams:     make(map[string]string),
+		Debug:             c.debug,
+		AuthScheme:        c.authScheme,
+		Token:             c.token,
+		UserInfo:          c.userInfo,
+		RetryCount:        c.retryCount,
+		RetryWaitTime:     c.retryWaitTime,
+		RetryMaxWaitTime:  c.retryMaxWaitTime,
+		RetryResetReaders: c.retryResetReaders,
+		CloseConnection:   c.closeConnection,
+		NotParseResponse:  c.notParseResponse,
 
 		client:              c,
 		multipartFiles:      []*File{},
@@ -572,7 +578,6 @@ func (c *Client) R() *Request {
 		log:                 c.log,
 		setContentLength:    c.setContentLength,
 		trace:               c.trace,
-		notParseResponse:    c.notParseResponse,
 		debugBodySizeLimit:  c.debugBodySizeLimit,
 		responseBodyLimit:   c.responseBodyLimit,
 		generateCurlOnDebug: c.generateCurlOnDebug,
@@ -604,9 +609,7 @@ func (c *Client) beforeRequestMiddlewares() []RequestMiddleware {
 func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-
 	c.udBeforeRequest = append(c.udBeforeRequest, m)
-
 	return c
 }
 
@@ -629,9 +632,7 @@ func (c *Client) afterResponseMiddlewares() []ResponseMiddleware {
 func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-
 	c.afterResponse = append(c.afterResponse, m)
-
 	return c
 }
 
@@ -962,13 +963,6 @@ func (c *Client) SetRetryAfter(callback RetryAfterFunc) *Client {
 	return c
 }
 
-// JSONMarshaler method gets the JSON marshaler function to marshal the request body.
-func (c *Client) JSONMarshaler() func(v any) ([]byte, error) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.jsonMarshal
-}
-
 // SetJSONMarshaler method sets the JSON marshaler function to marshal the request body.
 // By default, Resty uses [encoding/json] package to marshal the request body.
 func (c *Client) SetJSONMarshaler(marshaler func(v any) ([]byte, error)) *Client {
@@ -976,13 +970,6 @@ func (c *Client) SetJSONMarshaler(marshaler func(v any) ([]byte, error)) *Client
 	defer c.lock.Unlock()
 	c.jsonMarshal = marshaler
 	return c
-}
-
-// JSONUnmarshaler method gets the JSON unmarshaler function to unmarshal the response body.
-func (c *Client) JSONUnmarshaler() func([]byte, any) error {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.jsonUnmarshal
 }
 
 // SetJSONUnmarshaler method sets the JSON unmarshaler function to unmarshal the response body.
@@ -994,13 +981,6 @@ func (c *Client) SetJSONUnmarshaler(unmarshaler func(data []byte, v any) error) 
 	return c
 }
 
-// XMLMarshaler method gets the XML marshaler function to marshal the request body.
-func (c *Client) XMLMarshaler() func(any) ([]byte, error) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.xmlMarshal
-}
-
 // SetXMLMarshaler method sets the XML marshaler function to marshal the request body.
 // By default, Resty uses [encoding/xml] package to marshal the request body.
 func (c *Client) SetXMLMarshaler(marshaler func(v any) ([]byte, error)) *Client {
@@ -1008,13 +988,6 @@ func (c *Client) SetXMLMarshaler(marshaler func(v any) ([]byte, error)) *Client 
 	defer c.lock.Unlock()
 	c.xmlMarshal = marshaler
 	return c
-}
-
-// XMLUnmarshaler method gets the XML unmarshaler function to unmarshal the response body.
-func (c *Client) XMLUnmarshaler() func([]byte, any) error {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.xmlUnmarshal
 }
 
 // SetXMLUnmarshaler method sets the XML unmarshaler function to unmarshal the response body.
@@ -1111,6 +1084,13 @@ func (c *Client) SetTLSClientConfig(config *tls.Config) *Client {
 	return c
 }
 
+// ProxyURL method returns the proxy URL if set otherwise nil.
+func (c *Client) ProxyURL() *url.URL {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.proxyURL
+}
+
 // SetProxy method sets the Proxy URL and Port for the Resty client.
 //
 //	client.SetProxy("http://proxyserver:8888")
@@ -1130,9 +1110,9 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 	}
 
 	c.lock.Lock()
-	defer c.lock.Unlock()
 	c.proxyURL = pURL
-	transport.Proxy = http.ProxyURL(c.proxyURL)
+	c.lock.Unlock()
+	transport.Proxy = http.ProxyURL(c.ProxyURL())
 	return c
 }
 
@@ -1219,6 +1199,8 @@ func (c *Client) handleCAs(scope string, permCerts []byte) {
 		return
 	}
 
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	switch scope {
 	case "root":
 		if config.RootCAs == nil {
@@ -1315,6 +1297,8 @@ func (c *Client) SetScheme(scheme string) *Client {
 
 // SetCloseConnection method sets variable `Close` in HTTP request struct with the given
 // value. More info: https://golang.org/src/net/http/request.go
+//
+// It can be overridden at the request level, see [Request.SetCloseConnection]
 func (c *Client) SetCloseConnection(close bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -1329,10 +1313,10 @@ func (c *Client) SetCloseConnection(close bool) *Client {
 //
 // NOTE: [Response] middlewares are not executed using this option. You have
 // taken over the control of response parsing from Resty.
-func (c *Client) SetDoNotParseResponse(parse bool) *Client {
+func (c *Client) SetDoNotParseResponse(notParse bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.notParseResponse = parse
+	c.notParseResponse = notParse
 	return c
 }
 
@@ -1452,11 +1436,11 @@ func (c *Client) SetRawPathParams(params map[string]string) *Client {
 }
 
 // SetJSONEscapeHTML method enables or disables the HTML escape on JSON marshal.
-// By default, escape HTML is false.
+// By default, escape HTML is `true`.
 //
 // NOTE: This option only applies to the standard JSON Marshaller used by Resty.
 //
-// It can be overridden at the request level, see [Client.SetJSONEscapeHTML]
+// It can be overridden at the request level, see [Request.SetJSONEscapeHTML]
 func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -1534,9 +1518,7 @@ func (c *Client) DisableGenerateCurlOnDebug() *Client {
 // IsProxySet method returns the true is proxy is set from the Resty client; otherwise
 // false. By default, the proxy is set from the environment variable; refer to [http.ProxyFromEnvironment].
 func (c *Client) IsProxySet() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.proxyURL != nil
+	return c.ProxyURL() != nil
 }
 
 // GetClient method returns the underlying [http.Client] used by the Resty.
@@ -1636,7 +1618,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		RawResponse: resp,
 	}
 
-	if err != nil || req.notParseResponse {
+	if err != nil || req.NotParseResponse {
 		logErr := responseLogger(c, response)
 		response.setReceivedAt()
 		if err != nil {

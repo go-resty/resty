@@ -668,7 +668,7 @@ func TestClientNewRequest(t *testing.T) {
 func TestClientSetJSONMarshaler(t *testing.T) {
 	m := func(v any) ([]byte, error) { return nil, nil }
 	c := New().SetJSONMarshaler(m)
-	p1 := fmt.Sprintf("%p", c.JSONMarshaler())
+	p1 := fmt.Sprintf("%p", c.jsonMarshal)
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
@@ -676,7 +676,7 @@ func TestClientSetJSONMarshaler(t *testing.T) {
 func TestClientSetJSONUnmarshaler(t *testing.T) {
 	m := func([]byte, any) error { return nil }
 	c := New().SetJSONUnmarshaler(m)
-	p1 := fmt.Sprintf("%p", c.JSONUnmarshaler())
+	p1 := fmt.Sprintf("%p", c.jsonUnmarshal)
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
@@ -684,7 +684,7 @@ func TestClientSetJSONUnmarshaler(t *testing.T) {
 func TestClientSetXMLMarshaler(t *testing.T) {
 	m := func(v any) ([]byte, error) { return nil, nil }
 	c := New().SetXMLMarshaler(m)
-	p1 := fmt.Sprintf("%p", c.XMLMarshaler())
+	p1 := fmt.Sprintf("%p", c.xmlMarshal)
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
@@ -692,7 +692,7 @@ func TestClientSetXMLMarshaler(t *testing.T) {
 func TestClientSetXMLUnmarshaler(t *testing.T) {
 	m := func([]byte, any) error { return nil }
 	c := New().SetXMLUnmarshaler(m)
-	p1 := fmt.Sprintf("%p", c.XMLUnmarshaler())
+	p1 := fmt.Sprintf("%p", c.xmlUnmarshal)
 	p2 := fmt.Sprintf("%p", m)
 	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }

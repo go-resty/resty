@@ -1372,7 +1372,7 @@ func TestProxySetting(t *testing.T) {
 	c.SetProxy("http://sampleproxy:8888")
 	assertEqual(t, true, c.IsProxySet())
 	c.RemoveProxy()
-	assertNil(t, c.proxyURL)
+	assertNil(t, c.ProxyURL())
 	assertNil(t, transport.Proxy)
 }
 

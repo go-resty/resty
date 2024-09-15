@@ -160,6 +160,7 @@ func createCookieJar() *cookiejar.Jar {
 
 func createClient(hc *http.Client) *Client {
 	c := &Client{ // not setting language default values
+		lock:                   &sync.RWMutex{},
 		queryParams:            url.Values{},
 		formData:               url.Values{},
 		header:                 http.Header{},
@@ -172,12 +173,10 @@ func createClient(hc *http.Client) *Client {
 		jsonUnmarshal:          json.Unmarshal,
 		xmlMarshal:             xml.Marshal,
 		xmlUnmarshal:           xml.Unmarshal,
-		headerAuthorizationKey: http.CanonicalHeaderKey("Authorization"),
-
-		jsonEscapeHTML:     true,
-		httpClient:         hc,
-		debugBodySizeLimit: math.MaxInt32,
-		lock:               &sync.RWMutex{},
+		headerAuthorizationKey: hdrAuthorizationKey,
+		jsonEscapeHTML:         true,
+		httpClient:             hc,
+		debugBodySizeLimit:     math.MaxInt32,
 	}
 
 	// Logger
