@@ -584,6 +584,8 @@ func (c *Client) R() *Request {
 		responseBodyLimit:   c.responseBodyLimit,
 		generateCurlOnDebug: c.generateCurlOnDebug,
 	}
+
+	r.retryConditions = append(r.retryConditions, c.retryConditions...)
 	return r
 }
 
