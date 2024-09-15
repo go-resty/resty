@@ -27,14 +27,14 @@ const debugRequestLogKey = "__restyDebugRequestLog"
 //_______________________________________________________________________
 
 func parseRequestURL(c *Client, r *Request) error {
-	if l := len(c.pathParams) + len(c.rawPathParams) + len(r.PathParams) + len(r.RawPathParams); l > 0 {
+	if l := len(c.PathParams()) + len(c.RawPathParams()) + len(r.PathParams) + len(r.RawPathParams); l > 0 {
 		params := make(map[string]string, l)
 
 		// GitHub #103 Path Params
 		for p, v := range r.PathParams {
 			params[p] = url.PathEscape(v)
 		}
-		for p, v := range c.pathParams {
+		for p, v := range c.PathParams() {
 			if _, ok := params[p]; !ok {
 				params[p] = url.PathEscape(v)
 			}
@@ -46,7 +46,7 @@ func parseRequestURL(c *Client, r *Request) error {
 				params[p] = v
 			}
 		}
-		for p, v := range c.rawPathParams {
+		for p, v := range c.RawPathParams() {
 			if _, ok := params[p]; !ok {
 				params[p] = v
 			}
@@ -121,30 +121,30 @@ func parseRequestURL(c *Client, r *Request) error {
 	}
 
 	// GH #407 && #318
-	if reqURL.Scheme == "" && len(c.scheme) > 0 {
-		reqURL.Scheme = c.scheme
+	if reqURL.Scheme == "" && len(c.Scheme()) > 0 {
+		reqURL.Scheme = c.Scheme()
 	}
 
 	// Adding Query Param
-	if len(c.queryParam)+len(r.QueryParam) > 0 {
-		for k, v := range c.queryParam {
+	if len(c.QueryParams())+len(r.QueryParams) > 0 {
+		for k, v := range c.QueryParams() {
 			// skip query parameter if it was set in request
-			if _, ok := r.QueryParam[k]; ok {
+			if _, ok := r.QueryParams[k]; ok {
 				continue
 			}
 
-			r.QueryParam[k] = v[:]
+			r.QueryParams[k] = v[:]
 		}
 
 		// GitHub #123 Preserve query string order partially.
 		// Since not feasible in `SetQuery*` resty methods, because
 		// standard package `url.Encode(...)` sorts the query params
 		// alphabetically
-		if len(r.QueryParam) > 0 {
+		if len(r.QueryParams) > 0 {
 			if IsStringEmpty(reqURL.RawQuery) {
-				reqURL.RawQuery = r.QueryParam.Encode()
+				reqURL.RawQuery = r.QueryParams.Encode()
 			} else {
-				reqURL.RawQuery = reqURL.RawQuery + "&" + r.QueryParam.Encode()
+				reqURL.RawQuery = reqURL.RawQuery + "&" + r.QueryParams.Encode()
 			}
 		}
 	}
@@ -155,7 +155,7 @@ func parseRequestURL(c *Client, r *Request) error {
 }
 
 func parseRequestHeader(c *Client, r *Request) error {
-	for k, v := range c.header {
+	for k, v := range c.Header() {
 		if _, ok := r.Header[k]; ok {
 			continue
 		}
@@ -174,13 +174,13 @@ func parseRequestHeader(c *Client, r *Request) error {
 }
 
 func parseRequestBody(c *Client, r *Request) error {
-	if isPayloadSupported(r.Method, c.allowGetMethodPayload) {
+	if isPayloadSupported(r.Method, c.AllowGetMethodPayload()) {
 		switch {
 		case r.isMultiPart: // Handling Multipart
 			if err := handleMultipart(c, r); err != nil {
 				return err
 			}
-		case len(c.formData) > 0 || len(r.FormData) > 0: // Handling Form Data
+		case len(c.FormData()) > 0 || len(r.FormData) > 0: // Handling Form Data
 			handleFormData(c, r)
 		case r.Body != nil: // Handling Request body
 			handleContentType(c, r)
@@ -205,7 +205,7 @@ func parseRequestBody(c *Client, r *Request) error {
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
 	if r.bodyBuf == nil {
-		if reader, ok := r.Body.(io.Reader); ok && isPayloadSupported(r.Method, c.allowGetMethodPayload) {
+		if reader, ok := r.Body.(io.Reader); ok && isPayloadSupported(r.Method, c.AllowGetMethodPayload()) {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, reader)
 		} else if r.setContentLength {
 			r.RawRequest, err = http.NewRequest(r.Method, r.URL, http.NoBody)
@@ -229,7 +229,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	r.RawRequest.Header = r.Header
 
 	// Add cookies from client instance into http request
-	for _, cookie := range c.cookies {
+	for _, cookie := range c.Cookies() {
 		r.RawRequest.AddCookie(cookie)
 	}
 
@@ -268,11 +268,8 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 func addCredentials(c *Client, r *Request) error {
 	var isBasicAuth bool
 	// Basic Auth
-	if r.UserInfo != nil { // takes precedence
+	if r.UserInfo != nil {
 		r.RawRequest.SetBasicAuth(r.UserInfo.Username, r.UserInfo.Password)
-		isBasicAuth = true
-	} else if c.userInfo != nil {
-		r.RawRequest.SetBasicAuth(c.userInfo.Username, c.userInfo.Password)
 		isBasicAuth = true
 	}
 
@@ -282,21 +279,15 @@ func addCredentials(c *Client, r *Request) error {
 		}
 	}
 
-	// Set the Authorization header Scheme
-	var authScheme string
-	if !IsStringEmpty(r.AuthScheme) {
-		authScheme = r.AuthScheme
-	} else if !IsStringEmpty(c.authScheme) {
-		authScheme = c.authScheme
-	} else {
-		authScheme = "Bearer"
-	}
-
 	// Build the token Auth header
-	if !IsStringEmpty(r.Token) { // takes precedence
+	if !IsStringEmpty(r.Token) {
+		var authScheme string
+		if IsStringEmpty(r.AuthScheme) {
+			authScheme = "Bearer"
+		} else {
+			authScheme = r.AuthScheme
+		}
 		r.RawRequest.Header.Set(c.headerAuthorizationKey, authScheme+" "+r.Token)
-	} else if !IsStringEmpty(c.token) {
-		r.RawRequest.Header.Set(c.headerAuthorizationKey, authScheme+" "+c.token)
 	}
 
 	return nil
@@ -307,7 +298,7 @@ func createCurlCmd(c *Client, r *Request) (err error) {
 		if r.resultCurlCmd == nil {
 			r.resultCurlCmd = new(string)
 		}
-		*r.resultCurlCmd = buildCurlRequest(r.RawRequest, c.httpClient.Jar)
+		*r.resultCurlCmd = buildCurlRequest(r.RawRequest, c.GetClient().Jar)
 	}
 	return nil
 }
@@ -362,6 +353,8 @@ func responseLogger(c *Client, res *Response) error {
 	if res.Request.Debug {
 		rl := &ResponseLog{Header: copyHeaders(res.Header()), Body: res.fmtBodyString(res.Request.debugBodySizeLimit)}
 		if c.responseLog != nil {
+			c.lock.RLock()
+			defer c.lock.RUnlock()
 			if err := c.responseLog(rl); err != nil {
 				return err
 			}
@@ -435,7 +428,7 @@ func handleMultipart(c *Client, r *Request) error {
 		}
 	}
 
-	for k, v := range c.formData {
+	for k, v := range c.FormData() {
 		for _, iv := range v {
 			if err := w.WriteField(k, iv); err != nil {
 				return err
@@ -476,7 +469,7 @@ func handleMultipart(c *Client, r *Request) error {
 }
 
 func handleFormData(c *Client, r *Request) {
-	for k, v := range c.formData {
+	for k, v := range c.FormData() {
 		if _, ok := r.FormData[k]; ok {
 			continue
 		}
@@ -524,7 +517,7 @@ func handleRequestBody(c *Client, r *Request) error {
 		if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
 			r.bodyBuf, err = jsonMarshal(c, r, r.Body)
 		} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-			bodyBytes, err = c.xmlMarshal(r.Body)
+			bodyBytes, err = c.XMLMarshaler()(r.Body)
 		}
 		if err != nil {
 			return err
@@ -548,8 +541,8 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 	if res.Request.isSaveResponse {
 		file := ""
 
-		if len(c.outputDirectory) > 0 && !filepath.IsAbs(res.Request.outputFile) {
-			file += c.outputDirectory + string(filepath.Separator)
+		if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(res.Request.outputFile) {
+			file += c.OutputDirectory() + string(filepath.Separator)
 		}
 
 		file = filepath.Clean(file + res.Request.outputFile)

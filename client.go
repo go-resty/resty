@@ -149,64 +149,59 @@ type TransportSettings struct {
 // Resty also provides an option to override most of the client settings
 // at [Request] level.
 type Client struct {
-	baseURL               string
-	queryParam            url.Values
-	formData              url.Values
-	pathParams            map[string]string
-	rawPathParams         map[string]string
-	header                http.Header
-	userInfo              *User
-	token                 string
-	authScheme            string
-	cookies               []*http.Cookie
-	errorType             reflect.Type
-	debug                 bool
-	disableWarn           bool
-	allowGetMethodPayload bool
-	retryCount            int
-	retryWaitTime         time.Duration
-	retryMaxWaitTime      time.Duration
-	retryConditions       []RetryConditionFunc
-	retryHooks            []OnRetryFunc
-	retryAfter            RetryAfterFunc
-	retryResetReaders     bool
-	jsonMarshal           func(v any) ([]byte, error)
-	jsonUnmarshal         func(data []byte, v any) error
-	xmlMarshal            func(v any) ([]byte, error)
-	xmlUnmarshal          func(data []byte, v any) error
-
-	// headerAuthorizationKey is used to set/access Request Authorization header
-	// value when `SetAuthToken` option is used.
-
+	lock                   *sync.RWMutex
+	baseURL                string
+	queryParams            url.Values
+	formData               url.Values
+	pathParams             map[string]string
+	rawPathParams          map[string]string
+	header                 http.Header
+	userInfo               *User
+	token                  string
+	authScheme             string
+	cookies                []*http.Cookie
+	errorType              reflect.Type
+	debug                  bool
+	disableWarn            bool
+	allowGetMethodPayload  bool
+	retryCount             int
+	retryWaitTime          time.Duration
+	retryMaxWaitTime       time.Duration
+	retryConditions        []RetryConditionFunc
+	retryHooks             []OnRetryFunc
+	retryAfter             RetryAfterFunc
+	retryResetReaders      bool
+	jsonMarshal            func(v any) ([]byte, error)
+	jsonUnmarshal          func(data []byte, v any) error
+	xmlMarshal             func(v any) ([]byte, error)
+	xmlUnmarshal           func(data []byte, v any) error
 	headerAuthorizationKey string
 	responseBodyLimit      int
+	jsonEscapeHTML         bool
+	setContentLength       bool
+	closeConnection        bool
+	notParseResponse       bool
+	trace                  bool
+	debugBodySizeLimit     int
+	outputDirectory        string
+	scheme                 string
+	log                    Logger
+	httpClient             *http.Client
+	proxyURL               *url.URL
+	requestLog             RequestLogCallback
+	responseLog            ResponseLogCallback
+	rateLimiter            RateLimiter
+	generateCurlOnDebug    bool
+	beforeRequest          []RequestMiddleware
+	udBeforeRequest        []RequestMiddleware
+	afterResponse          []ResponseMiddleware
+	errorHooks             []ErrorHook
+	invalidHooks           []ErrorHook
+	panicHooks             []ErrorHook
+	successHooks           []SuccessHook
 
-	jsonEscapeHTML      bool
-	setContentLength    bool
-	closeConnection     bool
-	notParseResponse    bool
-	trace               bool
-	debugBodySizeLimit  int
-	outputDirectory     string
-	scheme              string
-	log                 Logger
-	httpClient          *http.Client
-	proxyURL            *url.URL
-	beforeRequest       []RequestMiddleware
-	udBeforeRequest     []RequestMiddleware
-	udBeforeRequestLock *sync.RWMutex
-	preReqHook          PreRequestHook
-	successHooks        []SuccessHook
-	afterResponse       []ResponseMiddleware
-	afterResponseLock   *sync.RWMutex
-	requestLog          RequestLogCallback
-	responseLog         ResponseLogCallback
-	errorHooks          []ErrorHook
-	invalidHooks        []ErrorHook
-	panicHooks          []ErrorHook
-	rateLimiter         RateLimiter
-	lock                *sync.RWMutex
-	generateCurlOnDebug bool
+	// TODO don't put mutex now, it may go away
+	preReqHook PreRequestHook
 }
 
 // User type is to hold an username and password information
@@ -307,9 +302,7 @@ func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 //
 //	client.SetCookieJar(nil)
 func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.httpClient.Jar = jar
+	c.GetClient().Jar = jar
 	return c
 }
 
@@ -357,11 +350,11 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 	return c
 }
 
-// QueryParam method gets all parameters and their values in the client instance.
-func (c *Client) QueryParam() url.Values {
+// QueryParams method gets all parameters and their values in the client instance.
+func (c *Client) QueryParams() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.queryParam
+	return c.queryParams
 }
 
 // SetQueryParam method sets a single parameter and its value in the client instance.
@@ -380,7 +373,7 @@ func (c *Client) QueryParam() url.Values {
 func (c *Client) SetQueryParam(param, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.queryParam.Set(param, value)
+	c.queryParams.Set(param, value)
 	return c
 }
 
@@ -433,8 +426,10 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 	return c
 }
 
-// BasicAuth method gets the basic authentication header in the HTTP request.
-func (c *Client) BasicAuth() *User {
+// UserInfo method returns the authorization username and password.
+//
+//	userInfo := client.UserInfo()
+func (c *Client) UserInfo() *User {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.userInfo
@@ -556,14 +551,19 @@ func (c *Client) SetDigestAuth(username, password string) *Client {
 
 // R method creates a new request instance; it's used for Get, Post, Put, Delete, Patch, Head, Options, etc.
 func (c *Client) R() *Request {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	r := &Request{
-		QueryParam:    url.Values{},
+		QueryParams:   url.Values{},
 		FormData:      url.Values{},
 		Header:        http.Header{},
 		Cookies:       make([]*http.Cookie, 0),
 		PathParams:    make(map[string]string),
 		RawPathParams: make(map[string]string),
 		Debug:         c.debug,
+		AuthScheme:    c.authScheme,
+		Token:         c.token,
+		UserInfo:      c.userInfo,
 
 		client:              c,
 		multipartFiles:      []*File{},
@@ -585,6 +585,12 @@ func (c *Client) NewRequest() *Request {
 	return c.R()
 }
 
+func (c *Client) beforeRequestMiddlewares() []RequestMiddleware {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.udBeforeRequest
+}
+
 // OnBeforeRequest method appends a request middleware to the before request chain.
 // The user-defined middlewares are applied before the default Resty request middlewares.
 // After all middlewares have been applied, the request is sent from Resty to the host server.
@@ -596,12 +602,18 @@ func (c *Client) NewRequest() *Request {
 //			return nil 	// if its successful otherwise return error
 //		})
 func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
-	c.udBeforeRequestLock.Lock()
-	defer c.udBeforeRequestLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
 	c.udBeforeRequest = append(c.udBeforeRequest, m)
 
 	return c
+}
+
+func (c *Client) afterResponseMiddlewares() []ResponseMiddleware {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.afterResponse
 }
 
 // OnAfterResponse method appends response middleware to the after-response chain.
@@ -615,8 +627,8 @@ func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
 //			return nil 	// if its successful otherwise return error
 //		})
 func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
-	c.afterResponseLock.Lock()
-	defer c.afterResponseLock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
 	c.afterResponse = append(c.afterResponse, m)
 
@@ -688,8 +700,6 @@ func (c *Client) OnPanic(h ErrorHook) *Client {
 //
 // NOTE: Only one pre-request hook can be registered. Use [Client.OnBeforeRequest] for multiple.
 func (c *Client) SetPreRequestHook(h PreRequestHook) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
 	if c.preReqHook != nil {
 		c.log.Warnf("Overwriting an existing pre-request hook: %s", functionName(h))
 	}
@@ -1223,6 +1233,13 @@ func (c *Client) handleCAs(scope string, permCerts []byte) {
 	}
 }
 
+// OutputDirectory method returns the output directory value from the client.
+func (c *Client) OutputDirectory() string {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.outputDirectory
+}
+
 // SetOutputDirectory method sets the output directory for saving HTTP responses in a file.
 // Resty creates one if the output directory does not exist. This setting is optional,
 // if you plan to use the absolute path in [Request.SetOutput] and can used together.
@@ -1233,6 +1250,13 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 	defer c.lock.Unlock()
 	c.outputDirectory = dirPath
 	return c
+}
+
+// RateLimiter method returns the rate limiter interface
+func (c *Client) RateLimiter() RateLimiter {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.rateLimiter
 }
 
 // SetRateLimiter sets an optional [RateLimiter]. If set, the rate limiter will control
@@ -1266,6 +1290,15 @@ func (c *Client) SetTransport(transport http.RoundTripper) *Client {
 		c.httpClient.Transport = transport
 	}
 	return c
+}
+
+// Scheme method returns custom scheme value from the client.
+//
+//	scheme := client.Scheme()
+func (c *Client) Scheme() string {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.scheme
 }
 
 // SetScheme method sets a custom scheme for the Resty client. It's a way to override the default.
@@ -1303,9 +1336,10 @@ func (c *Client) SetDoNotParseResponse(parse bool) *Client {
 	return c
 }
 
-// PathParam method gets single URL path key-value pair in the
-// Resty client instance.
-func (c *Client) PathParam() map[string]string {
+// PathParams method returns the path parameters from the client.
+//
+//	pathParams := client.PathParams()
+func (c *Client) PathParams() map[string]string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.pathParams
@@ -1537,27 +1571,17 @@ func (c *Client) Clone() *Client {
 	cc := *c
 
 	// lock values should not be copied - thus new values are used.
-	cc.afterResponseLock = &sync.RWMutex{}
-	cc.udBeforeRequestLock = &sync.RWMutex{}
 	cc.lock = &sync.RWMutex{}
 	return &cc
 }
 
 func (c *Client) executeBefore(req *Request) error {
-	// Lock the user-defined pre-request hooks.
-	c.udBeforeRequestLock.RLock()
-	defer c.udBeforeRequestLock.RUnlock()
-
-	// Lock the post-request hooks.
-	c.afterResponseLock.RLock()
-	defer c.afterResponseLock.RUnlock()
-
 	// Apply Request middleware
 	var err error
 
 	// user defined on before request methods
 	// to modify the *resty.Request object
-	for _, f := range c.udBeforeRequest {
+	for _, f := range c.beforeRequestMiddlewares() {
 		if err = f(c, req); err != nil {
 			return wrapNoRetryErr(err)
 		}
@@ -1565,8 +1589,8 @@ func (c *Client) executeBefore(req *Request) error {
 
 	// If there is a rate limiter set for this client, the Execute call
 	// will return an error if the rate limit is exceeded.
-	if req.client.rateLimiter != nil {
-		if !req.client.rateLimiter.Allow() {
+	if req.client.RateLimiter() != nil {
+		if !req.client.RateLimiter().Allow() {
 			return wrapNoRetryErr(ErrRateLimitExceeded)
 		}
 	}
@@ -1605,7 +1629,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	req.Time = time.Now()
-	resp, err := c.httpClient.Do(req.RawRequest)
+	resp, err := c.GetClient().Do(req.RawRequest)
 
 	response := &Response{
 		Request:     req,
@@ -1655,7 +1679,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		return response, wrapNoRetryErr(err)
 	}
 
-	for _, f := range c.afterResponse {
+	for _, f := range c.afterResponseMiddlewares() {
 		if err = f(c, response); err != nil {
 			break
 		}

@@ -259,8 +259,8 @@ func Test_parseRequestURL(t *testing.T) {
 		{
 			name: "adding query parameters by request with multiple values",
 			init: func(c *Client, r *Request) {
-				r.QueryParam.Add("foo", "1")
-				r.QueryParam.Add("foo", "2")
+				r.QueryParams.Add("foo", "1")
+				r.QueryParams.Add("foo", "2")
 				r.URL = "https://example.com/"
 			},
 			expectedURL: "https://example.com/?foo=1&foo=2",

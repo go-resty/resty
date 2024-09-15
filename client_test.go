@@ -468,14 +468,14 @@ func TestClientOptions(t *testing.T) {
 
 	client.SetQueryParam("test_param_1", "Param_1")
 	client.SetQueryParams(map[string]string{"test_param_2": "Param_2", "test_param_3": "Param_3"})
-	assertEqual(t, "Param_3", client.QueryParam().Get("test_param_3"))
+	assertEqual(t, "Param_3", client.QueryParams().Get("test_param_3"))
 
 	rTime := strconv.FormatInt(time.Now().UnixNano(), 10)
 	client.SetFormData(map[string]string{"r_time": rTime})
 	assertEqual(t, rTime, client.FormData().Get("r_time"))
 
 	client.SetBasicAuth("myuser", "mypass")
-	assertEqual(t, "myuser", client.BasicAuth().Username)
+	assertEqual(t, "myuser", client.UserInfo().Username)
 
 	client.SetAuthToken("AC75BD37F019E08FBC594900518B4F7E")
 	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", client.Token())
@@ -1202,15 +1202,15 @@ func TestClientClone(t *testing.T) {
 	// update value of non-interface type - change will only happen on clone
 	clone.SetBaseURL("https://local.host")
 	// update value of interface type - change will also happen on parent
-	clone.BasicAuth().Username = "clone"
+	clone.UserInfo().Username = "clone"
 
 	// assert non-interface type
 	assertEqual(t, "http://localhost", parent.BaseURL())
 	assertEqual(t, "https://local.host", clone.BaseURL())
 
 	// assert interface type
-	assertEqual(t, "clone", parent.BasicAuth().Username)
-	assertEqual(t, "clone", clone.BasicAuth().Username)
+	assertEqual(t, "clone", parent.UserInfo().Username)
+	assertEqual(t, "clone", clone.UserInfo().Username)
 }
 
 func TestResponseBodyLimit(t *testing.T) {

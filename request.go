@@ -31,7 +31,7 @@ type Request struct {
 	Method        string
 	Token         string
 	AuthScheme    string
-	QueryParam    url.Values
+	QueryParams   url.Values
 	FormData      url.Values
 	PathParams    map[string]string
 	RawPathParams map[string]string
@@ -188,7 +188,7 @@ func (r *Request) SetHeaderVerbatim(header, value string) *Request {
 //
 // It overrides the query parameter value set at the client instance level.
 func (r *Request) SetQueryParam(param, value string) *Request {
-	r.QueryParam.Set(param, value)
+	r.QueryParams.Set(param, value)
 	return r
 }
 
@@ -226,7 +226,7 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 func (r *Request) SetQueryParamsFromValues(params url.Values) *Request {
 	for p, v := range params {
 		for _, pv := range v {
-			r.QueryParam.Add(p, pv)
+			r.QueryParams.Add(p, pv)
 		}
 	}
 	return r
@@ -243,7 +243,7 @@ func (r *Request) SetQueryString(query string) *Request {
 	if err == nil {
 		for p, v := range params {
 			for _, pv := range v {
-				r.QueryParam.Add(p, pv)
+				r.QueryParams.Add(p, pv)
 			}
 		}
 	} else {
@@ -1073,7 +1073,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 
 	// clone URL values
 	rr.FormData = cloneURLValues(r.FormData)
-	rr.QueryParam = cloneURLValues(r.QueryParam)
+	rr.QueryParams = cloneURLValues(r.QueryParams)
 
 	// clone path params
 	if r.PathParams != nil {
