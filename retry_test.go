@@ -158,8 +158,7 @@ func TestConditionalGet(t *testing.T) {
 	logResponse(t, resp)
 }
 
-// Check to make sure the package Function works.
-func TestConditionalGetDefaultClient(t *testing.T) {
+func TestConditionalGetRequestLevel(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 	attemptCount := 1
@@ -173,9 +172,12 @@ func TestConditionalGetDefaultClient(t *testing.T) {
 
 	// Clear the default client.
 	client := dc()
-	// Proceed to check.
-	client.AddRetryCondition(check).SetRetryCount(1)
 	resp, err := client.R().
+		AddRetryCondition(check).
+		SetRetryCount(1).
+		SetRetryWaitTime(time.Duration(50)*time.Millisecond).
+		SetRetryMaxWaitTime(time.Duration(1)*time.Second).
+		SetRetryResetReaders(true).
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Get(ts.URL + "/")
 
@@ -800,7 +802,7 @@ func TestResetMultipartReaderSeekStartError(t *testing.T) {
 	assertEqual(t, err.Error(), errSeekFailure.Error())
 }
 
-func TestResetMultipartReaders(t *testing.T) {
+func TestClientResetMultipartReaders(t *testing.T) {
 	ts := createFilePostServer(t)
 	defer ts.Close()
 
@@ -831,6 +833,42 @@ func TestResetMultipartReaders(t *testing.T) {
 		SetFileReader("name", "filename", bufReader).
 		Post(ts.URL + "/set-reset-multipart-readers-test")
 
+	assertEqual(t, 500, resp.StatusCode())
+	assertNil(t, err)
+}
+
+func TestRequestResetMultipartReaders(t *testing.T) {
+	ts := createFilePostServer(t)
+	defer ts.Close()
+
+	str := "test"
+	buf := []byte(str)
+
+	bufReader := bytes.NewReader(buf)
+	bufCpy := make([]byte, len(buf))
+
+	c := dc().
+		SetTimeout(time.Second * 3).
+		AddRetryAfterErrorCondition().
+		AddRetryHook(
+			func(response *Response, _ error) {
+				read, err := bufReader.Read(bufCpy)
+
+				assertNil(t, err)
+				assertEqual(t, len(buf), read)
+				assertEqual(t, str, string(bufCpy))
+			},
+		)
+
+	assertEqual(t, false, c.RetryResetReaders())
+
+	req := c.R().
+		SetRetryCount(2).
+		SetRetryResetReaders(true).
+		SetFileReader("name", "filename", bufReader)
+	resp, err := req.Post(ts.URL + "/set-reset-multipart-readers-test")
+
+	assertEqual(t, true, req.RetryResetReaders)
 	assertEqual(t, 500, resp.StatusCode())
 	assertNil(t, err)
 }

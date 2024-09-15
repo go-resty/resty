@@ -855,6 +855,36 @@ func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 	return r
 }
 
+// SetRetryCount method enables retry on Resty client and allows you
+// to set no. of retry count. Resty uses a Backoff mechanism.
+func (r *Request) SetRetryCount(count int) *Request {
+	r.RetryCount = count
+	return r
+}
+
+// SetRetryWaitTime method sets the default wait time for sleep before retrying
+//
+// Default is 100 milliseconds.
+func (r *Request) SetRetryWaitTime(waitTime time.Duration) *Request {
+	r.RetryWaitTime = waitTime
+	return r
+}
+
+// SetRetryMaxWaitTime method sets the max wait time for sleep before retrying
+//
+// Default is 2 seconds.
+func (r *Request) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Request {
+	r.RetryMaxWaitTime = maxWaitTime
+	return r
+}
+
+// SetRetryResetReaders method enables the Resty client to seek the start of all
+// file readers are given as multipart files if the object implements [io.ReadSeeker].
+func (r *Request) SetRetryResetReaders(b bool) *Request {
+	r.RetryResetReaders = b
+	return r
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // HTTP request tracing
 //_______________________________________________________________________
@@ -1031,7 +1061,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	r.Method = method
 	r.URL = r.selectAddr(addrs, url, 0)
 
-	if r.client.retryCount == 0 {
+	if r.RetryCount == 0 {
 		r.Attempt = 1
 		resp, err = r.client.execute(r)
 		r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
@@ -1054,7 +1084,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		Retries(r.RetryCount),
 		WaitTime(r.RetryWaitTime),
 		MaxWaitTime(r.RetryMaxWaitTime),
-		RetryConditions(append(r.retryConditions, r.client.RetryConditions()...)),
+		RetryConditions(r.retryConditions),
 		RetryHooks(r.client.RetryHooks()),
 		ResetMultipartReaders(r.RetryResetReaders),
 	)
