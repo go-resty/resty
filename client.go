@@ -213,7 +213,7 @@ type User struct {
 // Client methods
 //___________________________________
 
-// BaseURL method is to get Base URL in the client instance.
+// BaseURL method returns the Base URL value from the client instance.
 func (c *Client) BaseURL() string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -235,7 +235,7 @@ func (c *Client) SetBaseURL(url string) *Client {
 	return c
 }
 
-// Header method gets all header fields and its value in the client instance.
+// Header method returns the headers from the client instance.
 func (c *Client) Header() http.Header {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -306,7 +306,7 @@ func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
 	return c
 }
 
-// Cookies method gets all cookies in the client instance.
+// Cookies method returns all cookies registered in the client instance.
 func (c *Client) Cookies() []*http.Cookie {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -350,7 +350,7 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 	return c
 }
 
-// QueryParams method gets all parameters and their values in the client instance.
+// QueryParams method returns all query parameters and their values from the client instance.
 func (c *Client) QueryParams() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -399,7 +399,7 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 	return c
 }
 
-// FormData method gets form parameters and their values in the client instance.
+// FormData method returns the form parameters and their values from the client instance.
 func (c *Client) FormData() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -454,14 +454,14 @@ func (c *Client) SetBasicAuth(username, password string) *Client {
 	return c
 }
 
-// Token method gets the auth token of the `Authorization` header for all HTTP requests.
+// Token method returns the auth token value registered in the client instance.
 func (c *Client) Token() string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.token
 }
 
-// HeaderAuthorizationKey method gets the Header Authorization Key on the Resty client.
+// HeaderAuthorizationKey method returns the HTTP header name for Authorization from the client instance.
 func (c *Client) HeaderAuthorizationKey() string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -488,7 +488,9 @@ func (c *Client) SetAuthToken(token string) *Client {
 	return c
 }
 
-// AuthScheme method gets the auth scheme type in the HTTP request.
+// AuthScheme method returns the auth scheme name set in the client instance.
+//
+// See [Client.SetAuthScheme], [Request.SetAuthScheme].
 func (c *Client) AuthScheme() string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -508,7 +510,7 @@ func (c *Client) AuthScheme() string {
 //
 // Information about auth schemes can be found in [RFC 7235], IANA [HTTP Auth schemes].
 //
-// See [Request.SetAuthToken].
+// See [Request.SetAuthScheme].
 //
 // [RFC 7235]: https://tools.ietf.org/html/rfc7235
 // [HTTP Auth schemes]: https://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml#authschemes
@@ -708,7 +710,7 @@ func (c *Client) SetPreRequestHook(h PreRequestHook) *Client {
 	return c
 }
 
-// Debug method gets if the Resty client is in debug mode.
+// Debug method returns `true` if the client is in debug mode; otherwise, it is `false`.
 func (c *Client) Debug() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -769,7 +771,7 @@ func (c *Client) OnResponseLog(rl ResponseLogCallback) *Client {
 	return c
 }
 
-// DisableWarn method gets if the Resty client disables the warning message.
+// DisableWarn method returns `true` if the warning message is disabled; otherwise, it is `false`.
 func (c *Client) DisableWarn() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -788,7 +790,8 @@ func (c *Client) SetDisableWarn(d bool) *Client {
 	return c
 }
 
-// AllowGetMethodPayload method gets if the Resty client allows the GET method with payload.
+// AllowGetMethodPayload method returns `true` if the client is enabled to allow
+// payload with GET method; otherwise, it is `false`.
 func (c *Client) AllowGetMethodPayload() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -840,7 +843,7 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	return c
 }
 
-// Error method returns the global or client common `Error` object into Resty.
+// Error method returns the global or client common `Error` object type registered in the Resty.
 func (c *Client) Error() reflect.Type {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -897,7 +900,7 @@ func (c *Client) SetRedirectPolicy(policies ...any) *Client {
 	return c
 }
 
-// RetryCount method gets retry count in Resty client.
+// RetryCount method returns the retry count value from the client instance.
 func (c *Client) RetryCount() int {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -913,7 +916,8 @@ func (c *Client) SetRetryCount(count int) *Client {
 	return c
 }
 
-// RetryWaitTime gets default wait time to sleep before retrying requeset.
+// RetryWaitTime method returns the retry wait time that is used to sleep before
+// retrying the request.
 func (c *Client) RetryWaitTime() time.Duration {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -930,7 +934,8 @@ func (c *Client) SetRetryWaitTime(waitTime time.Duration) *Client {
 	return c
 }
 
-// RetryMaxWaitTime method gets max wait time to sleep before retrying request.
+// RetryMaxWaitTime method returns the retry max wait time that is used to sleep
+// before retrying the request.
 func (c *Client) RetryMaxWaitTime() time.Duration {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -947,7 +952,8 @@ func (c *Client) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
 	return c
 }
 
-// RetryAfter gets callback to calculate wait time between retries.
+// RetryAfter method returns the retry after callback function, that is
+// used to calculate wait time between retries if it's registered; otherwise, it is nil.
 func (c *Client) RetryAfter() RetryAfterFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -999,7 +1005,7 @@ func (c *Client) SetXMLUnmarshaler(unmarshaler func(data []byte, v any) error) *
 	return c
 }
 
-// RetryConditions method gets all retry condition functions.
+// RetryConditions method returns all the retry condition functions.
 func (c *Client) RetryConditions() []RetryConditionFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -1028,7 +1034,7 @@ func (c *Client) AddRetryAfterErrorCondition() *Client {
 	return c
 }
 
-// RetryHooks gets all retry hooks.
+// RetryHooks method returns all the retry hook functions.
 func (c *Client) RetryHooks() []OnRetryFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -1044,8 +1050,7 @@ func (c *Client) AddRetryHook(hook OnRetryFunc) *Client {
 	return c
 }
 
-// RetryResetReaders method gets if the Resty client is enabled to seek the start
-// of all file readers given as multipart files.
+// RetryResetReaders method returns true if the retry reset readers are enabled; otherwise, it is nil.
 func (c *Client) RetryResetReaders() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -1375,8 +1380,7 @@ func (c *Client) SetPathParams(params map[string]string) *Client {
 	return c
 }
 
-// RawPathParams method gets single URL path key-value pair in the
-// Resty client instance.
+// RawPathParams method returns the raw path parameters from the client.
 func (c *Client) RawPathParams() map[string]string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -1448,7 +1452,8 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 	return c
 }
 
-// ResponseBodyLimit gets the max body size limit on response.
+// ResponseBodyLimit method returns the value max body size limit in bytes from
+// the client instance.
 func (c *Client) ResponseBodyLimit() int {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -1541,7 +1546,7 @@ func (c *Client) Transport() (*http.Transport, error) {
 	return nil, errors.New("current transport is not an *http.Transport instance")
 }
 
-// Clone returns a clone of the original client.
+// Clone method returns a clone of the original client.
 //
 // NOTE: Use with care:
 //   - Interface values are not deeply cloned. Thus, both the original and the
