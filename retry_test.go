@@ -151,7 +151,7 @@ func TestConditionalGet(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.Body())
+	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "TestGet: text response", resp.String())
 	assertEqual(t, externalCounter, attemptCount)
 
@@ -184,7 +184,7 @@ func TestConditionalGetRequestLevel(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.Body())
+	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "TestGet: text response", resp.String())
 	assertEqual(t, externalCounter, attemptCount)
 
@@ -204,7 +204,7 @@ func TestClientRetryGet(t *testing.T) {
 	assertEqual(t, "", resp.Proto())
 	assertEqual(t, 0, resp.StatusCode())
 	assertEqual(t, 0, len(resp.Cookies()))
-	assertNotNil(t, resp.Body())
+	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, 0, len(resp.Header()))
 
 	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
@@ -230,7 +230,7 @@ func TestClientRetryWait(t *testing.T) {
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		AddRetryCondition(
 			func(r *Response, _ error) bool {
-				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				timeSlept, _ := strconv.ParseUint(string(r.BodyBytes()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
 				return true
@@ -273,7 +273,7 @@ func TestClientRetryWaitMaxInfinite(t *testing.T) {
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		AddRetryCondition(
 			func(r *Response, _ error) bool {
-				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				timeSlept, _ := strconv.ParseUint(string(r.BodyBytes()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
 				return true
@@ -335,7 +335,7 @@ func TestClientRetryWaitCallbackError(t *testing.T) {
 		SetRetryAfter(retryAfter).
 		AddRetryCondition(
 			func(r *Response, _ error) bool {
-				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				timeSlept, _ := strconv.ParseUint(string(r.BodyBytes()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
 				return true
@@ -375,7 +375,7 @@ func TestClientRetryWaitCallback(t *testing.T) {
 		SetRetryAfter(retryAfter).
 		AddRetryCondition(
 			func(r *Response, _ error) bool {
-				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				timeSlept, _ := strconv.ParseUint(string(r.BodyBytes()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
 				return true
@@ -423,7 +423,7 @@ func TestClientRetryWaitCallbackTooShort(t *testing.T) {
 		SetRetryAfter(retryAfter).
 		AddRetryCondition(
 			func(r *Response, _ error) bool {
-				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				timeSlept, _ := strconv.ParseUint(string(r.BodyBytes()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
 				return true
@@ -471,7 +471,7 @@ func TestClientRetryWaitCallbackTooLong(t *testing.T) {
 		SetRetryAfter(retryAfter).
 		AddRetryCondition(
 			func(r *Response, _ error) bool {
-				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				timeSlept, _ := strconv.ParseUint(string(r.BodyBytes()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
 				return true
@@ -520,7 +520,7 @@ func TestClientRetryWaitCallbackSwitchToDefault(t *testing.T) {
 		SetRetryAfter(retryAfter).
 		AddRetryCondition(
 			func(r *Response, _ error) bool {
-				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				timeSlept, _ := strconv.ParseUint(string(r.BodyBytes()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
 				return true
@@ -570,7 +570,7 @@ func TestClientRetryCancel(t *testing.T) {
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		AddRetryCondition(
 			func(r *Response, _ error) bool {
-				timeSlept, _ := strconv.ParseUint(string(r.Body()), 10, 64)
+				timeSlept, _ := strconv.ParseUint(string(r.BodyBytes()), 10, 64)
 				retryIntervals[attempt] = timeSlept
 				attempt++
 				return true
@@ -620,7 +620,7 @@ func TestClientRetryPost(t *testing.T) {
 		if resp.StatusCode() == http.StatusInternalServerError {
 			t.Logf("Got response body: %s", resp.String())
 			var usersResponse []map[string]any
-			err := json.Unmarshal(resp.body, &usersResponse)
+			err := json.Unmarshal(resp.BodyBytes(), &usersResponse)
 			assertError(t, err)
 
 			if !reflect.DeepEqual(users, usersResponse) {
@@ -685,7 +685,7 @@ func TestClientRetryCount(t *testing.T) {
 	assertEqual(t, "", resp.Proto())
 	assertEqual(t, 0, resp.StatusCode())
 	assertEqual(t, 0, len(resp.Cookies()))
-	assertNotNil(t, resp.Body())
+	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, 0, len(resp.Header()))
 
 	// 2 attempts were made
@@ -747,7 +747,7 @@ func TestClientRetryHook(t *testing.T) {
 	assertEqual(t, "", resp.Proto())
 	assertEqual(t, 0, resp.StatusCode())
 	assertEqual(t, 0, len(resp.Cookies()))
-	assertNotNil(t, resp.Body())
+	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, 0, len(resp.Header()))
 
 	assertEqual(t, 3, attempt)

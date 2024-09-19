@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,31 +21,36 @@ import (
 // Response struct holds response values of executed requests.
 type Response struct {
 	Request     *Request
+	Body        io.ReadCloser
 	RawResponse *http.Response
 
-	body       []byte
+	bodyBytes  []byte
 	size       int64
 	receivedAt time.Time
 }
 
-// Body method returns the HTTP response as `[]byte` slice for the executed request.
+// BodyBytes method returns the HTTP response as `[]byte` slice for the executed request.
 //
-// NOTE: [Response.Body] might be nil if [Request.SetOutput] is used.
-// Also see [Request.SetDoNotParseResponse], [Client.SetDoNotParseResponse]
-func (r *Response) Body() []byte {
+// NOTE:
+//   - [Response.BodyBytes] might be `nil` if [Request.SetOutput], [Request.SetDoNotParseResponse],
+//     [Client.SetDoNotParseResponse] method is used.
+//   - [Response.BodyBytes] might be `nil` if [Response].Body is already read.
+func (r *Response) BodyBytes() []byte {
 	if r.RawResponse == nil {
 		return []byte{}
 	}
-	return r.body
+	return r.bodyBytes
 }
 
-// SetBody method sets [Response] body in byte slice. Typically,
+// SetBodyBytes method sets [Response] body in byte slice. Typically,
 // It is helpful for test cases.
 //
-//	resp.SetBody([]byte("This is test body content"))
-//	resp.SetBody(nil)
-func (r *Response) SetBody(b []byte) *Response {
-	r.body = b
+//	resp.SetBodyBytes([]byte("This is test body content"))
+//	resp.SetBodyBytes(nil)
+//
+// NOTE: Returns an empty byte slice on auto-unmarshal scenarios
+func (r *Response) SetBodyBytes(b []byte) *Response {
+	r.bodyBytes = b
 	return r
 }
 
@@ -108,11 +114,14 @@ func (r *Response) Cookies() []*http.Cookie {
 
 // String method returns the body of the HTTP response as a `string`.
 // It returns an empty string if it is nil or the body is zero length.
+//
+// NOTE:
+//   - Returns an empty string on auto-unmarshal scenarios
 func (r *Response) String() string {
-	if len(r.body) == 0 {
+	if len(r.bodyBytes) == 0 {
 		return ""
 	}
-	return strings.TrimSpace(string(r.body))
+	return strings.TrimSpace(string(r.bodyBytes))
 }
 
 // Time method returns the duration of HTTP response time from the request we sent
@@ -171,15 +180,18 @@ func (r *Response) setReceivedAt() {
 }
 
 func (r *Response) fmtBodyString(sl int) string {
-	if len(r.body) > 0 {
-		if len(r.body) > sl {
-			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", len(r.body))
+	if r.Request.NotParseResponse {
+		return "***** DO NOT PARSE RESPONSE - Enabled *****"
+	}
+	if len(r.bodyBytes) > 0 {
+		if len(r.bodyBytes) > sl {
+			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", len(r.bodyBytes))
 		}
 		ct := r.Header().Get(hdrContentTypeKey)
 		if IsJSONType(ct) {
 			out := acquireBuffer()
 			defer releaseBuffer(out)
-			err := json.Indent(out, r.body, "", "   ")
+			err := json.Indent(out, r.bodyBytes, "", "   ")
 			if err != nil {
 				return fmt.Sprintf("*** Error: Unable to format response body - \"%s\" ***\n\nLog Body as-is:\n%s", err, r.String())
 			}
@@ -189,4 +201,13 @@ func (r *Response) fmtBodyString(sl int) string {
 	}
 
 	return "***** NO CONTENT *****"
+}
+
+// auto-unmarshal didn't happen, so fallback to
+// old behavior of reading response as body bytes
+func (r *Response) readAllBytes() (err error) {
+	defer closeq(r.Body)
+	r.bodyBytes, err = io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(r.bodyBytes))
+	return
 }

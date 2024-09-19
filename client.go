@@ -6,7 +6,6 @@ package resty
 
 import (
 	"bytes"
-	"compress/gzip"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -58,6 +57,9 @@ var (
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json"
 	formContentType = "application/x-www-form-urlencoded"
+
+	jsonKey = "json"
+	xmlKey  = "xml"
 
 	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(.*json.*)(;|$))`)
 	xmlCheck  = regexp.MustCompile(`(?i:(application|text)/(.*xml.*)(;|$))`)
@@ -176,7 +178,7 @@ type Client struct {
 	xmlMarshal             func(v any) ([]byte, error)
 	xmlUnmarshal           func(data []byte, v any) error
 	headerAuthorizationKey string
-	responseBodyLimit      int
+	responseBodyLimit      int64
 	jsonEscapeHTML         bool
 	setContentLength       bool
 	closeConnection        bool
@@ -199,6 +201,8 @@ type Client struct {
 	invalidHooks           []ErrorHook
 	panicHooks             []ErrorHook
 	successHooks           []SuccessHook
+	contentTypeEncoders    map[string]ContentTypeEncoder
+	contentTypeDecoders    map[string]ContentTypeDecoder
 
 	// TODO don't put mutex now, it may go away
 	preReqHook PreRequestHook
@@ -710,6 +714,51 @@ func (c *Client) SetPreRequestHook(h PreRequestHook) *Client {
 	}
 	c.preReqHook = h
 	return c
+}
+
+// ContentTypeEncoders method returns all the registered content type encoders.
+func (c *Client) ContentTypeEncoders() map[string]ContentTypeEncoder {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.contentTypeEncoders
+}
+
+// AddContentTypeEncoder method adds the user-provided Content-Type encoder into a client.
+//
+// NOTE: It overwrites the encoder function if the given Content-Type key already exists.
+func (c *Client) AddContentTypeEncoder(ct string, e ContentTypeEncoder) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.contentTypeEncoders[ct] = e
+	return c
+}
+
+// ContentTypeDecoders method returns all the registered content type decoders.
+func (c *Client) ContentTypeDecoders() map[string]ContentTypeDecoder {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.contentTypeDecoders
+}
+
+// AddContentTypeDecoder method adds the user-provided Content-Type decoder into a client.
+//
+// NOTE: It overwrites the decoder function if the given Content-Type key already exists.
+func (c *Client) AddContentTypeDecoder(ct string, d ContentTypeDecoder) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.contentTypeDecoders[ct] = d
+	return c
+}
+
+func (c *Client) inferContentTypeDecoder(ct ...string) (ContentTypeDecoder, bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for _, v := range ct {
+		if d, f := c.contentTypeDecoders[v]; f {
+			return d, f
+		}
+	}
+	return nil, false
 }
 
 // Debug method returns `true` if the client is in debug mode; otherwise, it is `false`.
@@ -1456,7 +1505,7 @@ func (c *Client) SetJSONEscapeHTML(b bool) *Client {
 
 // ResponseBodyLimit method returns the value max body size limit in bytes from
 // the client instance.
-func (c *Client) ResponseBodyLimit() int {
+func (c *Client) ResponseBodyLimit() int64 {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.responseBodyLimit
@@ -1473,7 +1522,7 @@ func (c *Client) ResponseBodyLimit() int {
 //   - "DoNotParseResponse" is set for client or request.
 //
 // It can be overridden at the request level; see [Request.SetResponseBodyLimit]
-func (c *Client) SetResponseBodyLimit(v int) *Client {
+func (c *Client) SetResponseBodyLimit(v int64) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.responseBodyLimit = v
@@ -1625,89 +1674,38 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		RawResponse: resp,
 	}
 
-	if err != nil || req.NotParseResponse {
+	response.setReceivedAt()
+	if resp != nil {
+		response.Body = &limitReadCloser{
+			r: resp.Body,
+			l: req.responseBodyLimit,
+			f: func(s int64) {
+				response.size = s
+			},
+		}
+	}
+
+	if err != nil || req.NotParseResponse { // error or do not parse response
 		logErr := responseLogger(c, response)
-		response.setReceivedAt()
 		if err != nil {
 			return response, errors.Join(err, logErr)
 		}
 		return response, wrapNoRetryErr(logErr)
 	}
 
-	if !req.isSaveResponse {
-		defer closeq(resp.Body)
-		body := resp.Body
-
-		// GitHub #142 & #187
-		if strings.EqualFold(resp.Header.Get(hdrContentEncodingKey), "gzip") && resp.ContentLength != 0 {
-			if _, ok := body.(*gzip.Reader); !ok {
-				body, err = gzip.NewReader(body)
-				if err != nil {
-					err = errors.Join(err, responseLogger(c, response))
-					response.setReceivedAt()
-					return response, err
-				}
-				defer closeq(body)
-			}
-		}
-
-		if response.body, err = readAllWithLimit(body, req.responseBodyLimit); err != nil {
-			err = errors.Join(err, responseLogger(c, response))
-			response.setReceivedAt()
+	// Apply Response middleware
+	for _, f := range c.afterResponseMiddlewares() {
+		if err = f(c, response); err != nil {
 			return response, err
 		}
-
-		response.size = int64(len(response.body))
 	}
-
-	response.setReceivedAt() // after we read the body
-
-	// Apply Response middleware
+	// TODO figure out debug response logger with body copy, etc.
 	err = responseLogger(c, response)
 	if err != nil {
 		return response, wrapNoRetryErr(err)
 	}
 
-	for _, f := range c.afterResponseMiddlewares() {
-		if err = f(c, response); err != nil {
-			break
-		}
-	}
-
 	return response, wrapNoRetryErr(err)
-}
-
-var ErrResponseBodyTooLarge = errors.New("resty: response body too large")
-
-// https://github.com/golang/go/issues/51115
-// [io.LimitedReader] can only return [io.EOF]
-func readAllWithLimit(r io.Reader, maxSize int) ([]byte, error) {
-	if maxSize <= 0 {
-		return io.ReadAll(r)
-	}
-
-	var buf [512]byte // make buf stack allocated
-	result := make([]byte, 0, 512)
-	total := 0
-	for {
-		n, err := r.Read(buf[:])
-		total += n
-		if total > maxSize {
-			return nil, ErrResponseBodyTooLarge
-		}
-
-		if err != nil {
-			if err == io.EOF {
-				result = append(result, buf[:n]...)
-				break
-			}
-			return nil, err
-		}
-
-		result = append(result, buf[:n]...)
-	}
-
-	return result, nil
 }
 
 // getting TLS client config if not exists then create one

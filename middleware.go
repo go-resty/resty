@@ -382,38 +382,54 @@ func responseLogger(c *Client, res *Response) error {
 }
 
 func parseResponseBody(c *Client, res *Response) (err error) {
+	if res.Request.isSaveResponse {
+		return // move on
+	}
+
 	if res.StatusCode() == http.StatusNoContent {
 		res.Request.Error = nil
 		return
 	}
-	// Handles only JSON or XML content type
-	ct := firstNonEmpty(res.Request.forceContentType, res.Header().Get(hdrContentTypeKey), res.Request.fallbackContentType)
-	if IsJSONType(ct) || IsXMLType(ct) {
-		// HTTP status code > 199 and < 300, considered as Result
-		if res.IsSuccess() {
-			res.Request.Error = nil
-			if res.Request.Result != nil {
-				err = Unmarshalc(c, ct, res.body, res.Request.Result)
-				return
-			}
+
+	// TODO Attention Required when working on Compression
+
+	rct := firstNonEmpty(
+		res.Request.forceContentType,
+		res.Header().Get(hdrContentTypeKey),
+		res.Request.fallbackContentType,
+	)
+	decKey := inferContentTypeMapKey(rct)
+	decFunc, found := c.inferContentTypeDecoder(rct, decKey)
+	if !found {
+		// the Content-Type decoder is not found; just read all the body bytes
+		err = res.readAllBytes()
+		return
+	}
+
+	// HTTP status code > 199 and < 300, considered as Result
+	if res.IsSuccess() && res.Request.Result != nil {
+		res.Request.Error = nil
+		defer closeq(res.Body)
+		err = decFunc(res.Body, res.Request.Result)
+		return
+	}
+
+	// HTTP status code > 399, considered as Error
+	if res.IsError() {
+		// global error type registered at client-instance
+		if res.Request.Error == nil {
+			res.Request.Error = c.newErrorInterface()
 		}
 
-		// HTTP status code > 399, considered as error
-		if res.IsError() {
-			// global error interface
-			if res.Request.Error == nil {
-				res.Request.Error = c.newErrorInterface()
-			}
-
-			if res.Request.Error != nil {
-				unmarshalErr := Unmarshalc(c, ct, res.body, res.Request.Error)
-				if unmarshalErr != nil {
-					res.Request.log.Warnf("Cannot unmarshal response body: %s", unmarshalErr)
-				}
-			}
+		if res.Request.Error != nil {
+			defer closeq(res.Body)
+			err = decFunc(res.Body, res.Request.Error)
+			return
 		}
 	}
 
+	// read all bytes when auto-unmarshal didn't take place
+	err = res.readAllBytes()
 	return
 }
 
@@ -559,9 +575,9 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 		defer closeq(outFile)
 
 		// io.Copy reads maximum 32kb size, it is perfect for large file download too
-		defer closeq(res.RawResponse.Body)
+		defer closeq(res.Body)
 
-		written, err := io.Copy(outFile, res.RawResponse.Body)
+		written, err := io.Copy(outFile, res.Body)
 		if err != nil {
 			return err
 		}
