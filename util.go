@@ -132,19 +132,6 @@ func inferContentTypeMapKey(v string) string {
 	return ""
 }
 
-// Unmarshalc content into object from JSON or XML
-func Unmarshalc(c *Client, ct string, b []byte, d any) (err error) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if IsJSONType(ct) {
-		err = c.jsonUnmarshal(b, d)
-	} else if IsXMLType(ct) {
-		err = c.xmlUnmarshal(b, d)
-	}
-
-	return
-}
-
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // RequestLog and ResponseLog type
 //_______________________________________________________________________
