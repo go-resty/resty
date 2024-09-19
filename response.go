@@ -171,6 +171,9 @@ func (r *Response) setReceivedAt() {
 }
 
 func (r *Response) fmtBodyString(sl int64) string {
+	if r.Request.client.notParseResponse || r.Request.notParseResponse {
+		return "***** DO NOT PARSE RESPONSE - Enabled *****"
+	}
 	if len(r.body) > 0 {
 		if int64(len(r.body)) > sl {
 			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", len(r.body))

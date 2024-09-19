@@ -1710,6 +1710,43 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 	assertNil(t, resp.RawBody())
 }
 
+func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	t.Run("do not parse response debug log client level", func(t *testing.T) {
+		c := dc().
+			SetDoNotParseResponse(true).
+			SetDebug(true)
+
+		var lgr bytes.Buffer
+		c.outputLogTo(&lgr)
+
+		_, err := c.R().
+			SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+			Get(ts.URL + "/")
+
+		assertError(t, err)
+		assertEqual(t, true, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
+	})
+
+	t.Run("do not parse response debug log request level", func(t *testing.T) {
+		c := dc()
+
+		var lgr bytes.Buffer
+		c.outputLogTo(&lgr)
+
+		_, err := c.R().
+			SetDebug(true).
+			SetDoNotParseResponse(true).
+			SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+			Get(ts.URL + "/")
+
+		assertError(t, err)
+		assertEqual(t, true, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
+	})
+}
+
 type noCtTest struct {
 	Response string `json:"response"`
 }
