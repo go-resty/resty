@@ -254,7 +254,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 			case "/login-json-html":
 				w.Header().Set(hdrContentTypeKey, "text/html")
 				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte(`<htm><body>Test JSON request with HTML response</body></html>`))
+				_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
 				return
 			case "/usersmap":
 				// JSON

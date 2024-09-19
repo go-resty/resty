@@ -115,6 +115,23 @@ func IsXMLType(ct string) bool {
 	return xmlCheck.MatchString(ct)
 }
 
+func isJSONContentType(ct string) bool {
+	return strings.Contains(ct, jsonKey)
+}
+
+func isXMLContentType(ct string) bool {
+	return strings.Contains(ct, xmlKey)
+}
+
+func inferContentTypeMapKey(v string) string {
+	if isJSONContentType(v) {
+		return jsonKey
+	} else if isXMLContentType(v) {
+		return xmlKey
+	}
+	return ""
+}
+
 // Unmarshalc content into object from JSON or XML
 func Unmarshalc(c *Client, ct string, b []byte, d any) (err error) {
 	c.lock.RLock()

@@ -177,10 +177,18 @@ func createClient(hc *http.Client) *Client {
 		jsonEscapeHTML:         true,
 		httpClient:             hc,
 		debugBodySizeLimit:     math.MaxInt32,
+		contentTypeEncoders:    make(map[string]ContentTypeEncoder),
+		contentTypeDecoders:    make(map[string]ContentTypeDecoder),
 	}
 
 	// Logger
 	c.SetLogger(createLogger())
+
+	c.AddContentTypeEncoder(jsonKey, encodeJSON)
+	c.AddContentTypeEncoder(xmlKey, encodeXML)
+
+	c.AddContentTypeDecoder(jsonKey, decodeJSON)
+	c.AddContentTypeDecoder(xmlKey, decodeXML)
 
 	// default before request middlewares
 	c.beforeRequest = []RequestMiddleware{
@@ -197,7 +205,6 @@ func createClient(hc *http.Client) *Client {
 
 	// default after response middlewares
 	c.afterResponse = []ResponseMiddleware{
-		responseLogger,
 		parseResponseBody,
 		saveResponseIntoFile,
 	}

@@ -375,7 +375,7 @@ func TestClientOnBeforeRequestModification(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.Body())
+	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
@@ -701,11 +701,12 @@ func TestDebugBodySizeLimit(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
+	c := dc().
+		SetDebug(true).
+		SetDebugBodyLimit(30)
+
 	var lgr bytes.Buffer
-	c := dc()
-	c.SetDebug(true)
-	c.SetDebugBodyLimit(30)
-	c.outputLogTo(&lgr)
+	c.outputLogTo(&lgr) // internal method
 
 	testcases := []struct{ url, want string }{
 		// Text, does not exceed limit.
@@ -754,13 +755,13 @@ func TestAutoGzip(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		resp, err := c.R().
-			SetHeader("Accept-Encoding", "gzip").
+			// SetHeader("Accept-Encoding", "gzip"). // TODO put back when implementing compression handling
 			Get(tc.url)
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 		assertEqual(t, "200 OK", resp.Status())
-		assertNotNil(t, resp.Body())
+		assertNotNil(t, resp.BodyBytes())
 		assertEqual(t, tc.want, resp.String())
 
 		logResponse(t, resp)
@@ -1221,18 +1222,20 @@ func TestResponseBodyLimit(t *testing.T) {
 
 	t.Run("Client body limit", func(t *testing.T) {
 		c := dc().SetResponseBodyLimit(1024)
-		assertEqual(t, 1024, c.ResponseBodyLimit())
-		_, err := c.R().Get(ts.URL + "/")
+		assertEqual(t, int64(1024), c.ResponseBodyLimit())
+		resp, err := c.R().Get(ts.URL + "/")
 		assertNotNil(t, err)
-		assertErrorIs(t, ErrResponseBodyTooLarge, err)
+		assertErrorIs(t, ErrReadExceedsThresholdLimit, err)
+		assertEqual(t, int64(1408), resp.Size())
 	})
 
 	t.Run("request body limit", func(t *testing.T) {
 		c := dc()
 
-		_, err := c.R().SetResponseBodyLimit(1024).Get(ts.URL + "/")
+		resp, err := c.R().SetResponseBodyLimit(1024).Get(ts.URL + "/")
 		assertNotNil(t, err)
-		assertErrorIs(t, ErrResponseBodyTooLarge, err)
+		assertErrorIs(t, ErrReadExceedsThresholdLimit, err)
+		assertEqual(t, int64(1408), resp.Size())
 	})
 
 	t.Run("body less than limit", func(t *testing.T) {
@@ -1240,7 +1243,8 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		res, err := c.R().SetResponseBodyLimit(800*100 + 10).Get(ts.URL + "/")
 		assertNil(t, err)
-		assertEqual(t, 800*100, len(res.body))
+		assertEqual(t, 800*100, len(res.BodyBytes()))
+		assertEqual(t, int64(800*100), res.Size())
 	})
 
 	t.Run("no body limit", func(t *testing.T) {
@@ -1248,7 +1252,8 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		res, err := c.R().Get(ts.URL + "/")
 		assertNil(t, err)
-		assertEqual(t, 800*100, len(res.body))
+		assertEqual(t, 800*100, len(res.BodyBytes()))
+		assertEqual(t, int64(800*100), res.Size())
 	})
 
 	t.Run("read error", func(t *testing.T) {

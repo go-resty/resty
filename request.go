@@ -78,7 +78,7 @@ type Request struct {
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
 	debugBodySizeLimit  int
-	responseBodyLimit   int
+	responseBodyLimit   int64
 	resultCurlCmd       *string
 	generateCurlOnDebug bool
 }
@@ -603,7 +603,9 @@ func (r *Request) SetDigestAuth(username, password string) *Request {
 //		SetOutput("/Users/jeeva/Downloads/ReplyWithHeader-v5.1-beta.zip").
 //		Get("http://bit.ly/1LouEKr")
 //
-// NOTE: In this scenario [Response.Body] might be nil.
+// NOTE: In this scenario
+//   - [Response.BodyBytes] might be nil.
+//   - [Response].Body might be already read.
 func (r *Request) SetOutput(file string) *Request {
 	r.outputFile = file
 	r.isSaveResponse = true
@@ -653,7 +655,7 @@ func (r *Request) SetDoNotParseResponse(notParse bool) *Request {
 //   - "DoNotParseResponse" is set for client or request.
 //
 // It overrides the value set at the client instance level, see [Client.SetResponseBodyLimit]
-func (r *Request) SetResponseBodyLimit(v int) *Request {
+func (r *Request) SetResponseBodyLimit(v int64) *Request {
 	r.responseBodyLimit = v
 	return r
 }
@@ -1180,7 +1182,7 @@ type SRVRecord struct {
 
 func (r *Request) fmtBodyString(sl int) (body string) {
 	body = "***** NO CONTENT *****"
-	if !isPayloadSupported(r.Method, r.client.allowGetMethodPayload) {
+	if !isPayloadSupported(r.Method, r.client.AllowGetMethodPayload()) {
 		return
 	}
 

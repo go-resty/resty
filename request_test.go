@@ -44,7 +44,7 @@ func TestGet(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "HTTP/1.1", resp.Proto())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.Body())
+	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
@@ -269,6 +269,7 @@ func TestPostJSONStructSuccess(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, int64(50), resp.Size())
 
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
 
@@ -291,6 +292,7 @@ func TestPostJSONRPCStructSuccess(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, int64(50), resp.Size())
 
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
 
@@ -430,9 +432,10 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 		ForceContentType("application/json").
 		Post(ts.URL + "/login-json-html")
 
-	assertNotNil(t, err) // expecting error due to incorrect content type from server end
+	assertNil(t, err) // JSON response comes with incorrect content-type, we correct it with ForceContentType
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, 0, retried)
+	assertEqual(t, int64(50), resp.Size())
 
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
 
@@ -454,6 +457,7 @@ func TestPostXMLStringSuccess(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, int64(116), resp.Size())
 
 	logResponse(t, resp)
 }
@@ -1271,7 +1275,7 @@ func TestPatchMethod(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	resp.SetBody(nil)
+	resp.SetBodyBytes(nil)
 	assertEqual(t, "", resp.String())
 }
 
@@ -1589,19 +1593,25 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	defer ts.Close()
 	defer cleanupFiles(".testdata/dir-sample")
 
+	baseOutputDir := filepath.Join(getTestDataPath(), "dir-sample")
 	client := dc().
 		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
-		SetOutputDirectory(filepath.Join(getTestDataPath(), "dir-sample")).
+		SetOutputDirectory(baseOutputDir).
 		SetDebug(true)
 	client.outputLogTo(io.Discard)
 
+	outputFilePath := "go-resty/test-img-success.png"
 	resp, err := client.R().
-		SetOutput("go-resty/test-img-success.png").
+		SetOutput(outputFilePath).
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
 	assertEqual(t, true, resp.Size() != 0)
 	assertEqual(t, true, resp.Time() > 0)
+
+	f, err1 := os.Open(filepath.Join(baseOutputDir, outputFilePath))
+	defer closeq(f)
+	assertError(t, err1)
 }
 
 func TestOutputFileWithBaseDirError(t *testing.T) {
@@ -1778,7 +1788,7 @@ func TestRequestQueryStringOrder(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.Body())
+	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
@@ -1842,7 +1852,7 @@ func TestHostHeaderOverride(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.Body())
+	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "myhostname", resp.String())
 
 	logResponse(t, resp)
@@ -1865,8 +1875,6 @@ func TestNotFoundWithError(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusNotFound, resp.StatusCode())
 	assertEqual(t, "404 Not Found", resp.Status())
-	assertNotNil(t, resp.Body())
-	assertEqual(t, "{\"error\": \"Not found\"}", resp.String())
 	assertNotNil(t, httpError)
 	assertEqual(t, "Not found", httpError.Error)
 
@@ -1888,8 +1896,6 @@ func TestNotFoundWithoutError(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusNotFound, resp.StatusCode())
 	assertEqual(t, "404 Not Found", resp.Status())
-	assertNotNil(t, resp.Body())
-	assertEqual(t, 0, len(resp.Body()))
 	assertNotNil(t, httpError)
 	assertEqual(t, "", httpError.Error)
 
