@@ -35,7 +35,7 @@ func buildCurlRequest(req *http.Request, httpCookiejar http.CookieJar) (curl str
 	if req.Body != nil {
 		buf, _ := io.ReadAll(req.Body)
 		req.Body = io.NopCloser(bytes.NewBuffer(buf)) // important!!
-		curl += `-d ` + shellescape.Quote(string(buf))
+		curl += `-d ` + shellescape.Quote(string(bytes.TrimRight(buf, "\n")))
 	}
 
 	urlString := shellescape.Quote(req.URL.String())

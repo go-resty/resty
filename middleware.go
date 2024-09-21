@@ -183,8 +183,6 @@ func parseRequestBody(c *Client, r *Request) error {
 		case len(c.FormData()) > 0 || len(r.FormData) > 0: // Handling Form Data
 			handleFormData(c, r)
 		case r.Body != nil: // Handling Request body
-			handleContentType(c, r)
-
 			if err := handleRequestBody(c, r); err != nil {
 				return err
 			}
@@ -498,58 +496,60 @@ func handleFormData(c *Client, r *Request) {
 	r.isFormData = true
 }
 
-func handleContentType(c *Client, r *Request) {
+var ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body kind")
+
+func handleRequestBody(c *Client, r *Request) error {
 	contentType := r.Header.Get(hdrContentTypeKey)
 	if IsStringEmpty(contentType) {
+		// it is highly recommended that the user provide a request content-type
 		contentType = DetectContentType(r.Body)
 		r.Header.Set(hdrContentTypeKey, contentType)
 	}
-}
 
-func handleRequestBody(c *Client, r *Request) error {
-	var bodyBytes []byte
-	r.bodyBuf = nil
+	r.bodyBuf = acquireBuffer()
 
 	switch body := r.Body.(type) {
 	case io.Reader:
+		// TODO create pass through reader to capture content-length
 		if r.setContentLength { // keep backward compatibility
-			r.bodyBuf = acquireBuffer()
 			if _, err := r.bodyBuf.ReadFrom(body); err != nil {
+				releaseBuffer(r.bodyBuf)
 				return err
 			}
 			r.Body = nil
 		} else {
 			// Otherwise buffer less processing for `io.Reader`, sounds good.
+			releaseBuffer(r.bodyBuf)
+			r.bodyBuf = nil
 			return nil
 		}
 	case []byte:
-		bodyBytes = body
+		r.bodyBuf.Write(body)
 	case string:
-		bodyBytes = []byte(body)
+		r.bodyBuf.Write([]byte(body))
 	default:
-		contentType := r.Header.Get(hdrContentTypeKey)
-		kind := inferKind(r.Body)
-		var err error
-		if IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
-			r.bodyBuf, err = jsonMarshal(c, r, r.Body)
-		} else if IsXMLType(contentType) && (kind == reflect.Struct) {
-			c.lock.RLock()
-			bodyBytes, err = c.xmlMarshal(r.Body)
-			c.lock.RUnlock()
+		encKey := inferContentTypeMapKey(contentType)
+		if jsonKey == encKey {
+			if !r.jsonEscapeHTML {
+				return encodeJSONEscapeHTML(r.bodyBuf, r.Body, r.jsonEscapeHTML)
+			}
+		} else if xmlKey == encKey {
+			if inferKind(r.Body) != reflect.Struct {
+				releaseBuffer(r.bodyBuf)
+				return ErrUnsupportedRequestBodyKind
+			}
 		}
-		if err != nil {
+
+		// user registered encoders with resty fallback key
+		encFunc, found := c.inferContentTypeEncoder(contentType, encKey)
+		if !found {
+			releaseBuffer(r.bodyBuf)
+			return fmt.Errorf("resty: content-type encoder not found for %s", contentType)
+		}
+		if err := encFunc(r.bodyBuf, r.Body); err != nil {
+			releaseBuffer(r.bodyBuf)
 			return err
 		}
-	}
-
-	if bodyBytes == nil && r.bodyBuf == nil {
-		return errors.New("unsupported 'Body' type/value")
-	}
-
-	// []byte into Buffer
-	if bodyBytes != nil && r.bodyBuf == nil {
-		r.bodyBuf = acquireBuffer()
-		_, _ = r.bodyBuf.Write(bodyBytes)
 	}
 
 	return nil
