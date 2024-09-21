@@ -1243,12 +1243,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
-		logErr := responseLogger(c, response)
 		response.setReceivedAt()
-		if err != nil {
-			return response, errors.Join(err, logErr)
+		if logErr := responseLogger(c, response); logErr != nil {
+			return response, wrapErrors(logErr, err)
 		}
-		return response, wrapNoRetryErr(logErr)
+		if err != nil {
+			return response, err
+		}
+		return response, nil
 	}
 
 	if !req.isSaveResponse {
@@ -1260,7 +1262,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			if _, ok := body.(*gzip.Reader); !ok {
 				body, err = gzip.NewReader(body)
 				if err != nil {
-					err = errors.Join(err, responseLogger(c, response))
+					err = wrapErrors(responseLogger(c, response), err)
 					response.setReceivedAt()
 					return response, err
 				}
@@ -1269,7 +1271,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 
 		if response.body, err = readAllWithLimit(body, req.responseBodyLimit); err != nil {
-			err = errors.Join(err, responseLogger(c, response))
+			err = wrapErrors(responseLogger(c, response), err)
 			response.setReceivedAt()
 			return response, err
 		}
