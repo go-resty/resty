@@ -1244,10 +1244,10 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	if err != nil || req.notParseResponse || c.notParseResponse {
 		response.setReceivedAt()
-		logErr := responseLogger(c, response)
-		if logErr != nil {
+		if logErr := responseLogger(c, response); logErr != nil {
 			return response, wrapErrors(logErr, err)
-		} else if err != nil {
+		}
+		if err != nil {
 			return response, err
 		}
 		return response, nil
