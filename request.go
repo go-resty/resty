@@ -212,6 +212,7 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 }
 
 // SetUnescapeQueryParams method sets the unescape query parameters choice for request URL.
+// To prevent broken URL, resty replaces space (" ") with "+" in the query parameters.
 //
 // This method overrides the value set by [Client.SetUnescapeQueryParams]
 //
