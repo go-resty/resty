@@ -121,6 +121,14 @@ func createGetServer(t *testing.T) *httptest.Server {
 			case "/not-found-no-error":
 				w.Header().Set(hdrContentTypeKey, "application/json")
 				w.WriteHeader(http.StatusNotFound)
+			case "/unescape-query-params":
+				initOne := r.URL.Query().Get("initone")
+				fromClient := r.URL.Query().Get("fromclient")
+				registry := r.URL.Query().Get("registry")
+				assertEqual(t, "cáfe", initOne)
+				assertEqual(t, "hey unescape", fromClient)
+				assertEqual(t, "nacos://test:6801", registry)
+				_, _ = w.Write([]byte(`query params looks good`))
 			}
 
 			switch {

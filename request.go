@@ -73,6 +73,7 @@ type Request struct {
 	retryConditions     []RetryConditionFunc
 	responseBodyLimit   int
 	generateCurlOnDebug bool
+	unescapeQueryParams bool
 }
 
 // GenerateCurlCommand method generates the CURL command for the request.
@@ -207,6 +208,16 @@ func (r *Request) SetQueryParams(params map[string]string) *Request {
 	for p, v := range params {
 		r.SetQueryParam(p, v)
 	}
+	return r
+}
+
+// SetUnescapeQueryParams method sets the unescape query parameters choice for request URL.
+//
+// This method overrides the value set by [Client.SetUnescapeQueryParams]
+//
+// NOTE: Request failure is possible due to non-standard usage of Unescaped Query Parameters.
+func (r *Request) SetUnescapeQueryParams(unescape bool) *Request {
+	r.unescapeQueryParams = unescape
 	return r
 }
 

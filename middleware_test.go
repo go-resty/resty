@@ -265,6 +265,23 @@ func Test_parseRequestURL(t *testing.T) {
 			},
 			expectedURL: "https://example.com/?foo=1&foo=2",
 		},
+		{
+			name: "unescape query params",
+			init: func(c *Client, r *Request) {
+				c.SetBaseURL("https://example.com/").
+					SetUnescapeQueryParams(true). // this line is just code coverage; I will restructure this test in v3 for the client and request the respective init method
+					SetQueryParam("fromclient", "hey unescape").
+					SetQueryParam("initone", "cáfe")
+
+				r.SetUnescapeQueryParams(true) // this line takes effect
+				r.SetQueryParams(
+					map[string]string{
+						"registry": "nacos://test:6801", // GH #797
+					},
+				)
+			},
+			expectedURL: "https://example.com/?initone=cáfe&fromclient=hey unescape&registry=nacos://test:6801",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c := New()
@@ -290,6 +307,29 @@ func Test_parseRequestURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRequestURL_GH797(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dc().
+		SetBaseURL(ts.URL).
+		SetUnescapeQueryParams(true). // this line is just code coverage; I will restructure this test in v3 for the client and request the respective init method
+		SetQueryParam("fromclient", "hey unescape").
+		SetQueryParam("initone", "cáfe")
+
+	resp, err := c.R().
+		SetUnescapeQueryParams(true). // this line takes effect
+		SetQueryParams(
+			map[string]string{
+				"registry": "nacos://test:6801", // GH #797
+			},
+		).
+		Get("/unescape-query-params")
+
+	assertError(t, err)
+	assertEqual(t, "query params looks good", resp.String())
 }
 
 func Benchmark_parseRequestURL_PathParams(b *testing.B) {

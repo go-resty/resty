@@ -154,6 +154,15 @@ func parseRequestURL(c *Client, r *Request) error {
 		}
 	}
 
+	// GH#797 Unescape query parameters
+	if r.unescapeQueryParams && len(reqURL.RawQuery) > 0 {
+		unescapedQuery, err := url.QueryUnescape(reqURL.RawQuery)
+		if err != nil {
+			return err
+		}
+		reqURL.RawQuery = strings.ReplaceAll(unescapedQuery, " ", "+") // otherwise request becomes bad request
+	}
+
 	r.URL = reqURL.String()
 
 	return nil
