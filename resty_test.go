@@ -385,6 +385,17 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				return
 			}
 		}
+
+		if r.Method == MethodPut {
+
+			if r.URL.Path == "/raw-upload" {
+				body, _ := io.ReadAll(r.Body)
+				bl, _ := strconv.Atoi(r.Header.Get("Content-Length"))
+				assertEqual(t, len(body), bl)
+				w.WriteHeader(http.StatusOK)
+			}
+
+		}
 	})
 
 	return ts

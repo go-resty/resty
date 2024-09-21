@@ -672,18 +672,18 @@ func TestParseRequestBody(t *testing.T) {
 					Bar: "2",
 				}).SetContentLength(true)
 			},
-			expectedBodyBuf:       []byte(`{"foo":"1","bar":"2"}`),
+			expectedBodyBuf:       append([]byte(`{"foo":"1","bar":"2"}`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "21",
+			expectedContentLength: "22",
 		},
 		{
 			name: "json from slice",
 			initRequest: func(r *Request) {
 				r.SetBody([]string{"foo", "bar"}).SetContentLength(true)
 			},
-			expectedBodyBuf:       []byte(`["foo","bar"]`),
+			expectedBodyBuf:       append([]byte(`["foo","bar"]`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "13",
+			expectedContentLength: "14",
 		},
 		{
 			name: "json from map",
@@ -697,9 +697,9 @@ func TestParseRequestBody(t *testing.T) {
 					"xyz": nil,
 				}).SetContentLength(true)
 			},
-			expectedBodyBuf:       []byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`),
+			expectedBodyBuf:       append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "54",
+			expectedContentLength: "55",
 		},
 		{
 			name: "json from map",
@@ -713,9 +713,9 @@ func TestParseRequestBody(t *testing.T) {
 					"xyz": nil,
 				}).SetContentLength(true)
 			},
-			expectedBodyBuf:       []byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`),
+			expectedBodyBuf:       append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "54",
+			expectedContentLength: "55",
 		},
 		{
 			name: "json from map",
@@ -729,9 +729,9 @@ func TestParseRequestBody(t *testing.T) {
 					"xyz": nil,
 				}).SetContentLength(true)
 			},
-			expectedBodyBuf:       []byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`),
+			expectedBodyBuf:       append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "54",
+			expectedContentLength: "55",
 		},
 		{
 			name: "xml from struct",

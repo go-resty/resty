@@ -97,7 +97,7 @@ func DetectContentType(body any) string {
 	default:
 		if b, ok := body.([]byte); ok {
 			contentType = http.DetectContentType(b)
-		} else if kind == reflect.Slice {
+		} else if kind == reflect.Slice { // check slice here to differentiate between any slice vs byte slice
 			contentType = jsonContentType
 		}
 	}
@@ -150,24 +150,6 @@ type RequestLog struct {
 type ResponseLog struct {
 	Header http.Header
 	Body   string
-}
-
-// way to disable the HTML escape as opt-in
-func jsonMarshal(c *Client, r *Request, d any) (*bytes.Buffer, error) {
-	if !r.jsonEscapeHTML {
-		return noescapeJSONMarshal(d)
-	}
-
-	c.lock.RLock()
-	data, err := c.jsonMarshal(d)
-	c.lock.RUnlock()
-	if err != nil {
-		return nil, err
-	}
-
-	buf := acquireBuffer()
-	_, _ = buf.Write(data)
-	return buf, nil
 }
 
 func firstNonEmpty(v ...string) string {

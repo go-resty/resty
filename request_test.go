@@ -591,7 +591,7 @@ func TestPostXMLMapNotSupported(t *testing.T) {
 		SetBody(map[string]any{"Username": "testuser", "Password": "testpass"}).
 		Post(ts.URL + "/login")
 
-	assertEqual(t, "unsupported 'Body' type/value", err.Error())
+	assertErrorIs(t, ErrUnsupportedRequestBodyKind, err)
 }
 
 func TestRequestBasicAuth(t *testing.T) {

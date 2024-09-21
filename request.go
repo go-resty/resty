@@ -1268,18 +1268,6 @@ func (r *Request) initValuesMap() {
 	}
 }
 
-var noescapeJSONMarshal = func(v any) (*bytes.Buffer, error) {
-	buf := acquireBuffer()
-	encoder := json.NewEncoder(buf)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(v); err != nil {
-		releaseBuffer(buf)
-		return nil, err
-	}
-
-	return buf, nil
-}
-
 var noescapeJSONMarshalIndent = func(v any) (*bytes.Buffer, error) {
 	buf := acquireBuffer()
 	encoder := json.NewEncoder(buf)

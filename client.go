@@ -733,6 +733,17 @@ func (c *Client) AddContentTypeEncoder(ct string, e ContentTypeEncoder) *Client 
 	return c
 }
 
+func (c *Client) inferContentTypeEncoder(ct ...string) (ContentTypeEncoder, bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for _, v := range ct {
+		if d, f := c.contentTypeEncoders[v]; f {
+			return d, f
+		}
+	}
+	return nil, false
+}
+
 // ContentTypeDecoders method returns all the registered content type decoders.
 func (c *Client) ContentTypeDecoders() map[string]ContentTypeDecoder {
 	c.lock.RLock()

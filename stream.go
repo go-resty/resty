@@ -20,7 +20,13 @@ type (
 )
 
 func encodeJSON(w io.Writer, v any) error {
-	return json.NewEncoder(w).Encode(v)
+	return encodeJSONEscapeHTML(w, v, true)
+}
+
+func encodeJSONEscapeHTML(w io.Writer, v any, esc bool) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(esc)
+	return enc.Encode(v)
 }
 
 func decodeJSON(r io.Reader, v any) error {
