@@ -6,6 +6,7 @@ package resty
 
 import (
 	"bytes"
+	"errors"
 	"mime/multipart"
 	"net/url"
 	"testing"
@@ -101,4 +102,19 @@ func TestCloneURLValues(t *testing.T) {
 	nilUrl := cloneURLValues(nil)
 	assertEqual(t, v, c)
 	assertNil(t, nilUrl)
+}
+
+func TestRestyErrorFuncs(t *testing.T) {
+	ne1 := errors.New("new error 1")
+	nie1 := errors.New("inner error 1")
+
+	e := wrapErrors(ne1, nie1)
+	assertEqual(t, "new error 1", e.Error())
+	assertEqual(t, "inner error 1", errors.Unwrap(e).Error())
+
+	e = wrapErrors(ne1, nil)
+	assertEqual(t, "new error 1", e.Error())
+
+	e = wrapErrors(nil, nie1)
+	assertEqual(t, "inner error 1", e.Error())
 }

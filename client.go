@@ -1697,11 +1697,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if err != nil || req.NotParseResponse { // error or do not parse response
-		logErr := responseLogger(c, response)
-		if err != nil {
-			return response, errors.Join(err, logErr)
-		}
-		return response, wrapNoRetryErr(logErr)
+		return response, wrapErrors(responseLogger(c, response), err)
 	}
 
 	// Apply Response middleware

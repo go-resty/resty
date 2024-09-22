@@ -340,6 +340,35 @@ func copyHeaders(hdrs http.Header) http.Header {
 	return nh
 }
 
+func wrapErrors(n error, inner error) error {
+	if n == nil && inner == nil {
+		return nil
+	}
+	if inner == nil {
+		return n
+	}
+	if n == nil {
+		return inner
+	}
+	return &restyError{
+		err:   n,
+		inner: inner,
+	}
+}
+
+type restyError struct {
+	err   error
+	inner error
+}
+
+func (e *restyError) Error() string {
+	return e.err.Error()
+}
+
+func (e *restyError) Unwrap() error {
+	return e.inner
+}
+
 type noRetryErr struct {
 	err error
 }
