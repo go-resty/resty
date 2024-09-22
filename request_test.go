@@ -1275,7 +1275,6 @@ func TestPatchMethod(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	resp.SetBodyBytes(nil)
 	assertEqual(t, "", resp.String())
 }
 
@@ -1705,10 +1704,10 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 
 	buf := acquireBuffer()
 	defer releaseBuffer(buf)
-	_, _ = io.Copy(buf, resp.RawBody())
+	_, _ = io.Copy(buf, resp.Body)
 
 	assertEqual(t, "TestGet: text response", buf.String())
-	_ = resp.RawBody().Close()
+	_ = resp.Body.Close()
 
 	// Manually setting RawResponse as nil
 	resp, err = dc().R().
@@ -1718,7 +1717,8 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 	assertError(t, err)
 
 	resp.RawResponse = nil
-	assertNil(t, resp.RawBody())
+	assertEqual(t, 0, resp.StatusCode())
+	assertEqual(t, "", resp.String())
 }
 
 func TestRequestDoNotParseResponseDebugLog(t *testing.T) {

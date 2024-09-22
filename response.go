@@ -34,24 +34,12 @@ type Response struct {
 // NOTE:
 //   - [Response.BodyBytes] might be `nil` if [Request.SetOutput], [Request.SetDoNotParseResponse],
 //     [Client.SetDoNotParseResponse] method is used.
-//   - [Response.BodyBytes] might be `nil` if [Response].Body is already read.
+//   - [Response.BodyBytes] might be `nil` if [Response].Body is already auto-unmarshal performed.
 func (r *Response) BodyBytes() []byte {
 	if r.RawResponse == nil {
 		return []byte{}
 	}
 	return r.bodyBytes
-}
-
-// SetBodyBytes method sets [Response] body in byte slice. Typically,
-// It is helpful for test cases.
-//
-//	resp.SetBodyBytes([]byte("This is test body content"))
-//	resp.SetBodyBytes(nil)
-//
-// NOTE: Returns an empty byte slice on auto-unmarshal scenarios
-func (r *Response) SetBodyBytes(b []byte) *Response {
-	r.bodyBytes = b
-	return r
 }
 
 // Status method returns the HTTP status string for the executed request.
@@ -147,19 +135,6 @@ func (r *Response) ReceivedAt() time.Time {
 // when possible. So that users get the actual size of response bytes.
 func (r *Response) Size() int64 {
 	return r.size
-}
-
-// RawBody method exposes the HTTP raw response body. Use this method in conjunction with
-// [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse]
-// option; otherwise, you get an error as `read err: http: read on closed response body.`
-//
-// Do not forget to close the body, otherwise you might get into connection leaks, no connection reuse.
-// You have taken over the control of response parsing from Resty.
-func (r *Response) RawBody() io.ReadCloser {
-	if r.RawResponse == nil {
-		return nil
-	}
-	return r.RawResponse.Body
 }
 
 // IsSuccess method returns true if HTTP status `code >= 200 and <= 299` otherwise false.
