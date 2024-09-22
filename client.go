@@ -1369,6 +1369,15 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	return c
 }
 
+// SetRootCertificateWatcher enables dynamic reloading of one or more root certificates.
+// It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+//
+// client.SetRootCertificateWatcher(&WatcherOptions{PemFilePath: "root-ca.crt"})
+func (c *Client) SetRootCertificateWatcher(options *WatcherOptions) *Client {
+	c.handleCAsWatcher("root", options)
+	return c
+}
+
 // SetRootCertificateFromString method helps to add one or more root certificates
 // into the Resty client
 //
@@ -1389,6 +1398,15 @@ func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
 		return c
 	}
 	c.handleCAs("client", rootPemData)
+	return c
+}
+
+// SetClientRootCertificateWatcher enables dynamic reloading of one or more root certificates.
+// It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+//
+// client.SetClientRootCertificateWatcher(&WatcherOptions{PemFilePath: "root-ca.crt"})
+func (c *Client) SetClientRootCertificateWatcher(options *WatcherOptions) *Client {
+	c.handleCAsWatcher("client", options)
 	return c
 }
 
