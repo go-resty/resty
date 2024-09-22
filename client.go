@@ -865,6 +865,15 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	return c
 }
 
+// SetRootCertificateWatcher enables dynamic reloading of one or more root certificates.
+// It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+//
+// client.SetRootCertificateWatcher(&WatcherOptions{PemFilePath: "root-ca.crt"})
+func (c *Client) SetRootCertificateWatcher(options *WatcherOptions) *Client {
+	c.handleCAsWatcher("root", options)
+	return c
+}
+
 // SetRootCertificateFromString method helps to add one or more root certificates
 // into the Resty client
 //
@@ -885,6 +894,15 @@ func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
 		return c
 	}
 	c.handleCAs("client", rootPemData)
+	return c
+}
+
+// SetClientRootCertificateWatcher enables dynamic reloading of one or more root certificates.
+// It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+//
+// client.SetClientRootCertificateWatcher(&WatcherOptions{PemFilePath: "root-ca.crt"})
+func (c *Client) SetClientRootCertificateWatcher(options *WatcherOptions) *Client {
+	c.handleCAsWatcher("client", options)
 	return c
 }
 
@@ -916,6 +934,36 @@ func (c *Client) handleCAs(scope string, permCerts []byte) {
 		}
 		config.ClientCAs.AppendCertsFromPEM(permCerts)
 	}
+}
+
+func (c *Client) handleCAsWatcher(scope string, options *WatcherOptions) {
+	pw, err := newPemWatcher(options, c.log, c.Debug)
+	if err != nil {
+		c.log.Errorf("%v", err)
+		return
+	}
+
+	tlsConfig, err := c.tlsConfig()
+	if err != nil {
+		c.log.Errorf("%v", err)
+		return
+	}
+
+	c.OnBeforeRequest(func(client *Client, request *Request) error {
+		certPool, err := pw.CertPool()
+		if err != nil {
+			return err
+		}
+
+		switch scope {
+		case "root":
+			tlsConfig.RootCAs = certPool
+		case "client":
+			tlsConfig.ClientCAs = certPool
+		}
+
+		return nil
+	})
 }
 
 // SetOutputDirectory method sets the output directory for saving HTTP responses in a file.
