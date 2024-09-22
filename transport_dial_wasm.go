@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build js && wasm
-// +build js,wasm
+//go:build (js && wasm) || wasip1
+// +build js,wasm wasip1
 
 package resty
 
@@ -12,6 +12,6 @@ import (
 	"net"
 )
 
-func transportDialContext(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
+func transportDialContext(_ *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
 	return nil
 }
