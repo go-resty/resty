@@ -141,7 +141,7 @@ func parseRequestURL(c *Client, r *Request) error {
 		// standard package `url.Encode(...)` sorts the query params
 		// alphabetically
 		if len(r.QueryParams) > 0 {
-			if IsStringEmpty(reqURL.RawQuery) {
+			if isStringEmpty(reqURL.RawQuery) {
 				reqURL.RawQuery = r.QueryParams.Encode()
 			} else {
 				reqURL.RawQuery = reqURL.RawQuery + "&" + r.QueryParams.Encode()
@@ -162,11 +162,11 @@ func parseRequestHeader(c *Client, r *Request) error {
 		r.Header[k] = v[:]
 	}
 
-	if IsStringEmpty(r.Header.Get(hdrUserAgentKey)) {
+	if isStringEmpty(r.Header.Get(hdrUserAgentKey)) {
 		r.Header.Set(hdrUserAgentKey, hdrUserAgentValue)
 	}
 
-	if ct := r.Header.Get(hdrContentTypeKey); IsStringEmpty(r.Header.Get(hdrAcceptKey)) && !IsStringEmpty(ct) && (IsJSONType(ct) || IsXMLType(ct)) {
+	if ct := r.Header.Get(hdrContentTypeKey); isStringEmpty(r.Header.Get(hdrAcceptKey)) && !isStringEmpty(ct) && (isJSONContentType(ct) || isXMLContentType(ct)) {
 		r.Header.Set(hdrAcceptKey, r.Header.Get(hdrContentTypeKey))
 	}
 
@@ -278,9 +278,9 @@ func addCredentials(c *Client, r *Request) error {
 	}
 
 	// Build the token Auth header
-	if !IsStringEmpty(r.AuthToken) {
+	if !isStringEmpty(r.AuthToken) {
 		var authScheme string
-		if IsStringEmpty(r.AuthScheme) {
+		if isStringEmpty(r.AuthScheme) {
 			authScheme = "Bearer"
 		} else {
 			authScheme = r.AuthScheme
@@ -500,9 +500,9 @@ var ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body 
 
 func handleRequestBody(c *Client, r *Request) error {
 	contentType := r.Header.Get(hdrContentTypeKey)
-	if IsStringEmpty(contentType) {
+	if isStringEmpty(contentType) {
 		// it is highly recommended that the user provide a request content-type
-		contentType = DetectContentType(r.Body)
+		contentType = detectContentType(r.Body)
 		r.Header.Set(hdrContentTypeKey, contentType)
 	}
 

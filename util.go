@@ -74,19 +74,19 @@ type RateLimiter interface {
 	Allow() bool
 }
 
-var ErrRateLimitExceeded = errors.New("rate limit exceeded")
+var ErrRateLimitExceeded = errors.New("resty: rate limit exceeded")
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Package Helper methods
 //_______________________________________________________________________
 
-// IsStringEmpty method tells whether given string is empty or not
-func IsStringEmpty(str string) bool {
+// isStringEmpty method tells whether given string is empty or not
+func isStringEmpty(str string) bool {
 	return len(strings.TrimSpace(str)) == 0
 }
 
-// DetectContentType method is used to figure out `Request.Body` content type for request header
-func DetectContentType(body any) string {
+// detectContentType method is used to figure out `Request.Body` content type for request header
+func detectContentType(body any) string {
 	contentType := plainTextType
 	kind := inferKind(body)
 	switch kind {
@@ -103,16 +103,6 @@ func DetectContentType(body any) string {
 	}
 
 	return contentType
-}
-
-// IsJSONType method is to check JSON content type or not
-func IsJSONType(ct string) bool {
-	return jsonCheck.MatchString(ct)
-}
-
-// IsXMLType method is to check XML content type or not
-func IsXMLType(ct string) bool {
-	return xmlCheck.MatchString(ct)
 }
 
 func isJSONContentType(ct string) bool {
@@ -154,7 +144,7 @@ type ResponseLog struct {
 
 func firstNonEmpty(v ...string) string {
 	for _, s := range v {
-		if !IsStringEmpty(s) {
+		if !isStringEmpty(s) {
 			return s
 		}
 	}
@@ -171,7 +161,7 @@ func createMultipartHeader(param, fileName, contentType string) textproto.MIMEHe
 	hdr := make(textproto.MIMEHeader)
 
 	var contentDispositionValue string
-	if IsStringEmpty(fileName) {
+	if isStringEmpty(fileName) {
 		contentDispositionValue = fmt.Sprintf(`form-data; name="%s"`, param)
 	} else {
 		contentDispositionValue = fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
@@ -179,7 +169,7 @@ func createMultipartHeader(param, fileName, contentType string) textproto.MIMEHe
 	}
 	hdr.Set("Content-Disposition", contentDispositionValue)
 
-	if !IsStringEmpty(contentType) {
+	if !isStringEmpty(contentType) {
 		hdr.Set(hdrContentTypeKey, contentType)
 	}
 	return hdr

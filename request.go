@@ -1093,7 +1093,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		return resp, unwrapNoRetryErr(err)
 	}
 
-	err = Backoff(
+	err = backoff(
 		func() (*Response, error) {
 			r.Attempt++
 

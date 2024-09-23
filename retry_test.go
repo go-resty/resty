@@ -22,7 +22,7 @@ import (
 func TestBackoffSuccess(t *testing.T) {
 	attempts := 3
 	externalCounter := 0
-	retryErr := Backoff(func() (*Response, error) {
+	retryErr := backoff(func() (*Response, error) {
 		externalCounter++
 		if externalCounter < attempts {
 			return nil, errors.New("not yet got the number we're after")
@@ -54,7 +54,7 @@ func TestBackoffNoWaitForLastRetry(t *testing.T) {
 		},
 	}
 
-	retryErr := Backoff(func() (*Response, error) {
+	retryErr := backoff(func() (*Response, error) {
 		externalCounter++
 		return resp, nil
 	}, RetryConditions([]RetryConditionFunc{func(response *Response, err error) bool {
@@ -71,7 +71,7 @@ func TestBackoffNoWaitForLastRetry(t *testing.T) {
 func TestBackoffTenAttemptsSuccess(t *testing.T) {
 	attempts := 10
 	externalCounter := 0
-	retryErr := Backoff(func() (*Response, error) {
+	retryErr := backoff(func() (*Response, error) {
 		externalCounter++
 		if externalCounter < attempts {
 			return nil, errors.New("not yet got the number we're after")
@@ -90,7 +90,7 @@ func TestConditionalBackoffCondition(t *testing.T) {
 	check := RetryConditionFunc(func(*Response, error) bool {
 		return attempts != counter
 	})
-	retryErr := Backoff(func() (*Response, error) {
+	retryErr := backoff(func() (*Response, error) {
 		counter++
 		return nil, nil
 	}, RetryConditions([]RetryConditionFunc{check}))
@@ -104,7 +104,7 @@ func TestConditionalBackoffConditionNonExecution(t *testing.T) {
 	attempts := 3
 	counter := 0
 
-	retryErr := Backoff(func() (*Response, error) {
+	retryErr := backoff(func() (*Response, error) {
 		counter++
 		return nil, nil
 	}, RetryConditions([]RetryConditionFunc{filler}))
@@ -122,7 +122,7 @@ func TestOnRetryBackoff(t *testing.T) {
 		counter++
 	}
 
-	retryErr := Backoff(func() (*Response, error) {
+	retryErr := backoff(func() (*Response, error) {
 		return nil, nil
 	}, RetryHooks([]OnRetryFunc{hook}))
 

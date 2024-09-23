@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"os"
 	"reflect"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -60,9 +59,6 @@ var (
 
 	jsonKey = "json"
 	xmlKey  = "xml"
-
-	jsonCheck = regexp.MustCompile(`(?i:(application|text)/(.*json.*)(;|$))`)
-	xmlCheck  = regexp.MustCompile(`(?i:(application|text)/(.*xml.*)(;|$))`)
 
 	hdrUserAgentValue = "go-resty/" + Version + " (https://github.com/go-resty/resty)"
 	bufPool           = &sync.Pool{New: func() any { return &bytes.Buffer{} }}
@@ -1356,7 +1352,7 @@ func (c *Client) Scheme() string {
 func (c *Client) SetScheme(scheme string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if !IsStringEmpty(scheme) {
+	if !isStringEmpty(scheme) {
 		c.scheme = strings.TrimSpace(scheme)
 	}
 	return c
@@ -1652,7 +1648,7 @@ func (c *Client) executeBefore(req *Request) error {
 	// will return an error if the rate limit is exceeded.
 	if req.client.RateLimiter() != nil {
 		if !req.client.RateLimiter().Allow() {
-			return wrapNoRetryErr(ErrRateLimitExceeded)
+			return ErrRateLimitExceeded
 		}
 	}
 

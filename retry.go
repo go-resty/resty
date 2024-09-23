@@ -91,9 +91,9 @@ func ResetMultipartReaders(value bool) Option {
 	}
 }
 
-// Backoff retries with increasing timeout duration up until X amount of retries
+// backoff retries with increasing timeout duration up until X amount of retries
 // (Default is 3 attempts, Override with option Retries(n))
-func Backoff(operation func() (*Response, error), options ...Option) error {
+func backoff(operation func() (*Response, error), options ...Option) error {
 	// Defaults
 	opts := Options{
 		maxRetries:      defaultMaxRetries,

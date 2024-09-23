@@ -143,7 +143,7 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 		user := &User{}
 
 		// JSON
-		if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+		if isJSONContentType(r.Header.Get(hdrContentTypeKey)) {
 			jd := json.NewDecoder(r.Body)
 			err := jd.Decode(user)
 			if r.URL.Query().Get("ct") == "problem" {
@@ -174,7 +174,7 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 		}
 
 		// XML
-		if IsXMLType(r.Header.Get(hdrContentTypeKey)) {
+		if isXMLContentType(r.Header.Get(hdrContentTypeKey)) {
 			xd := xml.NewDecoder(r.Body)
 			err := xd.Decode(user)
 
@@ -208,7 +208,7 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 func handleUsersEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/users" {
 		// JSON
-		if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+		if isJSONContentType(r.Header.Get(hdrContentTypeKey)) {
 			var users []ExampleUser
 			jd := json.NewDecoder(r.Body)
 			err := jd.Decode(&users)
@@ -258,7 +258,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 				return
 			case "/usersmap":
 				// JSON
-				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+				if isJSONContentType(r.Header.Get(hdrContentTypeKey)) {
 					if r.URL.Query().Get("status") == "500" {
 						body, err := io.ReadAll(r.Body)
 						if err != nil {
