@@ -159,7 +159,7 @@ type Client struct {
 	rawPathParams          map[string]string
 	header                 http.Header
 	userInfo               *User
-	token                  string
+	authToken              string
 	authScheme             string
 	cookies                []*http.Cookie
 	errorType              reflect.Type
@@ -183,8 +183,8 @@ type Client struct {
 	setContentLength       bool
 	closeConnection        bool
 	notParseResponse       bool
-	trace                  bool
-	debugBodySizeLimit     int
+	isTrace                bool
+	debugBodyLimit         int
 	outputDirectory        string
 	scheme                 string
 	log                    Logger
@@ -299,6 +299,11 @@ func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 	return c
 }
 
+// CookieJar method returns the HTTP cookie jar instance from the underlying Go HTTP Client.
+func (c *Client) CookieJar() http.CookieJar {
+	return c.Client().Jar
+}
+
 // SetCookieJar method sets custom [http.CookieJar] in the resty client. It's a way to override the default.
 //
 // For Example, sometimes we don't want to save cookies in API mode so that we can remove the default
@@ -306,7 +311,7 @@ func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 //
 //	client.SetCookieJar(nil)
 func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
-	c.GetClient().Jar = jar
+	c.Client().Jar = jar
 	return c
 }
 
@@ -458,11 +463,11 @@ func (c *Client) SetBasicAuth(username, password string) *Client {
 	return c
 }
 
-// Token method returns the auth token value registered in the client instance.
-func (c *Client) Token() string {
+// AuthToken method returns the auth token value registered in the client instance.
+func (c *Client) AuthToken() string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.token
+	return c.authToken
 }
 
 // HeaderAuthorizationKey method returns the HTTP header name for Authorization from the client instance.
@@ -488,7 +493,7 @@ func (c *Client) HeaderAuthorizationKey() string {
 func (c *Client) SetAuthToken(token string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.token = token
+	c.authToken = token
 	return c
 }
 
@@ -560,22 +565,24 @@ func (c *Client) R() *Request {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	r := &Request{
-		QueryParams:       url.Values{},
-		FormData:          url.Values{},
-		Header:            http.Header{},
-		Cookies:           make([]*http.Cookie, 0),
-		PathParams:        make(map[string]string),
-		RawPathParams:     make(map[string]string),
-		Debug:             c.debug,
-		AuthScheme:        c.authScheme,
-		Token:             c.token,
-		UserInfo:          c.userInfo,
-		RetryCount:        c.retryCount,
-		RetryWaitTime:     c.retryWaitTime,
-		RetryMaxWaitTime:  c.retryMaxWaitTime,
-		RetryResetReaders: c.retryResetReaders,
-		CloseConnection:   c.closeConnection,
-		NotParseResponse:  c.notParseResponse,
+		QueryParams:        url.Values{},
+		FormData:           url.Values{},
+		Header:             http.Header{},
+		Cookies:            make([]*http.Cookie, 0),
+		PathParams:         make(map[string]string),
+		RawPathParams:      make(map[string]string),
+		Debug:              c.debug,
+		AuthScheme:         c.authScheme,
+		AuthToken:          c.authToken,
+		UserInfo:           c.userInfo,
+		RetryCount:         c.retryCount,
+		RetryWaitTime:      c.retryWaitTime,
+		RetryMaxWaitTime:   c.retryMaxWaitTime,
+		RetryResetReaders:  c.retryResetReaders,
+		CloseConnection:    c.closeConnection,
+		DoNotParseResponse: c.notParseResponse,
+		DebugBodyLimit:     c.debugBodyLimit,
+		ResponseBodyLimit:  c.responseBodyLimit,
 
 		client:              c,
 		multipartFiles:      []*File{},
@@ -583,13 +590,10 @@ func (c *Client) R() *Request {
 		jsonEscapeHTML:      c.jsonEscapeHTML,
 		log:                 c.log,
 		setContentLength:    c.setContentLength,
-		trace:               c.trace,
-		debugBodySizeLimit:  c.debugBodySizeLimit,
-		responseBodyLimit:   c.responseBodyLimit,
+		IsTrace:             c.isTrace,
 		generateCurlOnDebug: c.generateCurlOnDebug,
 	}
 
-	r.retryConditions = append(r.retryConditions, c.retryConditions...)
 	return r
 }
 
@@ -772,8 +776,8 @@ func (c *Client) inferContentTypeDecoder(ct ...string) (ContentTypeDecoder, bool
 	return nil, false
 }
 
-// Debug method returns `true` if the client is in debug mode; otherwise, it is `false`.
-func (c *Client) Debug() bool {
+// IsDebug method returns `true` if the client is in debug mode; otherwise, it is `false`.
+func (c *Client) IsDebug() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.debug
@@ -796,6 +800,13 @@ func (c *Client) SetDebug(d bool) *Client {
 	return c
 }
 
+// DebugBodyLimit method returns the debug body limit value set on the client instance
+func (c *Client) DebugBodyLimit() int {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.debugBodyLimit
+}
+
 // SetDebugBodyLimit sets the maximum size in bytes for which the response and
 // request body will be logged in debug mode.
 //
@@ -803,7 +814,7 @@ func (c *Client) SetDebug(d bool) *Client {
 func (c *Client) SetDebugBodyLimit(sl int) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.debugBodySizeLimit = sl
+	c.debugBodyLimit = sl
 	return c
 }
 
@@ -833,8 +844,8 @@ func (c *Client) OnResponseLog(rl ResponseLogCallback) *Client {
 	return c
 }
 
-// DisableWarn method returns `true` if the warning message is disabled; otherwise, it is `false`.
-func (c *Client) DisableWarn() bool {
+// IsDisableWarn method returns `true` if the warning message is disabled; otherwise, it is `false`.
+func (c *Client) IsDisableWarn() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.disableWarn
@@ -872,6 +883,13 @@ func (c *Client) SetAllowGetMethodPayload(a bool) *Client {
 	return c
 }
 
+// Logger method returns the logger instance used by the client instance.
+func (c *Client) Logger() Logger {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.log
+}
+
 // SetLogger method sets given writer for logging Resty request and response details.
 //
 // Compliant to interface [resty.Logger]
@@ -880,6 +898,13 @@ func (c *Client) SetLogger(l Logger) *Client {
 	defer c.lock.Unlock()
 	c.log = l
 	return c
+}
+
+// IsContentLength method returns true if the user requests to set content length. Otherwise, it is false.
+func (c *Client) IsContentLength() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.setContentLength
 }
 
 // SetContentLength method enables the HTTP header `Content-Length` value for every request.
@@ -1291,7 +1316,7 @@ func (c *Client) OutputDirectory() string {
 
 // SetOutputDirectory method sets the output directory for saving HTTP responses in a file.
 // Resty creates one if the output directory does not exist. This setting is optional,
-// if you plan to use the absolute path in [Request.SetOutput] and can used together.
+// if you plan to use the absolute path in [Request.SetOutputFile] and can used together.
 //
 //	client.SetOutputDirectory("/save/http/response/here")
 func (c *Client) SetOutputDirectory(dirPath string) *Client {
@@ -1315,6 +1340,21 @@ func (c *Client) SetRateLimiter(rl RateLimiter) *Client {
 	defer c.lock.Unlock()
 	c.rateLimiter = rl
 	return c
+}
+
+var ErrNotHttpTransportType = errors.New("resty: not a http.Transport type")
+
+// Transport method returns [http.Transport] currently in use or error
+// in case the currently used `transport` is not a [http.Transport].
+//
+// Since v2.8.0 has become exported method.
+func (c *Client) Transport() (*http.Transport, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
+		return transport, nil
+	}
+	return nil, ErrNotHttpTransportType
 }
 
 // SetTransport method sets custom [http.Transport] or any [http.RoundTripper]
@@ -1529,7 +1569,7 @@ func (c *Client) ResponseBodyLimit() int64 {
 // in the uncompressed response is larger than the limit.
 // Body size limit will not be enforced in the following cases:
 //   - ResponseBodyLimit <= 0, which is the default behavior.
-//   - [Request.SetOutput] is called to save response data to the file.
+//   - [Request.SetOutputFile] is called to save response data to the file.
 //   - "DoNotParseResponse" is set for client or request.
 //
 // It can be overridden at the request level; see [Request.SetResponseBodyLimit]
@@ -1551,17 +1591,31 @@ func (c *Client) SetResponseBodyLimit(v int64) *Client {
 //
 // The method [Request.EnableTrace] is also available to get trace info for a single request.
 func (c *Client) EnableTrace() *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.trace = true
+	c.SetTrace(true)
 	return c
 }
 
 // DisableTrace method disables the Resty client trace. Refer to [Client.EnableTrace].
 func (c *Client) DisableTrace() *Client {
+	c.SetTrace(false)
+	return c
+}
+
+// IsTrace method returns true if the trace is enabled on the client instance; otherwise, it returns false.
+func (c *Client) IsTrace() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.isTrace
+}
+
+// SetTrace method is used to turn on/off the trace capability in the Resty client
+// Refer to [Client.EnableTrace] or [Client.DisableTrace].
+//
+// Also, see [Request.SetTrace]
+func (c *Client) SetTrace(t bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.trace = false
+	c.isTrace = t
 	return c
 }
 
@@ -1572,13 +1626,24 @@ func (c *Client) DisableTrace() *Client {
 //   - Potential to leak sensitive data from [Request] and [Response] in the debug log.
 //   - Beware of memory usage since the request body is reread.
 func (c *Client) EnableGenerateCurlOnDebug() *Client {
-	c.generateCurlOnDebug = true
+	c.SetGenerateCurlOnDebug(true)
 	return c
 }
 
 // DisableGenerateCurlOnDebug method disables the option set by [Client.EnableGenerateCurlOnDebug].
 func (c *Client) DisableGenerateCurlOnDebug() *Client {
-	c.generateCurlOnDebug = false
+	c.SetGenerateCurlOnDebug(false)
+	return c
+}
+
+// SetGenerateCurlOnDebug method is used to turn on/off the generate CURL command in debug mode
+// at the client instance level.
+//
+// It can be overridden at the request level; see [Request.SetGenerateCurlOnDebug]
+func (c *Client) SetGenerateCurlOnDebug(b bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.generateCurlOnDebug = b
 	return c
 }
 
@@ -1588,24 +1653,11 @@ func (c *Client) IsProxySet() bool {
 	return c.ProxyURL() != nil
 }
 
-// GetClient method returns the underlying [http.Client] used by the Resty.
-func (c *Client) GetClient() *http.Client {
+// Client method returns the underlying Go [http.Client] used by the Resty.
+func (c *Client) Client() *http.Client {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.httpClient
-}
-
-// Transport method returns [http.Transport] currently in use or error
-// in case the currently used `transport` is not a [http.Transport].
-//
-// Since v2.8.0 has become exported method.
-func (c *Client) Transport() (*http.Transport, error) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
-		return transport, nil
-	}
-	return nil, errors.New("current transport is not an *http.Transport instance")
 }
 
 // Clone method returns a clone of the original client.
@@ -1678,7 +1730,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	req.Time = time.Now()
-	resp, err := c.GetClient().Do(req.RawRequest)
+	resp, err := c.Client().Do(req.RawRequest)
 
 	response := &Response{
 		Request:     req,
@@ -1689,14 +1741,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	if resp != nil {
 		response.Body = &limitReadCloser{
 			r: resp.Body,
-			l: req.responseBodyLimit,
+			l: req.ResponseBodyLimit,
 			f: func(s int64) {
 				response.size = s
 			},
 		}
 	}
 
-	if err != nil || req.NotParseResponse { // error or do not parse response
+	if err != nil || req.DoNotParseResponse { // error or do not parse response
 		return response, wrapErrors(responseLogger(c, response), err)
 	}
 

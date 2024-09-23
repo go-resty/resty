@@ -20,6 +20,8 @@ func TestGenerateUnexecutedCurl(t *testing.T) {
 			},
 		)
 
+	assertEqual(t, "", req.GenerateCurlCommand())
+
 	curlCmdUnexecuted := req.EnableGenerateCurlOnDebug().GenerateCurlCommand()
 	req.DisableGenerateCurlOnDebug()
 

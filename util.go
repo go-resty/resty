@@ -244,10 +244,6 @@ func createDirectory(dir string) (err error) {
 	return
 }
 
-func canJSONMarshal(contentType string, kind reflect.Kind) bool {
-	return IsJSONType(contentType) && (kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice)
-}
-
 func getPointer(v any) any {
 	vv := reflect.ValueOf(v)
 	if vv.Kind() == reflect.Ptr {
@@ -315,29 +311,21 @@ func closeq(v any) {
 
 func silently(_ ...any) {}
 
-func composeHeaders(c *Client, r *Request, hdrs http.Header) string {
-	str := make([]string, 0, len(hdrs))
-	for _, k := range sortHeaderKeys(hdrs) {
-		str = append(str, "\t"+strings.TrimSpace(fmt.Sprintf("%25s: %s", k, strings.Join(hdrs[k], ", "))))
+func composeHeaders(hdr http.Header) string {
+	str := make([]string, 0, len(hdr))
+	for _, k := range sortHeaderKeys(hdr) {
+		str = append(str, "\t"+strings.TrimSpace(fmt.Sprintf("%25s: %s", k, strings.Join(hdr[k], ", "))))
 	}
 	return strings.Join(str, "\n")
 }
 
-func sortHeaderKeys(hdrs http.Header) []string {
-	keys := make([]string, 0, len(hdrs))
-	for key := range hdrs {
+func sortHeaderKeys(hdr http.Header) []string {
+	keys := make([]string, 0, len(hdr))
+	for key := range hdr {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func copyHeaders(hdrs http.Header) http.Header {
-	nh := http.Header{}
-	for k, v := range hdrs {
-		nh[k] = v
-	}
-	return nh
 }
 
 func wrapErrors(n error, inner error) error {

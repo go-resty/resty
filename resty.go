@@ -176,7 +176,7 @@ func createClient(hc *http.Client) *Client {
 		headerAuthorizationKey: hdrAuthorizationKey,
 		jsonEscapeHTML:         true,
 		httpClient:             hc,
-		debugBodySizeLimit:     math.MaxInt32,
+		debugBodyLimit:         math.MaxInt32,
 		contentTypeEncoders:    make(map[string]ContentTypeEncoder),
 		contentTypeDecoders:    make(map[string]ContentTypeDecoder),
 	}

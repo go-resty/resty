@@ -429,7 +429,7 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	resp, err := c.R().
 		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		SetResult(AuthSuccess{}).
-		ForceContentType("application/json").
+		SetForceResponseContentType("application/json").
 		Post(ts.URL + "/login-json-html")
 
 	assertNil(t, err) // JSON response comes with incorrect content-type, we correct it with ForceContentType
@@ -604,6 +604,27 @@ func TestRequestBasicAuth(t *testing.T) {
 
 	resp, err := c.R().
 		SetBasicAuth("myuser", "basicauth").
+		SetResult(&AuthSuccess{}).
+		Post("/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+}
+
+func TestRequestBasicAuthWithBody(t *testing.T) {
+	ts := createAuthServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetBaseURL(ts.URL).
+		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+
+	resp, err := c.R().
+		SetBasicAuth("myuser", "basicauth").
+		SetBody([]string{strings.Repeat("hello", 25)}).
 		SetResult(&AuthSuccess{}).
 		Post("/login")
 
@@ -1101,7 +1122,7 @@ func TestGetWithCookies(t *testing.T) {
 	c.SetBaseURL(ts.URL).SetDebug(true)
 
 	tu, _ := url.Parse(ts.URL)
-	c.GetClient().Jar.SetCookies(tu, []*http.Cookie{
+	c.Client().Jar.SetCookies(tu, []*http.Cookie{
 		{
 			Name:  "jar-go-resty-1",
 			Value: "From Jar - This is cookie 1 value",
@@ -1382,7 +1403,7 @@ func TestProxySetting(t *testing.T) {
 func TestGetClient(t *testing.T) {
 	client := New()
 	custom := New()
-	customClient := custom.GetClient()
+	customClient := custom.Client()
 
 	assertNotNil(t, customClient)
 	assertNotEqual(t, client, http.DefaultClient)
@@ -1601,7 +1622,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 
 	outputFilePath := "go-resty/test-img-success.png"
 	resp, err := client.R().
-		SetOutput(outputFilePath).
+		SetOutputFile(outputFilePath).
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1630,7 +1651,7 @@ func TestOutputPathDirNotExists(t *testing.T) {
 		SetOutputDirectory(filepath.Join(getTestDataPath(), "not-exists-dir"))
 
 	resp, err := client.R().
-		SetOutput("test-img-success.png").
+		SetOutputFile("test-img-success.png").
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1644,7 +1665,7 @@ func TestOutputFileAbsPath(t *testing.T) {
 	defer cleanupFiles(filepath.Join(".testdata", "go-resty"))
 
 	_, err := dcr().
-		SetOutput(filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")).
+		SetOutputFile(filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")).
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1769,7 +1790,7 @@ func TestRequestExpectContentTypeTest(t *testing.T) {
 	c := dc()
 	resp, err := c.R().
 		SetResult(noCtTest{}).
-		ExpectContentType("application/json").
+		SetExpectResponseContentType("application/json").
 		Get(ts.URL + "/json-no-set")
 
 	assertError(t, err)
@@ -2038,7 +2059,7 @@ func TestTraceInfo(t *testing.T) {
 	}
 
 	// for sake of hook funcs
-	_, _ = client.R().EnableTrace().Get("https://httpbin.org/get")
+	_, _ = client.R().SetTrace(true).Get("https://httpbin.org/get")
 }
 
 func TestTraceInfoWithoutEnableTrace(t *testing.T) {
@@ -2088,7 +2109,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	debugBodySizeLimit := 512
 
 	t.Run("upload an image with more than 512 bytes", func(t *testing.T) {
-		// upload an image with more than 512 bytes
 		output := bytes.NewBufferString("")
 		resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
@@ -2100,7 +2120,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	})
 
 	t.Run("upload a text file with no more than 512 bytes", func(t *testing.T) {
-		// upload a text file with no more than 512 bytes
 		output := bytes.NewBufferString("")
 		resp, err := New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetDebug(true).
@@ -2116,7 +2135,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	defer formTs.Close()
 
 	t.Run("post form with more than 512 bytes data", func(t *testing.T) {
-		// post form with more than 512 bytes data
 		output := bytes.NewBufferString("")
 		resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetFormData(map[string]string{
@@ -2132,7 +2150,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	})
 
 	t.Run("post form with no more than 512 bytes data", func(t *testing.T) {
-		// post form with no more than 512 bytes data
 		output := bytes.NewBufferString("")
 		resp, err := New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetDebug(true).
@@ -2149,7 +2166,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	})
 
 	t.Run("post string with more than 512 bytes data", func(t *testing.T) {
-		// post string with more than 512 bytes data
 		output := bytes.NewBufferString("")
 		resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetBody(`{
@@ -2163,12 +2179,11 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
 	})
 
-	t.Run("post slice with more than 512 bytes data", func(t *testing.T) {
-		// post slice with more than 512 bytes data
+	t.Run("post string slice with more than 512 bytes data", func(t *testing.T) {
 		output := bytes.NewBufferString("")
 		resp, err := New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetDebug(true).
-			SetBody([]string{strings.Repeat("C", int(debugBodySizeLimit))}).
+			SetBody([]string{strings.Repeat("hello", debugBodySizeLimit)}).
 			SetBasicAuth("myuser", "mypass").
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
@@ -2286,4 +2301,18 @@ func TestRequestClone(t *testing.T) {
 
 	assertEqual(t, "xmpp-server", parent.SRV.Service)
 	assertEqual(t, "xmpp-server-clone", clone.SRV.Service)
+}
+
+// This test methods exist for test coverage purpose
+// to validate the getter and setter
+func TestRequestSettingsCoverage(t *testing.T) {
+	c := dc()
+
+	c.R().SetCloseConnection(true)
+
+	c.R().DisableTrace()
+
+	srv := []*net.SRV{}
+	srv = append(srv, &net.SRV{})
+	c.R().selectAddr(srv, "/", 1)
 }

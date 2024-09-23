@@ -32,7 +32,7 @@ type Response struct {
 // BodyBytes method returns the HTTP response as `[]byte` slice for the executed request.
 //
 // NOTE:
-//   - [Response.BodyBytes] might be `nil` if [Request.SetOutput], [Request.SetDoNotParseResponse],
+//   - [Response.BodyBytes] might be `nil` if [Request.SetOutputFile], [Request.SetDoNotParseResponse],
 //     [Client.SetDoNotParseResponse] method is used.
 //   - [Response.BodyBytes] might be `nil` if [Response].Body is already auto-unmarshal performed.
 func (r *Response) BodyBytes() []byte {
@@ -155,7 +155,7 @@ func (r *Response) setReceivedAt() {
 }
 
 func (r *Response) fmtBodyString(sl int) string {
-	if r.Request.NotParseResponse {
+	if r.Request.DoNotParseResponse {
 		return "***** DO NOT PARSE RESPONSE - Enabled *****"
 	}
 	if len(r.bodyBytes) > 0 {

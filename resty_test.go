@@ -529,6 +529,8 @@ func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 				auth := r.Header.Get("Authorization")
 				t.Logf("Basic Auth: %v", auth)
 
+				_, _ = io.ReadAll(r.Body)
+
 				w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
 				password, err := base64.StdEncoding.DecodeString(auth[6:])

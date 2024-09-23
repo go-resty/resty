@@ -237,7 +237,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	}
 
 	// Enable trace
-	if r.trace {
+	if r.IsTrace {
 		r.clientTrace = &clientTrace{}
 		r.ctx = r.clientTrace.createContext(r.Context())
 	}
@@ -271,21 +271,21 @@ func addCredentials(c *Client, r *Request) error {
 		isBasicAuth = true
 	}
 
-	if !c.disableWarn {
+	if !c.IsDisableWarn() {
 		if isBasicAuth && !strings.HasPrefix(r.URL, "https") {
 			r.log.Warnf("Using Basic Auth in HTTP mode is not secure, use HTTPS")
 		}
 	}
 
 	// Build the token Auth header
-	if !IsStringEmpty(r.Token) {
+	if !IsStringEmpty(r.AuthToken) {
 		var authScheme string
 		if IsStringEmpty(r.AuthScheme) {
 			authScheme = "Bearer"
 		} else {
 			authScheme = r.AuthScheme
 		}
-		r.RawRequest.Header.Set(c.HeaderAuthorizationKey(), authScheme+" "+r.Token)
+		r.RawRequest.Header.Set(c.HeaderAuthorizationKey(), authScheme+" "+r.AuthToken)
 	}
 
 	return nil
@@ -296,7 +296,7 @@ func createCurlCmd(c *Client, r *Request) (err error) {
 		if r.resultCurlCmd == nil {
 			r.resultCurlCmd = new(string)
 		}
-		*r.resultCurlCmd = buildCurlRequest(r.RawRequest, c.GetClient().Jar)
+		*r.resultCurlCmd = buildCurlRequest(r.RawRequest, c.Client().Jar)
 	}
 	return nil
 }
@@ -304,9 +304,9 @@ func createCurlCmd(c *Client, r *Request) (err error) {
 func requestLogger(c *Client, r *Request) error {
 	if r.Debug {
 		rr := r.RawRequest
-		rh := copyHeaders(rr.Header)
-		if c.GetClient().Jar != nil {
-			for _, cookie := range c.GetClient().Jar.Cookies(r.RawRequest.URL) {
+		rh := rr.Header.Clone()
+		if c.Client().Jar != nil {
+			for _, cookie := range c.Client().Jar.Cookies(r.RawRequest.URL) {
 				s := fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
 				if c := rh.Get("Cookie"); c != "" {
 					rh.Set("Cookie", c+"; "+s)
@@ -315,7 +315,7 @@ func requestLogger(c *Client, r *Request) error {
 				}
 			}
 		}
-		rl := &RequestLog{Header: rh, Body: r.fmtBodyString(r.debugBodySizeLimit)}
+		rl := &RequestLog{Header: rh, Body: r.fmtBodyString(r.DebugBodyLimit)}
 		if c.requestLog != nil {
 			if err := c.requestLog(rl); err != nil {
 				return err
@@ -332,7 +332,7 @@ func requestLogger(c *Client, r *Request) error {
 		reqLog += "~~~ REQUEST ~~~\n" +
 			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
 			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
-			fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(c, r, rl.Header)) +
+			fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(rl.Header)) +
 			fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
 			"------------------------------------------------------------------------------\n"
 
@@ -349,7 +349,7 @@ func requestLogger(c *Client, r *Request) error {
 
 func responseLogger(c *Client, res *Response) error {
 	if res.Request.Debug {
-		rl := &ResponseLog{Header: copyHeaders(res.Header()), Body: res.fmtBodyString(res.Request.debugBodySizeLimit)}
+		rl := &ResponseLog{Header: res.Header().Clone(), Body: res.fmtBodyString(res.Request.DebugBodyLimit)}
 		if c.responseLog != nil {
 			c.lock.RLock()
 			defer c.lock.RUnlock()
@@ -365,7 +365,7 @@ func responseLogger(c *Client, res *Response) error {
 			fmt.Sprintf("RECEIVED AT  : %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
 			fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
 			"HEADERS      :\n" +
-			composeHeaders(c, res.Request, rl.Header) + "\n"
+			composeHeaders(rl.Header) + "\n"
 		if res.Request.isSaveResponse {
 			debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
 		} else {
@@ -392,9 +392,9 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 	// TODO Attention Required when working on Compression
 
 	rct := firstNonEmpty(
-		res.Request.forceContentType,
+		res.Request.ForceResponseContentType,
 		res.Header().Get(hdrContentTypeKey),
-		res.Request.fallbackContentType,
+		res.Request.ExpectResponseContentType,
 	)
 	decKey := inferContentTypeMapKey(rct)
 	decFunc, found := c.inferContentTypeDecoder(rct, decKey)
@@ -559,11 +559,11 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 	if res.Request.isSaveResponse {
 		file := ""
 
-		if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(res.Request.outputFile) {
+		if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(res.Request.OutputFile) {
 			file += c.OutputDirectory() + string(filepath.Separator)
 		}
 
-		file = filepath.Clean(file + res.Request.outputFile)
+		file = filepath.Clean(file + res.Request.OutputFile)
 		if err := createDirectory(filepath.Dir(file)); err != nil {
 			return err
 		}
