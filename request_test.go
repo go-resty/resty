@@ -429,7 +429,7 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	resp, err := c.R().
 		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		SetResult(AuthSuccess{}).
-		ForceContentType("application/json").
+		SetForceResponseContentType("application/json").
 		Post(ts.URL + "/login-json-html")
 
 	assertNil(t, err) // JSON response comes with incorrect content-type, we correct it with ForceContentType
@@ -604,6 +604,27 @@ func TestRequestBasicAuth(t *testing.T) {
 
 	resp, err := c.R().
 		SetBasicAuth("myuser", "basicauth").
+		SetResult(&AuthSuccess{}).
+		Post("/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+	logResponse(t, resp)
+}
+
+func TestRequestBasicAuthWithBody(t *testing.T) {
+	ts := createAuthServer(t)
+	defer ts.Close()
+
+	c := dc()
+	c.SetBaseURL(ts.URL).
+		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+
+	resp, err := c.R().
+		SetBasicAuth("myuser", "basicauth").
+		SetBody([]string{strings.Repeat("hello", 25)}).
 		SetResult(&AuthSuccess{}).
 		Post("/login")
 
@@ -1101,7 +1122,7 @@ func TestGetWithCookies(t *testing.T) {
 	c.SetBaseURL(ts.URL).SetDebug(true)
 
 	tu, _ := url.Parse(ts.URL)
-	c.GetClient().Jar.SetCookies(tu, []*http.Cookie{
+	c.Client().Jar.SetCookies(tu, []*http.Cookie{
 		{
 			Name:  "jar-go-resty-1",
 			Value: "From Jar - This is cookie 1 value",
@@ -1143,7 +1164,7 @@ func TestGetWithCookies(t *testing.T) {
 }
 
 func TestPutPlainString(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	resp, err := dc().R().
@@ -1156,7 +1177,7 @@ func TestPutPlainString(t *testing.T) {
 }
 
 func TestPutJSONString(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	client := dc()
@@ -1185,7 +1206,7 @@ func TestPutJSONString(t *testing.T) {
 }
 
 func TestPutXMLString(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	resp, err := dc().R().
@@ -1199,7 +1220,7 @@ func TestPutXMLString(t *testing.T) {
 }
 
 func TestOnBeforeMiddleware(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dc()
@@ -1245,42 +1266,55 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err.Error(), "redirect is not allowed as per DomainCheckRedirectPolicy"))
 }
 
-func TestHeadMethod(t *testing.T) {
-	ts := createGetServer(t)
+func TestHttpMethods(t *testing.T) {
+	ts := createGenericServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().Head(ts.URL + "/")
+	t.Run("head method", func(t *testing.T) {
+		resp, err := dclr().Head(ts.URL + "/")
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
-}
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+	})
 
-func TestOptionsMethod(t *testing.T) {
-	ts := createGenServer(t)
-	defer ts.Close()
+	t.Run("options method", func(t *testing.T) {
+		resp, err := dclr().Options(ts.URL + "/options")
 
-	resp, err := dclr().Options(ts.URL + "/options")
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, resp.Header().Get("Access-Control-Expose-Headers"), "x-go-resty-id")
+	})
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, resp.Header().Get("Access-Control-Expose-Headers"), "x-go-resty-id")
-}
+	t.Run("patch method", func(t *testing.T) {
+		resp, err := dclr().Patch(ts.URL + "/patch")
 
-func TestPatchMethod(t *testing.T) {
-	ts := createGenServer(t)
-	defer ts.Close()
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	resp, err := dclr().Patch(ts.URL + "/patch")
+		assertEqual(t, "", resp.String())
+	})
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
+	t.Run("trace method", func(t *testing.T) {
+		resp, err := dclr().Trace(ts.URL + "/trace")
 
-	resp.SetBodyBytes(nil)
-	assertEqual(t, "", resp.String())
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		assertEqual(t, "", resp.String())
+	})
+
+	t.Run("connect method", func(t *testing.T) {
+		resp, err := dclr().Connect(ts.URL + "/connect")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		assertEqual(t, "", resp.String())
+	})
 }
 
 func TestSendMethod(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	t.Run("send-get", func(t *testing.T) {
@@ -1383,7 +1417,7 @@ func TestProxySetting(t *testing.T) {
 func TestGetClient(t *testing.T) {
 	client := New()
 	custom := New()
-	customClient := custom.GetClient()
+	customClient := custom.Client()
 
 	assertNotNil(t, customClient)
 	assertNotEqual(t, client, http.DefaultClient)
@@ -1602,7 +1636,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 
 	outputFilePath := "go-resty/test-img-success.png"
 	resp, err := client.R().
-		SetOutput(outputFilePath).
+		SetOutputFile(outputFilePath).
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1631,7 +1665,7 @@ func TestOutputPathDirNotExists(t *testing.T) {
 		SetOutputDirectory(filepath.Join(getTestDataPath(), "not-exists-dir"))
 
 	resp, err := client.R().
-		SetOutput("test-img-success.png").
+		SetOutputFile("test-img-success.png").
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1645,7 +1679,7 @@ func TestOutputFileAbsPath(t *testing.T) {
 	defer cleanupFiles(filepath.Join(".testdata", "go-resty"))
 
 	_, err := dcr().
-		SetOutput(filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")).
+		SetOutputFile(filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")).
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1705,10 +1739,10 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 
 	buf := acquireBuffer()
 	defer releaseBuffer(buf)
-	_, _ = io.Copy(buf, resp.RawBody())
+	_, _ = io.Copy(buf, resp.Body)
 
 	assertEqual(t, "TestGet: text response", buf.String())
-	_ = resp.RawBody().Close()
+	_ = resp.Body.Close()
 
 	// Manually setting RawResponse as nil
 	resp, err = dc().R().
@@ -1718,7 +1752,8 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 	assertError(t, err)
 
 	resp.RawResponse = nil
-	assertNil(t, resp.RawBody())
+	assertEqual(t, 0, resp.StatusCode())
+	assertEqual(t, "", resp.String())
 }
 
 func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
@@ -1763,13 +1798,13 @@ type noCtTest struct {
 }
 
 func TestRequestExpectContentTypeTest(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dc()
 	resp, err := c.R().
 		SetResult(noCtTest{}).
-		ExpectContentType("application/json").
+		SetExpectResponseContentType("application/json").
 		Get(ts.URL + "/json-no-set")
 
 	assertError(t, err)
@@ -1802,7 +1837,7 @@ func TestGetPathParamAndPathParams(t *testing.T) {
 }
 
 func TestReportMethodSupportsPayload(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dc()
@@ -2038,7 +2073,7 @@ func TestTraceInfo(t *testing.T) {
 	}
 
 	// for sake of hook funcs
-	_, _ = client.R().EnableTrace().Get("https://httpbin.org/get")
+	_, _ = client.R().SetTrace(true).Get("https://httpbin.org/get")
 }
 
 func TestTraceInfoWithoutEnableTrace(t *testing.T) {
@@ -2088,7 +2123,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	debugBodySizeLimit := 512
 
 	t.Run("upload an image with more than 512 bytes", func(t *testing.T) {
-		// upload an image with more than 512 bytes
 		output := bytes.NewBufferString("")
 		resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
@@ -2100,7 +2134,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	})
 
 	t.Run("upload a text file with no more than 512 bytes", func(t *testing.T) {
-		// upload a text file with no more than 512 bytes
 		output := bytes.NewBufferString("")
 		resp, err := New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetDebug(true).
@@ -2116,7 +2149,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	defer formTs.Close()
 
 	t.Run("post form with more than 512 bytes data", func(t *testing.T) {
-		// post form with more than 512 bytes data
 		output := bytes.NewBufferString("")
 		resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetFormData(map[string]string{
@@ -2132,7 +2164,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	})
 
 	t.Run("post form with no more than 512 bytes data", func(t *testing.T) {
-		// post form with no more than 512 bytes data
 		output := bytes.NewBufferString("")
 		resp, err := New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetDebug(true).
@@ -2149,7 +2180,6 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	})
 
 	t.Run("post string with more than 512 bytes data", func(t *testing.T) {
-		// post string with more than 512 bytes data
 		output := bytes.NewBufferString("")
 		resp, err := New().SetDebug(true).outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetBody(`{
@@ -2163,12 +2193,11 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
 	})
 
-	t.Run("post slice with more than 512 bytes data", func(t *testing.T) {
-		// post slice with more than 512 bytes data
+	t.Run("post string slice with more than 512 bytes data", func(t *testing.T) {
 		output := bytes.NewBufferString("")
 		resp, err := New().outputLogTo(output).SetDebugBodyLimit(debugBodySizeLimit).R().
 			SetDebug(true).
-			SetBody([]string{strings.Repeat("C", int(debugBodySizeLimit))}).
+			SetBody([]string{strings.Repeat("hello", debugBodySizeLimit)}).
 			SetBasicAuth("myuser", "mypass").
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
@@ -2286,4 +2315,18 @@ func TestRequestClone(t *testing.T) {
 
 	assertEqual(t, "xmpp-server", parent.SRV.Service)
 	assertEqual(t, "xmpp-server-clone", clone.SRV.Service)
+}
+
+// This test methods exist for test coverage purpose
+// to validate the getter and setter
+func TestRequestSettingsCoverage(t *testing.T) {
+	c := dc()
+
+	c.R().SetCloseConnection(true)
+
+	c.R().DisableTrace()
+
+	srv := []*net.SRV{}
+	srv = append(srv, &net.SRV{})
+	c.R().selectAddr(srv, "/", 1)
 }

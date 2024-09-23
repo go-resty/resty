@@ -29,6 +29,13 @@ func encodeJSONEscapeHTML(w io.Writer, v any, esc bool) error {
 	return enc.Encode(v)
 }
 
+func encodeJSONEscapeHTMLIndent(w io.Writer, v any, esc bool, indent string) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(esc)
+	enc.SetIndent("", indent)
+	return enc.Encode(v)
+}
+
 func decodeJSON(r io.Reader, v any) error {
 	dec := json.NewDecoder(r)
 	for {

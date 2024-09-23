@@ -143,7 +143,7 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 		user := &User{}
 
 		// JSON
-		if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+		if isJSONContentType(r.Header.Get(hdrContentTypeKey)) {
 			jd := json.NewDecoder(r.Body)
 			err := jd.Decode(user)
 			if r.URL.Query().Get("ct") == "problem" {
@@ -174,7 +174,7 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 		}
 
 		// XML
-		if IsXMLType(r.Header.Get(hdrContentTypeKey)) {
+		if isXMLContentType(r.Header.Get(hdrContentTypeKey)) {
 			xd := xml.NewDecoder(r.Body)
 			err := xd.Decode(user)
 
@@ -208,7 +208,7 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 func handleUsersEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/users" {
 		// JSON
-		if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+		if isJSONContentType(r.Header.Get(hdrContentTypeKey)) {
 			var users []ExampleUser
 			jd := json.NewDecoder(r.Body)
 			err := jd.Decode(&users)
@@ -258,7 +258,7 @@ func createPostServer(t *testing.T) *httptest.Server {
 				return
 			case "/usersmap":
 				// JSON
-				if IsJSONType(r.Header.Get(hdrContentTypeKey)) {
+				if isJSONContentType(r.Header.Get(hdrContentTypeKey)) {
 					if r.URL.Query().Get("status") == "500" {
 						body, err := io.ReadAll(r.Body)
 						if err != nil {
@@ -529,6 +529,8 @@ func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 				auth := r.Header.Get("Authorization")
 				t.Logf("Basic Auth: %v", auth)
 
+				_, _ = io.ReadAll(r.Body)
+
 				w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
 				password, err := base64.StdEncoding.DecodeString(auth[6:])
@@ -552,7 +554,7 @@ func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 	return httptest.NewServer(handler)
 }
 
-func createGenServer(t *testing.T) *httptest.Server {
+func createGenericServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
@@ -616,6 +618,16 @@ func createGenServer(t *testing.T) *httptest.Server {
 			if len(body) == 0 {
 				w.WriteHeader(http.StatusOK)
 			}
+			return
+		}
+
+		if r.Method == MethodTrace && r.URL.Path == "/trace" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method == MethodConnect && r.URL.Path == "/connect" {
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 	})

@@ -12,12 +12,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -159,7 +159,7 @@ func TestClientDigestErrors(t *testing.T) {
 }
 
 func TestOnAfterMiddleware(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dc()
@@ -432,115 +432,47 @@ func TestClientSetCookieJar(t *testing.T) {
 	assertEqual(t, true, client.httpClient.Jar == backupJar)
 }
 
-func TestClientOptions(t *testing.T) {
-	client := dc()
-	client.SetContentLength(true)
-	assertEqual(t, client.setContentLength, true)
+// This test methods exist for test coverage purpose
+// to validate the getter and setter
+func TestClientSettingsCoverage(t *testing.T) {
+	c := dc()
 
-	client.SetBaseURL("http://httpbin.org")
-	assertEqual(t, "http://httpbin.org", client.BaseURL())
+	assertNotNil(t, c.CookieJar())
+	assertNotNil(t, c.ContentTypeEncoders())
+	assertNotNil(t, c.ContentTypeDecoders())
+	assertEqual(t, false, c.IsDebug())
+	assertEqual(t, math.MaxInt32, c.DebugBodyLimit())
+	assertNotNil(t, c.Logger())
+	assertEqual(t, false, c.IsContentLength())
+	assertEqual(t, 0, c.RetryCount())
+	assertEqual(t, time.Millisecond*100, c.RetryWaitTime())
+	assertEqual(t, time.Second*2, c.RetryMaxWaitTime())
+	assertEqual(t, false, c.IsTrace())
 
-	client.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8")
-	client.SetHeaders(map[string]string{
-		hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1",
-		"X-Request-Id":  strconv.FormatInt(time.Now().UnixNano(), 10),
-	})
-	assertEqual(t, "application/json; charset=utf-8", client.Header().Get(hdrContentTypeKey))
+	authToken := "sample auth token value"
+	c.SetAuthToken(authToken)
+	assertEqual(t, authToken, c.AuthToken())
 
-	client.SetCookie(&http.Cookie{
-		Name:  "default-cookie",
-		Value: "This is cookie default-cookie value",
-	})
-	assertEqual(t, "default-cookie", client.Cookies()[0].Name)
+	type brokenRedirectPolicy struct{}
+	c.SetRedirectPolicy(&brokenRedirectPolicy{})
 
-	cookies := []*http.Cookie{
-		{
-			Name:  "default-cookie-1",
-			Value: "This is default-cookie 1 value",
-		}, {
-			Name:  "default-cookie-2",
-			Value: "This is default-cookie 2 value",
-		},
-	}
-	client.SetCookies(cookies)
-	assertEqual(t, "default-cookie-1", client.Cookies()[1].Name)
-	assertEqual(t, "default-cookie-2", client.Cookies()[2].Name)
+	c.SetCloseConnection(true)
 
-	client.SetQueryParam("test_param_1", "Param_1")
-	client.SetQueryParams(map[string]string{"test_param_2": "Param_2", "test_param_3": "Param_3"})
-	assertEqual(t, "Param_3", client.QueryParams().Get("test_param_3"))
+	// [Start] Custom Transport scenario
+	ct := dc()
+	ct.SetTransport(&CustomRoundTripper{})
+	_, err := ct.Transport()
+	assertNotNil(t, err)
+	assertEqual(t, ErrNotHttpTransportType, err)
 
-	rTime := strconv.FormatInt(time.Now().UnixNano(), 10)
-	client.SetFormData(map[string]string{"r_time": rTime})
-	assertEqual(t, rTime, client.FormData().Get("r_time"))
+	ct.SetProxy("http://localhost:8080")
+	ct.RemoveProxy()
 
-	client.SetBasicAuth("myuser", "mypass")
-	assertEqual(t, "myuser", client.UserInfo().Username)
+	ct.SetCertificates(tls.Certificate{})
+	ct.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
 
-	client.SetAuthToken("AC75BD37F019E08FBC594900518B4F7E")
-	assertEqual(t, "AC75BD37F019E08FBC594900518B4F7E", client.Token())
-
-	client.SetDisableWarn(true)
-	assertEqual(t, client.DisableWarn(), true)
-
-	client.SetRetryCount(3)
-	assertEqual(t, 3, client.RetryCount())
-
-	rwt := time.Duration(1000) * time.Millisecond
-	client.SetRetryWaitTime(rwt)
-	assertEqual(t, rwt, client.RetryWaitTime())
-
-	mrwt := time.Duration(2) * time.Second
-	client.SetRetryMaxWaitTime(mrwt)
-	assertEqual(t, mrwt, client.RetryMaxWaitTime())
-
-	client.AddRetryAfterErrorCondition()
-	equal(client.RetryConditions()[0], func(response *Response, err error) bool {
-		return response.IsError()
-	})
-
-	err := &AuthError{}
-	client.SetError(err)
-	if reflect.TypeOf(err) == client.Error() {
-		t.Error("SetError failed")
-	}
-
-	client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	transport, transportErr := client.Transport()
-
-	assertNil(t, transportErr)
-	assertEqual(t, true, transport.TLSClientConfig.InsecureSkipVerify)
-
-	client.OnBeforeRequest(func(c *Client, r *Request) error {
-		c.log.Debugf("I'm in Request middleware")
-		return nil // if it success
-	})
-	client.OnAfterResponse(func(c *Client, r *Response) error {
-		c.log.Debugf("I'm in Response middleware")
-		return nil // if it success
-	})
-
-	client.SetTimeout(5 * time.Second)
-	client.SetRedirectPolicy(FlexibleRedirectPolicy(10), func(req *http.Request, via []*http.Request) error {
-		return errors.New("sample test redirect")
-	})
-	client.SetContentLength(true)
-
-	client.SetDebug(true)
-	assertEqual(t, client.Debug(), true)
-
-	var sl int = 1000000
-	client.SetDebugBodyLimit(sl)
-	assertEqual(t, client.debugBodySizeLimit, sl)
-
-	client.SetAllowGetMethodPayload(true)
-	assertEqual(t, client.AllowGetMethodPayload(), true)
-
-	client.SetScheme("http")
-	assertEqual(t, client.scheme, "http")
-
-	client.SetCloseConnection(true)
-	assertEqual(t, client.closeConnection, true)
+	ct.outputLogTo(io.Discard)
+	// [End] Custom Transport scenario
 }
 
 func TestContentLengthWhenBodyIsNil(t *testing.T) {
@@ -650,51 +582,13 @@ func TestClientRoundTripper(t *testing.T) {
 	ct, err := c.Transport()
 	assertNotNil(t, err)
 	assertNil(t, ct)
-	assertEqual(t, "current transport is not an *http.Transport instance", err.Error())
-
-	c.SetTLSClientConfig(&tls.Config{})
-	c.SetProxy("http://localhost:9090")
-	c.RemoveProxy()
-	c.SetCertificates(tls.Certificate{})
-	c.SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	assertEqual(t, ErrNotHttpTransportType, err)
 }
 
 func TestClientNewRequest(t *testing.T) {
 	c := New()
 	request := c.NewRequest()
 	assertNotNil(t, request)
-}
-
-func TestClientSetJSONMarshaler(t *testing.T) {
-	m := func(v any) ([]byte, error) { return nil, nil }
-	c := New().SetJSONMarshaler(m)
-	p1 := fmt.Sprintf("%p", c.jsonMarshal)
-	p2 := fmt.Sprintf("%p", m)
-	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
-}
-
-func TestClientSetJSONUnmarshaler(t *testing.T) {
-	m := func([]byte, any) error { return nil }
-	c := New().SetJSONUnmarshaler(m)
-	p1 := fmt.Sprintf("%p", c.jsonUnmarshal)
-	p2 := fmt.Sprintf("%p", m)
-	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
-}
-
-func TestClientSetXMLMarshaler(t *testing.T) {
-	m := func(v any) ([]byte, error) { return nil, nil }
-	c := New().SetXMLMarshaler(m)
-	p1 := fmt.Sprintf("%p", c.xmlMarshal)
-	p2 := fmt.Sprintf("%p", m)
-	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
-}
-
-func TestClientSetXMLUnmarshaler(t *testing.T) {
-	m := func([]byte, any) error { return nil }
-	c := New().SetXMLUnmarshaler(m)
-	p1 := fmt.Sprintf("%p", c.xmlUnmarshal)
-	p2 := fmt.Sprintf("%p", m)
-	assertEqual(t, p1, p2) // functions can not be compared, we only can compare pointers
 }
 
 func TestDebugBodySizeLimit(t *testing.T) {
@@ -744,7 +638,7 @@ func (rt *CustomRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error)
 }
 
 func TestAutoGzip(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := New()

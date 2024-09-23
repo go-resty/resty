@@ -6,8 +6,6 @@
 package resty
 
 import (
-	"encoding/json"
-	"encoding/xml"
 	"math"
 	"net"
 	"net/http"
@@ -169,14 +167,10 @@ func createClient(hc *http.Client) *Client {
 		retryMaxWaitTime:       defaultMaxWaitTime,
 		pathParams:             make(map[string]string),
 		rawPathParams:          make(map[string]string),
-		jsonMarshal:            json.Marshal,
-		jsonUnmarshal:          json.Unmarshal,
-		xmlMarshal:             xml.Marshal,
-		xmlUnmarshal:           xml.Unmarshal,
 		headerAuthorizationKey: hdrAuthorizationKey,
 		jsonEscapeHTML:         true,
 		httpClient:             hc,
-		debugBodySizeLimit:     math.MaxInt32,
+		debugBodyLimit:         math.MaxInt32,
 		contentTypeEncoders:    make(map[string]ContentTypeEncoder),
 		contentTypeDecoders:    make(map[string]ContentTypeDecoder),
 	}

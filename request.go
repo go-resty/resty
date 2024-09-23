@@ -27,26 +27,32 @@ import (
 // Resty client. The [Request] provides an option to override client-level
 // settings and also an option for the request composition.
 type Request struct {
-	URL              string
-	Method           string
-	Token            string
-	AuthScheme       string
-	QueryParams      url.Values
-	FormData         url.Values
-	PathParams       map[string]string
-	RawPathParams    map[string]string
-	Header           http.Header
-	Time             time.Time
-	Body             any
-	Result           any
-	Error            any
-	RawRequest       *http.Request
-	SRV              *SRVRecord
-	UserInfo         *User
-	Cookies          []*http.Cookie
-	Debug            bool
-	CloseConnection  bool
-	NotParseResponse bool
+	URL                       string
+	Method                    string
+	AuthToken                 string
+	AuthScheme                string
+	QueryParams               url.Values
+	FormData                  url.Values
+	PathParams                map[string]string
+	RawPathParams             map[string]string
+	Header                    http.Header
+	Time                      time.Time
+	Body                      any
+	Result                    any
+	Error                     any
+	RawRequest                *http.Request
+	SRV                       *SRVRecord
+	UserInfo                  *User
+	Cookies                   []*http.Cookie
+	Debug                     bool
+	CloseConnection           bool
+	DoNotParseResponse        bool
+	OutputFile                string
+	ExpectResponseContentType string
+	ForceResponseContentType  string
+	DebugBodyLimit            int
+	ResponseBodyLimit         int64
+	IsTrace                   bool
 
 	// Retry
 	RetryCount        int
@@ -63,10 +69,6 @@ type Request struct {
 	setContentLength    bool
 	isSaveResponse      bool
 	jsonEscapeHTML      bool
-	trace               bool
-	outputFile          string
-	fallbackContentType string
-	forceContentType    string
 	ctx                 context.Context
 	values              map[string]any
 	client              *Client
@@ -77,8 +79,6 @@ type Request struct {
 	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
-	debugBodySizeLimit  int
-	responseBodyLimit   int64
 	resultCurlCmd       *string
 	generateCurlOnDebug bool
 }
@@ -532,8 +532,8 @@ func (r *Request) SetBasicAuth(username, password string) *Request {
 //	client.R().SetAuthToken("BC594900518B4F7EAC75BD37F019E08FBC594900518B4F7EAC75BD37F019E08F")
 //
 // It overrides the Auth token set by method [Client.SetAuthToken].
-func (r *Request) SetAuthToken(token string) *Request {
-	r.Token = token
+func (r *Request) SetAuthToken(authToken string) *Request {
+	r.AuthToken = authToken
 	return r
 }
 
@@ -591,7 +591,7 @@ func (r *Request) SetDigestAuth(username, password string) *Request {
 	return r
 }
 
-// SetOutput method sets the output file for the current HTTP request. The current
+// SetOutputFile method sets the output file for the current HTTP request. The current
 // HTTP response will be saved in the given file. It is similar to the `curl -o` flag.
 //
 // Absolute path or relative path can be used.
@@ -600,14 +600,14 @@ func (r *Request) SetDigestAuth(username, password string) *Request {
 // in the [Client.SetOutputDirectory].
 //
 //	client.R().
-//		SetOutput("/Users/jeeva/Downloads/ReplyWithHeader-v5.1-beta.zip").
+//		SetOutputFile("/Users/jeeva/Downloads/ReplyWithHeader-v5.1-beta.zip").
 //		Get("http://bit.ly/1LouEKr")
 //
 // NOTE: In this scenario
 //   - [Response.BodyBytes] might be nil.
 //   - [Response].Body might be already read.
-func (r *Request) SetOutput(file string) *Request {
-	r.outputFile = file
+func (r *Request) SetOutputFile(file string) *Request {
+	r.OutputFile = file
 	r.isSaveResponse = true
 	return r
 }
@@ -640,7 +640,7 @@ func (r *Request) SetCloseConnection(close bool) *Request {
 // NOTE: [Response] middlewares are not executed using this option. You have
 // taken over the control of response parsing from Resty.
 func (r *Request) SetDoNotParseResponse(notParse bool) *Request {
-	r.NotParseResponse = notParse
+	r.DoNotParseResponse = notParse
 	return r
 }
 
@@ -651,12 +651,12 @@ func (r *Request) SetDoNotParseResponse(notParse bool) *Request {
 // in the uncompressed response is larger than the limit.
 // Body size limit will not be enforced in the following cases:
 //   - ResponseBodyLimit <= 0, which is the default behavior.
-//   - [Request.SetOutput] is called to save response data to the file.
+//   - [Request.SetOutputFile] is called to save response data to the file.
 //   - "DoNotParseResponse" is set for client or request.
 //
 // It overrides the value set at the client instance level, see [Client.SetResponseBodyLimit]
 func (r *Request) SetResponseBodyLimit(v int64) *Request {
-	r.responseBodyLimit = v
+	r.ResponseBodyLimit = v
 	return r
 }
 
@@ -756,21 +756,21 @@ func (r *Request) SetRawPathParams(params map[string]string) *Request {
 	return r
 }
 
-// ExpectContentType method allows to provide fallback `Content-Type` for automatic unmarshalling
-// when the `Content-Type` response header is unavailable.
-func (r *Request) ExpectContentType(contentType string) *Request {
-	r.fallbackContentType = contentType
+// SetExpectResponseContentType method allows to provide fallback `Content-Type`
+// for automatic unmarshalling when the `Content-Type` response header is unavailable.
+func (r *Request) SetExpectResponseContentType(contentType string) *Request {
+	r.ExpectResponseContentType = contentType
 	return r
 }
 
-// ForceContentType method provides a strong sense of response `Content-Type` for
+// SetForceResponseContentType method provides a strong sense of response `Content-Type` for
 // automatic unmarshalling. Resty gives this a higher priority than the `Content-Type`
 // response header.
 //
-// This means that if both [Request.ForceContentType] is set and
-// the response `Content-Type` is available, `ForceContentType` will win.
-func (r *Request) ForceContentType(contentType string) *Request {
-	r.forceContentType = contentType
+// This means that if both [Request.SetForceResponseContentType] is set and
+// the response `Content-Type` is available, `SetForceResponseContentType` value will win.
+func (r *Request) SetForceResponseContentType(contentType string) *Request {
+	r.ForceResponseContentType = contentType
 	return r
 }
 
@@ -900,9 +900,24 @@ func (r *Request) SetRetryResetReaders(b bool) *Request {
 //	fmt.Println("Error:", err)
 //	fmt.Println("Trace Info:", resp.Request.TraceInfo())
 //
-// See [Client.EnableTrace] is also available to get trace info for all requests.
+// See [Client.EnableTrace], [Client.SetTrace] are also available to
+// get trace info for all requests.
 func (r *Request) EnableTrace() *Request {
-	r.trace = true
+	r.SetTrace(true)
+	return r
+}
+
+// DisableTrace method disables the request trace for the current request
+func (r *Request) DisableTrace() *Request {
+	r.SetTrace(false)
+	return r
+}
+
+// SetTrace method is used to turn on/off the trace capability at the request level
+//
+// See [Request.EnableTrace] or [Client.SetTrace]
+func (r *Request) SetTrace(t bool) *Request {
+	r.IsTrace = t
 	return r
 }
 
@@ -913,14 +928,22 @@ func (r *Request) EnableTrace() *Request {
 //   - Potential to leak sensitive data from [Request] and [Response] in the debug log.
 //   - Beware of memory usage since the request body is reread.
 func (r *Request) EnableGenerateCurlOnDebug() *Request {
-	r.generateCurlOnDebug = true
+	r.SetGenerateCurlOnDebug(true)
 	return r
 }
 
 // DisableGenerateCurlOnDebug method disables the option set by [Request.EnableGenerateCurlOnDebug].
 // It overrides the options set by the [Client].
 func (r *Request) DisableGenerateCurlOnDebug() *Request {
-	r.generateCurlOnDebug = false
+	r.SetGenerateCurlOnDebug(false)
+	return r
+}
+
+// SetGenerateCurlOnDebug method is used to turn on/off the generate CURL command in debug mode.
+//
+// It overrides the options set by the [Client.SetGenerateCurlOnDebug]
+func (r *Request) SetGenerateCurlOnDebug(b bool) *Request {
+	r.generateCurlOnDebug = b
 	return r
 }
 
@@ -999,9 +1022,19 @@ func (r *Request) Put(url string) (*Response, error) {
 	return r.Execute(MethodPut, url)
 }
 
+// Patch method does PATCH HTTP request. It's defined in section 2 of RFC5789.
+func (r *Request) Patch(url string) (*Response, error) {
+	return r.Execute(MethodPatch, url)
+}
+
 // Delete method does DELETE HTTP request. It's defined in section 4.3.5 of RFC7231.
 func (r *Request) Delete(url string) (*Response, error) {
 	return r.Execute(MethodDelete, url)
+}
+
+// Connect method does CONNECT HTTP request. It's defined in section 4.3.6 of RFC7231.
+func (r *Request) Connect(url string) (*Response, error) {
+	return r.Execute(MethodConnect, url)
 }
 
 // Options method does OPTIONS HTTP request. It's defined in section 4.3.7 of RFC7231.
@@ -1009,9 +1042,9 @@ func (r *Request) Options(url string) (*Response, error) {
 	return r.Execute(MethodOptions, url)
 }
 
-// Patch method does PATCH HTTP request. It's defined in section 2 of RFC5789.
-func (r *Request) Patch(url string) (*Response, error) {
-	return r.Execute(MethodPatch, url)
+// Trace method does TRACE HTTP request. It's defined in section 4.3.8 of RFC7231.
+func (r *Request) Trace(url string) (*Response, error) {
+	return r.Execute(MethodTrace, url)
 }
 
 // Send method performs the HTTP request using the method and URL already defined
@@ -1070,7 +1103,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		return resp, unwrapNoRetryErr(err)
 	}
 
-	err = Backoff(
+	err = backoff(
 		func() (*Response, error) {
 			r.Attempt++
 
@@ -1086,7 +1119,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		Retries(r.RetryCount),
 		WaitTime(r.RetryWaitTime),
 		MaxWaitTime(r.RetryMaxWaitTime),
-		RetryConditions(r.retryConditions),
+		RetryConditions(append(r.retryConditions, r.client.RetryConditions()...)),
 		RetryHooks(r.client.RetryHooks()),
 		ResetMultipartReaders(r.RetryResetReaders),
 	)
@@ -1210,41 +1243,39 @@ func (r *Request) fmtBodyString(sl int) (body string) {
 	var err error
 
 	contentType := r.Header.Get(hdrContentTypeKey)
+	ctKey := inferContentTypeMapKey(contentType)
+
 	kind := inferKind(r.Body)
-	if canJSONMarshal(contentType, kind) {
-		var bodyBuf *bytes.Buffer
-		bodyBuf, err = noescapeJSONMarshalIndent(&r.Body)
-		if err == nil {
-			prtBodyBytes = bodyBuf.Bytes()
-			defer releaseBuffer(bodyBuf)
+	if jsonKey == ctKey &&
+		(kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
+		buf := acquireBuffer()
+		defer releaseBuffer(buf)
+		if err = encodeJSONEscapeHTMLIndent(buf, r.Body, false, "   "); err == nil {
+			prtBodyBytes = buf.Bytes()
 		}
-	} else if IsXMLType(contentType) && (kind == reflect.Struct) {
+	} else if xmlKey == ctKey && kind == reflect.Struct {
 		prtBodyBytes, err = xml.MarshalIndent(&r.Body, "", "   ")
-	} else if b, ok := r.Body.(string); ok {
-		if IsJSONType(contentType) {
-			bodyBytes := []byte(b)
-			out := acquireBuffer()
-			defer releaseBuffer(out)
-			if err = json.Indent(out, bodyBytes, "", "   "); err == nil {
-				prtBodyBytes = out.Bytes()
+	} else {
+		switch b := r.Body.(type) {
+		case string:
+			prtBodyBytes = []byte(b)
+			if jsonKey == ctKey {
+				prtBodyBytes = jsonIndent(prtBodyBytes)
 			}
-		} else {
-			body = b
+		case []byte:
+			body = fmt.Sprintf("***** BODY IS byte(s) (size - %d) *****", len(b))
+			return
 		}
-	} else if b, ok := r.Body.([]byte); ok {
-		body = fmt.Sprintf("***** BODY IS byte(s) (size - %d) *****", len(b))
+	}
+
+	bodySize := len(prtBodyBytes)
+	if bodySize > sl {
+		body = fmt.Sprintf("***** REQUEST TOO LARGE (size - %d) *****", bodySize)
 		return
 	}
 
 	if prtBodyBytes != nil && err == nil {
 		body = string(prtBodyBytes)
-	}
-
-	if len(body) > 0 {
-		bodySize := len([]byte(body))
-		if bodySize > sl {
-			body = fmt.Sprintf("***** REQUEST TOO LARGE (size - %d) *****", bodySize)
-		}
 	}
 
 	return
@@ -1268,16 +1299,11 @@ func (r *Request) initValuesMap() {
 	}
 }
 
-var noescapeJSONMarshalIndent = func(v any) (*bytes.Buffer, error) {
+func jsonIndent(v []byte) []byte {
 	buf := acquireBuffer()
-	encoder := json.NewEncoder(buf)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "   ")
-
-	if err := encoder.Encode(v); err != nil {
-		releaseBuffer(buf)
-		return nil, err
+	defer releaseBuffer(buf)
+	if err := json.Indent(buf, v, "", "   "); err != nil {
+		return v
 	}
-
-	return buf, nil
+	return buf.Bytes()
 }

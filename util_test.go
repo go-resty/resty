@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestIsJSONType(t *testing.T) {
+func TestIsJSONContentType(t *testing.T) {
 	for _, test := range []struct {
 		input  string
 		expect bool
@@ -38,7 +38,7 @@ func TestIsJSONType(t *testing.T) {
 		{"text/vnd.foo-json", true},
 		{"text/vnd.foo.json", true},
 	} {
-		result := IsJSONType(test.input)
+		result := isJSONContentType(test.input)
 
 		if result != test.expect {
 			t.Errorf("failed on %q: want %v, got %v", test.input, test.expect, result)
@@ -46,7 +46,7 @@ func TestIsJSONType(t *testing.T) {
 	}
 }
 
-func TestIsXMLType(t *testing.T) {
+func TestIsXMLContentType(t *testing.T) {
 	for _, test := range []struct {
 		input  string
 		expect bool
@@ -70,7 +70,7 @@ func TestIsXMLType(t *testing.T) {
 		{"text/vnd.foo-xml", true},
 		{"text/vnd.foo.xml", true},
 	} {
-		result := IsXMLType(test.input)
+		result := isXMLContentType(test.input)
 
 		if result != test.expect {
 			t.Errorf("failed on %q: want %v, got %v", test.input, test.expect, result)
