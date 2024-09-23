@@ -173,10 +173,6 @@ type Client struct {
 	retryHooks             []OnRetryFunc
 	retryAfter             RetryAfterFunc
 	retryResetReaders      bool
-	jsonMarshal            func(v any) ([]byte, error)
-	jsonUnmarshal          func(data []byte, v any) error
-	xmlMarshal             func(v any) ([]byte, error)
-	xmlUnmarshal           func(data []byte, v any) error
 	headerAuthorizationKey string
 	responseBodyLimit      int64
 	jsonEscapeHTML         bool
@@ -1053,42 +1049,6 @@ func (c *Client) SetRetryAfter(callback RetryAfterFunc) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.retryAfter = callback
-	return c
-}
-
-// SetJSONMarshaler method sets the JSON marshaler function to marshal the request body.
-// By default, Resty uses [encoding/json] package to marshal the request body.
-func (c *Client) SetJSONMarshaler(marshaler func(v any) ([]byte, error)) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.jsonMarshal = marshaler
-	return c
-}
-
-// SetJSONUnmarshaler method sets the JSON unmarshaler function to unmarshal the response body.
-// By default, Resty uses [encoding/json] package to unmarshal the response body.
-func (c *Client) SetJSONUnmarshaler(unmarshaler func(data []byte, v any) error) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.jsonUnmarshal = unmarshaler
-	return c
-}
-
-// SetXMLMarshaler method sets the XML marshaler function to marshal the request body.
-// By default, Resty uses [encoding/xml] package to marshal the request body.
-func (c *Client) SetXMLMarshaler(marshaler func(v any) ([]byte, error)) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.xmlMarshal = marshaler
-	return c
-}
-
-// SetXMLUnmarshaler method sets the XML unmarshaler function to unmarshal the response body.
-// By default, Resty uses [encoding/xml] package to unmarshal the response body.
-func (c *Client) SetXMLUnmarshaler(unmarshaler func(data []byte, v any) error) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.xmlUnmarshal = unmarshaler
 	return c
 }
 
