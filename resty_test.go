@@ -554,7 +554,7 @@ func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 	return httptest.NewServer(handler)
 }
 
-func createGenServer(t *testing.T) *httptest.Server {
+func createGenericServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
@@ -618,6 +618,16 @@ func createGenServer(t *testing.T) *httptest.Server {
 			if len(body) == 0 {
 				w.WriteHeader(http.StatusOK)
 			}
+			return
+		}
+
+		if r.Method == MethodTrace && r.URL.Path == "/trace" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method == MethodConnect && r.URL.Path == "/connect" {
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 	})

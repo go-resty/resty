@@ -159,7 +159,7 @@ func TestClientDigestErrors(t *testing.T) {
 }
 
 func TestOnAfterMiddleware(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dc()
@@ -638,7 +638,7 @@ func (rt *CustomRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error)
 }
 
 func TestAutoGzip(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := New()

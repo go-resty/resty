@@ -1164,7 +1164,7 @@ func TestGetWithCookies(t *testing.T) {
 }
 
 func TestPutPlainString(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	resp, err := dc().R().
@@ -1177,7 +1177,7 @@ func TestPutPlainString(t *testing.T) {
 }
 
 func TestPutJSONString(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	client := dc()
@@ -1206,7 +1206,7 @@ func TestPutJSONString(t *testing.T) {
 }
 
 func TestPutXMLString(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	resp, err := dc().R().
@@ -1220,7 +1220,7 @@ func TestPutXMLString(t *testing.T) {
 }
 
 func TestOnBeforeMiddleware(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dc()
@@ -1266,41 +1266,55 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err.Error(), "redirect is not allowed as per DomainCheckRedirectPolicy"))
 }
 
-func TestHeadMethod(t *testing.T) {
-	ts := createGetServer(t)
+func TestHttpMethods(t *testing.T) {
+	ts := createGenericServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().Head(ts.URL + "/")
+	t.Run("head method", func(t *testing.T) {
+		resp, err := dclr().Head(ts.URL + "/")
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
-}
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+	})
 
-func TestOptionsMethod(t *testing.T) {
-	ts := createGenServer(t)
-	defer ts.Close()
+	t.Run("options method", func(t *testing.T) {
+		resp, err := dclr().Options(ts.URL + "/options")
 
-	resp, err := dclr().Options(ts.URL + "/options")
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, resp.Header().Get("Access-Control-Expose-Headers"), "x-go-resty-id")
+	})
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, resp.Header().Get("Access-Control-Expose-Headers"), "x-go-resty-id")
-}
+	t.Run("patch method", func(t *testing.T) {
+		resp, err := dclr().Patch(ts.URL + "/patch")
 
-func TestPatchMethod(t *testing.T) {
-	ts := createGenServer(t)
-	defer ts.Close()
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	resp, err := dclr().Patch(ts.URL + "/patch")
+		assertEqual(t, "", resp.String())
+	})
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
+	t.Run("trace method", func(t *testing.T) {
+		resp, err := dclr().Trace(ts.URL + "/trace")
 
-	assertEqual(t, "", resp.String())
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		assertEqual(t, "", resp.String())
+	})
+
+	t.Run("connect method", func(t *testing.T) {
+		resp, err := dclr().Connect(ts.URL + "/connect")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		assertEqual(t, "", resp.String())
+	})
 }
 
 func TestSendMethod(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	t.Run("send-get", func(t *testing.T) {
@@ -1784,7 +1798,7 @@ type noCtTest struct {
 }
 
 func TestRequestExpectContentTypeTest(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dc()
@@ -1823,7 +1837,7 @@ func TestGetPathParamAndPathParams(t *testing.T) {
 }
 
 func TestReportMethodSupportsPayload(t *testing.T) {
-	ts := createGenServer(t)
+	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dc()

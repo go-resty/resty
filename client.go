@@ -41,6 +41,12 @@ const (
 
 	// MethodOptions HTTP method
 	MethodOptions = "OPTIONS"
+
+	// MethodTrace HTTP method
+	MethodTrace = "TRACE"
+
+	// MethodConnect HTTP method
+	MethodConnect = "CONNECT"
 )
 
 var (

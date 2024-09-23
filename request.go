@@ -1022,9 +1022,19 @@ func (r *Request) Put(url string) (*Response, error) {
 	return r.Execute(MethodPut, url)
 }
 
+// Patch method does PATCH HTTP request. It's defined in section 2 of RFC5789.
+func (r *Request) Patch(url string) (*Response, error) {
+	return r.Execute(MethodPatch, url)
+}
+
 // Delete method does DELETE HTTP request. It's defined in section 4.3.5 of RFC7231.
 func (r *Request) Delete(url string) (*Response, error) {
 	return r.Execute(MethodDelete, url)
+}
+
+// Connect method does CONNECT HTTP request. It's defined in section 4.3.6 of RFC7231.
+func (r *Request) Connect(url string) (*Response, error) {
+	return r.Execute(MethodConnect, url)
 }
 
 // Options method does OPTIONS HTTP request. It's defined in section 4.3.7 of RFC7231.
@@ -1032,9 +1042,9 @@ func (r *Request) Options(url string) (*Response, error) {
 	return r.Execute(MethodOptions, url)
 }
 
-// Patch method does PATCH HTTP request. It's defined in section 2 of RFC5789.
-func (r *Request) Patch(url string) (*Response, error) {
-	return r.Execute(MethodPatch, url)
+// Trace method does TRACE HTTP request. It's defined in section 4.3.8 of RFC7231.
+func (r *Request) Trace(url string) (*Response, error) {
+	return r.Execute(MethodTrace, url)
 }
 
 // Send method performs the HTTP request using the method and URL already defined
