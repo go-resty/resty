@@ -9,6 +9,7 @@ import (
 	"errors"
 	"mime/multipart"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -108,6 +109,8 @@ func TestRestyErrorFuncs(t *testing.T) {
 	ne1 := errors.New("new error 1")
 	nie1 := errors.New("inner error 1")
 
+	assertNil(t, wrapErrors(nil, nil))
+
 	e := wrapErrors(ne1, nie1)
 	assertEqual(t, "new error 1", e.Error())
 	assertEqual(t, "inner error 1", errors.Unwrap(e).Error())
@@ -117,4 +120,21 @@ func TestRestyErrorFuncs(t *testing.T) {
 
 	e = wrapErrors(nil, nie1)
 	assertEqual(t, "inner error 1", e.Error())
+}
+
+// This test methods exist for test coverage purpose
+// to validate the getter and setter
+func TestUtilMiscTestCoverage(t *testing.T) {
+	l := &limitReadCloser{r: strings.NewReader("hello test close for no io.Closer")}
+	assertNil(t, l.Close())
+
+	r := &readCopier{s: strings.NewReader("hello test close for no io.Closer")}
+	assertNil(t, r.Close())
+
+	v := struct {
+		ID      string `json:"id"`
+		Message string `json:"message"`
+	}{}
+	err := decodeJSON(bytes.NewReader([]byte(`{\"  \": \"some value\"}`)), &v)
+	assertEqual(t, "invalid character '\\\\' looking for beginning of object key string", err.Error())
 }

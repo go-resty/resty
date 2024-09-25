@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"bytes"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/base64"
@@ -318,6 +319,8 @@ func createPostServer(t *testing.T) *httptest.Server {
 				}
 				http.SetCookie(w, &cookie)
 				w.WriteHeader(http.StatusOK)
+			case "/204-response":
+				w.WriteHeader(http.StatusNoContent)
 			}
 		}
 	})
@@ -817,27 +820,27 @@ func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest
 	return httptest.NewServer(http.HandlerFunc(fn))
 }
 
-func dc() *Client {
+func dcnl() *Client {
 	c := New().
 		outputLogTo(io.Discard)
 	return c
 }
 
-func dcl() *Client {
+func dcld() (*Client, *bytes.Buffer) {
+	logBuf := acquireBuffer()
 	c := New().
-		SetDebug(true).
-		outputLogTo(io.Discard)
-	return c
+		EnableDebug().
+		outputLogTo(logBuf)
+	return c, logBuf
 }
 
-func dcr() *Request {
-	return dc().R()
+func dcnlr() *Request {
+	return dcnl().R()
 }
 
-func dclr() *Request {
-	c := dc().
-		SetDebug(true).
-		outputLogTo(io.Discard)
+func dcnldr() *Request {
+	c := dcnl().
+		SetDebug(true)
 	return c.R()
 }
 

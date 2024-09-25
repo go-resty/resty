@@ -36,7 +36,7 @@ func TestGet(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dc().R().
+	resp, err := dcnl().R().
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Get(ts.URL + "/")
 
@@ -54,7 +54,7 @@ func TestGetGH524(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dc().R().
+	resp, err := dcnl().R().
 		SetPathParams((map[string]string{
 			"userId":       "sample@sample.com",
 			"subAccountId": "100002",
@@ -76,7 +76,7 @@ func TestRateLimiter(t *testing.T) {
 	// Test a burst with a valid capacity and then a consecutive request that must fail.
 
 	// Allow a rate of 1 every 100 ms but also allow bursts of 10 requests.
-	client := dc().SetRateLimiter(rate.NewLimiter(rate.Every(100*time.Millisecond), 10))
+	client := dcnl().SetRateLimiter(rate.NewLimiter(rate.Every(100*time.Millisecond), 10))
 
 	// Execute a burst of 10 requests.
 	for i := 0; i < 10; i++ {
@@ -95,7 +95,7 @@ func TestRateLimiter(t *testing.T) {
 	// Test continues request at a valid rate
 
 	// Allow a rate of 1 every ms with no burst.
-	client = dc().SetRateLimiter(rate.NewLimiter(rate.Every(1*time.Millisecond), 1))
+	client = dcnl().SetRateLimiter(rate.NewLimiter(rate.Every(1*time.Millisecond), 1))
 
 	// Sending requests every ms+tiny delta must succeed.
 	for i := 0; i < 100; i++ {
@@ -111,7 +111,7 @@ func TestIllegalRetryCount(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dc().SetRetryCount(-1).R().Get(ts.URL + "/")
+	resp, err := dcnl().SetRetryCount(-1).R().Get(ts.URL + "/")
 
 	assertNil(t, err)
 	assertNil(t, resp)
@@ -121,7 +121,7 @@ func TestGetCustomUserAgent(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dcr().
+	resp, err := dcnlr().
 		SetHeader(hdrUserAgentKey, "Test Custom User agent").
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Get(ts.URL + "/")
@@ -139,7 +139,7 @@ func TestGetClientParamRequestParam(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetQueryParam("client_param", "true").
 		SetQueryParams(map[string]string{"req_1": "jeeva", "req_3": "jeeva3"}).
 		SetDebug(true)
@@ -164,7 +164,7 @@ func TestGetRelativePath(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetBaseURL(ts.URL)
 
 	resp, err := c.R().Get("mypage2")
@@ -180,7 +180,7 @@ func TestGet400Error(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dcr().Get(ts.URL + "/mypage")
+	resp, err := dcnlr().Get(ts.URL + "/mypage")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusBadRequest, resp.StatusCode())
@@ -193,7 +193,7 @@ func TestPostJSONStringSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.1", hdrAcceptKey: "application/json; charset=utf-8"})
 
@@ -221,7 +221,7 @@ func TestPostJSONBytesSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetHeaders(map[string]string{hdrUserAgentKey: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) go-resty v0.7", hdrAcceptKey: "application/json; charset=utf-8"})
 
@@ -239,7 +239,7 @@ func TestPostJSONBytesIoReader(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetHeader(hdrContentTypeKey, "application/json; charset=utf-8")
 
 	bodyBytes := []byte(`{"username":"testuser", "password":"testpass"}`)
@@ -260,7 +260,7 @@ func TestPostJSONStructSuccess(t *testing.T) {
 
 	user := &User{Username: "testuser", Password: "testpass"}
 
-	c := dc().SetJSONEscapeHTML(false)
+	c := dcnl().SetJSONEscapeHTML(false)
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(user).
@@ -282,7 +282,7 @@ func TestPostJSONRPCStructSuccess(t *testing.T) {
 
 	user := &User{Username: "testuser", Password: "testpass"}
 
-	c := dc().SetJSONEscapeHTML(false)
+	c := dcnl().SetJSONEscapeHTML(false)
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json-rpc").
 		SetBody(user).
@@ -303,7 +303,7 @@ func TestPostJSONStructInvalidLogin(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetDebug(false)
 
 	resp, err := c.R().
@@ -328,7 +328,7 @@ func TestPostJSONErrorRFC7807(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(User{Username: "testuser", Password: "testpass1"}).
@@ -350,7 +350,7 @@ func TestPostJSONMapSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetDebug(false)
 
 	resp, err := c.R().
@@ -370,7 +370,7 @@ func TestPostJSONMapInvalidResponseJson(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetBody(map[string]any{"username": "testuser", "password": "invalidjson"}).
 		SetResult(&AuthSuccess{}).
 		Post(ts.URL + "/login")
@@ -400,7 +400,7 @@ func TestPostJSONMarshalError(t *testing.T) {
 	b := brokenMarshalJSON{}
 	exp := "b0rk3d"
 
-	_, err := dclr().
+	_, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/json").
 		SetBody(b).
 		Post(ts.URL + "/login")
@@ -418,7 +418,7 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	defer ts.Close()
 
 	retried := 0
-	c := dc()
+	c := dcnl()
 	c.SetDebug(false)
 	c.SetRetryCount(3)
 	c.SetRetryAfter(RetryAfterFunc(func(*Client, *Response) (time.Duration, error) {
@@ -446,7 +446,7 @@ func TestPostXMLStringSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetDebug(false)
 
 	resp, err := c.R().
@@ -475,7 +475,7 @@ func TestPostXMLMarshalError(t *testing.T) {
 	b := brokenMarshalXML{}
 	exp := "b0rk3d"
 
-	_, err := dclr().
+	_, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(b).
 		Post(ts.URL + "/login")
@@ -492,7 +492,7 @@ func TestPostXMLStringError(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username>testpass</Password></User>`).
 		Post(ts.URL + "/login")
@@ -508,7 +508,7 @@ func TestPostXMLBytesSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetDebug(false)
 
 	resp, err := c.R().
@@ -528,7 +528,7 @@ func TestPostXMLStructSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(User{Username: "testuser", Password: "testpass"}).
 		SetContentLength(true).
@@ -547,7 +547,7 @@ func TestPostXMLStructInvalidLogin(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetError(&AuthError{})
 
 	resp, err := c.R().
@@ -568,7 +568,7 @@ func TestPostXMLStructInvalidResponseXml(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(User{Username: "testuser", Password: "invalidxml"}).
 		SetResult(&AuthSuccess{}).
@@ -586,7 +586,7 @@ func TestPostXMLMapNotSupported(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	_, err := dclr().
+	_, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(map[string]any{"Username": "testuser", "Password": "testpass"}).
 		Post(ts.URL + "/login")
@@ -598,7 +598,7 @@ func TestRequestBasicAuth(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetBaseURL(ts.URL).
 		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
 
@@ -618,7 +618,7 @@ func TestRequestBasicAuthWithBody(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetBaseURL(ts.URL).
 		SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
 
@@ -643,7 +643,7 @@ func TestRequestInsecureBasicAuth(t *testing.T) {
 	logger := createLogger()
 	logger.l.SetOutput(&logBuf)
 
-	c := dc()
+	c := dcnl()
 	c.SetBaseURL(ts.URL)
 
 	resp, err := c.R().
@@ -665,7 +665,7 @@ func TestRequestBasicAuthFail(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 		SetError(AuthError{})
 
@@ -684,7 +684,7 @@ func TestRequestAuthToken(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF")
 
@@ -700,7 +700,7 @@ func TestRequestAuthScheme(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 		SetAuthScheme("OAuth").
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF")
@@ -719,7 +719,7 @@ func TestRequestDigestAuth(t *testing.T) {
 	ts := createDigestServer(t, nil)
 	defer ts.Close()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetDigestAuth(conf.username, conf.password).
 		SetResult(&AuthSuccess{}).
 		Get(ts.URL + conf.uri)
@@ -736,7 +736,7 @@ func TestRequestDigestAuthFail(t *testing.T) {
 	ts := createDigestServer(t, nil)
 	defer ts.Close()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetDigestAuth(conf.username, "wrongPassword").
 		SetError(AuthError{}).
 		Get(ts.URL + conf.uri)
@@ -753,7 +753,7 @@ func TestRequestDigestAuthWithBody(t *testing.T) {
 	ts := createDigestServer(t, nil)
 	defer ts.Close()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetDigestAuth(conf.username, conf.password).
 		SetResult(&AuthSuccess{}).
 		SetHeader(hdrContentTypeKey, "application/json").
@@ -771,7 +771,7 @@ func TestFormData(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
 		SetContentLength(true).
 		SetDebug(true)
@@ -795,7 +795,7 @@ func TestMultiValueFormData(t *testing.T) {
 		"search_criteria": []string{"book", "glass", "pencil"},
 	}
 
-	c := dc()
+	c := dcnl()
 	c.SetContentLength(true).SetDebug(true)
 	c.outputLogTo(io.Discard)
 
@@ -812,7 +812,7 @@ func TestFormDataDisableWarn(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
 		SetContentLength(true).
 		SetDisableWarn(true)
@@ -836,7 +836,7 @@ func TestMultiPartUploadFile(t *testing.T) {
 
 	basePath := getTestDataPath()
 
-	c := dc()
+	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
 
 	resp, err := c.R().
@@ -855,7 +855,7 @@ func TestMultiPartUploadFileViaPatch(t *testing.T) {
 
 	basePath := getTestDataPath()
 
-	c := dc()
+	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
 
 	resp, err := c.R().
@@ -874,7 +874,7 @@ func TestMultiPartUploadFileError(t *testing.T) {
 
 	basePath := getTestDataPath()
 
-	c := dc()
+	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
 
 	resp, err := c.R().
@@ -896,7 +896,7 @@ func TestMultiPartUploadFiles(t *testing.T) {
 
 	basePath := getTestDataPath()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetFormDataFromValues(url.Values{
 			"first_name": []string{"Jeevanandam"},
 			"last_name":  []string{"M"},
@@ -929,7 +929,7 @@ func TestMultiPartIoReaderFiles(t *testing.T) {
 	}
 	t.Logf("File Info: %v", file.String())
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
 		SetFileReader("profile_img", "test-img.png", bytes.NewReader(profileImgBytes)).
 		SetFileReader("notes", "text-file.txt", bytes.NewReader(notesBytes)).
@@ -950,13 +950,13 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 
 	basePath := getTestDataPath()
 
-	_, err := dclr().
+	_, err := dcnldr().
 		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
 		Get(ts.URL + "/upload")
 
 	assertEqual(t, "multipart content is not allowed in HTTP verb [GET]", err.Error())
 
-	_, err = dclr().
+	_, err = dcnldr().
 		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
 		Delete(ts.URL + "/upload")
 
@@ -964,7 +964,7 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 
 	var hook1Count int
 	var hook2Count int
-	_, err = dc().
+	_, err = dcnl().
 		OnInvalid(func(r *Request, err error) {
 			assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
 			assertNotNil(t, r)
@@ -987,7 +987,7 @@ func TestMultiPartUploadFileNotOnGetOrDelete(t *testing.T) {
 func TestMultiPartFormData(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
 		SetBasicAuth("myuser", "mypass").
 		Post(ts.URL + "/profile")
@@ -1004,7 +1004,7 @@ func TestMultiPartMultipartField(t *testing.T) {
 
 	jsonBytes := []byte(`{"input": {"name": "Uploaded document", "_filename" : ["file.txt"]}}`)
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetFormDataFromValues(url.Values{
 			"first_name": []string{"Jeevanandam"},
 			"last_name":  []string{"M"},
@@ -1047,7 +1047,7 @@ func TestMultiPartMultipartFields(t *testing.T) {
 		},
 	}
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
 		SetMultipartFields(fields...).
 		Post(ts.URL + "/upload")
@@ -1065,7 +1065,7 @@ func TestMultiPartCustomBoundary(t *testing.T) {
 	defer ts.Close()
 	defer cleanupFiles(".testdata/upload")
 
-	_, err := dclr().
+	_, err := dcnldr().
 		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
 		SetMultipartBoundary(`"my-custom-boundary"`).
 		SetBasicAuth("myuser", "mypass").
@@ -1073,7 +1073,7 @@ func TestMultiPartCustomBoundary(t *testing.T) {
 
 	assertEqual(t, "mime: invalid boundary character", err.Error())
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
 		SetMultipartBoundary("my-custom-boundary").
 		Post(ts.URL + "/profile")
@@ -1087,7 +1087,7 @@ func TestGetWithCookie(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dcl()
+	c := dcnl()
 	c.SetBaseURL(ts.URL)
 	c.SetCookie(&http.Cookie{
 		Name:  "go-resty-1",
@@ -1118,7 +1118,7 @@ func TestGetWithCookies(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetBaseURL(ts.URL).SetDebug(true)
 
 	tu, _ := url.Parse(ts.URL)
@@ -1167,7 +1167,7 @@ func TestPutPlainString(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
-	resp, err := dc().R().
+	resp, err := dcnl().R().
 		SetBody("This is plain text body to server").
 		Put(ts.URL + "/plaintext")
 
@@ -1180,7 +1180,7 @@ func TestPutJSONString(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
-	client := dc()
+	client := dcnl()
 
 	client.OnBeforeRequest(func(c *Client, r *Request) error {
 		r.SetHeader("X-Custom-Request-Middleware", "OnBeforeRequest middleware")
@@ -1209,7 +1209,7 @@ func TestPutXMLString(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
-	resp, err := dc().R().
+	resp, err := dcnl().R().
 		SetHeaders(map[string]string{hdrContentTypeKey: "application/xml", hdrAcceptKey: "application/xml"}).
 		SetBody(`<?xml version="1.0" encoding="UTF-8"?><Request>XML Content sending to server</Request>`).
 		Put(ts.URL + "/xml")
@@ -1223,7 +1223,7 @@ func TestOnBeforeMiddleware(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.OnBeforeRequest(func(c *Client, r *Request) error {
 		r.SetHeader("X-Custom-Request-Middleware", "OnBeforeRequest middleware")
 		return nil
@@ -1247,7 +1247,7 @@ func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
 
-	_, err := dc().R().Get(ts.URL + "/redirect-1")
+	_, err := dcnl().R().Get(ts.URL + "/redirect-1")
 
 	assertEqual(t, true, (err.Error() == "Get /redirect-11: stopped after 10 redirects" ||
 		err.Error() == "Get \"/redirect-11\": stopped after 10 redirects"))
@@ -1257,7 +1257,7 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
 
-	c := dc().
+	c := dcnl().
 		SetRedirectPolicy(DomainCheckRedirectPolicy("127.0.0.1"))
 
 	_, err := c.R().Get(ts.URL + "/redirect-host-check-1")
@@ -1271,14 +1271,14 @@ func TestHttpMethods(t *testing.T) {
 	defer ts.Close()
 
 	t.Run("head method", func(t *testing.T) {
-		resp, err := dclr().Head(ts.URL + "/")
+		resp, err := dcnldr().Head(ts.URL + "/")
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 	})
 
 	t.Run("options method", func(t *testing.T) {
-		resp, err := dclr().Options(ts.URL + "/options")
+		resp, err := dcnldr().Options(ts.URL + "/options")
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -1286,7 +1286,7 @@ func TestHttpMethods(t *testing.T) {
 	})
 
 	t.Run("patch method", func(t *testing.T) {
-		resp, err := dclr().Patch(ts.URL + "/patch")
+		resp, err := dcnldr().Patch(ts.URL + "/patch")
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -1295,7 +1295,7 @@ func TestHttpMethods(t *testing.T) {
 	})
 
 	t.Run("trace method", func(t *testing.T) {
-		resp, err := dclr().Trace(ts.URL + "/trace")
+		resp, err := dcnldr().Trace(ts.URL + "/trace")
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -1304,7 +1304,7 @@ func TestHttpMethods(t *testing.T) {
 	})
 
 	t.Run("connect method", func(t *testing.T) {
-		resp, err := dclr().Connect(ts.URL + "/connect")
+		resp, err := dcnldr().Connect(ts.URL + "/connect")
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -1317,9 +1317,21 @@ func TestSendMethod(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
+	t.Run("send-get-implicit", func(t *testing.T) {
+		req := dcnldr()
+		req.URL = ts.URL + "/gzip-test"
+
+		resp, err := req.Send()
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		assertEqual(t, "This is Gzip response testing", resp.String())
+	})
+
 	t.Run("send-get", func(t *testing.T) {
-		req := dclr()
-		req.Method = http.MethodGet
+		req := dcnldr()
+		req.SetMethod(MethodGet)
 		req.URL = ts.URL + "/gzip-test"
 
 		resp, err := req.Send()
@@ -1331,8 +1343,8 @@ func TestSendMethod(t *testing.T) {
 	})
 
 	t.Run("send-options", func(t *testing.T) {
-		req := dclr()
-		req.Method = http.MethodOptions
+		req := dcnldr()
+		req.SetMethod(MethodOptions)
 		req.URL = ts.URL + "/options"
 
 		resp, err := req.Send()
@@ -1345,8 +1357,8 @@ func TestSendMethod(t *testing.T) {
 	})
 
 	t.Run("send-patch", func(t *testing.T) {
-		req := dclr()
-		req.Method = http.MethodPatch
+		req := dcnldr()
+		req.SetMethod(MethodPatch)
 		req.URL = ts.URL + "/patch"
 
 		resp, err := req.Send()
@@ -1358,8 +1370,8 @@ func TestSendMethod(t *testing.T) {
 	})
 
 	t.Run("send-put", func(t *testing.T) {
-		req := dclr()
-		req.Method = http.MethodPut
+		req := dcnldr()
+		req.SetMethod(MethodPut)
 		req.URL = ts.URL + "/plaintext"
 
 		resp, err := req.Send()
@@ -1378,7 +1390,7 @@ func TestRawFileUploadByBody(t *testing.T) {
 	fileBytes, err := os.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
 	assertNil(t, err)
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetBody(fileBytes).
 		SetContentLength(true).
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
@@ -1390,7 +1402,7 @@ func TestRawFileUploadByBody(t *testing.T) {
 }
 
 func TestProxySetting(t *testing.T) {
-	c := dc()
+	c := dcnl()
 
 	transport, err := c.Transport()
 
@@ -1426,7 +1438,7 @@ func TestGetClient(t *testing.T) {
 }
 
 func TestIncorrectURL(t *testing.T) {
-	c := dc()
+	c := dcnl()
 	_, err := c.R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
 	assertEqual(t, true, (strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
 		strings.Contains(err.Error(), "parse \"//not.a.user@%66%6f%6f.com/just/a/path/also\"")))
@@ -1443,7 +1455,7 @@ func TestDetectContentTypeForPointer(t *testing.T) {
 
 	user := &User{Username: "testuser", Password: "testpass"}
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetBody(user).
 		SetResult(AuthSuccess{}).
 		Post(ts.URL + "/login")
@@ -1472,7 +1484,7 @@ func TestDetectContentTypeForPointerWithSlice(t *testing.T) {
 		{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
 	}
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetBody(users).
 		Post(ts.URL + "/users")
 
@@ -1497,7 +1509,7 @@ func TestDetectContentTypeForPointerWithSliceMap(t *testing.T) {
 	var users []map[string]any
 	users = append(users, usersmap)
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetBody(&users).
 		Post(ts.URL + "/usersmap")
 
@@ -1519,7 +1531,7 @@ func TestDetectContentTypeForSlice(t *testing.T) {
 		{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
 	}
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetBody(users).
 		Post(ts.URL + "/users")
 
@@ -1535,7 +1547,7 @@ func TestMultiParamsQueryString(t *testing.T) {
 	ts1 := createGetServer(t)
 	defer ts1.Close()
 
-	client := dc()
+	client := dcnl()
 	req1 := client.R()
 
 	client.SetQueryParam("status", "open")
@@ -1577,7 +1589,7 @@ func TestSetQueryStringTypical(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetQueryString("productId=232&template=fresh-sample&cat=resty&source=google&kw=buy a lot more").
 		Get(ts.URL)
 
@@ -1586,7 +1598,7 @@ func TestSetQueryStringTypical(t *testing.T) {
 	assertEqual(t, "200 OK", resp.Status())
 	assertEqual(t, "TestGet: text response", resp.String())
 
-	resp, err = dclr().
+	resp, err = dcnldr().
 		SetQueryString("&%%amp;").
 		Get(ts.URL)
 
@@ -1600,7 +1612,7 @@ func TestSetHeaderVerbatim(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	r := dclr().
+	r := dcnldr().
 		SetHeaderVerbatim("header-lowercase", "value_lowercase").
 		SetHeader("header-lowercase", "value_standard")
 
@@ -1613,7 +1625,7 @@ func TestSetHeaderMultipleValue(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	r := dclr().
+	r := dcnldr().
 		SetHeaderMultiValues(map[string][]string{
 			"Content":       {"text/*", "text/html", "*"},
 			"Authorization": {"Bearer xyz"},
@@ -1628,7 +1640,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	defer cleanupFiles(".testdata/dir-sample")
 
 	baseOutputDir := filepath.Join(getTestDataPath(), "dir-sample")
-	client := dc().
+	client := dcnl().
 		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
 		SetOutputDirectory(baseOutputDir).
 		SetDebug(true)
@@ -1649,7 +1661,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 }
 
 func TestOutputFileWithBaseDirError(t *testing.T) {
-	c := dc().SetRedirectPolicy(FlexibleRedirectPolicy(10)).
+	c := dcnl().SetRedirectPolicy(FlexibleRedirectPolicy(10)).
 		SetOutputDirectory(filepath.Join(getTestDataPath(), `go-resty\0`))
 
 	_ = c
@@ -1660,7 +1672,7 @@ func TestOutputPathDirNotExists(t *testing.T) {
 	defer ts.Close()
 	defer cleanupFiles(filepath.Join(".testdata", "not-exists-dir"))
 
-	client := dc().
+	client := dcnl().
 		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
 		SetOutputDirectory(filepath.Join(getTestDataPath(), "not-exists-dir"))
 
@@ -1678,7 +1690,7 @@ func TestOutputFileAbsPath(t *testing.T) {
 	defer ts.Close()
 	defer cleanupFiles(filepath.Join(".testdata", "go-resty"))
 
-	_, err := dcr().
+	_, err := dcnlr().
 		SetOutputFile(filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")).
 		Get(ts.URL + "/my-image.png")
 
@@ -1689,7 +1701,7 @@ func TestContextInternal(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	r := dc().R().
+	r := dcnl().R().
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10))
 
 	resp, err := r.Get(ts.URL + "/")
@@ -1699,7 +1711,7 @@ func TestContextInternal(t *testing.T) {
 }
 
 func TestSRV(t *testing.T) {
-	c := dc().
+	c := dcnl().
 		SetRedirectPolicy(FlexibleRedirectPolicy(20)).
 		SetScheme("http")
 
@@ -1718,7 +1730,7 @@ func TestSRV(t *testing.T) {
 }
 
 func TestSRVInvalidService(t *testing.T) {
-	_, err := dc().R().
+	_, err := dcnl().R().
 		SetSRV(&SRVRecord{"nonexistantservice", "sampledomain"}).
 		Get("/")
 
@@ -1730,30 +1742,31 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	client := dc().SetDoNotParseResponse(true)
-	resp, err := client.R().
-		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
-		Get(ts.URL + "/")
+	t.Run("do not parse response 1", func(t *testing.T) {
+		client := dcnl().SetDoNotParseResponse(true)
+		resp, err := client.R().
+			SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+			Get(ts.URL + "/")
 
-	assertError(t, err)
+		assertError(t, err)
 
-	buf := acquireBuffer()
-	defer releaseBuffer(buf)
-	_, _ = io.Copy(buf, resp.Body)
+		b, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		assertError(t, err)
+		assertEqual(t, "TestGet: text response", string(b))
+	})
 
-	assertEqual(t, "TestGet: text response", buf.String())
-	_ = resp.Body.Close()
+	t.Run("manual reset raw response - do not parse response 2", func(t *testing.T) {
+		resp, err := dcnl().R().
+			SetDoNotParseResponse(true).
+			Get(ts.URL + "/")
 
-	// Manually setting RawResponse as nil
-	resp, err = dc().R().
-		SetDoNotParseResponse(true).
-		Get(ts.URL + "/")
+		assertError(t, err)
 
-	assertError(t, err)
-
-	resp.RawResponse = nil
-	assertEqual(t, 0, resp.StatusCode())
-	assertEqual(t, "", resp.String())
+		resp.RawResponse = nil
+		assertEqual(t, 0, resp.StatusCode())
+		assertEqual(t, "", resp.String())
+	})
 }
 
 func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
@@ -1761,7 +1774,7 @@ func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
 	defer ts.Close()
 
 	t.Run("do not parse response debug log client level", func(t *testing.T) {
-		c := dc().
+		c := dcnl().
 			SetDoNotParseResponse(true).
 			SetDebug(true)
 
@@ -1777,7 +1790,7 @@ func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
 	})
 
 	t.Run("do not parse response debug log request level", func(t *testing.T) {
-		c := dc()
+		c := dcnl()
 
 		var lgr bytes.Buffer
 		c.outputLogTo(&lgr)
@@ -1801,7 +1814,7 @@ func TestRequestExpectContentTypeTest(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	resp, err := c.R().
 		SetResult(noCtTest{}).
 		SetExpectResponseContentType("application/json").
@@ -1819,7 +1832,7 @@ func TestGetPathParamAndPathParams(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().
+	c := dcnl().
 		SetBaseURL(ts.URL).
 		SetPathParam("userId", "sample@sample.com")
 
@@ -1840,7 +1853,7 @@ func TestReportMethodSupportsPayload(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	resp, err := c.R().
 		SetBody("body").
 		Execute("REPORT", ts.URL+"/report")
@@ -1870,7 +1883,7 @@ func TestRequestOverridesClientAuthorizationHeader(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
 		SetHeader("Authorization", "some token").
 		SetBaseURL(ts.URL + "/")
@@ -1890,7 +1903,7 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 	file, _ := os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
 	defer file.Close()
 
-	resp, err := dclr().
+	resp, err := dcnldr().
 		SetBody(file).
 		SetHeader("Content-Type", "image/png").
 		Post(ts.URL + "/upload")
@@ -1902,7 +1915,7 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 	file, _ = os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
 	defer file.Close()
 
-	resp, err = dclr().
+	resp, err = dcnldr().
 		SetBody(file).
 		SetHeader("Content-Type", "image/png").
 		SetContentLength(true).
@@ -1917,7 +1930,7 @@ func TestHostHeaderOverride(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dc().R().
+	resp, err := dcnl().R().
 		SetHeader("Host", "myhostname").
 		Get(ts.URL + "/host-header")
 
@@ -1939,7 +1952,7 @@ func TestNotFoundWithError(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dc().R().
+	resp, err := dcnl().R().
 		SetHeader(hdrContentTypeKey, "application/json").
 		SetError(&httpError).
 		Get(ts.URL + "/not-found-with-error")
@@ -1959,7 +1972,7 @@ func TestNotFoundWithoutError(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().outputLogTo(os.Stdout)
+	c := dcnl().outputLogTo(os.Stdout)
 	resp, err := c.R().
 		SetError(&httpError).
 		SetHeader(hdrContentTypeKey, "application/json").
@@ -1978,7 +1991,7 @@ func TestPathParamURLInput(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().
+	c := dcnl().
 		SetBaseURL(ts.URL).
 		SetPathParams(map[string]string{
 			"userId": "sample@sample.com",
@@ -2004,7 +2017,7 @@ func TestRawPathParamURLInput(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().SetDebug(true).
+	c := dcnl().
 		SetBaseURL(ts.URL).
 		SetRawPathParams(map[string]string{
 			"userId": "sample@sample.com",
@@ -2014,7 +2027,7 @@ func TestRawPathParamURLInput(t *testing.T) {
 	assertEqual(t, "sample@sample.com", c.RawPathParams()["userId"])
 	assertEqual(t, "users/developers", c.RawPathParams()["path"])
 
-	resp, err := c.R().
+	resp, err := c.R().EnableDebug().
 		SetRawPathParams(map[string]string{
 			"subAccountId": "100002",
 			"website":      "https://example.com",
@@ -2035,7 +2048,7 @@ func TestTraceInfo(t *testing.T) {
 
 	serverAddr := ts.URL[strings.LastIndex(ts.URL, "/")+1:]
 
-	client := dc()
+	client := dcnl()
 	client.SetBaseURL(ts.URL).EnableTrace()
 	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
 		resp, err := client.R().Get(u)
@@ -2080,7 +2093,7 @@ func TestTraceInfoWithoutEnableTrace(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	client := dc()
+	client := dcnl()
 	client.SetBaseURL(ts.URL)
 	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
 		resp, err := client.R().Get(u)
@@ -2098,7 +2111,7 @@ func TestTraceInfoWithoutEnableTrace(t *testing.T) {
 }
 
 func TestTraceInfoOnTimeout(t *testing.T) {
-	client := dc()
+	client := dcnl()
 	client.SetBaseURL("http://resty-nowhere.local").EnableTrace()
 
 	resp, err := client.R().Get("/")
@@ -2211,13 +2224,26 @@ func TestPostMapTemporaryRedirect(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	resp, err := c.R().SetBody(map[string]string{"username": "testuser", "password": "testpass"}).
 		Post(ts.URL + "/redirect")
 
 	assertNil(t, err)
 	assertNotNil(t, resp)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+func TestPostWith204Responset(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	resp, err := c.R().SetBody(map[string]string{"username": "testuser", "password": "testpass"}).
+		Post(ts.URL + "/204-response")
+
+	assertNil(t, err)
+	assertNotNil(t, resp)
+	assertEqual(t, http.StatusNoContent, resp.StatusCode())
 }
 
 type brokenReadCloser struct{}
@@ -2234,11 +2260,11 @@ func TestPostBodyError(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	resp, err := c.R().SetBody(brokenReadCloser{}).Post(ts.URL + "/redirect")
 	assertNotNil(t, err)
-	assertEqual(t, "read error", err.Error())
-	assertNil(t, resp)
+	assertEqual(t, "read error", errors.Unwrap(err).Error())
+	assertNotNil(t, resp)
 }
 
 func TestSetResultMustNotPanicOnNil(t *testing.T) {
@@ -2247,14 +2273,14 @@ func TestSetResultMustNotPanicOnNil(t *testing.T) {
 			t.Errorf("must not panic")
 		}
 	}()
-	dc().R().SetResult(nil)
+	dcnl().R().SetResult(nil)
 }
 
 func TestRequestClone(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc()
+	c := dcnl()
 	parent := c.R()
 
 	// set an non-interface value
@@ -2317,10 +2343,43 @@ func TestRequestClone(t *testing.T) {
 	assertEqual(t, "xmpp-server-clone", clone.SRV.Service)
 }
 
+func TestResponseBodyUnlimitedReads(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	user := &User{Username: "testuser", Password: "testpass"}
+
+	c := dcnl().
+		SetJSONEscapeHTML(false).
+		SetResponseBodyUnlimitedReads(true)
+
+	assertEqual(t, true, c.ResponseBodyUnlimitedReads())
+
+	resp, err := c.R().
+		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
+		SetBody(user).
+		SetResult(&AuthSuccess{}).
+		Post(ts.URL + "/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, int64(50), resp.Size())
+
+	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
+
+	for i := 1; i <= 5; i++ {
+		b, err := io.ReadAll(resp.Body)
+		assertNil(t, err)
+		assertEqual(t, `{ "id": "success", "message": "login successful" }`, string(b))
+	}
+
+	logResponse(t, resp)
+}
+
 // This test methods exist for test coverage purpose
 // to validate the getter and setter
 func TestRequestSettingsCoverage(t *testing.T) {
-	c := dc()
+	c := dcnl()
 
 	c.R().SetCloseConnection(true)
 
@@ -2329,4 +2388,8 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	srv := []*net.SRV{}
 	srv = append(srv, &net.SRV{})
 	c.R().selectAddr(srv, "/", 1)
+
+	c.R().SetResponseBodyUnlimitedReads(true)
+
+	c.R().DisableDebug()
 }

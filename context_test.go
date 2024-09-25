@@ -20,7 +20,7 @@ func TestSetContext(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dc().R().
+	resp, err := dcnl().R().
 		SetContext(context.Background()).
 		Get(ts.URL + "/")
 
@@ -37,7 +37,7 @@ func TestSetContextWithError(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	resp, err := dcr().
+	resp, err := dcnlr().
 		SetContext(context.Background()).
 		Get(ts.URL + "/mypage")
 
@@ -71,7 +71,7 @@ func TestSetContextCancel(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := dc().R().
+	_, err := dcnl().R().
 		SetContext(ctx).
 		Get(ts.URL + "/")
 
@@ -110,7 +110,7 @@ func TestSetContextCancelRetry(t *testing.T) {
 		cancel()
 	}()
 
-	c := dc().
+	c := dcnl().
 		SetTimeout(time.Second * 3).
 		SetRetryCount(3)
 
@@ -157,7 +157,7 @@ func TestSetContextCancelWithError(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := dc().R().
+	_, err := dcnl().R().
 		SetContext(ctx).
 		Get(ts.URL + "/")
 
@@ -184,7 +184,7 @@ func TestClientRetryWithSetContext(t *testing.T) {
 	})
 	defer ts.Close()
 
-	c := dc().
+	c := dcnl().
 		SetTimeout(time.Second * 1).
 		SetRetryCount(3)
 
@@ -199,7 +199,7 @@ func TestClientRetryWithSetContext(t *testing.T) {
 }
 
 func TestRequestContext(t *testing.T) {
-	client := dc()
+	client := dcnl()
 	r := client.NewRequest()
 	assertNotNil(t, r.Context())
 

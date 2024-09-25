@@ -265,26 +265,27 @@ func releaseBuffer(buf *bytes.Buffer) {
 	}
 }
 
-// requestBodyReleaser wraps requests's body and implements custom Close for it.
+func wrapRequestBufferReleaser(r *Request) io.ReadCloser {
+	if r.bodyBuf == nil {
+		return r.RawRequest.Body
+	}
+	return &requestBufferReleaser{
+		reqBuf:     r.bodyBuf,
+		ReadCloser: r.RawRequest.Body,
+	}
+}
+
+var _ io.ReadCloser = (*requestBufferReleaser)(nil)
+
+// requestBufferReleaser wraps request body and implements custom Close for it.
 // The Close method closes original body and releases request body back to sync.Pool.
-type requestBodyReleaser struct {
+type requestBufferReleaser struct {
 	releaseOnce sync.Once
 	reqBuf      *bytes.Buffer
 	io.ReadCloser
 }
 
-func newRequestBodyReleaser(respBody io.ReadCloser, reqBuf *bytes.Buffer) io.ReadCloser {
-	if reqBuf == nil {
-		return respBody
-	}
-
-	return &requestBodyReleaser{
-		reqBuf:     reqBuf,
-		ReadCloser: respBody,
-	}
-}
-
-func (rr *requestBodyReleaser) Close() error {
+func (rr *requestBufferReleaser) Close() error {
 	err := rr.ReadCloser.Close()
 	rr.releaseOnce.Do(func() {
 		releaseBuffer(rr.reqBuf)

@@ -23,6 +23,7 @@ type Response struct {
 	Request     *Request
 	Body        io.ReadCloser
 	RawResponse *http.Response
+	IsRead      bool
 
 	bodyBytes  []byte
 	size       int64
@@ -35,6 +36,8 @@ type Response struct {
 //   - [Response.BodyBytes] might be `nil` if [Request.SetOutputFile], [Request.SetDoNotParseResponse],
 //     [Client.SetDoNotParseResponse] method is used.
 //   - [Response.BodyBytes] might be `nil` if [Response].Body is already auto-unmarshal performed.
+//
+// TODO remove it
 func (r *Response) BodyBytes() []byte {
 	if r.RawResponse == nil {
 		return []byte{}
@@ -106,8 +109,8 @@ func (r *Response) Cookies() []*http.Cookie {
 // NOTE:
 //   - Returns an empty string on auto-unmarshal scenarios
 func (r *Response) String() string {
-	if len(r.bodyBytes) == 0 {
-		return ""
+	if len(r.bodyBytes) == 0 && !r.Request.DoNotParseResponse {
+		_ = r.readAllBytes()
 	}
 	return strings.TrimSpace(string(r.bodyBytes))
 }
@@ -154,35 +157,66 @@ func (r *Response) setReceivedAt() {
 	}
 }
 
-func (r *Response) fmtBodyString(sl int) string {
+func (r *Response) fmtBodyString(sl int) (string, error) {
 	if r.Request.DoNotParseResponse {
-		return "***** DO NOT PARSE RESPONSE - Enabled *****"
+		return "***** DO NOT PARSE RESPONSE - Enabled *****", nil
 	}
-	if len(r.bodyBytes) > 0 {
-		if len(r.bodyBytes) > sl {
-			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", len(r.bodyBytes))
+
+	bl := len(r.bodyBytes)
+	if r.IsRead && bl == 0 {
+		return "***** RESPONSE BODY IS ALREADY READ - see Response.{Result()/Error()} *****", nil
+	}
+
+	if bl > 0 {
+		if bl > sl {
+			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", bl), nil
 		}
+
 		ct := r.Header().Get(hdrContentTypeKey)
-		if isJSONContentType(ct) {
+		ctKey := inferContentTypeMapKey(ct)
+		if jsonKey == ctKey {
 			out := acquireBuffer()
 			defer releaseBuffer(out)
 			err := json.Indent(out, r.bodyBytes, "", "   ")
 			if err != nil {
-				return fmt.Sprintf("*** Error: Unable to format response body - \"%s\" ***\n\nLog Body as-is:\n%s", err, r.String())
+				return "", err
 			}
-			return out.String()
+			return out.String(), nil
 		}
-		return r.String()
+		return r.String(), nil
 	}
 
-	return "***** NO CONTENT *****"
+	return "***** NO CONTENT *****", nil
 }
 
 // auto-unmarshal didn't happen, so fallback to
 // old behavior of reading response as body bytes
 func (r *Response) readAllBytes() (err error) {
-	defer closeq(r.Body)
-	r.bodyBytes, err = io.ReadAll(r.Body)
-	r.Body = io.NopCloser(bytes.NewReader(r.bodyBytes))
+	if r.IsRead {
+		return nil
+	}
+
+	if _, ok := r.Body.(*readCopier); ok {
+		_, err = io.ReadAll(r.Body)
+	} else {
+		r.bodyBytes, err = io.ReadAll(r.Body)
+		closeq(r.Body)
+		r.Body = &readNoOpCloser{r: bytes.NewReader(r.bodyBytes)}
+	}
+
+	r.IsRead = true
 	return
+}
+
+func (r *Response) wrapReadCopier() {
+	r.Body = &readCopier{
+		s: r.Body,
+		t: acquireBuffer(),
+		f: func(b *bytes.Buffer) {
+			r.bodyBytes = append([]byte{}, b.Bytes()...)
+			closeq(r.Body)
+			r.Body = &readNoOpCloser{r: bytes.NewReader(r.bodyBytes)}
+			releaseBuffer(b)
+		},
+	}
 }

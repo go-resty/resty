@@ -5,6 +5,7 @@
 package resty
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -97,3 +98,49 @@ func (l *limitReadCloser) Close() error {
 	}
 	return nil
 }
+
+var _ io.ReadCloser = (*readCopier)(nil)
+
+type readCopier struct {
+	s io.Reader
+	t *bytes.Buffer
+	c bool
+	f func(*bytes.Buffer)
+}
+
+func (r *readCopier) Read(p []byte) (int, error) {
+	n, err := r.s.Read(p)
+	if n > 0 {
+		_, _ = r.t.Write(p[:n])
+	}
+	if err == io.EOF || err == ErrReadExceedsThresholdLimit {
+		if !r.c {
+			r.f(r.t)
+			r.c = true
+		}
+	}
+	return n, err
+}
+
+func (r *readCopier) Close() error {
+	if c, ok := r.s.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
+}
+
+var _ io.ReadCloser = (*readNoOpCloser)(nil)
+
+type readNoOpCloser struct {
+	r *bytes.Reader
+}
+
+func (r *readNoOpCloser) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if err == io.EOF {
+		r.r.Seek(0, 0)
+	}
+	return n, err
+}
+
+func (r *readNoOpCloser) Close() error { return nil }
