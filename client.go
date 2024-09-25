@@ -177,6 +177,7 @@ type Client struct {
 	retryResetReaders      bool
 	headerAuthorizationKey string
 	responseBodyLimit      int64
+	resBodyUnlimitedReads  bool
 	jsonEscapeHTML         bool
 	setContentLength       bool
 	closeConnection        bool
@@ -563,24 +564,26 @@ func (c *Client) R() *Request {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	r := &Request{
-		QueryParams:        url.Values{},
-		FormData:           url.Values{},
-		Header:             http.Header{},
-		Cookies:            make([]*http.Cookie, 0),
-		PathParams:         make(map[string]string),
-		RawPathParams:      make(map[string]string),
-		Debug:              c.debug,
-		AuthScheme:         c.authScheme,
-		AuthToken:          c.authToken,
-		UserInfo:           c.userInfo,
-		RetryCount:         c.retryCount,
-		RetryWaitTime:      c.retryWaitTime,
-		RetryMaxWaitTime:   c.retryMaxWaitTime,
-		RetryResetReaders:  c.retryResetReaders,
-		CloseConnection:    c.closeConnection,
-		DoNotParseResponse: c.notParseResponse,
-		DebugBodyLimit:     c.debugBodyLimit,
-		ResponseBodyLimit:  c.responseBodyLimit,
+		QueryParams:                url.Values{},
+		FormData:                   url.Values{},
+		Header:                     http.Header{},
+		Cookies:                    make([]*http.Cookie, 0),
+		PathParams:                 make(map[string]string),
+		RawPathParams:              make(map[string]string),
+		Debug:                      c.debug,
+		IsTrace:                    c.isTrace,
+		AuthScheme:                 c.authScheme,
+		AuthToken:                  c.authToken,
+		UserInfo:                   c.userInfo,
+		RetryCount:                 c.retryCount,
+		RetryWaitTime:              c.retryWaitTime,
+		RetryMaxWaitTime:           c.retryMaxWaitTime,
+		RetryResetReaders:          c.retryResetReaders,
+		CloseConnection:            c.closeConnection,
+		DoNotParseResponse:         c.notParseResponse,
+		DebugBodyLimit:             c.debugBodyLimit,
+		ResponseBodyLimit:          c.responseBodyLimit,
+		ResponseBodyUnlimitedReads: c.resBodyUnlimitedReads,
 
 		client:              c,
 		multipartFiles:      []*File{},
@@ -588,7 +591,6 @@ func (c *Client) R() *Request {
 		jsonEscapeHTML:      c.jsonEscapeHTML,
 		log:                 c.log,
 		setContentLength:    c.setContentLength,
-		IsTrace:             c.isTrace,
 		generateCurlOnDebug: c.generateCurlOnDebug,
 	}
 
@@ -779,6 +781,18 @@ func (c *Client) IsDebug() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.debug
+}
+
+// EnableDebug method is a helper method for [Client.SetDebug]
+func (c *Client) EnableDebug() *Client {
+	c.SetDebug(true)
+	return c
+}
+
+// DisableDebug method is a helper method for [Client.SetDebug]
+func (c *Client) DisableDebug() *Client {
+	c.SetDebug(false)
+	return c
 }
 
 // SetDebug method enables the debug mode on the Resty client. The client logs details
@@ -1609,6 +1623,30 @@ func (c *Client) SetGenerateCurlOnDebug(b bool) *Client {
 	return c
 }
 
+// ResponseBodyUnlimitedReads method returns true if enabled. Otherwise, it returns false
+func (c *Client) ResponseBodyUnlimitedReads() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.resBodyUnlimitedReads
+}
+
+// SetResponseBodyUnlimitedReads method is to turn on/off the response body copy
+// that provides an ability to do unlimited reads.
+//
+// It can be overridden at the request level; see [Request.SetResponseBodyUnlimitedReads]
+//
+// NOTE: Turning on this feature uses additional memory to store a copy of the response body buffer.
+//
+// Unlimited reads are possible in a few scenarios, even without enabling this method.
+//   - When [Client.SetDebug] set to true
+//   - When [Request.SetResult] or [Request.SetError] methods are not used
+func (c *Client) SetResponseBodyUnlimitedReads(b bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.resBodyUnlimitedReads = b
+	return c
+}
+
 // IsProxySet method returns the true is proxy is set from the Resty client; otherwise
 // false. By default, the proxy is set from the environment variable; refer to [http.ProxyFromEnvironment].
 func (c *Client) IsProxySet() bool {
@@ -1639,8 +1677,11 @@ func (c *Client) Clone() *Client {
 }
 
 func (c *Client) executeBefore(req *Request) error {
-	// Apply Request middleware
 	var err error
+
+	if isStringEmpty(req.Method) {
+		req.Method = MethodGet
+	}
 
 	// user defined on before request methods
 	// to modify the *resty.Request object
@@ -1676,11 +1717,6 @@ func (c *Client) executeBefore(req *Request) error {
 		}
 	}
 
-	if err = requestLogger(c, req); err != nil {
-		return wrapNoRetryErr(err)
-	}
-
-	req.RawRequest.Body = newRequestBodyReleaser(req.RawRequest.Body, req.bodyBuf)
 	return nil
 }
 
@@ -1691,27 +1727,39 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		return nil, err
 	}
 
+	if err := requestDebugLogger(c, req); err != nil {
+		return nil, wrapNoRetryErr(err)
+	}
+
+	req.RawRequest.Body = wrapRequestBufferReleaser(req)
 	req.Time = time.Now()
 	resp, err := c.Client().Do(req.RawRequest)
 
-	response := &Response{
-		Request:     req,
-		RawResponse: resp,
-	}
-
+	response := &Response{Request: req, RawResponse: resp}
 	response.setReceivedAt()
+	if err != nil {
+		return response, err
+	}
 	if resp != nil {
-		response.Body = &limitReadCloser{
-			r: resp.Body,
+		response.Body = &limitReadCloser{r: resp.Body,
 			l: req.ResponseBodyLimit,
-			f: func(s int64) {
-				response.size = s
-			},
+			f: func(s int64) { response.size = s },
+		}
+	}
+	if !req.DoNotParseResponse && (req.Debug || req.ResponseBodyUnlimitedReads) {
+		response.wrapReadCopier()
+
+		if err := response.readAllBytes(); err != nil {
+			return response, err
 		}
 	}
 
-	if err != nil || req.DoNotParseResponse { // error or do not parse response
-		return response, wrapErrors(responseLogger(c, response), err)
+	if err := responseDebugLogger(c, response); err != nil {
+		return response, err
+	}
+
+	if req.DoNotParseResponse {
+		return response, err
 	}
 
 	// Apply Response middleware
@@ -1719,11 +1767,6 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		if err = f(c, response); err != nil {
 			return response, err
 		}
-	}
-	// TODO figure out debug response logger with body copy, etc.
-	err = responseLogger(c, response)
-	if err != nil {
-		return response, wrapNoRetryErr(err)
 	}
 
 	return response, wrapNoRetryErr(err)

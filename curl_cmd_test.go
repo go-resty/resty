@@ -10,7 +10,7 @@ import (
 
 // 1. Generate curl for unexecuted request(dry-run)
 func TestGenerateUnexecutedCurl(t *testing.T) {
-	req := dclr().
+	req := dcnldr().
 		SetBody(map[string]string{
 			"name": "Alex",
 		}).
@@ -18,7 +18,8 @@ func TestGenerateUnexecutedCurl(t *testing.T) {
 			[]*http.Cookie{
 				{Name: "count", Value: "1"},
 			},
-		)
+		).
+		SetMethod(MethodPost)
 
 	assertEqual(t, "", req.GenerateCurlCommand())
 
@@ -26,7 +27,7 @@ func TestGenerateUnexecutedCurl(t *testing.T) {
 	req.DisableGenerateCurlOnDebug()
 
 	if !strings.Contains(curlCmdUnexecuted, "Cookie: count=1") ||
-		!strings.Contains(curlCmdUnexecuted, "curl -X GET") ||
+		!strings.Contains(curlCmdUnexecuted, "curl -X POST") ||
 		!strings.Contains(curlCmdUnexecuted, `-d '{"name":"Alex"}'`) {
 		t.Fatal("Incomplete curl:", curlCmdUnexecuted)
 	} else {
@@ -43,7 +44,7 @@ func TestGenerateExecutedCurl(t *testing.T) {
 	data := map[string]string{
 		"name": "Alex",
 	}
-	c := dcl()
+	c := dcnl().EnableDebug()
 	req := c.R().
 		SetBody(data).
 		SetCookies(
@@ -112,6 +113,13 @@ func TestDebugModeCurl(t *testing.T) {
 	} else {
 		t.Log("Normal debug curl info: \n", output)
 	}
+}
+
+func TestCurlMiscTestCoverage(t *testing.T) {
+	cookieStr := dumpCurlCookies([]*http.Cookie{
+		{Name: "count", Value: "1"},
+	})
+	assertEqual(t, "Cookie: count=1", cookieStr)
 }
 
 func captureStderr() (getOutput func() string, restore func()) {

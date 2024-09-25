@@ -212,6 +212,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 		}
 	} else {
 		// fix data race: must deep copy.
+		// TODO investigate in details and remove this copy line
 		bodyBuf := bytes.NewBuffer(append([]byte{}, r.bodyBuf.Bytes()...))
 		r.RawRequest, err = http.NewRequest(r.Method, r.URL, bodyBuf)
 	}
@@ -245,19 +246,6 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	// Use context if it was specified
 	if r.ctx != nil {
 		r.RawRequest = r.RawRequest.WithContext(r.ctx)
-	}
-
-	bodyCopy, err := getBodyCopy(r)
-	if err != nil {
-		return err
-	}
-
-	// assign get body func for the underlying raw request instance
-	r.RawRequest.GetBody = func() (io.ReadCloser, error) {
-		if bodyCopy != nil {
-			return io.NopCloser(bytes.NewReader(bodyCopy.Bytes())), nil
-		}
-		return nil, nil
 	}
 
 	return
@@ -296,49 +284,51 @@ func createCurlCmd(c *Client, r *Request) (err error) {
 		if r.resultCurlCmd == nil {
 			r.resultCurlCmd = new(string)
 		}
-		*r.resultCurlCmd = buildCurlRequest(r.RawRequest, c.Client().Jar)
+		*r.resultCurlCmd = buildCurlRequest(r)
 	}
 	return nil
 }
 
-func requestLogger(c *Client, r *Request) error {
-	if r.Debug {
-		rr := r.RawRequest
-		rh := rr.Header.Clone()
-		if c.Client().Jar != nil {
-			for _, cookie := range c.Client().Jar.Cookies(r.RawRequest.URL) {
-				s := fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
-				if c := rh.Get("Cookie"); c != "" {
-					rh.Set("Cookie", c+"; "+s)
-				} else {
-					rh.Set("Cookie", s)
-				}
-			}
-		}
-		rl := &RequestLog{Header: rh, Body: r.fmtBodyString(r.DebugBodyLimit)}
-		if c.requestLog != nil {
-			if err := c.requestLog(rl); err != nil {
-				return err
-			}
-		}
-
-		reqLog := "\n==============================================================================\n"
-
-		if r.Debug && r.generateCurlOnDebug {
-			reqLog += "~~~ REQUEST(CURL) ~~~\n" +
-				fmt.Sprintf("	%v\n", *r.resultCurlCmd)
-		}
-
-		reqLog += "~~~ REQUEST ~~~\n" +
-			fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
-			fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
-			fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(rl.Header)) +
-			fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
-			"------------------------------------------------------------------------------\n"
-
-		r.initValuesMap()
-		r.values[debugRequestLogKey] = reqLog
+func requestDebugLogger(c *Client, r *Request) error {
+	if !r.Debug {
+		return nil
 	}
+
+	rr := r.RawRequest
+	rh := rr.Header.Clone()
+	if c.Client().Jar != nil {
+		for _, cookie := range c.Client().Jar.Cookies(r.RawRequest.URL) {
+			s := fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
+			if c := rh.Get("Cookie"); c != "" {
+				rh.Set("Cookie", c+"; "+s)
+			} else {
+				rh.Set("Cookie", s)
+			}
+		}
+	}
+	rl := &RequestLog{Header: rh, Body: r.fmtBodyString(r.DebugBodyLimit)}
+	if c.requestLog != nil {
+		if err := c.requestLog(rl); err != nil {
+			return err
+		}
+	}
+
+	reqLog := "\n==============================================================================\n"
+
+	if r.Debug && r.generateCurlOnDebug {
+		reqLog += "~~~ REQUEST(CURL) ~~~\n" +
+			fmt.Sprintf("	%v\n", *r.resultCurlCmd)
+	}
+
+	reqLog += "~~~ REQUEST ~~~\n" +
+		fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
+		fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
+		fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(rl.Header)) +
+		fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
+		"------------------------------------------------------------------------------\n"
+
+	r.initValuesMap()
+	r.values[debugRequestLogKey] = reqLog
 
 	return nil
 }
@@ -347,40 +337,47 @@ func requestLogger(c *Client, r *Request) error {
 // Response Middleware(s)
 //_______________________________________________________________________
 
-func responseLogger(c *Client, res *Response) error {
-	if res.Request.Debug {
-		rl := &ResponseLog{Header: res.Header().Clone(), Body: res.fmtBodyString(res.Request.DebugBodyLimit)}
-		if c.responseLog != nil {
-			c.lock.RLock()
-			defer c.lock.RUnlock()
-			if err := c.responseLog(rl); err != nil {
-				return err
-			}
-		}
-
-		debugLog := res.Request.values[debugRequestLogKey].(string)
-		debugLog += "~~~ RESPONSE ~~~\n" +
-			fmt.Sprintf("STATUS       : %s\n", res.Status()) +
-			fmt.Sprintf("PROTO        : %s\n", res.RawResponse.Proto) +
-			fmt.Sprintf("RECEIVED AT  : %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
-			fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
-			"HEADERS      :\n" +
-			composeHeaders(rl.Header) + "\n"
-		if res.Request.isSaveResponse {
-			debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
-		} else {
-			debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)
-		}
-		debugLog += "==============================================================================\n"
-
-		res.Request.log.Debugf("%s", debugLog)
+func responseDebugLogger(c *Client, res *Response) error {
+	if !res.Request.Debug {
+		return nil
 	}
+
+	bodyStr, err := res.fmtBodyString(res.Request.DebugBodyLimit)
+	if err != nil {
+		return err
+	}
+
+	rl := &ResponseLog{Header: res.Header().Clone(), Body: bodyStr}
+	if c.responseLog != nil {
+		c.lock.RLock()
+		defer c.lock.RUnlock()
+		if err := c.responseLog(rl); err != nil {
+			return err
+		}
+	}
+
+	debugLog := res.Request.values[debugRequestLogKey].(string)
+	debugLog += "~~~ RESPONSE ~~~\n" +
+		fmt.Sprintf("STATUS       : %s\n", res.Status()) +
+		fmt.Sprintf("PROTO        : %s\n", res.RawResponse.Proto) +
+		fmt.Sprintf("RECEIVED AT  : %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
+		fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
+		"HEADERS      :\n" +
+		composeHeaders(rl.Header) + "\n"
+	if res.Request.isSaveResponse {
+		debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
+	} else {
+		debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)
+	}
+	debugLog += "==============================================================================\n"
+
+	res.Request.log.Debugf("%s", debugLog)
 
 	return nil
 }
 
 func parseResponseBody(c *Client, res *Response) (err error) {
-	if res.Request.isSaveResponse {
+	if res.Request.DoNotParseResponse || res.Request.isSaveResponse {
 		return // move on
 	}
 
@@ -409,6 +406,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 		res.Request.Error = nil
 		defer closeq(res.Body)
 		err = decFunc(res.Body, res.Request.Result)
+		res.IsRead = true
 		return
 	}
 
@@ -422,6 +420,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 		if res.Request.Error != nil {
 			defer closeq(res.Body)
 			err = decFunc(res.Body, res.Request.Error)
+			res.IsRead = true
 			return
 		}
 	}
@@ -586,33 +585,4 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 	}
 
 	return nil
-}
-
-func getBodyCopy(r *Request) (*bytes.Buffer, error) {
-	// If r.bodyBuf present, return the copy
-	if r.bodyBuf != nil {
-		bodyCopy := acquireBuffer()
-		if _, err := io.Copy(bodyCopy, bytes.NewReader(r.bodyBuf.Bytes())); err != nil {
-			// cannot use io.Copy(bodyCopy, r.bodyBuf) because io.Copy reset r.bodyBuf
-			return nil, err
-		}
-		return bodyCopy, nil
-	}
-
-	// Maybe body is `io.Reader`.
-	// Note: Resty user have to watchout for large body size of `io.Reader`
-	if r.RawRequest.Body != nil {
-		b, err := io.ReadAll(r.RawRequest.Body)
-		if err != nil {
-			return nil, err
-		}
-
-		// Restore the Body
-		closeq(r.RawRequest.Body)
-		r.RawRequest.Body = io.NopCloser(bytes.NewBuffer(b))
-
-		// Return the Body bytes
-		return bytes.NewBuffer(b), nil
-	}
-	return nil, nil
 }

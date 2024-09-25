@@ -143,7 +143,7 @@ func TestConditionalGet(t *testing.T) {
 		return attemptCount != externalCounter
 	})
 
-	client := dc().AddRetryCondition(check).SetRetryCount(1)
+	client := dcnl().AddRetryCondition(check).SetRetryCount(1)
 	resp, err := client.R().
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Get(ts.URL + "/")
@@ -171,7 +171,7 @@ func TestConditionalGetRequestLevel(t *testing.T) {
 	})
 
 	// Clear the default client.
-	client := dc()
+	client := dcnl()
 	resp, err := client.R().
 		AddRetryCondition(check).
 		SetRetryCount(1).
@@ -195,7 +195,7 @@ func TestClientRetryGet(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().
+	c := dcnl().
 		SetTimeout(time.Second * 3).
 		SetRetryCount(3)
 
@@ -224,7 +224,7 @@ func TestClientRetryWait(t *testing.T) {
 	retryWaitTime := time.Duration(3) * time.Second
 	retryMaxWaitTime := time.Duration(9) * time.Second
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
@@ -267,7 +267,7 @@ func TestClientRetryWaitMaxInfinite(t *testing.T) {
 	retryWaitTime := time.Duration(3) * time.Second
 	retryMaxWaitTime := time.Duration(-1.0) // negative value
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
@@ -303,7 +303,7 @@ func TestClientRetryWaitMaxMinimum(t *testing.T) {
 
 	const retryMaxWaitTime = time.Nanosecond // minimal duration value
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(1).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		AddRetryCondition(func(*Response, error) bool { return true })
@@ -328,7 +328,7 @@ func TestClientRetryWaitCallbackError(t *testing.T) {
 		return 0, errors.New("quota exceeded")
 	}
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
@@ -368,7 +368,7 @@ func TestClientRetryWaitCallback(t *testing.T) {
 		return 5 * time.Second, nil
 	}
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
@@ -416,7 +416,7 @@ func TestClientRetryWaitCallbackTooShort(t *testing.T) {
 		return 2 * time.Second, nil // too short duration
 	}
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
@@ -464,7 +464,7 @@ func TestClientRetryWaitCallbackTooLong(t *testing.T) {
 		return 4 * time.Second, nil // too long duration
 	}
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
@@ -512,7 +512,7 @@ func TestClientRetryWaitCallbackSwitchToDefault(t *testing.T) {
 		return 0, nil // use default algorithm to determine retry-after time
 	}
 
-	c := dc().
+	c := dcnl().
 		EnableTrace().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
@@ -564,7 +564,7 @@ func TestClientRetryCancel(t *testing.T) {
 	retryWaitTime := time.Duration(10) * time.Second
 	retryMaxWaitTime := time.Duration(20) * time.Second
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
@@ -606,7 +606,7 @@ func TestClientRetryPost(t *testing.T) {
 	var users []map[string]any
 	users = append(users, usersmap)
 
-	c := dc()
+	c := dcnl()
 	c.SetRetryCount(3)
 	c.AddRetryCondition(RetryConditionFunc(func(r *Response, _ error) bool {
 		return r.StatusCode() >= http.StatusInternalServerError
@@ -637,7 +637,7 @@ func TestClientRetryErrorRecover(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(2).
 		SetError(AuthError{}).
 		AddRetryCondition(
@@ -670,7 +670,7 @@ func TestClientRetryCount(t *testing.T) {
 
 	attempt := 0
 
-	c := dc().
+	c := dcnl().
 		SetTimeout(time.Second * 3).
 		SetRetryCount(1).
 		AddRetryCondition(
@@ -699,7 +699,7 @@ func TestClientErrorRetry(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dc().
+	c := dcnl().
 		SetTimeout(time.Second * 3).
 		SetRetryCount(1).
 		AddRetryAfterErrorCondition()
@@ -730,7 +730,7 @@ func TestClientRetryHook(t *testing.T) {
 		attempt++
 	}
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(2).
 		SetTimeout(time.Second * 3).
 		AddRetryHook(retryHook)
@@ -786,7 +786,7 @@ func TestResetMultipartReaderSeekStartError(t *testing.T) {
 		bytes.NewReader([]byte("test")),
 	}
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(2).
 		SetTimeout(time.Second * 3).
 		SetRetryResetReaders(true).
@@ -812,7 +812,7 @@ func TestClientResetMultipartReaders(t *testing.T) {
 	bufReader := bytes.NewReader(buf)
 	bufCpy := make([]byte, len(buf))
 
-	c := dc().
+	c := dcnl().
 		SetRetryCount(2).
 		SetTimeout(time.Second * 3).
 		SetRetryResetReaders(true).
@@ -847,7 +847,7 @@ func TestRequestResetMultipartReaders(t *testing.T) {
 	bufReader := bytes.NewReader(buf)
 	bufCpy := make([]byte, len(buf))
 
-	c := dc().
+	c := dcnl().
 		SetTimeout(time.Second * 3).
 		AddRetryAfterErrorCondition().
 		AddRetryHook(

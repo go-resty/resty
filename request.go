@@ -27,32 +27,33 @@ import (
 // Resty client. The [Request] provides an option to override client-level
 // settings and also an option for the request composition.
 type Request struct {
-	URL                       string
-	Method                    string
-	AuthToken                 string
-	AuthScheme                string
-	QueryParams               url.Values
-	FormData                  url.Values
-	PathParams                map[string]string
-	RawPathParams             map[string]string
-	Header                    http.Header
-	Time                      time.Time
-	Body                      any
-	Result                    any
-	Error                     any
-	RawRequest                *http.Request
-	SRV                       *SRVRecord
-	UserInfo                  *User
-	Cookies                   []*http.Cookie
-	Debug                     bool
-	CloseConnection           bool
-	DoNotParseResponse        bool
-	OutputFile                string
-	ExpectResponseContentType string
-	ForceResponseContentType  string
-	DebugBodyLimit            int
-	ResponseBodyLimit         int64
-	IsTrace                   bool
+	URL                        string
+	Method                     string
+	AuthToken                  string
+	AuthScheme                 string
+	QueryParams                url.Values
+	FormData                   url.Values
+	PathParams                 map[string]string
+	RawPathParams              map[string]string
+	Header                     http.Header
+	Time                       time.Time
+	Body                       any
+	Result                     any
+	Error                      any
+	RawRequest                 *http.Request
+	SRV                        *SRVRecord
+	UserInfo                   *User
+	Cookies                    []*http.Cookie
+	Debug                      bool
+	CloseConnection            bool
+	DoNotParseResponse         bool
+	OutputFile                 string
+	ExpectResponseContentType  string
+	ForceResponseContentType   string
+	DebugBodyLimit             int
+	ResponseBodyLimit          int64
+	ResponseBodyUnlimitedReads bool
+	IsTrace                    bool
 
 	// Retry
 	RetryCount        int
@@ -99,8 +100,14 @@ func (r *Request) GenerateCurlCommand() string {
 	if r.resultCurlCmd == nil {
 		r.resultCurlCmd = new(string)
 	}
-	*r.resultCurlCmd = buildCurlRequest(r.RawRequest, r.client.httpClient.Jar)
+	*r.resultCurlCmd = buildCurlRequest(r)
 	return *r.resultCurlCmd
+}
+
+// SetMethod method used to set the HTTP verb for the request
+func (r *Request) SetMethod(m string) *Request {
+	r.Method = m
+	return r
 }
 
 // Context method returns the Context if it is already set in the [Request]
@@ -660,6 +667,21 @@ func (r *Request) SetResponseBodyLimit(v int64) *Request {
 	return r
 }
 
+// SetResponseBodyUnlimitedReads method is to turn on/off the response body copy
+// that provides an ability to do unlimited reads.
+//
+// It overriddes the value set at client level; see [Client.SetResponseBodyUnlimitedReads]
+//
+// NOTE: Turning on this feature uses additional memory to store a copy of the response body buffer.
+//
+// Unlimited reads are possible in a few scenarios, even without enabling this method.
+//   - When [Client.SetDebug] or [Request.SetDebug] set to true
+//   - When [Request.SetResult] or [Request.SetError] methods are not used
+func (r *Request) SetResponseBodyUnlimitedReads(b bool) *Request {
+	r.ResponseBodyUnlimitedReads = b
+	return r
+}
+
 // SetPathParam method sets a single URL path key-value pair in the
 // Resty current request instance.
 //
@@ -828,6 +850,18 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 // It overrides the logger value set at the client instance level.
 func (r *Request) SetLogger(l Logger) *Request {
 	r.log = l
+	return r
+}
+
+// EnableDebug method is a helper method for [Request.SetDebug]
+func (r *Request) EnableDebug() *Request {
+	r.SetDebug(true)
+	return r
+}
+
+// DisableDebug method is a helper method for [Request.SetDebug]
+func (r *Request) DisableDebug() *Request {
+	r.SetDebug(false)
 	return r
 }
 
@@ -1250,7 +1284,7 @@ func (r *Request) fmtBodyString(sl int) (body string) {
 		(kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice) {
 		buf := acquireBuffer()
 		defer releaseBuffer(buf)
-		if err = encodeJSONEscapeHTMLIndent(buf, r.Body, false, "   "); err == nil {
+		if err = encodeJSONEscapeHTMLIndent(buf, &r.Body, false, "   "); err == nil {
 			prtBodyBytes = buf.Bytes()
 		}
 	} else if xmlKey == ctKey && kind == reflect.Struct {
