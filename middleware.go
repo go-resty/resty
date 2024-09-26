@@ -375,7 +375,7 @@ func responseLogger(c *Client, res *Response) error {
 		debugLog := res.Request.values[debugRequestLogKey].(string)
 		debugLog += "~~~ RESPONSE ~~~\n" +
 			fmt.Sprintf("STATUS       : %s\n", res.Status()) +
-			fmt.Sprintf("PROTO        : %s\n", res.RawResponse.Proto) +
+			fmt.Sprintf("PROTO        : %s\n", res.Proto()) +
 			fmt.Sprintf("RECEIVED AT  : %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
 			fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
 			"HEADERS      :\n" +
