@@ -25,7 +25,7 @@ jobs:
     name: Build
     strategy:
       matrix:
-        go: [ 'stable', '1.20.x' ]
+        go: [ 'stable', '1.21.x' ]
         os: [ ubuntu-latest ]
 
     runs-on: ${{ matrix.os }}
@@ -47,9 +47,12 @@ jobs:
         run: diff -u <(echo -n) <(go fmt $(go list ./...))
 
       - name: Test
-        run: go test ./... -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
+        run: go test ./... -race -count=1 -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... -shuffle=on
 
       - name: Upload coverage to Codecov
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.go == 'stable' }}
         uses: codecov/codecov-action@v4
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.txt
+          flags: unittests

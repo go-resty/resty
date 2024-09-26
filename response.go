@@ -192,7 +192,7 @@ func (r *Response) fmtBodyString(sl int) (string, error) {
 // auto-unmarshal didn't happen, so fallback to
 // old behavior of reading response as body bytes
 func (r *Response) readAllBytes() (err error) {
-	if r.IsRead {
+	if r.Body == nil || r.IsRead {
 		return nil
 	}
 
@@ -203,9 +203,23 @@ func (r *Response) readAllBytes() (err error) {
 		closeq(r.Body)
 		r.Body = &readNoOpCloser{r: bytes.NewReader(r.bodyBytes)}
 	}
+	if err == io.ErrUnexpectedEOF {
+		// content-encoding scenario's - empty/no response body from server
+		err = nil
+	}
 
 	r.IsRead = true
 	return
+}
+
+func (r *Response) wrapLimitReadCloser() {
+	r.Body = &limitReadCloser{
+		r: r.Body,
+		l: r.Request.ResponseBodyLimit,
+		f: func(s int64) {
+			r.size = s
+		},
+	}
 }
 
 func (r *Response) wrapReadCopier() {
@@ -219,4 +233,31 @@ func (r *Response) wrapReadCopier() {
 			releaseBuffer(b)
 		},
 	}
+}
+
+func (r *Response) wrapContentDecompressor() error {
+	ce := r.Header().Get(hdrContentEncodingKey)
+	if isStringEmpty(ce) {
+		return nil
+	}
+
+	if decFunc, f := r.Request.client.ContentDecompressors()[ce]; f {
+		dec, err := decFunc(r.Body)
+		if err != nil {
+			if err == io.EOF {
+				// empty/no response body from server
+				err = nil
+			}
+			return err
+		}
+
+		r.Body = dec
+		r.Header().Del(hdrContentEncodingKey)
+		r.Header().Del(hdrContentLengthKey)
+		r.RawResponse.ContentLength = -1
+	} else {
+		return ErrContentDecompressorNotFound
+	}
+
+	return nil
 }
