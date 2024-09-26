@@ -14,17 +14,16 @@ import (
 func buildCurlRequest(req *Request) (curl string) {
 	// 1. Generate curl raw headers
 	curl = "curl -X " + req.Method + " "
-	// req.Host + req.URL.Path + "?" + req.URL.RawQuery + " " + req.Proto + " "
 	headers := dumpCurlHeaders(req.RawRequest)
 	for _, kv := range *headers {
-		curl += `-H ` + shellescape.Quote(kv[0]+": "+kv[1]) + ` `
+		curl += "-H " + shellescape.Quote(kv[0]+": "+kv[1]) + " "
 	}
 
 	// 2. Generate curl cookies
 	// TODO validate this block of code, I think its not required since cookie captured via Headers
 	if cookieJar := req.client.CookieJar(); cookieJar != nil {
 		if cookies := cookieJar.Cookies(req.RawRequest.URL); len(cookies) > 0 {
-			curl += ` -H ` + shellescape.Quote(dumpCurlCookies(cookies)) + " "
+			curl += " -H " + shellescape.Quote(dumpCurlCookies(cookies)) + " "
 		}
 	}
 
@@ -35,7 +34,7 @@ func buildCurlRequest(req *Request) (curl string) {
 			return ""
 		}
 		buf, _ := io.ReadAll(body)
-		curl += `-d ` + shellescape.Quote(string(bytes.TrimRight(buf, "\n")))
+		curl += "-d " + shellescape.Quote(string(bytes.TrimRight(buf, "\n")))
 	}
 
 	urlString := shellescape.Quote(req.RawRequest.URL.String())

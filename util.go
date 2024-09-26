@@ -70,11 +70,11 @@ func (l *logger) output(format string, v ...any) {
 // Rate Limiter interface
 //_______________________________________________________________________
 
+var ErrRateLimitExceeded = errors.New("resty: rate limit exceeded")
+
 type RateLimiter interface {
 	Allow() bool
 }
-
-var ErrRateLimitExceeded = errors.New("resty: rate limit exceeded")
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Package Helper methods

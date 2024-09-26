@@ -30,21 +30,6 @@ type Response struct {
 	receivedAt time.Time
 }
 
-// BodyBytes method returns the HTTP response as `[]byte` slice for the executed request.
-//
-// NOTE:
-//   - [Response.BodyBytes] might be `nil` if [Request.SetOutputFile], [Request.SetDoNotParseResponse],
-//     [Client.SetDoNotParseResponse] method is used.
-//   - [Response.BodyBytes] might be `nil` if [Response].Body is already auto-unmarshal performed.
-//
-// TODO remove it
-func (r *Response) BodyBytes() []byte {
-	if r.RawResponse == nil {
-		return []byte{}
-	}
-	return r.bodyBytes
-}
-
 // Status method returns the HTTP status string for the executed request.
 //
 //	Example: 200 OK
@@ -107,10 +92,12 @@ func (r *Response) Cookies() []*http.Cookie {
 // It returns an empty string if it is nil or the body is zero length.
 //
 // NOTE:
-//   - Returns an empty string on auto-unmarshal scenarios
+//   - Returns an empty string on auto-unmarshal scenarios, unless
+//     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
+//   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set
 func (r *Response) String() string {
 	if len(r.bodyBytes) == 0 && !r.Request.DoNotParseResponse {
-		_ = r.readAllBytes()
+		_ = r.readAll()
 	}
 	return strings.TrimSpace(string(r.bodyBytes))
 }
@@ -191,17 +178,17 @@ func (r *Response) fmtBodyString(sl int) (string, error) {
 
 // auto-unmarshal didn't happen, so fallback to
 // old behavior of reading response as body bytes
-func (r *Response) readAllBytes() (err error) {
+func (r *Response) readAll() (err error) {
 	if r.Body == nil || r.IsRead {
 		return nil
 	}
 
-	if _, ok := r.Body.(*readCopier); ok {
+	if _, ok := r.Body.(*copyReadCloser); ok {
 		_, err = io.ReadAll(r.Body)
 	} else {
 		r.bodyBytes, err = io.ReadAll(r.Body)
 		closeq(r.Body)
-		r.Body = &readNoOpCloser{r: bytes.NewReader(r.bodyBytes)}
+		r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes)}
 	}
 	if err == io.ErrUnexpectedEOF {
 		// content-encoding scenario's - empty/no response body from server
@@ -222,14 +209,14 @@ func (r *Response) wrapLimitReadCloser() {
 	}
 }
 
-func (r *Response) wrapReadCopier() {
-	r.Body = &readCopier{
+func (r *Response) wrapCopyReadCloser() {
+	r.Body = &copyReadCloser{
 		s: r.Body,
 		t: acquireBuffer(),
 		f: func(b *bytes.Buffer) {
 			r.bodyBytes = append([]byte{}, b.Bytes()...)
 			closeq(r.Body)
-			r.Body = &readNoOpCloser{r: bytes.NewReader(r.bodyBytes)}
+			r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes)}
 			releaseBuffer(b)
 		},
 	}

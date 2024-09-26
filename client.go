@@ -51,6 +51,9 @@ const (
 )
 
 var (
+	ErrNotHttpTransportType       = errors.New("resty: not a http.Transport type")
+	ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body kind")
+
 	hdrUserAgentKey       = http.CanonicalHeaderKey("User-Agent")
 	hdrAcceptKey          = http.CanonicalHeaderKey("Accept")
 	hdrAcceptEncodingKey  = http.CanonicalHeaderKey("Accept-Encoding")
@@ -1383,8 +1386,6 @@ func (c *Client) SetRateLimiter(rl RateLimiter) *Client {
 	return c
 }
 
-var ErrNotHttpTransportType = errors.New("resty: not a http.Transport type")
-
 // Transport method returns [http.Transport] currently in use or error
 // in case the currently used `transport` is not a [http.Transport].
 //
@@ -1816,9 +1817,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		response.wrapLimitReadCloser()
 	}
 	if !req.DoNotParseResponse && (req.Debug || req.ResponseBodyUnlimitedReads) {
-		response.wrapReadCopier()
+		response.wrapCopyReadCloser()
 
-		if err := response.readAllBytes(); err != nil {
+		if err := response.readAll(); err != nil {
 			return response, err
 		}
 	}

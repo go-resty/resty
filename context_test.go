@@ -27,7 +27,6 @@ func TestSetContext(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertEqual(t, true, resp.BodyBytes() != nil)
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
