@@ -12,9 +12,7 @@ import (
 	"strings"
 )
 
-var (
-	ErrAutoRedirectDisabled = errors.New("auto redirect is disabled")
-)
+var ErrAutoRedirectDisabled = errors.New("resty: auto redirect is disabled")
 
 type (
 	// RedirectPolicy to regulate the redirects in the Resty client.
@@ -23,7 +21,7 @@ type (
 	// Apply function should return nil to continue the redirect journey; otherwise
 	// return error to stop the redirect.
 	RedirectPolicy interface {
-		Apply(req *http.Request, via []*http.Request) error
+		Apply(*http.Request, []*http.Request) error
 	}
 
 	// The [RedirectPolicyFunc] type is an adapter to allow the use of ordinary

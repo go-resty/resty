@@ -89,16 +89,11 @@ func (r *Request) GenerateCurlCommand() string {
 	if !(r.Debug && r.generateCurlOnDebug) {
 		return ""
 	}
-
 	if r.resultCurlCmd != nil {
 		return *r.resultCurlCmd
 	}
-
 	if r.RawRequest == nil {
 		r.client.executeBefore(r) // mock with r.Get("/")
-	}
-	if r.resultCurlCmd == nil {
-		r.resultCurlCmd = new(string)
 	}
 	*r.resultCurlCmd = buildCurlRequest(r)
 	return *r.resultCurlCmd

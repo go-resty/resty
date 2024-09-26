@@ -128,7 +128,7 @@ func TestUtilMiscTestCoverage(t *testing.T) {
 	l := &limitReadCloser{r: strings.NewReader("hello test close for no io.Closer")}
 	assertNil(t, l.Close())
 
-	r := &readCopier{s: strings.NewReader("hello test close for no io.Closer")}
+	r := &copyReadCloser{s: strings.NewReader("hello test close for no io.Closer")}
 	assertNil(t, r.Close())
 
 	v := struct {

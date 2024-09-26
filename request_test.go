@@ -44,7 +44,6 @@ func TestGet(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "HTTP/1.1", resp.Proto())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
@@ -1873,7 +1872,6 @@ func TestRequestQueryStringOrder(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
@@ -1937,7 +1935,6 @@ func TestHostHeaderOverride(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "myhostname", resp.String())
 
 	logResponse(t, resp)
@@ -2392,4 +2389,8 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	c.R().SetResponseBodyUnlimitedReads(true)
 
 	c.R().DisableDebug()
+
+	invalidJsonBytes := []byte(`{\" \": "value here"}`)
+	result := jsonIndent(invalidJsonBytes)
+	assertEqual(t, string(invalidJsonBytes), string(result))
 }

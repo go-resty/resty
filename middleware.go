@@ -6,7 +6,6 @@ package resty
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -166,8 +165,11 @@ func parseRequestHeader(c *Client, r *Request) error {
 		r.Header.Set(hdrUserAgentKey, hdrUserAgentValue)
 	}
 
-	if ct := r.Header.Get(hdrContentTypeKey); isStringEmpty(r.Header.Get(hdrAcceptKey)) && !isStringEmpty(ct) && (isJSONContentType(ct) || isXMLContentType(ct)) {
-		r.Header.Set(hdrAcceptKey, r.Header.Get(hdrContentTypeKey))
+	if isStringEmpty(r.Header.Get(hdrAcceptKey)) {
+		ct := r.Header.Get(hdrContentTypeKey)
+		if isJSONContentType(ct) || isXMLContentType(ct) {
+			r.Header.Set(hdrAcceptKey, ct)
+		}
 	}
 
 	if isStringEmpty(r.Header.Get(hdrAcceptEncodingKey)) {
@@ -390,8 +392,6 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 		return
 	}
 
-	// TODO Attention Required when working on Compression
-
 	rct := firstNonEmpty(
 		res.Request.ForceResponseContentType,
 		res.Header().Get(hdrContentTypeKey),
@@ -401,7 +401,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 	decFunc, found := c.inferContentTypeDecoder(rct, decKey)
 	if !found {
 		// the Content-Type decoder is not found; just read all the body bytes
-		err = res.readAllBytes()
+		err = res.readAll()
 		return
 	}
 
@@ -430,7 +430,7 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 	}
 
 	// read all bytes when auto-unmarshal didn't take place
-	err = res.readAllBytes()
+	err = res.readAll()
 	return
 }
 
@@ -499,8 +499,6 @@ func handleFormData(c *Client, r *Request) {
 	r.isFormData = true
 }
 
-var ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body kind")
-
 func handleRequestBody(c *Client, r *Request) error {
 	contentType := r.Header.Get(hdrContentTypeKey)
 	if isStringEmpty(contentType) {
@@ -513,7 +511,7 @@ func handleRequestBody(c *Client, r *Request) error {
 
 	switch body := r.Body.(type) {
 	case io.Reader:
-		// TODO create pass through reader to capture content-length
+		// TODO create pass through reader to capture content-length, really needed??
 		if r.setContentLength { // keep backward compatibility
 			if _, err := r.bodyBuf.ReadFrom(body); err != nil {
 				releaseBuffer(r.bodyBuf)

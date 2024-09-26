@@ -20,10 +20,10 @@ var (
 
 type (
 	// ContentTypeEncoder type is for encoding the request body based on header Content-Type
-	ContentTypeEncoder func(w io.Writer, v any) error
+	ContentTypeEncoder func(io.Writer, any) error
 
 	// ContentTypeDecoder type is for decoding the response body based on header Content-Type
-	ContentTypeDecoder func(r io.Reader, v any) error
+	ContentTypeDecoder func(io.Reader, any) error
 
 	// ContentDecompressor type is for decompressing response body based on header Content-Encoding
 	// ([RFC 9110])
@@ -163,16 +163,16 @@ func (l *limitReadCloser) Close() error {
 	return nil
 }
 
-var _ io.ReadCloser = (*readCopier)(nil)
+var _ io.ReadCloser = (*copyReadCloser)(nil)
 
-type readCopier struct {
+type copyReadCloser struct {
 	s io.Reader
 	t *bytes.Buffer
 	c bool
 	f func(*bytes.Buffer)
 }
 
-func (r *readCopier) Read(p []byte) (int, error) {
+func (r *copyReadCloser) Read(p []byte) (int, error) {
 	n, err := r.s.Read(p)
 	if n > 0 {
 		_, _ = r.t.Write(p[:n])
@@ -186,20 +186,20 @@ func (r *readCopier) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (r *readCopier) Close() error {
+func (r *copyReadCloser) Close() error {
 	if c, ok := r.s.(io.Closer); ok {
 		return c.Close()
 	}
 	return nil
 }
 
-var _ io.ReadCloser = (*readNoOpCloser)(nil)
+var _ io.ReadCloser = (*nopReadCloser)(nil)
 
-type readNoOpCloser struct {
+type nopReadCloser struct {
 	r *bytes.Reader
 }
 
-func (r *readNoOpCloser) Read(p []byte) (int, error) {
+func (r *nopReadCloser) Read(p []byte) (int, error) {
 	n, err := r.r.Read(p)
 	if err == io.EOF {
 		r.r.Seek(0, 0)
@@ -207,4 +207,4 @@ func (r *readNoOpCloser) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (r *readNoOpCloser) Close() error { return nil }
+func (r *nopReadCloser) Close() error { return nil }

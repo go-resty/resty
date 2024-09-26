@@ -192,8 +192,8 @@ func TestClientRedirectPolicy(t *testing.T) {
 
 	c.SetRedirectPolicy(NoRedirectPolicy())
 	_, err = c.R().Get(ts.URL + "/redirect-1")
-	assertEqual(t, true, (err.Error() == "Get /redirect-2: auto redirect is disabled" ||
-		err.Error() == "Get \"/redirect-2\": auto redirect is disabled"))
+	assertEqual(t, true, (err.Error() == "Get /redirect-2: resty: auto redirect is disabled" ||
+		err.Error() == "Get \"/redirect-2\": resty: auto redirect is disabled"))
 }
 
 func TestClientTimeout(t *testing.T) {
@@ -380,7 +380,6 @@ func TestClientOnBeforeRequestModification(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "200 OK", resp.Status())
-	assertNotNil(t, resp.BodyBytes())
 	assertEqual(t, "TestGet: text response", resp.String())
 
 	logResponse(t, resp)
@@ -481,6 +480,13 @@ func TestClientSettingsCoverage(t *testing.T) {
 
 	ct.outputLogTo(io.Discard)
 	// [End] Custom Transport scenario
+
+	// Response - for now stay here
+	resp := &Response{Request: &Request{}}
+	s, err := resp.fmtBodyString(0)
+	assertNil(t, err)
+	assertEqual(t, "***** NO CONTENT *****", s)
+	fmt.Println(err, s)
 }
 
 func TestContentLengthWhenBodyIsNil(t *testing.T) {
@@ -531,6 +537,21 @@ func TestClientPreRequestHook(t *testing.T) {
 		Post(ts.URL + "/login")
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, `{ "id": "success", "message": "login successful" }`, resp.String())
+}
+
+func TestClientPreRequestHookError(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	c.SetPreRequestHook(func(c *Client, r *http.Request) error {
+		return errors.New("error from PreRequestHook")
+	})
+
+	resp, err := c.R().Get(ts.URL)
+	assertNotNil(t, err)
+	assertEqual(t, "error from PreRequestHook", err.Error())
+	assertNil(t, resp)
 }
 
 func TestClientAllowsGetMethodPayload(t *testing.T) {
@@ -661,7 +682,6 @@ func TestGzipCompress(t *testing.T) {
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 		assertEqual(t, "200 OK", resp.Status())
-		assertNotNil(t, resp.BodyBytes())
 		assertEqual(t, tc.want, resp.String())
 
 		logResponse(t, resp)
@@ -684,7 +704,6 @@ func TestDeflateCompress(t *testing.T) {
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 		assertEqual(t, "200 OK", resp.Status())
-		assertNotNil(t, resp.BodyBytes())
 		assertEqual(t, tc.want, resp.String())
 
 		logResponse(t, resp)
@@ -738,7 +757,6 @@ func TestLzwCompress(t *testing.T) {
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 		assertEqual(t, "200 OK", resp.Status())
-		assertNotNil(t, resp.BodyBytes())
 		assertEqual(t, tc.want, resp.String())
 
 		logResponse(t, resp)
@@ -1216,7 +1234,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		res, err := c.R().SetResponseBodyLimit(800*100 + 10).Get(ts.URL + "/")
 		assertNil(t, err)
-		assertEqual(t, 800*100, len(res.BodyBytes()))
+		assertEqual(t, 800*100, len(res.bodyBytes))
 		assertEqual(t, int64(800*100), res.Size())
 	})
 
@@ -1225,7 +1243,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		res, err := c.R().Get(ts.URL + "/")
 		assertNil(t, err)
-		assertEqual(t, 800*100, len(res.BodyBytes()))
+		assertEqual(t, 800*100, len(res.bodyBytes))
 		assertEqual(t, int64(800*100), res.Size())
 	})
 
