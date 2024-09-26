@@ -6,10 +6,16 @@ package resty
 
 import (
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"io"
+)
+
+var (
+	ErrContentDecompressorNotFound = errors.New("resty: content decoder not found")
 )
 
 type (
@@ -18,6 +24,14 @@ type (
 
 	// ContentTypeDecoder type is for decoding the response body based on header Content-Type
 	ContentTypeDecoder func(r io.Reader, v any) error
+
+	// ContentDecompressor type is for decompressing response body based on header Content-Encoding
+	// ([RFC 9110])
+	//
+	// For example, gzip, deflate, etc.
+	//
+	// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
+	ContentDecompressor func(io.ReadCloser) (io.ReadCloser, error)
 )
 
 func encodeJSON(w io.Writer, v any) error {
@@ -62,6 +76,56 @@ func decodeXML(r io.Reader, v any) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func decompressGzip(r io.ReadCloser) (io.ReadCloser, error) {
+	nr, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+
+	gz := &gzipReader{s: r, r: nr}
+
+	return gz, nil
+}
+
+type gzipReader struct {
+	s io.ReadCloser
+	r *gzip.Reader
+}
+
+func (gz *gzipReader) Read(p []byte) (n int, err error) {
+	return gz.r.Read(p)
+}
+
+func (gz *gzipReader) Close() error {
+	closeq(gz.r)
+	closeq(gz.s)
+	return nil
+}
+
+func decompressDeflate(r io.ReadCloser) (io.ReadCloser, error) {
+	d := &deflateReader{
+		s: r,
+		r: flate.NewReader(r),
+	}
+
+	return d, nil
+}
+
+type deflateReader struct {
+	s io.ReadCloser
+	r io.ReadCloser
+}
+
+func (d *deflateReader) Read(p []byte) (n int, err error) {
+	return d.r.Read(p)
+}
+
+func (d *deflateReader) Close() error {
+	closeq(d.r)
+	closeq(d.s)
 	return nil
 }
 

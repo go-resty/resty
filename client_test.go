@@ -7,6 +7,7 @@ package resty
 import (
 	"bytes"
 	"compress/gzip"
+	"compress/lzw"
 	"crypto/rand"
 	"crypto/tls"
 	"errors"
@@ -644,20 +645,95 @@ func (rt *CustomRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error)
 	return &http.Response{}, nil
 }
 
-func TestAutoGzip(t *testing.T) {
+func TestGzipCompress(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
-	c := New()
+	c := dcnl()
 	testcases := []struct{ url, want string }{
 		{ts.URL + "/gzip-test", "This is Gzip response testing"},
 		{ts.URL + "/gzip-test-gziped-empty-body", ""},
 		{ts.URL + "/gzip-test-no-gziped-body", ""},
 	}
 	for _, tc := range testcases {
-		resp, err := c.R().
-			// SetHeader("Accept-Encoding", "gzip"). // TODO put back when implementing compression handling
-			Get(tc.url)
+		resp, err := c.R().Get(tc.url)
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "200 OK", resp.Status())
+		assertNotNil(t, resp.BodyBytes())
+		assertEqual(t, tc.want, resp.String())
+
+		logResponse(t, resp)
+	}
+}
+
+func TestDeflateCompress(t *testing.T) {
+	ts := createGenericServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	testcases := []struct{ url, want string }{
+		{ts.URL + "/deflate-test", "This is Deflate response testing"},
+		{ts.URL + "/deflate-test-empty-body", ""},
+		{ts.URL + "/deflate-test-no-body", ""},
+	}
+	for _, tc := range testcases {
+		resp, err := c.R().Get(tc.url)
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "200 OK", resp.Status())
+		assertNotNil(t, resp.BodyBytes())
+		assertEqual(t, tc.want, resp.String())
+
+		logResponse(t, resp)
+	}
+}
+
+type lzwReader struct {
+	s io.ReadCloser
+	r io.ReadCloser
+}
+
+func (l *lzwReader) Read(p []byte) (n int, err error) {
+	return l.r.Read(p)
+}
+
+func (l *lzwReader) Close() error {
+	closeq(l.r)
+	closeq(l.s)
+	return nil
+}
+
+func TestLzwCompress(t *testing.T) {
+	ts := createGenericServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+
+	// Not found scenario
+	_, err := c.R().Get(ts.URL + "/lzw-test")
+	assertNotNil(t, err)
+	assertEqual(t, ErrContentDecompressorNotFound, err)
+
+	// Register LZW content decoder
+	c.AddContentDecompressor("compress", func(r io.ReadCloser) (io.ReadCloser, error) {
+		l := &lzwReader{
+			s: r,
+			r: lzw.NewReader(r, lzw.LSB, 8),
+		}
+		return l, nil
+	})
+	c.SetContentDecompressorKeys([]string{"compress"})
+
+	testcases := []struct{ url, want string }{
+		{ts.URL + "/lzw-test", "This is LZW response testing"},
+		{ts.URL + "/lzw-test-empty-body", ""},
+		{ts.URL + "/lzw-test-no-body", ""},
+	}
+	for _, tc := range testcases {
+		resp, err := c.R().Get(tc.url)
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())

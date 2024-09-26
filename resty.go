@@ -92,7 +92,7 @@ func createTransport(dialer *net.Dialer, transportSettings *TransportSettings) *
 		Proxy:              http.ProxyFromEnvironment,
 		DialContext:        transportDialContext(dialer),
 		DisableKeepAlives:  transportSettings.DisableKeepAlives,
-		DisableCompression: transportSettings.DisableCompression,
+		DisableCompression: true, // Resty handles it, see [Client.AddContentDecoder]
 		ForceAttemptHTTP2:  true,
 	}
 
@@ -158,21 +158,23 @@ func createCookieJar() *cookiejar.Jar {
 
 func createClient(hc *http.Client) *Client {
 	c := &Client{ // not setting language default values
-		lock:                   &sync.RWMutex{},
-		queryParams:            url.Values{},
-		formData:               url.Values{},
-		header:                 http.Header{},
-		cookies:                make([]*http.Cookie, 0),
-		retryWaitTime:          defaultWaitTime,
-		retryMaxWaitTime:       defaultMaxWaitTime,
-		pathParams:             make(map[string]string),
-		rawPathParams:          make(map[string]string),
-		headerAuthorizationKey: hdrAuthorizationKey,
-		jsonEscapeHTML:         true,
-		httpClient:             hc,
-		debugBodyLimit:         math.MaxInt32,
-		contentTypeEncoders:    make(map[string]ContentTypeEncoder),
-		contentTypeDecoders:    make(map[string]ContentTypeDecoder),
+		lock:                    &sync.RWMutex{},
+		queryParams:             url.Values{},
+		formData:                url.Values{},
+		header:                  http.Header{},
+		cookies:                 make([]*http.Cookie, 0),
+		retryWaitTime:           defaultWaitTime,
+		retryMaxWaitTime:        defaultMaxWaitTime,
+		pathParams:              make(map[string]string),
+		rawPathParams:           make(map[string]string),
+		headerAuthorizationKey:  hdrAuthorizationKey,
+		jsonEscapeHTML:          true,
+		httpClient:              hc,
+		debugBodyLimit:          math.MaxInt32,
+		contentTypeEncoders:     make(map[string]ContentTypeEncoder),
+		contentTypeDecoders:     make(map[string]ContentTypeDecoder),
+		contentDecompressorKeys: make([]string, 0),
+		contentDecompressors:    make(map[string]ContentDecompressor),
 	}
 
 	// Logger
@@ -183,6 +185,10 @@ func createClient(hc *http.Client) *Client {
 
 	c.AddContentTypeDecoder(jsonKey, decodeJSON)
 	c.AddContentTypeDecoder(xmlKey, decodeXML)
+
+	// Order matter, giving priority to gzip
+	c.AddContentDecompressor("deflate", decompressDeflate)
+	c.AddContentDecompressor("gzip", decompressGzip)
 
 	// default before request middlewares
 	c.beforeRequest = []RequestMiddleware{

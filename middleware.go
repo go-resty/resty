@@ -170,6 +170,10 @@ func parseRequestHeader(c *Client, r *Request) error {
 		r.Header.Set(hdrAcceptKey, r.Header.Get(hdrContentTypeKey))
 	}
 
+	if isStringEmpty(r.Header.Get(hdrAcceptEncodingKey)) {
+		r.Header.Set(hdrAcceptEncodingKey, r.client.ContentDecompressorKeys())
+	}
+
 	return nil
 }
 

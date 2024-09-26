@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,7 @@ const (
 var (
 	hdrUserAgentKey       = http.CanonicalHeaderKey("User-Agent")
 	hdrAcceptKey          = http.CanonicalHeaderKey("Accept")
+	hdrAcceptEncodingKey  = http.CanonicalHeaderKey("Accept-Encoding")
 	hdrContentTypeKey     = http.CanonicalHeaderKey("Content-Type")
 	hdrContentLengthKey   = http.CanonicalHeaderKey("Content-Length")
 	hdrContentEncodingKey = http.CanonicalHeaderKey("Content-Encoding")
@@ -128,9 +130,6 @@ type TransportSettings struct {
 	// DisableKeepAlives, default value is `false`.
 	DisableKeepAlives bool
 
-	// DisableCompression, default value is `false`.
-	DisableCompression bool
-
 	// MaxResponseHeaderBytes, added to provide ability to
 	// set value. No default value in Resty, the Go
 	// HTTP client default value applies.
@@ -153,55 +152,57 @@ type TransportSettings struct {
 // Resty also provides an option to override most of the client settings
 // at [Request] level.
 type Client struct {
-	lock                   *sync.RWMutex
-	baseURL                string
-	queryParams            url.Values
-	formData               url.Values
-	pathParams             map[string]string
-	rawPathParams          map[string]string
-	header                 http.Header
-	userInfo               *User
-	authToken              string
-	authScheme             string
-	cookies                []*http.Cookie
-	errorType              reflect.Type
-	debug                  bool
-	disableWarn            bool
-	allowGetMethodPayload  bool
-	retryCount             int
-	retryWaitTime          time.Duration
-	retryMaxWaitTime       time.Duration
-	retryConditions        []RetryConditionFunc
-	retryHooks             []OnRetryFunc
-	retryAfter             RetryAfterFunc
-	retryResetReaders      bool
-	headerAuthorizationKey string
-	responseBodyLimit      int64
-	resBodyUnlimitedReads  bool
-	jsonEscapeHTML         bool
-	setContentLength       bool
-	closeConnection        bool
-	notParseResponse       bool
-	isTrace                bool
-	debugBodyLimit         int
-	outputDirectory        string
-	scheme                 string
-	log                    Logger
-	httpClient             *http.Client
-	proxyURL               *url.URL
-	requestLog             RequestLogCallback
-	responseLog            ResponseLogCallback
-	rateLimiter            RateLimiter
-	generateCurlOnDebug    bool
-	beforeRequest          []RequestMiddleware
-	udBeforeRequest        []RequestMiddleware
-	afterResponse          []ResponseMiddleware
-	errorHooks             []ErrorHook
-	invalidHooks           []ErrorHook
-	panicHooks             []ErrorHook
-	successHooks           []SuccessHook
-	contentTypeEncoders    map[string]ContentTypeEncoder
-	contentTypeDecoders    map[string]ContentTypeDecoder
+	lock                    *sync.RWMutex
+	baseURL                 string
+	queryParams             url.Values
+	formData                url.Values
+	pathParams              map[string]string
+	rawPathParams           map[string]string
+	header                  http.Header
+	userInfo                *User
+	authToken               string
+	authScheme              string
+	cookies                 []*http.Cookie
+	errorType               reflect.Type
+	debug                   bool
+	disableWarn             bool
+	allowGetMethodPayload   bool
+	retryCount              int
+	retryWaitTime           time.Duration
+	retryMaxWaitTime        time.Duration
+	retryConditions         []RetryConditionFunc
+	retryHooks              []OnRetryFunc
+	retryAfter              RetryAfterFunc
+	retryResetReaders       bool
+	headerAuthorizationKey  string
+	responseBodyLimit       int64
+	resBodyUnlimitedReads   bool
+	jsonEscapeHTML          bool
+	setContentLength        bool
+	closeConnection         bool
+	notParseResponse        bool
+	isTrace                 bool
+	debugBodyLimit          int
+	outputDirectory         string
+	scheme                  string
+	log                     Logger
+	httpClient              *http.Client
+	proxyURL                *url.URL
+	requestLog              RequestLogCallback
+	responseLog             ResponseLogCallback
+	rateLimiter             RateLimiter
+	generateCurlOnDebug     bool
+	beforeRequest           []RequestMiddleware
+	udBeforeRequest         []RequestMiddleware
+	afterResponse           []ResponseMiddleware
+	errorHooks              []ErrorHook
+	invalidHooks            []ErrorHook
+	panicHooks              []ErrorHook
+	successHooks            []SuccessHook
+	contentTypeEncoders     map[string]ContentTypeEncoder
+	contentTypeDecoders     map[string]ContentTypeDecoder
+	contentDecompressorKeys []string
+	contentDecompressors    map[string]ContentDecompressor
 
 	// TODO don't put mutex now, it may go away
 	preReqHook PreRequestHook
@@ -774,6 +775,70 @@ func (c *Client) inferContentTypeDecoder(ct ...string) (ContentTypeDecoder, bool
 		}
 	}
 	return nil, false
+}
+
+// ContentDecompressors method returns all the registered content-encoding decompressors.
+func (c *Client) ContentDecompressors() map[string]ContentDecompressor {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.contentDecompressors
+}
+
+// AddContentDecompressor method adds the user-provided Content-Encoding ([RFC 9110]) decompressor
+// and directive into a client.
+//
+// NOTE: It overwrites the decompressor function if the given Content-Encoding directive already exists.
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
+func (c *Client) AddContentDecompressor(k string, d ContentDecompressor) *Client {
+	c.insertFirstContentDecompressor(k)
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.contentDecompressors[k] = d
+	return c
+}
+
+// ContentDecompressorKeys method returns all the registered content-encoding decompressors
+// keys as comma-separated string.
+func (c *Client) ContentDecompressorKeys() string {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return strings.Join(c.contentDecompressorKeys, ", ")
+}
+
+// SetContentDecompressorKeys method sets given Content-Encoding ([RFC 9110]) directives into the client instance.
+//
+// It checks the given Content-Encoding exists in the [ContentDecompressor] list before assigning it,
+// if it does not exist, it will skip that directive.
+//
+// Use this method to overwrite the default order. If a new content decompressor is added,
+// that directive will be the first.
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
+func (c *Client) SetContentDecompressorKeys(keys []string) *Client {
+	result := make([]string, 0)
+	decoders := c.ContentDecompressors()
+	for _, k := range keys {
+		if _, f := decoders[k]; f {
+			result = append(result, k)
+		}
+	}
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.contentDecompressorKeys = result
+	return c
+}
+
+func (c *Client) insertFirstContentDecompressor(k string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if !slices.Contains(c.contentDecompressorKeys, k) {
+		c.contentDecompressorKeys = append(c.contentDecompressorKeys, "")
+		copy(c.contentDecompressorKeys[1:], c.contentDecompressorKeys)
+		c.contentDecompressorKeys[0] = k
+	}
 }
 
 // IsDebug method returns `true` if the client is in debug mode; otherwise, it is `false`.
@@ -1741,10 +1806,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		return response, err
 	}
 	if resp != nil {
-		response.Body = &limitReadCloser{r: resp.Body,
-			l: req.ResponseBodyLimit,
-			f: func(s int64) { response.size = s },
+		response.Body = resp.Body
+
+		err := response.wrapContentDecompressor()
+		if err != nil {
+			return response, err
 		}
+
+		response.wrapLimitReadCloser()
 	}
 	if !req.DoNotParseResponse && (req.Debug || req.ResponseBodyUnlimitedReads) {
 		response.wrapReadCopier()

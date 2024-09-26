@@ -6,7 +6,9 @@ package resty
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
+	"compress/lzw"
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
@@ -563,27 +565,68 @@ func createGenericServer(t *testing.T) *httptest.Server {
 		t.Logf("Path: %v", r.URL.Path)
 
 		if r.Method == MethodGet {
-			if r.URL.Path == "/json-no-set" {
+			switch r.URL.Path {
+			case "/json-no-set":
 				// Set empty header value for testing, since Go server sets to
 				// text/plain; charset=utf-8
 				w.Header().Set(hdrContentTypeKey, "")
 				_, _ = w.Write([]byte(`{"response":"json response no content type set"}`))
-			} else if r.URL.Path == "/gzip-test" {
+
+			// Gzip
+			case "/gzip-test":
 				w.Header().Set(hdrContentTypeKey, plainTextType)
 				w.Header().Set(hdrContentEncodingKey, "gzip")
 				zw := gzip.NewWriter(w)
 				_, _ = zw.Write([]byte("This is Gzip response testing"))
 				zw.Close()
-			} else if r.URL.Path == "/gzip-test-gziped-empty-body" {
+			case "/gzip-test-gziped-empty-body":
 				w.Header().Set(hdrContentTypeKey, plainTextType)
 				w.Header().Set(hdrContentEncodingKey, "gzip")
 				zw := gzip.NewWriter(w)
 				// write gziped empty body
 				_, _ = zw.Write([]byte(""))
 				zw.Close()
-			} else if r.URL.Path == "/gzip-test-no-gziped-body" {
+			case "/gzip-test-no-gziped-body":
 				w.Header().Set(hdrContentTypeKey, plainTextType)
 				w.Header().Set(hdrContentEncodingKey, "gzip")
+				// don't write body
+
+			// Deflate
+			case "/deflate-test":
+				w.Header().Set(hdrContentTypeKey, plainTextType)
+				w.Header().Set(hdrContentEncodingKey, "deflate")
+				zw, _ := flate.NewWriter(w, flate.BestSpeed)
+				_, _ = zw.Write([]byte("This is Deflate response testing"))
+				zw.Close()
+			case "/deflate-test-empty-body":
+				w.Header().Set(hdrContentTypeKey, plainTextType)
+				w.Header().Set(hdrContentEncodingKey, "deflate")
+				zw, _ := flate.NewWriter(w, flate.BestSpeed)
+				// write deflate empty body
+				_, _ = zw.Write([]byte(""))
+				zw.Close()
+			case "/deflate-test-no-body":
+				w.Header().Set(hdrContentTypeKey, plainTextType)
+				w.Header().Set(hdrContentEncodingKey, "deflate")
+				// don't write body
+
+			// LZW
+			case "/lzw-test":
+				w.Header().Set(hdrContentTypeKey, plainTextType)
+				w.Header().Set(hdrContentEncodingKey, "compress")
+				zw := lzw.NewWriter(w, lzw.LSB, 8)
+				_, _ = zw.Write([]byte("This is LZW response testing"))
+				zw.Close()
+			case "/lzw-test-empty-body":
+				w.Header().Set(hdrContentTypeKey, plainTextType)
+				w.Header().Set(hdrContentEncodingKey, "compress")
+				zw := lzw.NewWriter(w, lzw.LSB, 8)
+				// write lzw empty body
+				_, _ = zw.Write([]byte(""))
+				zw.Close()
+			case "/lzw-test-no-body":
+				w.Header().Set(hdrContentTypeKey, plainTextType)
+				w.Header().Set(hdrContentEncodingKey, "compress")
 				// don't write body
 			}
 
