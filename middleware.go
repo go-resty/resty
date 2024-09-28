@@ -208,24 +208,30 @@ func parseRequestBody(c *Client, r *Request) error {
 }
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
+	// init client trace if enabled
+	r.initClientTrace()
+
 	if r.bodyBuf == nil {
 		if reader, ok := r.Body.(io.Reader); ok && isPayloadSupported(r.Method, c.AllowGetMethodPayload()) {
-			r.RawRequest, err = http.NewRequest(r.Method, r.URL, reader)
+			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, reader)
 		} else if r.setContentLength {
-			r.RawRequest, err = http.NewRequest(r.Method, r.URL, http.NoBody)
+			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, http.NoBody)
 		} else {
-			r.RawRequest, err = http.NewRequest(r.Method, r.URL, nil)
+			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, nil)
 		}
 	} else {
 		// fix data race: must deep copy.
 		// TODO investigate in details and remove this copy line
 		bodyBuf := bytes.NewBuffer(append([]byte{}, r.bodyBuf.Bytes()...))
-		r.RawRequest, err = http.NewRequest(r.Method, r.URL, bodyBuf)
+		r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, bodyBuf)
 	}
 
 	if err != nil {
 		return
 	}
+
+	// get the context reference back from underlying RawRequest
+	r.ctx = r.RawRequest.Context()
 
 	// Assign close connection option
 	r.RawRequest.Close = r.CloseConnection
@@ -241,17 +247,6 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	// Add cookies from request instance into http request
 	for _, cookie := range r.Cookies {
 		r.RawRequest.AddCookie(cookie)
-	}
-
-	// Enable trace
-	if r.IsTrace {
-		r.clientTrace = &clientTrace{}
-		r.ctx = r.clientTrace.createContext(r.Context())
-	}
-
-	// Use context if it was specified
-	if r.ctx != nil {
-		r.RawRequest = r.RawRequest.WithContext(r.ctx)
 	}
 
 	return
