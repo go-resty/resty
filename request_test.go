@@ -260,11 +260,15 @@ func TestPostJSONStructSuccess(t *testing.T) {
 	user := &User{Username: "testuser", Password: "testpass"}
 
 	c := dcnl().SetJSONEscapeHTML(false)
-	resp, err := c.R().
+	r := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(user).
-		SetResult(&AuthSuccess{}).
-		Post(ts.URL + "/login")
+		SetResult(&AuthSuccess{})
+
+	rr := r.WithContext(context.Background())
+	resp, err := rr.Post(ts.URL + "/login")
+
+	_ = rr.Clone(context.Background())
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -282,12 +286,14 @@ func TestPostJSONRPCStructSuccess(t *testing.T) {
 	user := &User{Username: "testuser", Password: "testpass"}
 
 	c := dcnl().SetJSONEscapeHTML(false)
-	resp, err := c.R().
+	r := c.R().
 		SetHeader(hdrContentTypeKey, "application/json-rpc").
 		SetBody(user).
 		SetResult(&AuthSuccess{}).
-		SetQueryParam("ct", "rpc").
-		Post(ts.URL + "/login")
+		SetQueryParam("ct", "rpc")
+
+	rr := r.WithContext(context.Background())
+	resp, err := rr.Post(ts.URL + "/login")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -895,15 +901,22 @@ func TestMultiPartUploadFiles(t *testing.T) {
 
 	basePath := getTestDataPath()
 
-	resp, err := dcnldr().
+	c := dcnld()
+
+	r := c.R().
 		SetFormDataFromValues(url.Values{
 			"first_name": []string{"Jeevanandam"},
 			"last_name":  []string{"M"},
 		}).
-		SetFiles(map[string]string{"profile_img": filepath.Join(basePath, "test-img.png"), "notes": filepath.Join(basePath, "text-file.txt")}).
-		Post(ts.URL + "/upload")
+		SetFiles(map[string]string{
+			"profile_img": filepath.Join(basePath, "test-img.png"),
+			"notes":       filepath.Join(basePath, "text-file.txt"),
+		})
+	resp, err := r.Post(ts.URL + "/upload")
 
 	responseStr := resp.String()
+
+	_ = r.Clone(context.Background())
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -928,13 +941,17 @@ func TestMultiPartIoReaderFiles(t *testing.T) {
 	}
 	t.Logf("File Info: %v", file.String())
 
-	resp, err := dcnldr().
+	c := dcnld()
+
+	r := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
 		SetFileReader("profile_img", "test-img.png", bytes.NewReader(profileImgBytes)).
-		SetFileReader("notes", "text-file.txt", bytes.NewReader(notesBytes)).
-		Post(ts.URL + "/upload")
+		SetFileReader("notes", "text-file.txt", bytes.NewReader(notesBytes))
+	resp, err := r.Post(ts.URL + "/upload")
 
 	responseStr := resp.String()
+
+	_ = r.Clone(context.Background())
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -1003,15 +1020,19 @@ func TestMultiPartMultipartField(t *testing.T) {
 
 	jsonBytes := []byte(`{"input": {"name": "Uploaded document", "_filename" : ["file.txt"]}}`)
 
-	resp, err := dcnldr().
+	c := dcnld()
+
+	r := c.R().
 		SetFormDataFromValues(url.Values{
 			"first_name": []string{"Jeevanandam"},
 			"last_name":  []string{"M"},
 		}).
-		SetMultipartField("uploadManifest", "upload-file.json", "application/json", bytes.NewReader(jsonBytes)).
-		Post(ts.URL + "/upload")
+		SetMultipartField("uploadManifest", "upload-file.json", "application/json", bytes.NewReader(jsonBytes))
+	resp, err := r.Post(ts.URL + "/upload")
 
 	responseStr := resp.String()
+
+	_ = r.Clone(context.Background())
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -1046,12 +1067,16 @@ func TestMultiPartMultipartFields(t *testing.T) {
 		},
 	}
 
-	resp, err := dcnldr().
+	c := dcnld()
+
+	r := c.R().
 		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
-		SetMultipartFields(fields...).
-		Post(ts.URL + "/upload")
+		SetMultipartFields(fields...)
+	resp, err := r.Post(ts.URL + "/upload")
 
 	responseStr := resp.String()
+
+	_ = r.Clone(context.Background())
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -1093,7 +1118,7 @@ func TestGetWithCookie(t *testing.T) {
 		Value: "This is cookie 1 value",
 	})
 
-	resp, err := c.R().
+	r := c.R().
 		SetCookie(&http.Cookie{
 			Name:  "go-resty-2",
 			Value: "This is cookie 2 value",
@@ -1103,8 +1128,10 @@ func TestGetWithCookie(t *testing.T) {
 				Name:  "go-resty-1",
 				Value: "This is cookie 1 value additional append",
 			},
-		}).
-		Get("mypage2")
+		})
+	resp, err := r.Get("mypage2")
+
+	_ = r.Clone(context.Background())
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -1148,12 +1175,14 @@ func TestGetWithCookies(t *testing.T) {
 		},
 	})
 
-	resp, err = c.R().
+	r := c.R().
 		SetCookie(&http.Cookie{
 			Name:  "req-go-resty-1",
 			Value: "This is request cookie 1 value additional append",
-		}).
-		Get("mypage2")
+		})
+	resp, err = r.Get("mypage2")
+
+	_ = r.Clone(context.Background())
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
@@ -2325,7 +2354,7 @@ func TestRequestClone(t *testing.T) {
 	assertEqual(t, "clone", clone.bodyBuf.String())
 
 	// parent request should have raw request while clone should not
-	assertNotNil(t, clone.RawRequest)
+	assertNil(t, clone.RawRequest)
 	assertNotNil(t, parent.RawRequest)
 	assertNotEqual(t, parent.RawRequest, clone.RawRequest)
 
@@ -2371,6 +2400,22 @@ func TestResponseBodyUnlimitedReads(t *testing.T) {
 	}
 
 	logResponse(t, resp)
+}
+
+func TestRequestPanicContext(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic")
+		}
+	}()
+
+	c := dcnl()
+
+	//lint:ignore SA1012 test case nil check
+	_ = c.R().WithContext(nil)
+
+	//lint:ignore SA1012 test case nil check
+	_ = c.R().Clone(nil)
 }
 
 // This test methods exist for test coverage purpose

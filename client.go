@@ -6,11 +6,13 @@ package resty
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -189,6 +191,7 @@ type Client struct {
 	outputDirectory         string
 	scheme                  string
 	log                     Logger
+	ctx                     context.Context
 	httpClient              *http.Client
 	proxyURL                *url.URL
 	requestLog              RequestLogCallback
@@ -214,6 +217,13 @@ type Client struct {
 // User type is to hold an username and password information
 type User struct {
 	Username, Password string
+}
+
+// Clone method returns deep copy of u.
+func (u *User) Clone() *User {
+	uu := new(User)
+	*uu = *u
+	return uu
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -299,6 +309,22 @@ func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.header[header] = []string{value}
+	return c
+}
+
+// Context method returns the [context.Context] from the client instance.
+func (c *Client) Context() context.Context {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.ctx
+}
+
+// SetContext method sets the given [context.Context] in the client instance and
+// it gets added to [Request] raised from this instance.
+func (c *Client) SetContext(ctx context.Context) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.ctx = ctx
 	return c
 }
 
@@ -596,6 +622,10 @@ func (c *Client) R() *Request {
 		log:                 c.log,
 		setContentLength:    c.setContentLength,
 		generateCurlOnDebug: c.generateCurlOnDebug,
+	}
+
+	if c.ctx != nil {
+		r.ctx = context.WithoutCancel(c.ctx) // refer to godoc for more info about this function
 	}
 
 	return r
@@ -1731,15 +1761,39 @@ func (c *Client) Client() *http.Client {
 // NOTE: Use with care:
 //   - Interface values are not deeply cloned. Thus, both the original and the
 //     clone will use the same value.
-//   - This function is not safe for concurrent use. You should only use this method
-//     when you are sure that any other goroutine is not using the client.
-func (c *Client) Clone() *Client {
+//   - It is not safe for concurrent use. You should only use this method
+//     when you are sure that any other concurrent process is not using the client.
+func (c *Client) Clone(ctx context.Context) *Client {
+	cc := new(Client)
 	// dereference the pointer and copy the value
-	cc := *c
+	*cc = *c
 
-	// lock values should not be copied - thus new values are used.
+	cc.ctx = ctx
+	cc.queryParams = cloneURLValues(c.queryParams)
+	cc.formData = cloneURLValues(c.formData)
+	cc.header = c.header.Clone()
+	cc.pathParams = maps.Clone(c.pathParams)
+	cc.rawPathParams = maps.Clone(c.rawPathParams)
+	cc.userInfo = c.userInfo.Clone()
+	cc.contentTypeEncoders = maps.Clone(c.contentTypeEncoders)
+	cc.contentTypeDecoders = maps.Clone(c.contentTypeDecoders)
+	cc.contentDecompressors = maps.Clone(c.contentDecompressors)
+	copy(cc.contentDecompressorKeys, c.contentDecompressorKeys)
+
+	if c.proxyURL != nil {
+		cc.proxyURL, _ = url.Parse(c.proxyURL.String())
+	}
+	// clone cookies
+	if l := len(c.cookies); l > 0 {
+		cc.cookies = make([]*http.Cookie, l)
+		for _, cookie := range c.cookies {
+			cc.cookies = append(cc.cookies, cloneCookie(cookie))
+		}
+	}
+
+	// certain values need to be reset
 	cc.lock = &sync.RWMutex{}
-	return &cc
+	return cc
 }
 
 func (c *Client) executeBefore(req *Request) error {
@@ -1931,6 +1985,13 @@ func (f *File) String() string {
 	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
 }
 
+// Clone method returns deep copy of f.
+func (f *File) Clone() *File {
+	ff := new(File)
+	*ff = *f
+	return ff
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // MultipartField struct
 //_______________________________________________________________________
@@ -1941,4 +2002,11 @@ type MultipartField struct {
 	FileName    string
 	ContentType string
 	io.Reader
+}
+
+// Clone method returns the deep copy of m except [io.Reader].
+func (m *MultipartField) Clone() *MultipartField {
+	mm := new(MultipartField)
+	*mm = *m
+	return mm
 }

@@ -869,7 +869,11 @@ func dcnl() *Client {
 	return c
 }
 
-func dcld() (*Client, *bytes.Buffer) {
+func dcnld() *Client {
+	return dcnl().EnableDebug()
+}
+
+func dcldb() (*Client, *bytes.Buffer) {
 	logBuf := acquireBuffer()
 	c := New().
 		EnableDebug().
@@ -895,24 +899,28 @@ func assertNil(t *testing.T, v any) {
 }
 
 func assertNotNil(t *testing.T, v any) {
+	t.Helper()
 	if isNil(v) {
 		t.Errorf("[%v] was expected to be non-nil", v)
 	}
 }
 
 func assertType(t *testing.T, typ, v any) {
+	t.Helper()
 	if reflect.DeepEqual(reflect.TypeOf(typ), reflect.TypeOf(v)) {
 		t.Errorf("Expected type %t, got %t", typ, v)
 	}
 }
 
 func assertError(t *testing.T, err error) {
+	t.Helper()
 	if err != nil {
 		t.Errorf("Error occurred [%v]", err)
 	}
 }
 
 func assertErrorIs(t *testing.T, e, g error) (r bool) {
+	t.Helper()
 	if !errors.Is(g, e) {
 		t.Errorf("Expected [%v], got [%v]", e, g)
 	}
@@ -930,6 +938,7 @@ func assertEqual(t *testing.T, e, g any) (r bool) {
 }
 
 func assertNotEqual(t *testing.T, e, g any) (r bool) {
+	t.Helper()
 	if equal(e, g) {
 		t.Errorf("Expected [%v], got [%v]", e, g)
 	} else {
@@ -958,6 +967,7 @@ func isNil(v any) bool {
 }
 
 func logResponse(t *testing.T, resp *Response) {
+	t.Helper()
 	t.Logf("Response Status: %v", resp.Status())
 	t.Logf("Response Time: %v", resp.Time())
 	t.Logf("Response Headers: %v", resp.Header())

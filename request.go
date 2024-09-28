@@ -11,6 +11,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -105,8 +106,11 @@ func (r *Request) SetMethod(m string) *Request {
 	return r
 }
 
-// Context method returns the Context if it is already set in the [Request]
-// otherwise, it creates a new one using [context.Background].
+// Context method returns the request's [context.Context]. To change the context, use
+// [Request.Clone] or [Request.WithContext].
+//
+// The returned context is always non-nil; it defaults to the
+// background context.
 func (r *Request) Context() context.Context {
 	if r.ctx == nil {
 		return context.Background()
@@ -114,13 +118,35 @@ func (r *Request) Context() context.Context {
 	return r.ctx
 }
 
-// SetContext method sets the [context.Context] for current [Request]. It allows
-// to interrupt the request execution if `ctx.Done()` channel is closed.
-// See https://blog.golang.org/context article and the package [context]
-// documentation.
+// SetContext method sets the [context.Context] for current [Request].
+// It overwrites the current context in the Request instance; it does not
+// affect the [Request].RawRequest that was already created.
+//
+// If you want this method to take effect, use this method before invoking
+// [Request.Send] or [Request].HTTPVerb methods.
+//
+// See [Request.WithContext], [Request.Clone]
 func (r *Request) SetContext(ctx context.Context) *Request {
 	r.ctx = ctx
 	return r
+}
+
+// WithContext method returns a shallow copy of r with its context changed
+// to ctx. The provided ctx must be non-nil. It does not
+// affect the [Request].RawRequest that was already created.
+//
+// If you want this method to take effect, use this method before invoking
+// [Request.Send] or [Request].HTTPVerb methods.
+//
+// See [Request.SetContext], [Request.Clone]
+func (r *Request) WithContext(ctx context.Context) *Request {
+	if ctx == nil {
+		panic("resty: Request.WithContext nil context")
+	}
+	rr := new(Request)
+	*rr = *r
+	rr.ctx = ctx
+	return rr
 }
 
 // SetHeader method sets a single header field and its value in the current request.
@@ -374,9 +400,7 @@ func (r *Request) SetBody(body any) *Request {
 //	// Can be accessed via -
 //	fmt.Println(response.Result().(*AuthToken))
 func (r *Request) SetResult(v any) *Request {
-	if v != nil {
-		r.Result = getPointer(v)
-	}
+	r.Result = getPointer(v)
 	return r
 }
 
@@ -1161,73 +1185,85 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	return resp, unwrapNoRetryErr(err)
 }
 
-// Clone returns a deep copy of r with it's context changed to ctx.
-// The method clones some important fields of the request:
-//   - Header: a new header is created and all the values are copied.
-//   - bodyBuf: a new buffer is created and the content is copied.
-//   - RawRequest: a new RawRequest is created and the content is copied.
-//   - ctx: the context is replaced with the new one.
+// Clone returns a deep copy of r with its context changed to ctx.
+// It does clone appropriate fields, reset, and reinitialize, so
+// [Request] can be used again.
 //
-// The body is not copied, it's a reference to the original body.
+// The body is not copied, but it's a reference to the original body.
 //
 //	request := client.R()
 //	request.SetBody("body")
 //	request.SetHeader("header", "value")
 //	clonedRequest := request.Clone(context.Background())
 func (r *Request) Clone(ctx context.Context) *Request {
+	if ctx == nil {
+		panic("resty: Request.Clone nil context")
+	}
 	rr := new(Request)
 	*rr = *r
 
 	// set new context
 	rr.ctx = ctx
 
-	// clone URL values
+	// RawRequest should not copied, since its created on request execution flow.
+	rr.RawRequest = nil
+
+	// clone values
+	rr.Header = r.Header.Clone()
 	rr.FormData = cloneURLValues(r.FormData)
 	rr.QueryParams = cloneURLValues(r.QueryParams)
-
-	// clone path params
-	if r.PathParams != nil {
-		rr.PathParams = make(map[string]string, len(r.PathParams))
-		for k, v := range r.PathParams {
-			rr.PathParams[k] = v
-		}
-	}
-
-	// clone raw path params
-	if r.RawPathParams != nil {
-		rr.RawPathParams = make(map[string]string, len(r.RawPathParams))
-		for k, v := range r.RawPathParams {
-			rr.RawPathParams[k] = v
-		}
-	}
+	rr.PathParams = maps.Clone(r.PathParams)
+	rr.RawPathParams = maps.Clone(r.RawPathParams)
 
 	// clone basic auth
 	if r.UserInfo != nil {
-		rr.UserInfo = &User{Username: r.UserInfo.Username, Password: r.UserInfo.Password}
+		rr.UserInfo = r.UserInfo.Clone()
 	}
 
 	// clone the SRV record
 	if r.SRV != nil {
-		rr.SRV = &SRVRecord{Service: r.SRV.Service, Domain: r.SRV.Domain}
+		rr.SRV = r.SRV.Clone()
 	}
 
-	// clone header
-	if r.Header != nil {
-		rr.Header = r.Header.Clone()
+	// clone cookies
+	if l := len(r.Cookies); l > 0 {
+		rr.Cookies = make([]*http.Cookie, l)
+		for _, cookie := range r.Cookies {
+			rr.Cookies = append(rr.Cookies, cloneCookie(cookie))
+		}
 	}
 
-	// copy bodyBuf since it's an interface value
-	// if a request is used, the bodyBuf will be nil and
-	// any clone will have an empty bodyBuf
+	// create new interface for result and error
+	rr.Result = newInterface(r.Result)
+	rr.Error = newInterface(r.Error)
+
+	// clone multipart fields
+	if l := len(r.multipartFiles); l > 0 {
+		rr.multipartFiles = make([]*File, l)
+		for i, mf := range r.multipartFiles {
+			rr.multipartFiles[i] = mf.Clone()
+		}
+	}
+	if l := len(r.multipartFields); l > 0 {
+		rr.multipartFields = make([]*MultipartField, l)
+		for i, mf := range r.multipartFields {
+			rr.multipartFields[i] = mf.Clone()
+		}
+	}
+
+	// reset values
+	rr.Time = time.Time{}
+	rr.Attempt = 0
+	rr.initClientTrace()
+	rr.resultCurlCmd = new(string)
+	r.values = make(map[string]any)
+
+	// copy bodyBuf
 	if r.bodyBuf != nil {
 		rr.bodyBuf = acquireBuffer()
-		rr.bodyBuf.Write(r.bodyBuf.Bytes())
+		_, _ = io.Copy(rr.bodyBuf, r.bodyBuf)
 	}
 
-	// copy raw request to reuse it
-	if r.RawRequest != nil {
-		rr.RawRequest = r.RawRequest.Clone(ctx)
-	}
 	return rr
 }
 
@@ -1240,6 +1276,13 @@ func (r *Request) Clone(ctx context.Context) *Request {
 type SRVRecord struct {
 	Service string
 	Domain  string
+}
+
+// Clone method returns deep copy of s.
+func (s *SRVRecord) Clone() *SRVRecord {
+	ss := new(SRVRecord)
+	*ss = *s
+	return ss
 }
 
 func (r *Request) fmtBodyString(sl int) (body string) {
@@ -1325,6 +1368,13 @@ func (r *Request) selectAddr(addrs []*net.SRV, path string, attempt int) string 
 func (r *Request) initValuesMap() {
 	if r.values == nil {
 		r.values = make(map[string]any)
+	}
+}
+
+func (r *Request) initClientTrace() {
+	if r.IsTrace {
+		r.clientTrace = new(clientTrace)
+		r.ctx = r.clientTrace.createContext(r.Context())
 	}
 }
 

@@ -16,7 +16,27 @@ import (
 	"time"
 )
 
-func TestSetContext(t *testing.T) {
+func TestClientSetContext(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+
+	assertNil(t, c.Context())
+
+	c.SetContext(context.Background())
+
+	resp, err := c.R().Get(ts.URL + "/")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "200 OK", resp.Status())
+	assertEqual(t, "TestGet: text response", resp.String())
+
+	logResponse(t, resp)
+}
+
+func TestRequestSetContext(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 

@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"compress/lzw"
+	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"errors"
@@ -624,7 +625,7 @@ func TestDebugBodySizeLimit(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c, lb := dcld()
+	c, lb := dcldb()
 	c.SetDebugBodyLimit(30)
 
 	testcases := []struct{ url, want, wantErr string }{
@@ -767,7 +768,7 @@ func TestLogCallbacks(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
 
-	c, lb := dcld()
+	c, lb := dcldb()
 
 	c.OnRequestLog(func(r *RequestLog) error {
 		// masking authorization header
@@ -1181,28 +1182,55 @@ func TestUnixSocket(t *testing.T) {
 	assertEqual(t, "Hello resty client from a server running on endpoint /hello!", res.String())
 }
 
+var _ RateLimiter = (*testRateLimiter)(nil)
+
+type testRateLimiter struct{}
+
+func (t *testRateLimiter) Allow() bool {
+	return false
+}
+
 func TestClientClone(t *testing.T) {
 	parent := New()
 
 	// set a non-interface field
 	parent.SetBaseURL("http://localhost")
+	parent.SetBasicAuth("parent", "")
+	parent.SetProxy("http://localhost:8080")
 
 	// set an interface field
-	parent.SetBasicAuth("parent", "")
+	tr := &testRateLimiter{}
+	parent.SetRateLimiter(tr)
+	parent.SetCookie(&http.Cookie{
+		Name:  "go-resty-1",
+		Value: "This is cookie 1 value",
+	})
+	parent.SetCookies([]*http.Cookie{
+		{
+			Name:  "go-resty-2",
+			Value: "This is cookie 2 value",
+		},
+		{
+			Name:  "go-resty-3",
+			Value: "This is cookie 3 value",
+		},
+	})
 
-	clone := parent.Clone()
+	clone := parent.Clone(context.Background())
 	// update value of non-interface type - change will only happen on clone
 	clone.SetBaseURL("https://local.host")
-	// update value of interface type - change will also happen on parent
-	clone.UserInfo().Username = "clone"
+
+	clone.SetBasicAuth("clone", "clone")
 
 	// assert non-interface type
 	assertEqual(t, "http://localhost", parent.BaseURL())
 	assertEqual(t, "https://local.host", clone.BaseURL())
-
-	// assert interface type
-	assertEqual(t, "clone", parent.UserInfo().Username)
+	assertEqual(t, "parent", parent.UserInfo().Username)
 	assertEqual(t, "clone", clone.UserInfo().Username)
+
+	// assert interface/pointer type
+	assertEqual(t, parent.Client(), clone.Client())
+	assertEqual(t, parent.RateLimiter(), clone.RateLimiter())
 }
 
 func TestResponseBodyLimit(t *testing.T) {

@@ -235,6 +235,9 @@ func createDirectory(dir string) (err error) {
 }
 
 func getPointer(v any) any {
+	if v == nil {
+		return nil
+	}
 	vv := reflect.ValueOf(v)
 	if vv.Kind() == reflect.Ptr {
 		return v
@@ -248,6 +251,13 @@ func inferType(v any) reflect.Type {
 
 func inferKind(v any) reflect.Kind {
 	return inferType(v).Kind()
+}
+
+func newInterface(v any) any {
+	if v == nil {
+		return nil
+	}
+	return reflect.New(inferType(v)).Interface()
 }
 
 func functionName(i any) string {
@@ -376,4 +386,21 @@ func cloneURLValues(v url.Values) url.Values {
 		return nil
 	}
 	return url.Values(http.Header(v).Clone())
+}
+
+func cloneCookie(c *http.Cookie) *http.Cookie {
+	return &http.Cookie{
+		Name:       c.Name,
+		Value:      c.Value,
+		Path:       c.Path,
+		Domain:     c.Domain,
+		Expires:    c.Expires,
+		RawExpires: c.RawExpires,
+		MaxAge:     c.MaxAge,
+		Secure:     c.Secure,
+		HttpOnly:   c.HttpOnly,
+		SameSite:   c.SameSite,
+		Raw:        c.Raw,
+		Unparsed:   c.Unparsed,
+	}
 }
