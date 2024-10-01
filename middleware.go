@@ -161,18 +161,18 @@ func parseRequestHeader(c *Client, r *Request) error {
 		r.Header[k] = v[:]
 	}
 
-	if isStringEmpty(r.Header.Get(hdrUserAgentKey)) {
+	if !r.isHeaderExists(hdrUserAgentKey) {
 		r.Header.Set(hdrUserAgentKey, hdrUserAgentValue)
 	}
 
-	if isStringEmpty(r.Header.Get(hdrAcceptKey)) {
+	if !r.isHeaderExists(hdrAcceptKey) {
 		ct := r.Header.Get(hdrContentTypeKey)
 		if isJSONContentType(ct) || isXMLContentType(ct) {
 			r.Header.Set(hdrAcceptKey, ct)
 		}
 	}
 
-	if isStringEmpty(r.Header.Get(hdrAcceptEncodingKey)) {
+	if !r.isHeaderExists(hdrAcceptEncodingKey) {
 		r.Header.Set(hdrAcceptEncodingKey, r.client.ContentDecompressorKeys())
 	}
 
@@ -498,7 +498,10 @@ func handleRequestBody(c *Client, r *Request) error {
 	contentType := r.Header.Get(hdrContentTypeKey)
 	if isStringEmpty(contentType) {
 		// it is highly recommended that the user provide a request content-type
+		// so that we can minimize memory allocation and compute.
 		contentType = detectContentType(r.Body)
+	}
+	if !r.isHeaderExists(hdrContentTypeKey) {
 		r.Header.Set(hdrContentTypeKey, contentType)
 	}
 
