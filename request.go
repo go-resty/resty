@@ -1378,6 +1378,11 @@ func (r *Request) initClientTrace() {
 	}
 }
 
+func (r *Request) isHeaderExists(k string) bool {
+	_, f := r.Header[k]
+	return f
+}
+
 func jsonIndent(v []byte) []byte {
 	buf := acquireBuffer()
 	defer releaseBuffer(buf)
