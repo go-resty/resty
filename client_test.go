@@ -487,7 +487,6 @@ func TestClientSettingsCoverage(t *testing.T) {
 	s, err := resp.fmtBodyString(0)
 	assertNil(t, err)
 	assertEqual(t, "***** NO CONTENT *****", s)
-	fmt.Println(err, s)
 }
 
 func TestContentLengthWhenBodyIsNil(t *testing.T) {

@@ -986,3 +986,11 @@ func cleanupFiles(files ...string) {
 		}
 	}
 }
+
+func createBinFile(fileName string, size int64) string {
+	fp := filepath.Join(getTestDataPath(), fileName)
+	f, _ := os.Create(fp)
+	_ = f.Truncate(size)
+	_ = f.Close()
+	return fp
+}

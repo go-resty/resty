@@ -12,9 +12,11 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -78,11 +80,11 @@ type Request struct {
 	clientTrace         *clientTrace
 	log                 Logger
 	multipartBoundary   string
-	multipartFiles      []*File
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
 	resultCurlCmd       *string
 	generateCurlOnDebug bool
+	multipartErrChan    chan error
 }
 
 // GenerateCurlCommand method generates the CURL command for the request.
@@ -298,6 +300,8 @@ func (r *Request) SetQueryString(query string) *Request {
 //		})
 //
 // It overrides the form data value set at the client instance level.
+//
+// See [Request.SetFormDataFromValues] for the same field name with multiple values.
 func (r *Request) SetFormData(data map[string]string) *Request {
 	for k, v := range data {
 		r.FormData.Set(k, v)
@@ -427,9 +431,13 @@ func (r *Request) SetError(err any) *Request {
 //
 //	client.R().
 //		SetFile("my_file", "/Users/jeeva/Gas Bill - Sep.pdf")
-func (r *Request) SetFile(param, filePath string) *Request {
+func (r *Request) SetFile(fieldName, filePath string) *Request {
 	r.isMultiPart = true
-	r.FormData.Set("@"+param, filePath)
+	r.multipartFields = append(r.multipartFields, &MultipartField{
+		Name:     fieldName,
+		FileName: filepath.Base(filePath),
+		filePath: filePath,
+	})
 	return r
 }
 
@@ -444,7 +452,11 @@ func (r *Request) SetFile(param, filePath string) *Request {
 func (r *Request) SetFiles(files map[string]string) *Request {
 	r.isMultiPart = true
 	for f, fp := range files {
-		r.FormData.Set("@"+f, fp)
+		r.multipartFields = append(r.multipartFields, &MultipartField{
+			Name:     f,
+			FileName: filepath.Base(fp),
+			filePath: fp,
+		})
 	}
 	return r
 }
@@ -454,31 +466,26 @@ func (r *Request) SetFiles(files map[string]string) *Request {
 //	client.R().
 //		SetFileReader("profile_img", "my-profile-img.png", bytes.NewReader(profileImgBytes)).
 //		SetFileReader("notes", "user-notes.txt", bytes.NewReader(notesBytes))
-func (r *Request) SetFileReader(param, fileName string, reader io.Reader) *Request {
-	r.isMultiPart = true
-	r.multipartFiles = append(r.multipartFiles, &File{
-		Name:      fileName,
-		ParamName: param,
-		Reader:    reader,
-	})
+func (r *Request) SetFileReader(fieldName, fileName string, reader io.Reader) *Request {
+	r.SetMultipartField(fieldName, fileName, "", reader)
 	return r
 }
 
 // SetMultipartFormData method allows simple form data to be attached to the request
 // as `multipart:form-data`
 func (r *Request) SetMultipartFormData(data map[string]string) *Request {
+	r.isMultiPart = true
 	for k, v := range data {
-		r = r.SetMultipartField(k, "", "", strings.NewReader(v))
+		r.FormData.Set(k, v)
 	}
-
 	return r
 }
 
 // SetMultipartField method sets custom data with Content-Type using [io.Reader] for multipart upload.
-func (r *Request) SetMultipartField(param, fileName, contentType string, reader io.Reader) *Request {
+func (r *Request) SetMultipartField(fieldName, fileName, contentType string, reader io.Reader) *Request {
 	r.isMultiPart = true
 	r.multipartFields = append(r.multipartFields, &MultipartField{
-		Param:       param,
+		Name:        fieldName,
 		FileName:    fileName,
 		ContentType: contentType,
 		Reader:      reader,
@@ -492,13 +499,13 @@ func (r *Request) SetMultipartField(param, fileName, contentType string, reader 
 //
 //	client.R().SetMultipartFields(
 //		&resty.MultipartField{
-//			Param:       "uploadManifest1",
+//			Name:       "uploadManifest1",
 //			FileName:    "upload-file-1.json",
 //			ContentType: "application/json",
 //			Reader:      strings.NewReader(`{"input": {"name": "Uploaded document 1", "_filename" : ["file1.txt"]}}`),
 //		},
 //		&resty.MultipartField{
-//			Param:       "uploadManifest2",
+//			Name:       "uploadManifest2",
 //			FileName:    "upload-file-2.json",
 //			ContentType: "application/json",
 //			Reader:      strings.NewReader(`{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`),
@@ -1177,6 +1184,12 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		ResetMultipartReaders(r.RetryResetReaders),
 	)
 
+	if r.isMultiPart {
+		for _, mf := range r.multipartFields {
+			mf.close()
+		}
+	}
+
 	if err != nil {
 		r.log.Errorf("%v", err)
 	}
@@ -1238,12 +1251,6 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.Error = newInterface(r.Error)
 
 	// clone multipart fields
-	if l := len(r.multipartFiles); l > 0 {
-		rr.multipartFiles = make([]*File, l)
-		for i, mf := range r.multipartFiles {
-			rr.multipartFiles[i] = mf.Clone()
-		}
-	}
 	if l := len(r.multipartFields); l > 0 {
 		rr.multipartFields = make([]*MultipartField, l)
 		for i, mf := range r.multipartFields {
@@ -1257,6 +1264,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.initClientTrace()
 	rr.resultCurlCmd = new(string)
 	r.values = make(map[string]any)
+	r.multipartErrChan = nil
 
 	// copy bodyBuf
 	if r.bodyBuf != nil {
@@ -1381,6 +1389,17 @@ func (r *Request) initClientTrace() {
 func (r *Request) isHeaderExists(k string) bool {
 	_, f := r.Header[k]
 	return f
+}
+
+func (r *Request) writeFormData(w *multipart.Writer) error {
+	for k, v := range r.FormData {
+		for _, iv := range v {
+			if err := w.WriteField(k, iv); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func jsonIndent(v []byte) []byte {

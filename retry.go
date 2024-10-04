@@ -6,7 +6,6 @@ package resty
 
 import (
 	"context"
-	"io"
 	"math"
 	"math/rand"
 	"sync"
@@ -136,7 +135,7 @@ func backoff(operation func() (*Response, error), options ...Option) error {
 		}
 
 		if opts.resetReaders {
-			if err := resetFileReaders(resp.Request.multipartFiles); err != nil {
+			if err := resetFileReaders(resp.Request.multipartFields...); err != nil {
 				return err
 			}
 		}
@@ -239,12 +238,10 @@ func newRnd() *rand.Rand {
 	return rand.New(src)
 }
 
-func resetFileReaders(files []*File) error {
-	for _, f := range files {
-		if rs, ok := f.Reader.(io.ReadSeeker); ok {
-			if _, err := rs.Seek(0, io.SeekStart); err != nil {
-				return err
-			}
+func resetFileReaders(fields ...*MultipartField) error {
+	for _, f := range fields {
+		if err := f.resetReader(); err != nil {
+			return err
 		}
 	}
 

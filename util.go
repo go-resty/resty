@@ -10,12 +10,9 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
@@ -149,74 +146,6 @@ func firstNonEmpty(v ...string) string {
 		}
 	}
 	return ""
-}
-
-var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
-
-func escapeQuotes(s string) string {
-	return quoteEscaper.Replace(s)
-}
-
-func createMultipartHeader(param, fileName, contentType string) textproto.MIMEHeader {
-	hdr := make(textproto.MIMEHeader)
-
-	var contentDispositionValue string
-	if isStringEmpty(fileName) {
-		contentDispositionValue = fmt.Sprintf(`form-data; name="%s"`, param)
-	} else {
-		contentDispositionValue = fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
-			param, escapeQuotes(fileName))
-	}
-	hdr.Set("Content-Disposition", contentDispositionValue)
-
-	if !isStringEmpty(contentType) {
-		hdr.Set(hdrContentTypeKey, contentType)
-	}
-	return hdr
-}
-
-func addMultipartFormField(w *multipart.Writer, mf *MultipartField) error {
-	partWriter, err := w.CreatePart(createMultipartHeader(mf.Param, mf.FileName, mf.ContentType))
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(partWriter, mf.Reader)
-	return err
-}
-
-func writeMultipartFormFile(w *multipart.Writer, fieldName, fileName string, r io.Reader) error {
-	// Auto detect actual multipart content type
-	cbuf := make([]byte, 512)
-	size, err := r.Read(cbuf)
-	if err != nil && err != io.EOF {
-		return err
-	}
-
-	partWriter, err := w.CreatePart(createMultipartHeader(fieldName, fileName, http.DetectContentType(cbuf[:size])))
-	if err != nil {
-		return err
-	}
-
-	if _, err = partWriter.Write(cbuf[:size]); err != nil {
-		return err
-	}
-
-	_, err = io.Copy(partWriter, r)
-	return err
-}
-
-func addFile(w *multipart.Writer, fieldName, path string) error {
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer closeq(file)
-	return writeMultipartFormFile(w, fieldName, filepath.Base(path), file)
-}
-
-func addFileReader(w *multipart.Writer, f *File) error {
-	return writeMultipartFormFile(w, f.ParamName, f.Name, f.Reader)
 }
 
 func isPayloadSupported(m string, allowMethodGet bool) bool {

@@ -430,54 +430,96 @@ func parseResponseBody(c *Client, res *Response) (err error) {
 }
 
 func handleMultipart(c *Client, r *Request) error {
-	r.bodyBuf = acquireBuffer()
-	w := multipart.NewWriter(r.bodyBuf)
-
-	// Set boundary if not set by user
-	if r.multipartBoundary != "" {
-		if err := w.SetBoundary(r.multipartBoundary); err != nil {
-			return err
+	for k, v := range c.FormData() {
+		if _, ok := r.FormData[k]; ok {
+			continue
 		}
+		r.FormData[k] = v[:]
 	}
 
-	for k, v := range c.FormData() {
-		for _, iv := range v {
-			if err := w.WriteField(k, iv); err != nil {
+	mfLen := len(r.multipartFields)
+	if mfLen == 0 {
+		r.bodyBuf = acquireBuffer()
+		mw := multipart.NewWriter(r.bodyBuf)
+
+		// set boundary if it is provided by the user
+		if !isStringEmpty(r.multipartBoundary) {
+			if err := mw.SetBoundary(r.multipartBoundary); err != nil {
 				return err
 			}
 		}
-	}
 
-	for k, v := range r.FormData {
-		for _, iv := range v {
-			if strings.HasPrefix(k, "@") { // file
-				if err := addFile(w, k[1:], iv); err != nil {
-					return err
-				}
-			} else { // form value
-				if err := w.WriteField(k, iv); err != nil {
-					return err
-				}
-			}
+		if err := r.writeFormData(mw); err != nil {
+			return err
 		}
+
+		r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
+		closeq(mw)
+
+		return nil
 	}
 
-	// #21 - adding io.Reader support
-	for _, f := range r.multipartFiles {
-		if err := addFileReader(w, f); err != nil {
+	// multipart streaming
+	bodyReader, bodyWriter := io.Pipe()
+	mw := multipart.NewWriter(bodyWriter)
+	r.Body = bodyReader
+	r.multipartErrChan = make(chan error, 1)
+
+	// set boundary if it is provided by the user
+	if !isStringEmpty(r.multipartBoundary) {
+		if err := mw.SetBoundary(r.multipartBoundary); err != nil {
 			return err
 		}
 	}
 
-	// GitHub #130 adding multipart field support with content type
+	go func() {
+		defer close(r.multipartErrChan)
+		if err := createMultipart(mw, r); err != nil {
+			r.multipartErrChan <- err
+		}
+		closeq(mw)
+		closeq(bodyWriter)
+	}()
+
+	r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
+	return nil
+}
+
+func createMultipart(w *multipart.Writer, r *Request) error {
+	if err := r.writeFormData(w); err != nil {
+		return err
+	}
+
 	for _, mf := range r.multipartFields {
-		if err := addMultipartFormField(w, mf); err != nil {
+		if err := mf.openFileIfRequired(); err != nil {
+			return err
+		}
+
+		p := make([]byte, 512)
+		size, err := mf.Reader.Read(p)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		// auto detect content type if empty
+		if isStringEmpty(mf.ContentType) {
+			mf.ContentType = http.DetectContentType(p[:size])
+		}
+
+		partWriter, err := w.CreatePart(mf.createHeader())
+		if err != nil {
+			return err
+		}
+
+		if _, err = partWriter.Write(p[:size]); err != nil {
+			return err
+		}
+		_, err = io.Copy(partWriter, mf.Reader)
+		if err != nil {
 			return err
 		}
 	}
 
-	r.Header.Set(hdrContentTypeKey, w.FormDataContentType())
-	return w.Close()
+	return nil
 }
 
 func handleFormData(c *Client, r *Request) {
