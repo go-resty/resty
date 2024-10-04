@@ -10,7 +10,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -62,6 +61,7 @@ var (
 	hdrContentTypeKey     = http.CanonicalHeaderKey("Content-Type")
 	hdrContentLengthKey   = http.CanonicalHeaderKey("Content-Length")
 	hdrContentEncodingKey = http.CanonicalHeaderKey("Content-Encoding")
+	hdrContentDisposition = http.CanonicalHeaderKey("Content-Disposition")
 	hdrLocationKey        = http.CanonicalHeaderKey("Location")
 	hdrAuthorizationKey   = http.CanonicalHeaderKey("Authorization")
 	hdrWwwAuthenticateKey = http.CanonicalHeaderKey("WWW-Authenticate")
@@ -616,8 +616,7 @@ func (c *Client) R() *Request {
 		ResponseBodyUnlimitedReads: c.resBodyUnlimitedReads,
 
 		client:              c,
-		multipartFiles:      []*File{},
-		multipartFields:     []*MultipartField{},
+		multipartFields:     make([]*MultipartField, 0),
 		jsonEscapeHTML:      c.jsonEscapeHTML,
 		log:                 c.log,
 		setContentLength:    c.setContentLength,
@@ -1860,6 +1859,11 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	if err != nil {
 		return response, err
 	}
+	if req.multipartErrChan != nil {
+		if err = <-req.multipartErrChan; err != nil {
+			return response, err
+		}
+	}
 	if resp != nil {
 		response.Body = resp.Body
 
@@ -1967,46 +1971,4 @@ func (c *Client) onInvalidHooks(req *Request, err error) {
 	for _, h := range c.invalidHooks {
 		h(req, err)
 	}
-}
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// File struct and its methods
-//_______________________________________________________________________
-
-// File struct represents file information for multipart request
-type File struct {
-	Name      string
-	ParamName string
-	io.Reader
-}
-
-// String method returns the string value of current file details
-func (f *File) String() string {
-	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
-}
-
-// Clone method returns deep copy of f.
-func (f *File) Clone() *File {
-	ff := new(File)
-	*ff = *f
-	return ff
-}
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// MultipartField struct
-//_______________________________________________________________________
-
-// MultipartField struct represents the custom data part for a multipart request
-type MultipartField struct {
-	Param       string
-	FileName    string
-	ContentType string
-	io.Reader
-}
-
-// Clone method returns the deep copy of m except [io.Reader].
-func (m *MultipartField) Clone() *MultipartField {
-	mm := new(MultipartField)
-	*mm = *m
-	return mm
 }

@@ -7,7 +7,6 @@ package resty
 import (
 	"bytes"
 	"errors"
-	"mime/multipart"
 	"net/url"
 	"strings"
 	"testing"
@@ -77,20 +76,6 @@ func TestIsXMLContentType(t *testing.T) {
 			t.Errorf("failed on %q: want %v, got %v", test.input, test.expect, result)
 		}
 	}
-}
-
-func TestWriteMultipartFormFileReaderEmpty(t *testing.T) {
-	w := multipart.NewWriter(bytes.NewBuffer(nil))
-	defer func() { _ = w.Close() }()
-	if err := writeMultipartFormFile(w, "foo", "bar", bytes.NewReader(nil)); err != nil {
-		t.Errorf("Got unexpected error: %v", err)
-	}
-}
-
-func TestWriteMultipartFormFileReaderError(t *testing.T) {
-	err := writeMultipartFormFile(nil, "", "", &brokenReadCloser{})
-	assertNotNil(t, err)
-	assertEqual(t, "read error", err.Error())
 }
 
 func TestCloneURLValues(t *testing.T) {

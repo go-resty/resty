@@ -3,7 +3,6 @@ package resty
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -452,12 +451,6 @@ func Benchmark_parseRequestHeader(b *testing.B) {
 	}
 }
 
-type errorReader struct{}
-
-func (errorReader) Read(p []byte) (n int, err error) {
-	return 0, errors.New("fake")
-}
-
 func TestParseRequestBody(t *testing.T) {
 	for _, tt := range []struct {
 		name                  string
@@ -756,59 +749,6 @@ func TestParseRequestBody(t *testing.T) {
 			expectedContentLength: "41",
 		},
 		{
-			name: "multipart form data",
-			initClient: func(c *Client) {
-				c.SetFormData(map[string]string{
-					"foo": "1",
-					"bar": "2",
-				})
-			},
-			initRequest: func(r *Request) {
-				r.SetFormData(map[string]string{
-					"foo": "3",
-					"baz": "4",
-				})
-				r.SetMultipartFormData(map[string]string{
-					"foo": "5",
-					"xyz": "6",
-				}).SetContentLength(true)
-			},
-			expectedBodyBuf:       []byte(`{"bar":"2", "baz":"4", "foo":"5", "xyz":"6"}`),
-			expectedContentType:   "multipart/form-data; boundary=",
-			expectedContentLength: "744",
-		},
-		{
-			name: "multipart fields",
-			initRequest: func(r *Request) {
-				r.SetMultipartFields(
-					&MultipartField{
-						Param:       "foo",
-						ContentType: "text/plain",
-						Reader:      strings.NewReader("1"),
-					},
-					&MultipartField{
-						Param:       "bar",
-						ContentType: "text/plain",
-						Reader:      strings.NewReader("2"),
-					},
-				).SetContentLength(true)
-			},
-			expectedBodyBuf:       []byte(`{"bar":"2","foo":"1"}`),
-			expectedContentType:   "multipart/form-data; boundary=",
-			expectedContentLength: "344",
-		},
-		{
-			name: "multipart files",
-			initRequest: func(r *Request) {
-				r.SetFileReader("foo", "foo.txt", strings.NewReader("1")).
-					SetFileReader("bar", "bar.txt", strings.NewReader("2")).
-					SetContentLength(true)
-			},
-			expectedBodyBuf:       []byte(`{"bar":"2","foo":"1"}`),
-			expectedContentType:   "multipart/form-data; boundary=",
-			expectedContentLength: "414",
-		},
-		{
 			name: "body with errorReader",
 			initRequest: func(r *Request) {
 				r.SetBody(&errorReader{}).SetContentLength(true)
@@ -832,34 +772,6 @@ func TestParseRequestBody(t *testing.T) {
 					Foo: "1",
 					Bar: "2",
 				}).Header.Set(hdrContentTypeKey, "text/xml")
-			},
-			wantErr: true,
-		},
-		{
-			name: "multipart fields with errorReader",
-			initRequest: func(r *Request) {
-				r.SetMultipartFields(&MultipartField{
-					Param:       "foo",
-					ContentType: "text/plain",
-					Reader:      &errorReader{},
-				})
-			},
-			wantErr: true,
-		},
-		{
-			name: "multipart files with errorReader",
-			initRequest: func(r *Request) {
-				r.SetFileReader("foo", "foo.txt", &errorReader{})
-			},
-			wantErr: true,
-		},
-		{
-			name: "multipart with file not found",
-			initRequest: func(r *Request) {
-				r.SetFormData(map[string]string{
-					"@foo": "foo.txt",
-				})
-				r.isMultiPart = true
 			},
 			wantErr: true,
 		},
@@ -1075,7 +987,7 @@ func Benchmark_parseRequestBody_MultiPart(b *testing.B) {
 		SetFileReader("qwe", "qwe.txt", strings.NewReader("7")).
 		SetMultipartFields(
 			&MultipartField{
-				Param:       "sdj",
+				Name:        "sdj",
 				ContentType: "text/plain",
 				Reader:      strings.NewReader("8"),
 			},
