@@ -510,6 +510,8 @@ func createMultipart(w *multipart.Writer, r *Request) error {
 			return err
 		}
 
+		partWriter = mf.wrapProgressCallbackIfPresent(partWriter)
+
 		if _, err = partWriter.Write(p[:size]); err != nil {
 			return err
 		}

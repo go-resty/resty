@@ -358,10 +358,77 @@ func TestMultipartLargeFile(t *testing.T) {
 	})
 }
 
+func TestMultipartFieldProgressCallback(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
+
+	file1, _ := os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
+	file1Stat, _ := file1.Stat()
+
+	fileName2 := "50mbfile.bin"
+	filePath2 := createBinFile(fileName2, 50<<20)
+	defer cleanupFiles(filePath2)
+	file2, _ := os.Open(filePath2)
+	file2Stat, _ := file2.Stat()
+
+	fileName3 := "100mbfile.bin"
+	filePath3 := createBinFile(fileName3, 100<<20)
+	defer cleanupFiles(filePath3)
+	file3, _ := os.Open(filePath3)
+	file3Stat, _ := file3.Stat()
+
+	progressCallback := func(mp MultipartFieldProgress) {
+		t.Logf("%s\n", mp)
+	}
+
+	fields := []*MultipartField{
+		{
+			Name:             "test-image-1",
+			FileName:         "test-image-1.png",
+			ContentType:      "image/png",
+			Reader:           file1,
+			FileSize:         file1Stat.Size(),
+			ProgressCallback: progressCallback,
+		},
+		{
+			Name:             "50mbfile",
+			FileName:         fileName2,
+			Reader:           file2,
+			FileSize:         file2Stat.Size(),
+			ProgressCallback: progressCallback,
+		},
+		{
+			Name:             "100mbfile",
+			FileName:         fileName3,
+			Reader:           file3,
+			FileSize:         file3Stat.Size(),
+			ProgressCallback: progressCallback,
+		},
+	}
+
+	c := dcnld()
+
+	r := c.R().
+		SetFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M"}).
+		SetMultipartFields(fields...)
+	resp, err := r.Post(ts.URL + "/upload")
+
+	responseStr := resp.String()
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(responseStr, "test-image-1.png"))
+	assertEqual(t, true, strings.Contains(responseStr, "50mbfile.bin"))
+	assertEqual(t, true, strings.Contains(responseStr, "100mbfile.bin"))
+}
+
+var errTestErrorReader = errors.New("fake")
+
 type errorReader struct{}
 
 func (errorReader) Read(p []byte) (n int, err error) {
-	return 0, errors.New("fake")
+	return 0, errTestErrorReader
 }
 
 func TestMultipartReaderErrors(t *testing.T) {
@@ -369,8 +436,6 @@ func TestMultipartReaderErrors(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl().SetBaseURL(ts.URL)
-
-	testErr := errors.New("fake")
 
 	t.Run("multipart fields with errorReader", func(t *testing.T) {
 		resp, err := c.R().
@@ -382,7 +447,7 @@ func TestMultipartReaderErrors(t *testing.T) {
 			Post("/upload")
 
 		assertNotNil(t, err)
-		assertEqual(t, testErr, err)
+		assertEqual(t, errTestErrorReader, err)
 		assertNotNil(t, resp)
 		assertEqual(t, nil, resp.Body)
 	})
@@ -393,7 +458,7 @@ func TestMultipartReaderErrors(t *testing.T) {
 			Post("/upload")
 
 		assertNotNil(t, err)
-		assertEqual(t, testErr, err)
+		assertEqual(t, errTestErrorReader, err)
 		assertNotNil(t, resp)
 		assertEqual(t, nil, resp.Body)
 	})
@@ -410,6 +475,13 @@ func TestMultipartReaderErrors(t *testing.T) {
 	})
 }
 
+type returnValueTestWriter struct {
+}
+
+func (z *returnValueTestWriter) Write(p []byte) (n int, err error) {
+	return 0, nil
+}
+
 func TestMultipartCornerCoverage(t *testing.T) {
 	mf := &MultipartField{
 		Name:   "foo",
@@ -417,4 +489,10 @@ func TestMultipartCornerCoverage(t *testing.T) {
 	}
 	err := mf.resetReader()
 	assertNil(t, err)
+
+	// wrap test writer to return 0 written value
+	mpw := multipartProgressWriter{w: &returnValueTestWriter{}}
+	n, err := mpw.Write([]byte("test return value"))
+	assertNil(t, err)
+	assertEqual(t, 0, n)
 }
