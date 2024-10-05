@@ -429,6 +429,9 @@ func (r *Request) SetError(err any) *Request {
 
 // SetFile method sets a single file field name and its path for multipart upload.
 //
+// Resty provides an optional multipart live upload progress callback;
+// see method [Request.SetMultipartFields]
+//
 //	client.R().
 //		SetFile("my_file", "/Users/jeeva/Gas Bill - Sep.pdf")
 func (r *Request) SetFile(fieldName, filePath string) *Request {
@@ -436,12 +439,15 @@ func (r *Request) SetFile(fieldName, filePath string) *Request {
 	r.multipartFields = append(r.multipartFields, &MultipartField{
 		Name:     fieldName,
 		FileName: filepath.Base(filePath),
-		filePath: filePath,
+		FilePath: filePath,
 	})
 	return r
 }
 
 // SetFiles method sets multiple file field names and their paths for multipart uploads.
+//
+// Resty provides an optional multipart live upload progress callback;
+// see method [Request.SetMultipartFields]
 //
 //	client.R().
 //		SetFiles(map[string]string{
@@ -455,13 +461,16 @@ func (r *Request) SetFiles(files map[string]string) *Request {
 		r.multipartFields = append(r.multipartFields, &MultipartField{
 			Name:     f,
 			FileName: filepath.Base(fp),
-			filePath: fp,
+			FilePath: fp,
 		})
 	}
 	return r
 }
 
 // SetFileReader method is to set a file using [io.Reader] for multipart upload.
+//
+// Resty provides an optional multipart live upload progress callback;
+// see method [Request.SetMultipartFields]
 //
 //	client.R().
 //		SetFileReader("profile_img", "my-profile-img.png", bytes.NewReader(profileImgBytes)).
@@ -482,6 +491,9 @@ func (r *Request) SetMultipartFormData(data map[string]string) *Request {
 }
 
 // SetMultipartField method sets custom data with Content-Type using [io.Reader] for multipart upload.
+//
+// Resty provides an optional multipart live upload progress callback;
+// see method [Request.SetMultipartFields]
 func (r *Request) SetMultipartField(fieldName, fileName, contentType string, reader io.Reader) *Request {
 	r.isMultiPart = true
 	r.multipartFields = append(r.multipartFields, &MultipartField{
@@ -495,20 +507,41 @@ func (r *Request) SetMultipartField(fieldName, fileName, contentType string, rea
 
 // SetMultipartFields method sets multiple data fields using [io.Reader] for multipart upload.
 //
+// Resty provides an optional multipart live upload progress count in bytes; see
+// [MultipartField].ProgressCallback and [MultipartFieldProgress]
+//
 // For Example:
 //
 //	client.R().SetMultipartFields(
 //		&resty.MultipartField{
-//			Name:       "uploadManifest1",
+//			Name:        "uploadManifest1",
 //			FileName:    "upload-file-1.json",
 //			ContentType: "application/json",
 //			Reader:      strings.NewReader(`{"input": {"name": "Uploaded document 1", "_filename" : ["file1.txt"]}}`),
 //		},
 //		&resty.MultipartField{
-//			Name:       "uploadManifest2",
+//			Name:        "uploadManifest2",
 //			FileName:    "upload-file-2.json",
 //			ContentType: "application/json",
-//			Reader:      strings.NewReader(`{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`),
+//			FilePath:    "/path/to/upload-file-2.json",
+//		},
+//		&resty.MultipartField{
+//			Name:             "image-file1",
+//			FileName:         "image-file1.png",
+//			ContentType:      "image/png",
+//			Reader:           bytes.NewReader(fileBytes),
+//			ProgressCallback: func(mp MultipartFieldProgress) {
+//				// use the progress details
+//			},
+//		},
+//		&resty.MultipartField{
+//			Name:             "image-file2",
+//			FileName:         "image-file2.png",
+//			ContentType:      "image/png",
+//			Reader:           imageFile2, // instance of *os.File
+//			ProgressCallback: func(mp MultipartFieldProgress) {
+//				// use the progress details
+//			},
 //		})
 //
 // If you have a `slice` of fields already, then call-
