@@ -554,51 +554,97 @@ func TestClientPreRequestHookError(t *testing.T) {
 	assertNil(t, resp)
 }
 
-func TestClientAllowsGetMethodPayload(t *testing.T) {
+func TestClientAllowMethodGetPayload(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dcnl()
-	c.SetAllowGetMethodPayload(true)
-	c.SetPreRequestHook(func(*Client, *http.Request) error { return nil }) // for coverage
+	t.Run("method GET allow string payload at client level", func(t *testing.T) {
+		c := dcnl()
+		c.SetAllowMethodGetPayload(true)
+		assertEqual(t, true, c.AllowMethodGetPayload())
 
-	payload := "test-payload"
-	resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
+		payload := "test-payload"
+		resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, payload, resp.String())
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, payload, resp.String())
+	})
+
+	t.Run("method GET allow io.Reader payload at client level", func(t *testing.T) {
+		c := dcnl()
+		c.SetAllowMethodGetPayload(true)
+		assertEqual(t, true, c.AllowMethodGetPayload())
+
+		payload := "test-payload"
+		body := bytes.NewReader([]byte(payload))
+		resp, err := c.R().SetBody(body).Get(ts.URL + "/get-method-payload-test")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, payload, resp.String())
+	})
+
+	t.Run("method GET disallow payload at client level", func(t *testing.T) {
+		c := dcnl()
+		c.SetAllowMethodGetPayload(false)
+		assertEqual(t, false, c.AllowMethodGetPayload())
+
+		payload := bytes.NewReader([]byte("test-payload"))
+		resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "", resp.String())
+	})
 }
 
-func TestClientAllowsGetMethodPayloadIoReader(t *testing.T) {
-	ts := createGetServer(t)
+func TestClientAllowMethodDeletePayload(t *testing.T) {
+	ts := createGenericServer(t)
 	defer ts.Close()
 
-	c := dcnl()
-	c.SetAllowGetMethodPayload(true)
+	t.Run("method DELETE allow string payload at client level", func(t *testing.T) {
+		c := dcnl().SetBaseURL(ts.URL)
 
-	payload := "test-payload"
-	body := bytes.NewReader([]byte(payload))
-	resp, err := c.R().SetBody(body).Get(ts.URL + "/get-method-payload-test")
+		c.SetAllowMethodDeletePayload(true)
+		assertEqual(t, true, c.AllowMethodDeletePayload())
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, payload, resp.String())
-}
+		payload := "test-payload"
+		resp, err := c.R().SetBody(payload).Delete("/delete")
 
-func TestClientAllowsGetMethodPayloadDisabled(t *testing.T) {
-	ts := createGetServer(t)
-	defer ts.Close()
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, payload, resp.String())
+	})
 
-	c := dcnl()
-	c.SetAllowGetMethodPayload(false)
+	t.Run("method DELETE allow io.Reader payload at client level", func(t *testing.T) {
+		c := dcnl().SetBaseURL(ts.URL)
 
-	payload := bytes.NewReader([]byte("test-payload"))
-	resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
+		c.SetAllowMethodDeletePayload(true)
+		assertEqual(t, true, c.AllowMethodDeletePayload())
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, "", resp.String())
+		payload := "test-payload"
+		body := bytes.NewReader([]byte(payload))
+		resp, err := c.R().SetBody(body).Delete("/delete")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, payload, resp.String())
+	})
+
+	t.Run("method DELETE disallow payload at client level", func(t *testing.T) {
+		c := dcnl().SetBaseURL(ts.URL)
+
+		c.SetAllowMethodDeletePayload(false)
+		assertEqual(t, false, c.AllowMethodDeletePayload())
+
+		payload := bytes.NewReader([]byte("test-payload"))
+		resp, err := c.R().SetBody(payload).Delete("/delete")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "", resp.String())
+	})
 }
 
 func TestClientRoundTripper(t *testing.T) {

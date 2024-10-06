@@ -148,10 +148,6 @@ func firstNonEmpty(v ...string) string {
 	return ""
 }
 
-func isPayloadSupported(m string, allowMethodGet bool) bool {
-	return !(m == MethodHead || m == MethodOptions || (m == MethodGet && !allowMethodGet))
-}
-
 func createDirectory(dir string) (err error) {
 	if _, err = os.Stat(dir); err != nil {
 		if os.IsNotExist(err) {

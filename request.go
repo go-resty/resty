@@ -57,6 +57,8 @@ type Request struct {
 	ResponseBodyLimit          int64
 	ResponseBodyUnlimitedReads bool
 	IsTrace                    bool
+	AllowMethodGetPayload      bool
+	AllowMethodDeletePayload   bool
 
 	// Retry
 	RetryCount        int
@@ -1040,6 +1042,30 @@ func (r *Request) SetGenerateCurlOnDebug(b bool) *Request {
 	return r
 }
 
+// SetAllowMethodGetPayload method allows the GET method with payload on the request level.
+// By default, Resty does not allow.
+//
+//	client.R().SetAllowMethodGetPayload(true)
+//
+// It overrides the option set by the [Client.SetAllowMethodGetPayload]
+func (r *Request) SetAllowMethodGetPayload(allow bool) *Request {
+	r.AllowMethodGetPayload = allow
+	return r
+}
+
+// SetAllowMethodDeletePayload method allows the DELETE method with payload on the request level.
+// By default, Resty does not allow.
+//
+//	client.R().SetAllowMethodDeletePayload(true)
+//
+// More info, refer to GH#881
+//
+// It overrides the option set by the [Client.SetAllowMethodDeletePayload]
+func (r *Request) SetAllowMethodDeletePayload(allow bool) *Request {
+	r.AllowMethodDeletePayload = allow
+	return r
+}
+
 // TraceInfo method returns the trace info for the request.
 // If either the [Client.EnableTrace] or [Request.EnableTrace] function has not been called
 // before the request is made, an empty [resty.TraceInfo] object is returned.
@@ -1123,11 +1149,6 @@ func (r *Request) Patch(url string) (*Response, error) {
 // Delete method does DELETE HTTP request. It's defined in section 4.3.5 of RFC7231.
 func (r *Request) Delete(url string) (*Response, error) {
 	return r.Execute(MethodDelete, url)
-}
-
-// Connect method does CONNECT HTTP request. It's defined in section 4.3.6 of RFC7231.
-func (r *Request) Connect(url string) (*Response, error) {
-	return r.Execute(MethodConnect, url)
 }
 
 // Options method does OPTIONS HTTP request. It's defined in section 4.3.7 of RFC7231.
@@ -1328,7 +1349,7 @@ func (s *SRVRecord) Clone() *SRVRecord {
 
 func (r *Request) fmtBodyString(sl int) (body string) {
 	body = "***** NO CONTENT *****"
-	if !isPayloadSupported(r.Method, r.client.AllowGetMethodPayload()) {
+	if !r.isPayloadSupported() {
 		return
 	}
 
@@ -1433,6 +1454,27 @@ func (r *Request) writeFormData(w *multipart.Writer) error {
 		}
 	}
 	return nil
+}
+
+func (r *Request) isPayloadSupported() bool {
+	if r.Method == "" {
+		r.Method = MethodGet
+	}
+
+	if r.Method == MethodGet && r.AllowMethodGetPayload {
+		return true
+	}
+
+	// More info, refer to GH#881
+	if r.Method == MethodDelete && r.AllowMethodDeletePayload {
+		return true
+	}
+
+	if r.Method == MethodPost || r.Method == MethodPut || r.Method == MethodPatch {
+		return true
+	}
+
+	return false
 }
 
 func jsonIndent(v []byte) []byte {

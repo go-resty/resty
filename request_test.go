@@ -1057,15 +1057,6 @@ func TestHttpMethods(t *testing.T) {
 
 		assertEqual(t, "", resp.String())
 	})
-
-	t.Run("connect method", func(t *testing.T) {
-		resp, err := dcnldr().Connect(ts.URL + "/connect")
-
-		assertError(t, err)
-		assertEqual(t, http.StatusOK, resp.StatusCode())
-
-		assertEqual(t, "", resp.String())
-	})
 }
 
 func TestSendMethod(t *testing.T) {
@@ -2101,6 +2092,87 @@ func TestResponseBodyUnlimitedReads(t *testing.T) {
 	}
 
 	logResponse(t, resp)
+}
+
+func TestRequestAllowPayload(t *testing.T) {
+	c := dcnl()
+
+	t.Run("default method is GET", func(t *testing.T) {
+		r := c.R()
+		result1 := r.isPayloadSupported()
+		assertEqual(t, false, result1)
+
+		r.SetAllowMethodGetPayload(true)
+		result2 := r.isPayloadSupported()
+		assertEqual(t, true, result2)
+	})
+
+	t.Run("method GET", func(t *testing.T) {
+		r := c.R().
+			SetMethod(MethodGet)
+
+		result1 := r.isPayloadSupported()
+		assertEqual(t, false, result1)
+
+		r.SetAllowMethodGetPayload(true)
+		result2 := r.isPayloadSupported()
+		assertEqual(t, true, result2)
+	})
+
+	t.Run("method POST", func(t *testing.T) {
+		r := c.R().
+			SetMethod(MethodPost)
+		result1 := r.isPayloadSupported()
+		assertEqual(t, true, result1)
+	})
+
+	t.Run("method PUT", func(t *testing.T) {
+		r := c.R().
+			SetMethod(MethodPut)
+		result1 := r.isPayloadSupported()
+		assertEqual(t, true, result1)
+	})
+
+	t.Run("method PATCH", func(t *testing.T) {
+		r := c.R().
+			SetMethod(MethodPatch)
+		result1 := r.isPayloadSupported()
+		assertEqual(t, true, result1)
+	})
+
+	t.Run("method DELETE", func(t *testing.T) {
+		r := c.R().
+			SetMethod(MethodDelete)
+
+		result1 := r.isPayloadSupported()
+		assertEqual(t, false, result1)
+
+		r.SetAllowMethodDeletePayload(true)
+		result2 := r.isPayloadSupported()
+		assertEqual(t, true, result2)
+	})
+
+	t.Run("method HEAD", func(t *testing.T) {
+		r := c.R().
+			SetMethod(MethodHead)
+		result1 := r.isPayloadSupported()
+		assertEqual(t, false, result1)
+	})
+
+	t.Run("method OPTIONS", func(t *testing.T) {
+		r := c.R().
+			SetMethod(MethodOptions)
+		result1 := r.isPayloadSupported()
+		assertEqual(t, false, result1)
+	})
+
+	t.Run("method TRACE", func(t *testing.T) {
+		r := c.R().
+			SetMethod(MethodTrace)
+		result1 := r.isPayloadSupported()
+		assertEqual(t, false, result1)
+	})
+
 }
 
 func TestRequestPanicContext(t *testing.T) {
