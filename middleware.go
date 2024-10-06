@@ -194,7 +194,7 @@ func parseRequestBody(c *Client, r *Request) error {
 			}
 		}
 	} else {
-		r.Body = nil // if payload not support by HTTP verb set explict nil
+		r.Body = nil // if the payload is not supported by HTTP verb, set explicit nil
 	}
 
 	// by default resty won't set content length, you can if you want to :)
