@@ -46,9 +46,6 @@ const (
 
 	// MethodTrace HTTP method
 	MethodTrace = "TRACE"
-
-	// MethodConnect HTTP method
-	MethodConnect = "CONNECT"
 )
 
 var (
@@ -157,58 +154,59 @@ type TransportSettings struct {
 // Resty also provides an option to override most of the client settings
 // at [Request] level.
 type Client struct {
-	lock                    *sync.RWMutex
-	baseURL                 string
-	queryParams             url.Values
-	formData                url.Values
-	pathParams              map[string]string
-	rawPathParams           map[string]string
-	header                  http.Header
-	userInfo                *User
-	authToken               string
-	authScheme              string
-	cookies                 []*http.Cookie
-	errorType               reflect.Type
-	debug                   bool
-	disableWarn             bool
-	allowGetMethodPayload   bool
-	retryCount              int
-	retryWaitTime           time.Duration
-	retryMaxWaitTime        time.Duration
-	retryConditions         []RetryConditionFunc
-	retryHooks              []OnRetryFunc
-	retryAfter              RetryAfterFunc
-	retryResetReaders       bool
-	headerAuthorizationKey  string
-	responseBodyLimit       int64
-	resBodyUnlimitedReads   bool
-	jsonEscapeHTML          bool
-	setContentLength        bool
-	closeConnection         bool
-	notParseResponse        bool
-	isTrace                 bool
-	debugBodyLimit          int
-	outputDirectory         string
-	scheme                  string
-	log                     Logger
-	ctx                     context.Context
-	httpClient              *http.Client
-	proxyURL                *url.URL
-	requestLog              RequestLogCallback
-	responseLog             ResponseLogCallback
-	rateLimiter             RateLimiter
-	generateCurlOnDebug     bool
-	beforeRequest           []RequestMiddleware
-	udBeforeRequest         []RequestMiddleware
-	afterResponse           []ResponseMiddleware
-	errorHooks              []ErrorHook
-	invalidHooks            []ErrorHook
-	panicHooks              []ErrorHook
-	successHooks            []SuccessHook
-	contentTypeEncoders     map[string]ContentTypeEncoder
-	contentTypeDecoders     map[string]ContentTypeDecoder
-	contentDecompressorKeys []string
-	contentDecompressors    map[string]ContentDecompressor
+	lock                     *sync.RWMutex
+	baseURL                  string
+	queryParams              url.Values
+	formData                 url.Values
+	pathParams               map[string]string
+	rawPathParams            map[string]string
+	header                   http.Header
+	userInfo                 *User
+	authToken                string
+	authScheme               string
+	cookies                  []*http.Cookie
+	errorType                reflect.Type
+	debug                    bool
+	disableWarn              bool
+	allowMethodGetPayload    bool
+	allowMethodDeletePayload bool
+	retryCount               int
+	retryWaitTime            time.Duration
+	retryMaxWaitTime         time.Duration
+	retryConditions          []RetryConditionFunc
+	retryHooks               []OnRetryFunc
+	retryAfter               RetryAfterFunc
+	retryResetReaders        bool
+	headerAuthorizationKey   string
+	responseBodyLimit        int64
+	resBodyUnlimitedReads    bool
+	jsonEscapeHTML           bool
+	setContentLength         bool
+	closeConnection          bool
+	notParseResponse         bool
+	isTrace                  bool
+	debugBodyLimit           int
+	outputDirectory          string
+	scheme                   string
+	log                      Logger
+	ctx                      context.Context
+	httpClient               *http.Client
+	proxyURL                 *url.URL
+	requestLog               RequestLogCallback
+	responseLog              ResponseLogCallback
+	rateLimiter              RateLimiter
+	generateCurlOnDebug      bool
+	beforeRequest            []RequestMiddleware
+	udBeforeRequest          []RequestMiddleware
+	afterResponse            []ResponseMiddleware
+	errorHooks               []ErrorHook
+	invalidHooks             []ErrorHook
+	panicHooks               []ErrorHook
+	successHooks             []SuccessHook
+	contentTypeEncoders      map[string]ContentTypeEncoder
+	contentTypeDecoders      map[string]ContentTypeDecoder
+	contentDecompressorKeys  []string
+	contentDecompressors     map[string]ContentDecompressor
 
 	// TODO don't put mutex now, it may go away
 	preReqHook PreRequestHook
@@ -614,6 +612,8 @@ func (c *Client) R() *Request {
 		DebugBodyLimit:             c.debugBodyLimit,
 		ResponseBodyLimit:          c.responseBodyLimit,
 		ResponseBodyUnlimitedReads: c.resBodyUnlimitedReads,
+		AllowMethodGetPayload:      c.allowMethodGetPayload,
+		AllowMethodDeletePayload:   c.allowMethodDeletePayload,
 
 		client:              c,
 		multipartFields:     make([]*MultipartField, 0),
@@ -972,23 +972,49 @@ func (c *Client) SetDisableWarn(d bool) *Client {
 	return c
 }
 
-// AllowGetMethodPayload method returns `true` if the client is enabled to allow
+// AllowMethodGetPayload method returns `true` if the client is enabled to allow
 // payload with GET method; otherwise, it is `false`.
-func (c *Client) AllowGetMethodPayload() bool {
+func (c *Client) AllowMethodGetPayload() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.allowGetMethodPayload
+	return c.allowMethodGetPayload
 }
 
-// SetAllowGetMethodPayload method allows the GET method with payload on the Resty client.
+// SetAllowMethodGetPayload method allows the GET method with payload on the Resty client.
+// By default, Resty does not allow.
 //
-// For example, Resty allows the user to send a request with a payload using the HTTP GET method.
+//	client.SetAllowMethodGetPayload(true)
 //
-//	client.SetAllowGetMethodPayload(true)
-func (c *Client) SetAllowGetMethodPayload(a bool) *Client {
+// It can be overridden at the request level. See [Request.SetAllowMethodGetPayload]
+func (c *Client) SetAllowMethodGetPayload(allow bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.allowGetMethodPayload = a
+	c.allowMethodGetPayload = allow
+	return c
+}
+
+// AllowMethodDeletePayload method returns `true` if the client is enabled to allow
+// payload with DELETE method; otherwise, it is `false`.
+//
+// More info, refer to GH#881
+func (c *Client) AllowMethodDeletePayload() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.allowMethodDeletePayload
+}
+
+// SetAllowMethodDeletePayload method allows the DELETE method with payload on the Resty client.
+// By default, Resty does not allow.
+//
+//	client.SetAllowMethodDeletePayload(true)
+//
+// More info, refer to GH#881
+//
+// It can be overridden at the request level. See [Request.SetAllowMethodDeletePayload]
+func (c *Client) SetAllowMethodDeletePayload(allow bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.allowMethodDeletePayload = allow
 	return c
 }
 

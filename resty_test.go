@@ -672,8 +672,12 @@ func createGenericServer(t *testing.T) *httptest.Server {
 			return
 		}
 
-		if r.Method == MethodConnect && r.URL.Path == "/connect" {
-			w.WriteHeader(http.StatusOK)
+		if r.Method == MethodDelete && r.URL.Path == "/delete" {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("Error: could not read get body: %s", err.Error())
+			}
+			_, _ = w.Write(body)
 			return
 		}
 	})

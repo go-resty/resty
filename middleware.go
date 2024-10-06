@@ -180,7 +180,7 @@ func parseRequestHeader(c *Client, r *Request) error {
 }
 
 func parseRequestBody(c *Client, r *Request) error {
-	if isPayloadSupported(r.Method, c.AllowGetMethodPayload()) {
+	if r.isPayloadSupported() {
 		switch {
 		case r.isMultiPart: // Handling Multipart
 			if err := handleMultipart(c, r); err != nil {
@@ -199,9 +199,9 @@ func parseRequestBody(c *Client, r *Request) error {
 
 	// by default resty won't set content length, you can if you want to :)
 	if r.setContentLength {
-		if r.bodyBuf == nil {
+		if r.bodyBuf == nil && r.Body == nil {
 			r.Header.Set(hdrContentLengthKey, "0")
-		} else {
+		} else if r.bodyBuf != nil {
 			r.Header.Set(hdrContentLengthKey, strconv.Itoa(r.bodyBuf.Len()))
 		}
 	}
