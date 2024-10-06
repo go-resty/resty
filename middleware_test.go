@@ -598,28 +598,6 @@ func TestParseRequestBody(t *testing.T) {
 			expectedContentType: jsonContentType,
 		},
 		{
-			name: "io.Reader body with SetContentLength by request",
-			initRequest: func(r *Request) {
-				r.SetBody(bytes.NewBufferString("foo")).
-					SetContentLength(true)
-			},
-			expectedBodyBuf:       []byte("foo"),
-			expectedContentLength: "3",
-			expectedContentType:   jsonContentType,
-		},
-		{
-			name: "io.Reader body with SetContentLength by client",
-			initClient: func(c *Client) {
-				c.SetContentLength(true)
-			},
-			initRequest: func(r *Request) {
-				r.SetBody(bytes.NewBufferString("foo"))
-			},
-			expectedBodyBuf:       []byte("foo"),
-			expectedContentLength: "3",
-			expectedContentType:   jsonContentType,
-		},
-		{
 			name: "form data by request",
 			initRequest: func(r *Request) {
 				r.SetFormData(map[string]string{
@@ -747,13 +725,6 @@ func TestParseRequestBody(t *testing.T) {
 			expectedBodyBuf:       []byte(`<FooBar><foo>1</foo><bar>2</bar></FooBar>`),
 			expectedContentType:   "text/xml",
 			expectedContentLength: "41",
-		},
-		{
-			name: "body with errorReader",
-			initRequest: func(r *Request) {
-				r.SetBody(&errorReader{}).SetContentLength(true)
-			},
-			wantErr: true,
 		},
 		{
 			name: "unsupported type",

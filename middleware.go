@@ -193,6 +193,8 @@ func parseRequestBody(c *Client, r *Request) error {
 				return err
 			}
 		}
+	} else {
+		r.Body = nil // if the payload is not supported by HTTP verb, set explicit nil
 	}
 
 	// by default resty won't set content length, you can if you want to :)
@@ -212,10 +214,8 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	r.initClientTrace()
 
 	if r.bodyBuf == nil {
-		if reader, ok := r.Body.(io.Reader); ok && isPayloadSupported(r.Method, c.AllowGetMethodPayload()) {
+		if reader, ok := r.Body.(io.Reader); ok {
 			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, reader)
-		} else if r.setContentLength {
-			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, http.NoBody)
 		} else {
 			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, nil)
 		}
@@ -552,20 +552,10 @@ func handleRequestBody(c *Client, r *Request) error {
 	r.bodyBuf = acquireBuffer()
 
 	switch body := r.Body.(type) {
-	case io.Reader:
-		// TODO create pass through reader to capture content-length, really needed??
-		if r.setContentLength { // keep backward compatibility
-			if _, err := r.bodyBuf.ReadFrom(body); err != nil {
-				releaseBuffer(r.bodyBuf)
-				return err
-			}
-			r.Body = nil
-		} else {
-			// Otherwise buffer less processing for `io.Reader`, sounds good.
-			releaseBuffer(r.bodyBuf)
-			r.bodyBuf = nil
-			return nil
-		}
+	case io.Reader: // Resty v3 onwards io.Reader used as-is with the request body
+		releaseBuffer(r.bodyBuf)
+		r.bodyBuf = nil
+		return nil
 	case []byte:
 		r.bodyBuf.Write(body)
 	case string:
