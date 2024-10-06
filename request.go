@@ -1043,7 +1043,7 @@ func (r *Request) SetGenerateCurlOnDebug(b bool) *Request {
 }
 
 // SetAllowMethodGetPayload method allows the GET method with payload on the request level.
-// By default, it does not allow.
+// By default, Resty does not allow.
 //
 //	client.R().SetAllowMethodGetPayload(true)
 //
@@ -1054,7 +1054,7 @@ func (r *Request) SetAllowMethodGetPayload(allow bool) *Request {
 }
 
 // SetAllowMethodDeletePayload method allows the DELETE method with payload on the request level.
-// By default, it does not allow.
+// By default, Resty does not allow.
 //
 //	client.R().SetAllowMethodDeletePayload(true)
 //
