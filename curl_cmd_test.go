@@ -1,8 +1,10 @@
 package resty
 
 import (
+	"bytes"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"strings"
 	"testing"
@@ -133,4 +135,113 @@ func captureStderr() (getOutput func() string, restore func()) {
 		w.Close()
 	}
 	return getOutput, restore
+}
+
+func TestBuildCurlCommand(t *testing.T) {
+	tests := []struct {
+		name     string
+		method   string
+		url      string
+		headers  map[string]string
+		body     string
+		cookies  []*http.Cookie
+		expected string
+	}{
+		{
+			name:     "With Headers",
+			method:   "GET",
+			url:      "http://example.com",
+			headers:  map[string]string{"Content-Type": "application/json", "Authorization": "Bearer token"},
+			expected: "curl -X GET -H 'Authorization: Bearer token' -H 'Content-Type: application/json' http://example.com",
+		},
+		{
+			name:     "With Body",
+			method:   "POST",
+			url:      "http://example.com",
+			headers:  map[string]string{"Content-Type": "application/json"},
+			body:     `{"key":"value"}`,
+			expected: "curl -X POST -H 'Content-Type: application/json' -d '{\"key\":\"value\"}' http://example.com",
+		},
+		{
+			name:     "With Empty Body",
+			method:   "POST",
+			url:      "http://example.com",
+			headers:  map[string]string{"Content-Type": "application/json"},
+			expected: "curl -X POST -H 'Content-Type: application/json' http://example.com",
+		},
+		{
+			name:     "With Query Params",
+			method:   "GET",
+			url:      "http://example.com?param1=value1&param2=value2",
+			expected: "curl -X GET 'http://example.com?param1=value1&param2=value2'",
+		},
+		{
+			name:     "With Special Characters in URL",
+			method:   "GET",
+			url:      "http://example.com/path with spaces",
+			expected: "curl -X GET http://example.com/path%20with%20spaces",
+		},
+		{
+			name:     "With Cookies",
+			method:   "GET",
+			url:      "http://example.com",
+			cookies:  []*http.Cookie{{Name: "session_id", Value: "abc123"}},
+			expected: "curl -X GET -H 'Cookie: session_id=abc123' http://example.com",
+		},
+		{
+			name:     "Without Cookies",
+			method:   "GET",
+			url:      "http://example.com",
+			expected: "curl -X GET http://example.com",
+		},
+		{
+			name:     "With Multiple Cookies",
+			method:   "GET",
+			url:      "http://example.com",
+			cookies:  []*http.Cookie{{Name: "session_id", Value: "abc123"}, {Name: "user_id", Value: "user456"}},
+			expected: "curl -X GET -H 'Cookie: session_id=abc123&user_id=user456' http://example.com",
+		},
+		{
+			name:     "With Empty Cookie Jar",
+			method:   "GET",
+			url:      "http://example.com",
+			expected: "curl -X GET http://example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup request
+			var (
+				req *http.Request
+				err error
+			)
+
+			if tt.body != "" {
+				req, err = http.NewRequest(tt.method, tt.url, bytes.NewBufferString(tt.body))
+			} else {
+				req, err = http.NewRequest(tt.method, tt.url, nil)
+			}
+
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
+
+			for k, v := range tt.headers {
+				req.Header.Set(k, v)
+			}
+
+			// Setup cookie jar
+			cookieJar, _ := cookiejar.New(nil)
+			if len(tt.cookies) > 0 {
+				cookieJar.SetCookies(req.URL, tt.cookies)
+			}
+
+			// Generate curl command
+			curl := buildCurlRequest(req, cookieJar)
+
+			// Assert
+			assertEqual(t, tt.expected, curl)
+		})
+	}
 }
