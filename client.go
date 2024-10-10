@@ -155,6 +155,7 @@ type Client struct {
 	panicHooks          []ErrorHook
 	rateLimiter         RateLimiter
 	generateCurlOnDebug bool
+	unescapeQueryParams bool
 }
 
 // User type is to hold an username and password information
@@ -325,6 +326,17 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 	return c
 }
 
+// SetUnescapeQueryParams method sets the unescape query parameters choice for request URL.
+// To prevent broken URL, resty replaces space (" ") with "+" in the query parameters.
+//
+// See [Request.SetUnescapeQueryParams]
+//
+// NOTE: Request failure is possible due to non-standard usage of Unescaped Query Parameters.
+func (c *Client) SetUnescapeQueryParams(unescape bool) *Client {
+	c.unescapeQueryParams = unescape
+	return c
+}
+
 // SetFormData method sets Form parameters and their values in the client instance.
 // It applies only to HTTP methods `POST` and `PUT`, and the request content type would be set as
 // `application/x-www-form-urlencoded`. These form data will be added to all the requests raised from
@@ -446,6 +458,7 @@ func (c *Client) R() *Request {
 		log:                 c.log,
 		responseBodyLimit:   c.ResponseBodyLimit,
 		generateCurlOnDebug: c.generateCurlOnDebug,
+		unescapeQueryParams: c.unescapeQueryParams,
 	}
 	return r
 }
