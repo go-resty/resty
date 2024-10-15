@@ -11,7 +11,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -1456,34 +1455,6 @@ func TestContextInternal(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
-func TestSRV(t *testing.T) {
-	c := dcnl().
-		SetRedirectPolicy(FlexibleRedirectPolicy(20)).
-		SetScheme("http")
-
-	r := c.R().
-		SetSRV(&SRVRecord{"xmpp-server", "google.com"})
-
-	assertEqual(t, "xmpp-server", r.SRV.Service)
-	assertEqual(t, "google.com", r.SRV.Domain)
-
-	resp, err := r.Get("/")
-	if err == nil {
-		assertError(t, err)
-		assertNotNil(t, resp)
-		assertEqual(t, http.StatusOK, resp.StatusCode())
-	}
-}
-
-func TestSRVInvalidService(t *testing.T) {
-	_, err := dcnl().R().
-		SetSRV(&SRVRecord{"nonexistantservice", "sampledomain"}).
-		Get("/")
-
-	assertNotNil(t, err)
-	assertType(t, net.DNSError{}, err)
-}
-
 func TestRequestDoNotParseResponse(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
@@ -2049,16 +2020,6 @@ func TestRequestClone(t *testing.T) {
 	assertNil(t, clone.RawRequest)
 	assertNotNil(t, parent.RawRequest)
 	assertNotEqual(t, parent.RawRequest, clone.RawRequest)
-
-	// test SRV
-	parent = c.R()
-	parent.SetSRV(&SRVRecord{"xmpp-server", "google.com"})
-
-	clone = parent.Clone(context.Background())
-	clone.SRV.Service = "xmpp-server-clone"
-
-	assertEqual(t, "xmpp-server", parent.SRV.Service)
-	assertEqual(t, "xmpp-server-clone", clone.SRV.Service)
 }
 
 func TestResponseBodyUnlimitedReads(t *testing.T) {
@@ -2199,10 +2160,6 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	c.R().SetCloseConnection(true)
 
 	c.R().DisableTrace()
-
-	srv := []*net.SRV{}
-	srv = append(srv, &net.SRV{})
-	c.R().selectAddr(srv, "/", 1)
 
 	c.R().SetResponseBodyUnlimitedReads(true)
 

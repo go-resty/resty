@@ -105,15 +105,25 @@ func parseRequestURL(c *Client, r *Request) error {
 		return err
 	}
 
-	// If Request.URL is relative path then added c.HostURL into
-	// the request URL otherwise Request.URL will be used as-is
+	// If [Request.URL] is a relative path, then the following
+	// gets evaluated in the order
+	//	1. [Client.LoadBalancer] is used to obtain the base URL if not nil
+	//	2. [Client.BaseURL] is used to obtain the base URL
+	//	3. Otherwise [Request.URL] is used as-is
 	if !reqURL.IsAbs() {
 		r.URL = reqURL.String()
 		if len(r.URL) > 0 && r.URL[0] != '/' {
 			r.URL = "/" + r.URL
 		}
 
-		reqURL, err = url.Parse(c.BaseURL() + r.URL)
+		if r.client.LoadBalancer() != nil {
+			r.baseURL, err = r.client.LoadBalancer().Next()
+			if err != nil {
+				return err
+			}
+		}
+
+		reqURL, err = url.Parse(r.baseURL + r.URL)
 		if err != nil {
 			return err
 		}

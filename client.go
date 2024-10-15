@@ -196,6 +196,7 @@ type Client struct {
 	responseLog              ResponseLogCallback
 	rateLimiter              RateLimiter
 	generateCurlOnDebug      bool
+	loadBalancer             LoadBalancer
 	beforeRequest            []RequestMiddleware
 	udBeforeRequest          []RequestMiddleware
 	afterResponse            []ResponseMiddleware
@@ -247,6 +248,22 @@ func (c *Client) SetBaseURL(url string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.baseURL = strings.TrimRight(url, "/")
+	return c
+}
+
+// LoadBalancer method returns the requestload balancer instance from the client
+// instance. Otherwise returns nil.
+func (c *Client) LoadBalancer() LoadBalancer {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.loadBalancer
+}
+
+// SetLoadBalancer method is used to set the new request load balancer into the client.
+func (c *Client) SetLoadBalancer(b LoadBalancer) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.loadBalancer = b
 	return c
 }
 
@@ -616,6 +633,7 @@ func (c *Client) R() *Request {
 		AllowMethodDeletePayload:   c.allowMethodDeletePayload,
 
 		client:              c,
+		baseURL:             c.baseURL,
 		multipartFields:     make([]*MultipartField, 0),
 		jsonEscapeHTML:      c.jsonEscapeHTML,
 		log:                 c.log,
