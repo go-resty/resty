@@ -1377,10 +1377,13 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 
 // SetRootCertificateWatcher enables dynamic reloading of one or more root certificates.
 // It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+// The caller is responsible for calling Close to stop the watcher.
 //
 //	client.SetRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
-//			PoolInterval: time.Hours * 24,
+//			PoolInterval: time.Hour * 24,
 //	})
+//
+// defer client.Close()
 func (c *Client) SetRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
 	c.SetRootCertificate(pemFilePath)
 	c.initCertWatcher(pemFilePath, "root", options)
@@ -1416,12 +1419,14 @@ type CertWatcherOptions struct {
 	PoolInterval time.Duration
 }
 
-// SetClientRootCertificateWatcher enables dynamic reloading of one or more rclient oot certificates.
+// SetClientRootCertificateWatcher enables dynamic reloading of one or more client root certificates.
 // It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+// The caller is responsible for calling Close to stop the watcher.
 //
 //	client.SetClientRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
-//			PoolInterval: time.Hours * 24,
-//	})
+//			PoolInterval: time.Hour * 24,
+//		})
+//		defer client.Close()
 func (c *Client) SetClientRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
 	c.SetClientRootCertificate(pemFilePath)
 	c.initCertWatcher(pemFilePath, "client", options)
