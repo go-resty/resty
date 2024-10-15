@@ -44,7 +44,7 @@
   * Custom [Root Certificates](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.SetRootCertificate) and Client [Certificates](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.SetCertificates)
   * Download/Save HTTP response directly into File, like `curl -o` flag. See [SetOutputDirectory](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.SetOutputDirectory) & [SetOutput](https://pkg.go.dev/github.com/go-resty/resty/v2#Request.SetOutput).
   * Cookies for your request and CookieJar support
-  * SRV Record based request instead of Host URL
+  * SRV Record based request instead of Host URL TODO move it
   * Client settings like `Timeout`, `RedirectPolicy`, `Proxy`, `TLSClientConfig`, `Transport`, etc.
   * Optionally allows GET request with payload, see [SetAllowGetMethodPayload](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.SetAllowGetMethodPayload)
   * Supports registering external JSON library into resty, see [how to use](https://github.com/go-resty/resty/issues/76#issuecomment-314015250)
@@ -77,8 +77,10 @@
     * Backoff Retry
     * Conditional Retry
     * Since v2.6.0, Retry Hooks - [Client](https://pkg.go.dev/github.com/go-resty/resty/v2#Client.AddRetryHook), [Request](https://pkg.go.dev/github.com/go-resty/resty/v2#Request.AddRetryHook)
-  * SRV Record based request instead of Host URL [how to use](resty_test.go#L1412)
+  * SRV Record based request instead of Host URL [how to use](resty_test.go#L1412) TODO move it
   * etc (upcoming - throw your idea's [here](https://github.com/go-resty/resty/issues)).
+  * Load Balancer - TODO Add documentation before release
+
 
 
 #### Supported Go Versions

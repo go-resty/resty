@@ -16,23 +16,26 @@ import (
 func Test_parseRequestURL(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
-		init        func(c *Client, r *Request)
+		initClient  func(c *Client)
+		initRequest func(r *Request)
 		expectedURL string
 	}{
 		{
 			name: "apply client path parameters",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetPathParams(map[string]string{
 					"foo": "1",
 					"bar": "2/3",
 				})
+			},
+			initRequest: func(r *Request) {
 				r.URL = "https://example.com/{foo}/{bar}"
 			},
 			expectedURL: "https://example.com/1/2%2F3",
 		},
 		{
 			name: "apply request path parameters",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetPathParams(map[string]string{
 					"foo": "4",
 					"bar": "5/6",
@@ -43,11 +46,13 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "apply request and client path parameters",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetPathParams(map[string]string{
 					"foo": "1", // ignored, because of the request's "foo"
 					"bar": "2/3",
 				})
+			},
+			initRequest: func(r *Request) {
 				r.SetPathParams(map[string]string{
 					"foo": "4/5",
 				})
@@ -57,18 +62,20 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "apply client raw path parameters",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetRawPathParams(map[string]string{
 					"foo": "1/2",
 					"bar": "3",
 				})
+			},
+			initRequest: func(r *Request) {
 				r.URL = "https://example.com/{foo}/{bar}"
 			},
 			expectedURL: "https://example.com/1/2/3",
 		},
 		{
 			name: "apply request raw path parameters",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetRawPathParams(map[string]string{
 					"foo": "4",
 					"bar": "5/6",
@@ -79,11 +86,13 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "apply request and client raw path parameters",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetRawPathParams(map[string]string{
 					"foo": "1", // ignored, because of the request's "foo"
 					"bar": "2/3",
 				})
+			},
+			initRequest: func(r *Request) {
 				r.SetRawPathParams(map[string]string{
 					"foo": "4/5",
 				})
@@ -93,7 +102,7 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "apply request path and raw path parameters",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetPathParams(map[string]string{
 					"foo": "4/5",
 				}).SetRawPathParams(map[string]string{
@@ -106,7 +115,7 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "empty path parameter in URL",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetPathParams(map[string]string{
 					"bar": "4",
 				})
@@ -116,7 +125,7 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "not closed path parameter in URL",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetPathParams(map[string]string{
 					"foo": "4",
 				})
@@ -126,7 +135,7 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "extra path parameter in URL",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetPathParams(map[string]string{
 					"foo": "1",
 				})
@@ -136,7 +145,7 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: " path parameter with remainder",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetPathParams(map[string]string{
 					"foo": "1",
 				})
@@ -146,8 +155,10 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "using base url with path param at index 0",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetBaseURL("https://example.com/prefix")
+			},
+			initRequest: func(r *Request) {
 				r.SetPathParam("first", "1").
 					SetPathParam("second", "2")
 				r.URL = "{first}/{second}"
@@ -156,73 +167,88 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "using BaseURL with absolute URL in request",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetBaseURL("https://foo.bar") // ignored
+			},
+			initRequest: func(r *Request) {
 				r.URL = "https://example.com/"
 			},
 			expectedURL: "https://example.com/",
 		},
 		{
 			name: "using BaseURL with relative path in request URL without leading slash",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetBaseURL("https://example.com")
+			},
+			initRequest: func(r *Request) {
 				r.URL = "foo/bar"
 			},
 			expectedURL: "https://example.com/foo/bar",
 		},
 		{
 			name: "using BaseURL with relative path in request URL wit leading slash",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetBaseURL("https://example.com")
+			},
+			initRequest: func(r *Request) {
 				r.URL = "/foo/bar"
 			},
 			expectedURL: "https://example.com/foo/bar",
 		},
 		{
 			name: "using deprecated HostURL with relative path in request URL",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetBaseURL("https://example.com")
+			},
+			initRequest: func(r *Request) {
 				r.URL = "foo/bar"
 			},
 			expectedURL: "https://example.com/foo/bar",
 		},
 		{
 			name: "request URL without scheme",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.URL = "example.com/foo/bar"
 			},
 			expectedURL: "/example.com/foo/bar",
 		},
 		{
 			name: "BaseURL without scheme",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetBaseURL("example.com")
+			},
+			initRequest: func(r *Request) {
 				r.URL = "foo/bar"
 			},
 			expectedURL: "example.com/foo/bar",
 		},
 		{
 			name: "using SetScheme and BaseURL without scheme",
-			init: func(c *Client, r *Request) {
-				c.SetBaseURL("example.com").SetScheme("https")
+			initClient: func(c *Client) {
+				c.SetBaseURL("example.com").
+					SetScheme("https")
+			},
+			initRequest: func(r *Request) {
 				r.URL = "foo/bar"
 			},
 			expectedURL: "https://example.com/foo/bar",
 		},
 		{
 			name: "adding query parameters by client",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetQueryParams(map[string]string{
 					"foo": "1",
 					"bar": "2",
 				})
+			},
+			initRequest: func(r *Request) {
 				r.URL = "https://example.com/"
 			},
 			expectedURL: "https://example.com/?foo=1&bar=2",
 		},
 		{
 			name: "adding query parameters by request",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetQueryParams(map[string]string{
 					"foo": "1",
 					"bar": "2",
@@ -233,11 +259,13 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "adding query parameters by client and request",
-			init: func(c *Client, r *Request) {
+			initClient: func(c *Client) {
 				c.SetQueryParams(map[string]string{
 					"foo": "1", // ignored, because of the "foo" parameter in request
 					"bar": "2",
 				})
+			},
+			initRequest: func(r *Request) {
 				r.SetQueryParams(map[string]string{
 					"foo": "3",
 				})
@@ -247,7 +275,7 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "adding query parameters by request to URL with existent",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.SetQueryParams(map[string]string{
 					"bar": "2",
 				})
@@ -257,7 +285,7 @@ func Test_parseRequestURL(t *testing.T) {
 		},
 		{
 			name: "adding query parameters by request with multiple values",
-			init: func(c *Client, r *Request) {
+			initRequest: func(r *Request) {
 				r.QueryParams.Add("foo", "1")
 				r.QueryParams.Add("foo", "2")
 				r.URL = "https://example.com/"
@@ -267,8 +295,14 @@ func Test_parseRequestURL(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c := New()
+			if tt.initClient != nil {
+				tt.initClient(c)
+			}
+
 			r := c.R()
-			tt.init(c, r)
+			if tt.initRequest != nil {
+				tt.initRequest(r)
+			}
 			if err := parseRequestURL(c, r); err != nil {
 				t.Errorf("parseRequestURL() error = %v", err)
 			}

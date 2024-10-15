@@ -13,7 +13,6 @@ import (
 	"io"
 	"maps"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -44,7 +43,6 @@ type Request struct {
 	Result                     any
 	Error                      any
 	RawRequest                 *http.Request
-	SRV                        *SRVRecord
 	UserInfo                   *User
 	Cookies                    []*http.Cookie
 	Debug                      bool
@@ -81,6 +79,7 @@ type Request struct {
 	bodyBuf             *bytes.Buffer
 	clientTrace         *clientTrace
 	log                 Logger
+	baseURL             string
 	multipartBoundary   string
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
@@ -680,17 +679,6 @@ func (r *Request) SetOutputFile(file string) *Request {
 	return r
 }
 
-// SetSRV method sets the details to query the service SRV record and execute the
-// request.
-//
-//	client.R().
-//		SetSRV(SRVRecord{"web", "testservice.com"}).
-//		Get("/get")
-func (r *Request) SetSRV(srv *SRVRecord) *Request {
-	r.SRV = srv
-	return r
-}
-
 // SetCloseConnection method sets variable `Close` in HTTP request struct with the given
 // value. More info: https://golang.org/src/net/http/request.go
 //
@@ -1177,7 +1165,6 @@ func (r *Request) Send() (*Response, error) {
 //
 //	resp, err := client.R().Execute(resty.MethodGet, "http://httpbin.org/get")
 func (r *Request) Execute(method, url string) (*Response, error) {
-	var addrs []*net.SRV
 	var resp *Response
 	var err error
 
@@ -1199,33 +1186,26 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		return nil, err
 	}
 
-	if r.SRV != nil {
-		_, addrs, err = net.LookupSRV(r.SRV.Service, "tcp", r.SRV.Domain)
-		if err != nil {
-			r.client.onErrorHooks(r, nil, err)
-			return nil, err
-		}
-	}
-
 	r.Method = method
-	r.URL = r.selectAddr(addrs, url, 0)
+	r.URL = url
 
 	if r.RetryCount == 0 {
 		r.Attempt = 1
 		resp, err = r.client.execute(r)
 		r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
+		if err != nil {
+			r.sendLoadBalancerFeedback()
+		}
 		return resp, unwrapNoRetryErr(err)
 	}
 
 	err = backoff(
 		func() (*Response, error) {
 			r.Attempt++
-
-			r.URL = r.selectAddr(addrs, url, r.Attempt)
-
 			resp, err = r.client.execute(r)
 			if err != nil {
 				r.log.Warnf("%v, Attempt %v", err, r.Attempt)
+				r.sendLoadBalancerFeedback()
 			}
 
 			return resp, err
@@ -1287,11 +1267,6 @@ func (r *Request) Clone(ctx context.Context) *Request {
 		rr.UserInfo = r.UserInfo.Clone()
 	}
 
-	// clone the SRV record
-	if r.SRV != nil {
-		rr.SRV = r.SRV.Clone()
-	}
-
 	// clone cookies
 	if l := len(r.Cookies); l > 0 {
 		rr.Cookies = make([]*http.Cookie, l)
@@ -1327,24 +1302,6 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	}
 
 	return rr
-}
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// SRVRecord struct
-//_______________________________________________________________________
-
-// SRVRecord struct holds the data to query the SRV record for the
-// following service.
-type SRVRecord struct {
-	Service string
-	Domain  string
-}
-
-// Clone method returns deep copy of s.
-func (s *SRVRecord) Clone() *SRVRecord {
-	ss := new(SRVRecord)
-	*ss = *s
-	return ss
 }
 
 func (r *Request) fmtBodyString(sl int) (body string) {
@@ -1415,18 +1372,6 @@ func (r *Request) fmtBodyString(sl int) (body string) {
 	return
 }
 
-func (r *Request) selectAddr(addrs []*net.SRV, path string, attempt int) string {
-	if addrs == nil {
-		return path
-	}
-
-	idx := attempt % len(addrs)
-	domain := strings.TrimRight(addrs[idx].Target, ".")
-	path = strings.TrimLeft(path, "/")
-
-	return fmt.Sprintf("%s://%s:%d/%s", r.client.Scheme(), domain, addrs[idx].Port, path)
-}
-
 func (r *Request) initValuesMap() {
 	if r.values == nil {
 		r.values = make(map[string]any)
@@ -1475,6 +1420,16 @@ func (r *Request) isPayloadSupported() bool {
 	}
 
 	return false
+}
+
+func (r *Request) sendLoadBalancerFeedback() {
+	if r.client.LoadBalancer() != nil {
+		r.client.LoadBalancer().Feedback(&RequestFeedback{
+			BaseURL: r.baseURL,
+			Success: false,
+			Attempt: r.Attempt,
+		})
+	}
 }
 
 func jsonIndent(v []byte) []byte {
