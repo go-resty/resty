@@ -48,15 +48,23 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 	generateCerts(t, paths)
 	startHTTPSServer(fmt.Sprintf(":%d", port), paths)
 
-	client := New().SetDebug(true).SetRootCertificateWatcher(&WatcherOptions{
-		PemFilePath:     paths.RootCACert,
-		PoolingInterval: time.Second * 1,
-	})
+	//client := New().SetRootCertificate(paths.RootCACert).SetDebug(true)
+	client := New().SetRootCertificateWatcher(paths.RootCACert, &CertWatcherOptions{
+		PoolInterval: time.Second * 1,
+	}).SetDebug(true)
+
+	tr, err := client.Transport()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Make sure that TLS handshake happens for all request
+	// (otherwise, test may succeed because 1st TLS session is re-used)
+	tr.DisableKeepAlives = true
 
 	url := fmt.Sprintf("https://localhost:%d/", port)
 
 	for i := 0; i < 5; i++ {
-		time.Sleep(1 * time.Second)
+		t.Logf("i = %d", i)
 		res, err := client.R().Get(url)
 		if err != nil {
 			t.Fatal(err)
@@ -68,7 +76,10 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 			// Re-generate certs to simulate renewal scenario
 			generateCerts(t, paths)
 		}
+		time.Sleep(time.Second * 1)
 	}
+
+	client.Stop()
 }
 
 func startHTTPSServer(addr string, path certPaths) {
@@ -135,9 +146,18 @@ func generateRootCA(keyPath, certPath string) (*rsa.PrivateKey, []byte, error) {
 		return nil, nil, err
 	}
 
+	// Define the maximum value you want for the random big integer
+	max := new(big.Int).Lsh(big.NewInt(1), 256) // Example: 256 bits
+
+	// Generate a random big.Int
+	randomBigInt, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Create the root certificate template
 	rootCertTemplate := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
+		SerialNumber: randomBigInt,
 		Subject: pkix.Name{
 			Organization: []string{"YourOrg"},
 			Country:      []string{"US"},
@@ -146,7 +166,7 @@ func generateRootCA(keyPath, certPath string) (*rsa.PrivateKey, []byte, error) {
 			CommonName:   "YourRootCA",
 		},
 		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(10, 0, 0), // 10 years validity
+		NotAfter:              time.Now().Add(time.Hour * 10),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		IsCA:                  true,
 		BasicConstraintsValid: true,
@@ -191,7 +211,7 @@ func generateTLSCert(keyPath, certPath string, rootKey *rsa.PrivateKey, rootCert
 			CommonName:   "localhost",
 		},
 		NotBefore:   time.Now(),
-		NotAfter:    time.Now().AddDate(1, 0, 0), // 1 year validity
+		NotAfter:    time.Now().Add(time.Hour * 10),
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},

@@ -48,6 +48,10 @@ const (
 	MethodTrace = "TRACE"
 )
 
+const (
+	defaultWatcherPoolingInterval = 24 * time.Hour
+)
+
 var (
 	ErrNotHttpTransportType       = errors.New("resty: not a http.Transport type")
 	ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body kind")
@@ -208,6 +212,8 @@ type Client struct {
 	contentTypeDecoders      map[string]ContentTypeDecoder
 	contentDecompressorKeys  []string
 	contentDecompressors     map[string]ContentDecompressor
+	stopChan            chan bool
+	certLock            *sync.Mutex
 
 	// TODO don't put mutex now, it may go away
 	preReqHook PreRequestHook
@@ -1372,9 +1378,12 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 // SetRootCertificateWatcher enables dynamic reloading of one or more root certificates.
 // It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
 //
-// client.SetRootCertificateWatcher(&WatcherOptions{PemFilePath: "root-ca.crt"})
-func (c *Client) SetRootCertificateWatcher(options *WatcherOptions) *Client {
-	c.handleCAsWatcher("root", options)
+//	client.SetRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
+//			PoolInterval: time.Hours * 24,
+//	})
+func (c *Client) SetRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
+	c.SetRootCertificate(pemFilePath)
+	c.initCertWatcher(pemFilePath, "root", options)
 	return c
 }
 
@@ -1401,13 +1410,83 @@ func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
 	return c
 }
 
-// SetClientRootCertificateWatcher enables dynamic reloading of one or more root certificates.
+type CertWatcherOptions struct {
+	// PoolInterval is the frequency at which resty will check if the PEM file needs to be reloaded.
+	// Default is 24 hours.
+	PoolInterval time.Duration
+}
+
+// SetClientRootCertificateWatcher enables dynamic reloading of one or more rclient oot certificates.
 // It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
 //
-// client.SetClientRootCertificateWatcher(&WatcherOptions{PemFilePath: "root-ca.crt"})
-func (c *Client) SetClientRootCertificateWatcher(options *WatcherOptions) *Client {
-	c.handleCAsWatcher("client", options)
+//	client.SetClientRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
+//			PoolInterval: time.Hours * 24,
+//	})
+func (c *Client) SetClientRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
+	c.SetClientRootCertificate(pemFilePath)
+	c.initCertWatcher(pemFilePath, "client", options)
+
 	return c
+}
+
+func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcherOptions) {
+	tickerDuration := defaultWatcherPoolingInterval
+	if options != nil && options.PoolInterval > 0 {
+		tickerDuration = options.PoolInterval
+	}
+
+	go func() {
+		ticker := time.NewTicker(tickerDuration)
+		st, err := os.Stat(pemFilePath)
+		if err != nil {
+			c.log.Errorf("%v", err)
+			return
+		}
+
+		modTime := st.ModTime().UTC()
+
+		for {
+			select {
+			case <-c.stopChan:
+				ticker.Stop()
+				return
+			case <-ticker.C:
+
+				c.debugf("Checking if cert %s has changed...", pemFilePath)
+
+				st, err = os.Stat(pemFilePath)
+				if err != nil {
+					c.log.Errorf("%v", err)
+					continue
+				}
+				newModTime := st.ModTime().UTC()
+
+				if modTime.Equal(newModTime) {
+					c.debugf("Cert %s hasn't changed.", pemFilePath)
+					continue
+				}
+
+				modTime = newModTime
+
+				c.debugf("Reloading cert %s ...", pemFilePath)
+
+				c.certLock.Lock()
+				switch scope {
+				case "root":
+					c.SetRootCertificate(pemFilePath)
+				case "client":
+					c.SetClientRootCertificate(pemFilePath)
+				}
+				c.certLock.Unlock()
+
+				c.debugf("Cert %s reloaded.", pemFilePath)
+			}
+		}
+	}()
+}
+
+func (c *Client) Stop() {
+	close(c.stopChan)
 }
 
 // SetClientRootCertificateFromString method helps to add one or more clients
@@ -2041,4 +2120,94 @@ func (c *Client) onInvalidHooks(req *Request, err error) {
 	for _, h := range c.invalidHooks {
 		h(req, err)
 	}
+}
+
+func (c *Client) debugf(format string, v ...interface{}) {
+	if !c.Debug {
+		return
+	}
+
+	c.log.Debugf(format, v...)
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// File struct and its methods
+//_______________________________________________________________________
+
+// File struct represents file information for multipart request
+type File struct {
+	Name      string
+	ParamName string
+	io.Reader
+}
+
+// String method returns the string value of current file details
+func (f *File) String() string {
+	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// MultipartField struct
+//_______________________________________________________________________
+
+// MultipartField struct represents the custom data part for a multipart request
+type MultipartField struct {
+	Param       string
+	FileName    string
+	ContentType string
+	io.Reader
+}
+
+func createClient(hc *http.Client) *Client {
+	if hc.Transport == nil {
+		hc.Transport = createTransport(nil)
+	}
+
+	c := &Client{ // not setting lang default values
+		QueryParam:             url.Values{},
+		FormData:               url.Values{},
+		Header:                 http.Header{},
+		Cookies:                make([]*http.Cookie, 0),
+		RetryWaitTime:          defaultWaitTime,
+		RetryMaxWaitTime:       defaultMaxWaitTime,
+		PathParams:             make(map[string]string),
+		RawPathParams:          make(map[string]string),
+		JSONMarshal:            json.Marshal,
+		JSONUnmarshal:          json.Unmarshal,
+		XMLMarshal:             xml.Marshal,
+		XMLUnmarshal:           xml.Unmarshal,
+		HeaderAuthorizationKey: http.CanonicalHeaderKey("Authorization"),
+
+		jsonEscapeHTML:      true,
+		httpClient:          hc,
+		debugBodySizeLimit:  math.MaxInt32,
+		udBeforeRequestLock: &sync.RWMutex{},
+		afterResponseLock:   &sync.RWMutex{},
+		certLock:            &sync.Mutex{},
+		stopChan:            make(chan bool),
+	}
+
+	// Logger
+	c.SetLogger(createLogger())
+
+	// default before request middlewares
+	c.beforeRequest = []RequestMiddleware{
+		parseRequestURL,
+		parseRequestHeader,
+		parseRequestBody,
+		createHTTPRequest,
+		addCredentials,
+		createCurlCmd,
+	}
+
+	// user defined request middlewares
+	c.udBeforeRequest = []RequestMiddleware{}
+
+	// default after response middlewares
+	c.afterResponse = []ResponseMiddleware{
+		parseResponseBody,
+		saveResponseIntoFile,
+	}
+
+	return c
 }
