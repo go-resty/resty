@@ -175,6 +175,8 @@ func createClient(hc *http.Client) *Client {
 		contentTypeDecoders:     make(map[string]ContentTypeDecoder),
 		contentDecompressorKeys: make([]string, 0),
 		contentDecompressors:    make(map[string]ContentDecompressor),
+		stopChan:                make(chan bool),
+		certLock:                &sync.Mutex{},
 	}
 
 	// Logger

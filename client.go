@@ -212,8 +212,8 @@ type Client struct {
 	contentTypeDecoders      map[string]ContentTypeDecoder
 	contentDecompressorKeys  []string
 	contentDecompressors     map[string]ContentDecompressor
-	stopChan            chan bool
-	certLock            *sync.Mutex
+	stopChan                 chan bool
+	certLock                 *sync.Mutex
 
 	// TODO don't put mutex now, it may go away
 	preReqHook PreRequestHook
@@ -1485,10 +1485,6 @@ func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcher
 	}()
 }
 
-func (c *Client) Stop() {
-	close(c.stopChan)
-}
-
 // SetClientRootCertificateFromString method helps to add one or more clients
 // root certificates into the Resty client
 //
@@ -1941,6 +1937,7 @@ func (c *Client) Close() error {
 	if c.LoadBalancer() != nil {
 		silently(c.LoadBalancer().Close())
 	}
+	close(c.stopChan)
 	return nil
 }
 
@@ -2123,91 +2120,9 @@ func (c *Client) onInvalidHooks(req *Request, err error) {
 }
 
 func (c *Client) debugf(format string, v ...interface{}) {
-	if !c.Debug {
+	if !c.debug {
 		return
 	}
 
 	c.log.Debugf(format, v...)
-}
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// File struct and its methods
-//_______________________________________________________________________
-
-// File struct represents file information for multipart request
-type File struct {
-	Name      string
-	ParamName string
-	io.Reader
-}
-
-// String method returns the string value of current file details
-func (f *File) String() string {
-	return fmt.Sprintf("ParamName: %v; FileName: %v", f.ParamName, f.Name)
-}
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// MultipartField struct
-//_______________________________________________________________________
-
-// MultipartField struct represents the custom data part for a multipart request
-type MultipartField struct {
-	Param       string
-	FileName    string
-	ContentType string
-	io.Reader
-}
-
-func createClient(hc *http.Client) *Client {
-	if hc.Transport == nil {
-		hc.Transport = createTransport(nil)
-	}
-
-	c := &Client{ // not setting lang default values
-		QueryParam:             url.Values{},
-		FormData:               url.Values{},
-		Header:                 http.Header{},
-		Cookies:                make([]*http.Cookie, 0),
-		RetryWaitTime:          defaultWaitTime,
-		RetryMaxWaitTime:       defaultMaxWaitTime,
-		PathParams:             make(map[string]string),
-		RawPathParams:          make(map[string]string),
-		JSONMarshal:            json.Marshal,
-		JSONUnmarshal:          json.Unmarshal,
-		XMLMarshal:             xml.Marshal,
-		XMLUnmarshal:           xml.Unmarshal,
-		HeaderAuthorizationKey: http.CanonicalHeaderKey("Authorization"),
-
-		jsonEscapeHTML:      true,
-		httpClient:          hc,
-		debugBodySizeLimit:  math.MaxInt32,
-		udBeforeRequestLock: &sync.RWMutex{},
-		afterResponseLock:   &sync.RWMutex{},
-		certLock:            &sync.Mutex{},
-		stopChan:            make(chan bool),
-	}
-
-	// Logger
-	c.SetLogger(createLogger())
-
-	// default before request middlewares
-	c.beforeRequest = []RequestMiddleware{
-		parseRequestURL,
-		parseRequestHeader,
-		parseRequestBody,
-		createHTTPRequest,
-		addCredentials,
-		createCurlCmd,
-	}
-
-	// user defined request middlewares
-	c.udBeforeRequest = []RequestMiddleware{}
-
-	// default after response middlewares
-	c.afterResponse = []ResponseMiddleware{
-		parseResponseBody,
-		saveResponseIntoFile,
-	}
-
-	return c
 }

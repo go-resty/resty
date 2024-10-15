@@ -79,7 +79,8 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 		time.Sleep(time.Second * 1)
 	}
 
-	client.Stop()
+	err = client.Close()
+	assertNil(t, err)
 }
 
 func startHTTPSServer(addr string, path certPaths) {
