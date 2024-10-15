@@ -406,6 +406,8 @@ func TestLoadBalancerRequest(t *testing.T) {
 	assertNil(t, err)
 
 	c := dcnl()
+	defer c.Close()
+
 	c.SetLoadBalancer(rr)
 
 	ts1URL, ts2URL := 0, 0
@@ -429,6 +431,8 @@ func TestLoadBalancerRequestFlowError(t *testing.T) {
 		assertNil(t, err)
 
 		c := dcnl()
+		defer c.Close()
+
 		c.SetLoadBalancer(wrr)
 
 		resp, err := c.R().Get("/")

@@ -1839,6 +1839,14 @@ func (c *Client) Clone(ctx context.Context) *Client {
 	return cc
 }
 
+// Close method performs cleanup and closure activities on the client instance
+func (c *Client) Close() error {
+	if c.LoadBalancer() != nil {
+		silently(c.LoadBalancer().Close())
+	}
+	return nil
+}
+
 func (c *Client) executeBefore(req *Request) error {
 	var err error
 
