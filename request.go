@@ -1193,12 +1193,8 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		r.Attempt = 1
 		resp, err = r.client.execute(r)
 		r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
-		if err != nil && r.client.LoadBalancer() != nil {
-			r.client.LoadBalancer().Feedback(&RequestFeedback{
-				BaseURL: r.baseURL,
-				Success: false,
-				Attempt: r.Attempt,
-			})
+		if err != nil {
+			r.sendLoadBalancerFeedback()
 		}
 		return resp, unwrapNoRetryErr(err)
 	}
@@ -1209,13 +1205,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 			resp, err = r.client.execute(r)
 			if err != nil {
 				r.log.Warnf("%v, Attempt %v", err, r.Attempt)
-				if r.client.LoadBalancer() != nil {
-					r.client.LoadBalancer().Feedback(&RequestFeedback{
-						BaseURL: r.baseURL,
-						Success: false,
-						Attempt: r.Attempt,
-					})
-				}
+				r.sendLoadBalancerFeedback()
 			}
 
 			return resp, err
@@ -1430,6 +1420,16 @@ func (r *Request) isPayloadSupported() bool {
 	}
 
 	return false
+}
+
+func (r *Request) sendLoadBalancerFeedback() {
+	if r.client.LoadBalancer() != nil {
+		r.client.LoadBalancer().Feedback(&RequestFeedback{
+			BaseURL: r.baseURL,
+			Success: false,
+			Attempt: r.Attempt,
+		})
+	}
 }
 
 func jsonIndent(v []byte) []byte {
