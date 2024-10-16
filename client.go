@@ -213,7 +213,6 @@ type Client struct {
 	contentDecompressorKeys  []string
 	contentDecompressors     map[string]ContentDecompressor
 	stopChan                 chan bool
-	certLock                 *sync.Mutex
 
 	// TODO don't put mutex now, it may go away
 	preReqHook PreRequestHook
@@ -1475,14 +1474,12 @@ func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcher
 
 				c.debugf("Reloading cert %s ...", pemFilePath)
 
-				c.certLock.Lock()
 				switch scope {
 				case "root":
 					c.SetRootCertificate(pemFilePath)
 				case "client":
 					c.SetClientRootCertificate(pemFilePath)
 				}
-				c.certLock.Unlock()
 
 				c.debugf("Cert %s reloaded.", pemFilePath)
 			}
