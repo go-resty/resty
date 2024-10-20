@@ -2122,6 +2122,8 @@ func (c *Client) onInvalidHooks(req *Request, err error) {
 }
 
 func (c *Client) debugf(format string, v ...interface{}) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	if !c.debug {
 		return
 	}
