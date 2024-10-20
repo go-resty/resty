@@ -223,6 +223,13 @@ type User struct {
 	Username, Password string
 }
 
+// CertWatcherOptions allows configuring a watcher that reloads dynamically TLS certs.
+type CertWatcherOptions struct {
+	// PoolInterval is the frequency at which resty will check if the PEM file needs to be reloaded.
+	// Default is 24 hours.
+	PoolInterval time.Duration
+}
+
 // Clone method returns deep copy of u.
 func (u *User) Clone() *User {
 	uu := new(User)
@@ -1410,12 +1417,6 @@ func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
 	}
 	c.handleCAs("client", rootPemData)
 	return c
-}
-
-type CertWatcherOptions struct {
-	// PoolInterval is the frequency at which resty will check if the PEM file needs to be reloaded.
-	// Default is 24 hours.
-	PoolInterval time.Duration
 }
 
 // SetClientRootCertificateWatcher enables dynamic reloading of one or more client root certificates.
