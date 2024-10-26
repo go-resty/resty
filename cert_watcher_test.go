@@ -48,10 +48,14 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 	generateCerts(t, paths)
 	startHTTPSServer(fmt.Sprintf(":%d", port), paths)
 
+	poolingInterval := time.Second * 1
+
 	//client := New().SetRootCertificate(paths.RootCACert).SetDebug(true)
 	client := New().SetRootCertificateWatcher(paths.RootCACert, &CertWatcherOptions{
-		PoolInterval: time.Second * 1,
-	}).SetDebug(true)
+		PoolInterval: poolingInterval,
+	}).SetClientRootCertificateWatcher(paths.RootCACert, &CertWatcherOptions{
+		PoolInterval: poolingInterval,
+	}).SetDebug(false)
 
 	tr, err := client.Transport()
 	if err != nil {
@@ -63,21 +67,50 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 
 	url := fmt.Sprintf("https://localhost:%d/", port)
 
-	for i := 0; i < 5; i++ {
-		t.Logf("i = %d", i)
-		res, err := client.R().Get(url)
-		if err != nil {
-			t.Fatal(err)
-		}
+	t.Run("Cert Watcher should handle certs rotation", func(t *testing.T) {
+		for i := 0; i < 5; i++ {
+			res, err := client.R().Get(url)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		assertEqual(t, res.StatusCode(), http.StatusOK)
+			assertEqual(t, res.StatusCode(), http.StatusOK)
 
-		if i%2 == 1 {
-			// Re-generate certs to simulate renewal scenario
-			generateCerts(t, paths)
+			if i%2 == 1 {
+				// Re-generate certs to simulate renewal scenario
+				generateCerts(t, paths)
+			}
+			time.Sleep(poolingInterval)
 		}
-		time.Sleep(time.Second * 1)
-	}
+	})
+
+	t.Run("Cert Watcher should recover on failure", func(t *testing.T) {
+		// Delete root cert and re-create it to ensure that cert watcher is able to recover
+
+		// Re-generate certs to invalidate existing cert
+		generateCerts(t, paths)
+		// Delete root cert so that Cert Watcher will fail
+		err = os.RemoveAll(paths.RootCACert)
+		assertNil(t, err)
+
+		// Reset TLS config to ensure that previous root cert is not re-used
+		tr, err = client.Transport()
+		assertNil(t, err)
+		tr.TLSClientConfig = nil
+		client.SetTransport(tr)
+
+		time.Sleep(poolingInterval)
+
+		_, err = client.R().Get(url)
+		// We expect an error since root cert has been deleted
+		assertNotNil(t, err)
+
+		// Re-generate certs. We except cert watcher to reload the new root cert.
+		generateCerts(t, paths)
+		time.Sleep(poolingInterval)
+		_, err = client.R().Get(url)
+		assertNil(t, err)
+	})
 
 	err = client.Close()
 	assertNil(t, err)
