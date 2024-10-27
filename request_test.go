@@ -387,7 +387,6 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	retried := 0
 	c := dcnl()
 	c.SetDebug(false)
-	c.SetRetryCount(3)
 
 	resp, err := c.R().
 		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
@@ -1572,7 +1571,7 @@ func TestRequestOverridesClientAuthorizationHeader(t *testing.T) {
 }
 
 func TestRequestFileUploadAsReader(t *testing.T) {
-	ts := createFilePostServer(t)
+	ts := createFileUploadServer(t)
 	defer ts.Close()
 
 	file, _ := os.Open(filepath.Join(getTestDataPath(), "test-img.png"))

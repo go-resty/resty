@@ -469,14 +469,14 @@ func createFormPatchServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
-func createFilePostServer(t *testing.T) *httptest.Server {
+func createFileUploadServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
 
-		if r.Method != MethodPost {
-			t.Log("createPostServer:: Not a Post request")
+		if r.Method != MethodPost && r.Method != MethodPut {
+			t.Log("createFileUploadServer:: Not a POST or PUT request")
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprint(w, http.StatusText(http.StatusBadRequest))
 			return
