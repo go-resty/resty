@@ -48,6 +48,10 @@ const (
 	MethodTrace = "TRACE"
 )
 
+const (
+	defaultWatcherPoolingInterval = 24 * time.Hour
+)
+
 var (
 	ErrNotHttpTransportType       = errors.New("resty: not a http.Transport type")
 	ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body kind")
@@ -208,6 +212,7 @@ type Client struct {
 	contentTypeDecoders      map[string]ContentTypeDecoder
 	contentDecompressorKeys  []string
 	contentDecompressors     map[string]ContentDecompressor
+	stopChan                 chan bool
 
 	// TODO don't put mutex now, it may go away
 	preReqHook PreRequestHook
@@ -216,6 +221,13 @@ type Client struct {
 // User type is to hold an username and password information
 type User struct {
 	Username, Password string
+}
+
+// CertWatcherOptions allows configuring a watcher that reloads dynamically TLS certs.
+type CertWatcherOptions struct {
+	// PoolInterval is the frequency at which resty will check if the PEM file needs to be reloaded.
+	// Default is 24 hours.
+	PoolInterval time.Duration
 }
 
 // Clone method returns deep copy of u.
@@ -1369,6 +1381,21 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	return c
 }
 
+// SetRootCertificateWatcher enables dynamic reloading of one or more root certificates.
+// It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+// The caller is responsible for calling Close to stop the watcher.
+//
+//	client.SetRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
+//			PoolInterval: time.Hour * 24,
+//	})
+//
+// defer client.Close()
+func (c *Client) SetRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
+	c.SetRootCertificate(pemFilePath)
+	c.initCertWatcher(pemFilePath, "root", options)
+	return c
+}
+
 // SetRootCertificateFromString method helps to add one or more root certificates
 // into the Resty client
 //
@@ -1390,6 +1417,75 @@ func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
 	}
 	c.handleCAs("client", rootPemData)
 	return c
+}
+
+// SetClientRootCertificateWatcher enables dynamic reloading of one or more client root certificates.
+// It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+// The caller is responsible for calling Close to stop the watcher.
+//
+//	client.SetClientRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
+//			PoolInterval: time.Hour * 24,
+//		})
+//		defer client.Close()
+func (c *Client) SetClientRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
+	c.SetClientRootCertificate(pemFilePath)
+	c.initCertWatcher(pemFilePath, "client", options)
+
+	return c
+}
+
+func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcherOptions) {
+	tickerDuration := defaultWatcherPoolingInterval
+	if options != nil && options.PoolInterval > 0 {
+		tickerDuration = options.PoolInterval
+	}
+
+	go func() {
+		ticker := time.NewTicker(tickerDuration)
+		st, err := os.Stat(pemFilePath)
+		if err != nil {
+			c.log.Errorf("%v", err)
+			return
+		}
+
+		modTime := st.ModTime().UTC()
+
+		for {
+			select {
+			case <-c.stopChan:
+				ticker.Stop()
+				return
+			case <-ticker.C:
+
+				c.debugf("Checking if cert %s has changed...", pemFilePath)
+
+				st, err = os.Stat(pemFilePath)
+				if err != nil {
+					c.log.Errorf("%v", err)
+					continue
+				}
+				newModTime := st.ModTime().UTC()
+
+				if modTime.Equal(newModTime) {
+					c.debugf("Cert %s hasn't changed.", pemFilePath)
+					continue
+				}
+
+				modTime = newModTime
+
+				c.debugf("Reloading cert %s ...", pemFilePath)
+
+				switch scope {
+				case "root":
+					c.SetRootCertificate(pemFilePath)
+				case "client":
+					c.SetClientRootCertificate(pemFilePath)
+				}
+
+				c.debugf("Cert %s reloaded.", pemFilePath)
+			}
+		}
+	}()
 }
 
 // SetClientRootCertificateFromString method helps to add one or more clients
@@ -1844,6 +1940,7 @@ func (c *Client) Close() error {
 	if c.LoadBalancer() != nil {
 		silently(c.LoadBalancer().Close())
 	}
+	close(c.stopChan)
 	return nil
 }
 
@@ -2023,4 +2120,14 @@ func (c *Client) onInvalidHooks(req *Request, err error) {
 	for _, h := range c.invalidHooks {
 		h(req, err)
 	}
+}
+
+func (c *Client) debugf(format string, v ...interface{}) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	if !c.debug {
+		return
+	}
+
+	c.log.Debugf(format, v...)
 }

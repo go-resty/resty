@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net"
 	"net/http"
@@ -351,6 +352,30 @@ func TestClientSetClientRootCertificateNotExists(t *testing.T) {
 
 	assertNil(t, err)
 	assertNil(t, transport.TLSClientConfig)
+}
+
+func TestClientSetClientRootCertificateWatcher(t *testing.T) {
+	t.Run("Cert exists", func(t *testing.T) {
+		client := dcnl()
+		client.SetClientRootCertificateWatcher(filepath.Join(getTestDataPath(), "sample-root.pem"), &CertWatcherOptions{
+			PoolInterval: time.Second * 1,
+		})
+
+		transport, err := client.Transport()
+
+		assertNil(t, err)
+		assertNotNil(t, transport.TLSClientConfig.ClientCAs)
+	})
+
+	t.Run("Cert does not exist", func(t *testing.T) {
+		client := dcnl()
+		client.SetClientRootCertificateWatcher(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"), nil)
+
+		transport, err := client.Transport()
+
+		assertNil(t, err)
+		assertNil(t, transport.TLSClientConfig)
+	})
 }
 
 func TestClientSetClientRootCertificateFromString(t *testing.T) {
@@ -1332,5 +1357,21 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		_, err := c.R().SetResponseBodyLimit(10240).Get(tse.URL + "/")
 		assertErrorIs(t, gzip.ErrHeader, err)
+	})
+}
+
+func TestClientDebugf(t *testing.T) {
+	t.Run("Debug mode enabled", func(t *testing.T) {
+		var b bytes.Buffer
+		c := New().SetLogger(&logger{l: log.New(&b, "", 0)}).SetDebug(true)
+		c.debugf("hello")
+		assertEqual(t, "DEBUG RESTY hello\n", b.String())
+	})
+
+	t.Run("Debug mode disabled", func(t *testing.T) {
+		var b bytes.Buffer
+		c := New().SetLogger(&logger{l: log.New(&b, "", 0)})
+		c.debugf("hello")
+		assertEqual(t, "", b.String())
 	})
 }
