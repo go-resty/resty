@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -57,16 +58,13 @@ type Request struct {
 	IsTrace                    bool
 	AllowMethodGetPayload      bool
 	AllowMethodDeletePayload   bool
-
-	// Retry
-	RetryCount        int
-	RetryWaitTime     time.Duration
-	RetryMaxWaitTime  time.Duration
-	RetryResetReaders bool
-
-	// Attempt is to represent the request attempt made during a Resty
-	// request execution flow, including retry count.
-	Attempt int
+	IsDone                     bool
+	RetryCount                 int
+	RetryWaitTime              time.Duration
+	RetryMaxWaitTime           time.Duration
+	RetryStrategy              RetryStrategyFunc
+	IsRetryDefaultConditions   bool
+	Attempt                    int
 
 	isMultiPart         bool
 	isFormData          bool
@@ -963,10 +961,36 @@ func (r *Request) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Request {
 	return r
 }
 
-// SetRetryResetReaders method enables the Resty client to seek the start of all
-// file readers are given as multipart files if the object implements [io.ReadSeeker].
-func (r *Request) SetRetryResetReaders(b bool) *Request {
-	r.RetryResetReaders = b
+// SetRetryStrategy method used to set the custom Retry strategy on request,
+// it is used to get wait time before each retry. It overrides the retry
+// strategy set at the client instance level, see [Client.SetRetryStrategy]
+//
+// Default (nil) implies exponential backoff with a jitter strategy
+func (r *Request) SetRetryStrategy(rs RetryStrategyFunc) *Request {
+	r.RetryStrategy = rs
+	return r
+}
+
+// EnableRetryDefaultConditions method enables the Resty's default retry
+// conditions on request level
+func (r *Request) EnableRetryDefaultConditions() *Request {
+	r.SetRetryDefaultConditions(true)
+	return r
+}
+
+// DisableRetryDefaultConditions method disables the Resty's default retry
+// conditions on request level
+func (r *Request) DisableRetryDefaultConditions() *Request {
+	r.SetRetryDefaultConditions(false)
+	return r
+}
+
+// SetRetryDefaultConditions method is used to enable/disable the Resty's default
+// retry conditions on request level
+//
+// It overrides value set at the client instance level, see [Client.SetRetryDefaultConditions]
+func (r *Request) SetRetryDefaultConditions(b bool) *Request {
+	r.IsRetryDefaultConditions = b
 	return r
 }
 
@@ -1164,10 +1188,7 @@ func (r *Request) Send() (*Response, error) {
 // for current [Request].
 //
 //	resp, err := client.R().Execute(resty.MethodGet, "http://httpbin.org/get")
-func (r *Request) Execute(method, url string) (*Response, error) {
-	var resp *Response
-	var err error
-
+func (r *Request) Execute(method, url string) (res *Response, err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			if err, ok := rec.(error); ok {
@@ -1189,47 +1210,104 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	r.Method = method
 	r.URL = url
 
-	if r.RetryCount == 0 {
-		r.Attempt = 1
-		resp, err = r.client.execute(r)
-		r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
-		if err != nil {
-			r.sendLoadBalancerFeedback()
-		}
-		return resp, unwrapNoRetryErr(err)
+	if r.RetryCount < 0 {
+		r.RetryCount = 0 // default behavior is no retry
 	}
 
-	err = backoff(
-		func() (*Response, error) {
-			r.Attempt++
-			resp, err = r.client.execute(r)
-			if err != nil {
-				r.log.Warnf("%v, Attempt %v", err, r.Attempt)
-				r.sendLoadBalancerFeedback()
+	var backoff *backoffWithJitter
+	if r.RetryCount > 0 {
+		backoff = newBackoffWithJitter(r.RetryWaitTime, r.RetryMaxWaitTime)
+	}
+
+	// first request + retry count = total no. of requests
+
+	for i := 0; i <= r.RetryCount; i++ {
+		r.Attempt++
+		err = nil
+		res, err = r.client.execute(r)
+		if err != nil {
+			if isInvalidRequestError(err) {
+				return
+			}
+			if r.Context().Err() != nil {
+				return res, wrapErrors(r.Context().Err(), err)
+			}
+		}
+
+		// we have reached the maximum retry count stop here
+		if r.Attempt-1 == r.RetryCount {
+			break
+		}
+
+		if backoff != nil {
+			needsRetry := false
+
+			// apply default retry conditions
+			if r.IsRetryDefaultConditions {
+				needsRetry = applyRetryDefaultConditions(res, err)
 			}
 
-			return resp, err
-		},
-		Retries(r.RetryCount),
-		WaitTime(r.RetryWaitTime),
-		MaxWaitTime(r.RetryMaxWaitTime),
-		RetryConditions(append(r.retryConditions, r.client.RetryConditions()...)),
-		RetryHooks(r.client.RetryHooks()),
-		ResetMultipartReaders(r.RetryResetReaders),
-	)
+			// apply user-defined retry conditions if default one
+			// is still false
+			if !needsRetry && res != nil {
+				// user defined retry conditions
+				retryConditions := append(r.retryConditions, r.client.RetryConditions()...)
+				for _, retryCondition := range retryConditions {
+					if needsRetry = retryCondition(res, err); needsRetry {
+						break
+					}
+				}
+			}
+
+			// retry not required stop here
+			if !needsRetry {
+				break
+			}
+
+			// by default reset file readers
+			if err = r.resetFileReaders(); err != nil {
+				// if any error in reset readers, stop here
+				break
+			}
+
+			// run user-defined retry hooks
+			for _, retryHookFunc := range r.client.RetryHooks() {
+				retryHookFunc(res, err)
+			}
+
+			// let's drain the response body, before retry wait
+			drainBody(res)
+
+			waitDuration, waitErr := backoff.NextWaitDuration(r.client, res, err, r.Attempt)
+			if waitErr != nil {
+				// if any error in retry strategy, stop here
+				err = wrapErrors(waitErr, err)
+				break
+			}
+
+			timer := time.NewTimer(waitDuration)
+			select {
+			case <-r.Context().Done():
+				timer.Stop()
+				return nil, wrapErrors(r.Context().Err(), err)
+			case <-timer.C:
+			}
+		}
+	}
 
 	if r.isMultiPart {
 		for _, mf := range r.multipartFields {
 			mf.close()
 		}
 	}
-
 	if err != nil {
 		r.log.Errorf("%v", err)
 	}
 
-	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
-	return resp, unwrapNoRetryErr(err)
+	r.IsDone = true
+	r.client.onErrorHooks(r, res, err)
+	r.sendLoadBalancerFeedback() // TODO revisit on call and success criteria
+	return
 }
 
 // Clone returns a deep copy of r with its context changed to ctx.
@@ -1426,10 +1504,19 @@ func (r *Request) sendLoadBalancerFeedback() {
 	if r.client.LoadBalancer() != nil {
 		r.client.LoadBalancer().Feedback(&RequestFeedback{
 			BaseURL: r.baseURL,
-			Success: false,
+			Success: false, // TODO revisit condition to define success or not
 			Attempt: r.Attempt,
 		})
 	}
+}
+
+func (r *Request) resetFileReaders() error {
+	for _, f := range r.multipartFields {
+		if err := f.resetReader(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func jsonIndent(v []byte) []byte {

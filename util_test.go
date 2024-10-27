@@ -122,7 +122,4 @@ func TestUtilMiscTestCoverage(t *testing.T) {
 	}{}
 	err := decodeJSON(bytes.NewReader([]byte(`{\"  \": \"some value\"}`)), &v)
 	assertEqual(t, "invalid character '\\\\' looking for beginning of object key string", err.Error())
-
-	err = &noRetryErr{err: errors.New("hey error")}
-	assertEqual(t, "hey error", err.Error())
 }

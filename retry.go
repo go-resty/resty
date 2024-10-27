@@ -1,249 +1,196 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
 import (
-	"context"
+	"crypto/tls"
 	"math"
 	"math/rand"
+	"net/http"
+	"net/url"
+	"regexp"
+	"strconv"
 	"sync"
 	"time"
 )
 
 const (
-	defaultMaxRetries  = 3
 	defaultWaitTime    = time.Duration(100) * time.Millisecond
 	defaultMaxWaitTime = time.Duration(2000) * time.Millisecond
 )
 
 type (
-	// Option is to create convenient retry options like wait time, max retries, etc.
-	Option func(*Options)
-
 	// RetryConditionFunc type is for the retry condition function
 	// input: non-nil Response OR request execution error
 	RetryConditionFunc func(*Response, error) bool
 
-	// OnRetryFunc is for side-effecting functions triggered on retry
-	OnRetryFunc func(*Response, error)
+	// RetryHookFunc is for side-effecting functions triggered on retry
+	RetryHookFunc func(*Response, error)
 
-	// RetryAfterFunc returns time to wait before retry
-	// For example, it can parse HTTP Retry-After header
-	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html
-	// Non-nil error is returned if it is found that the request is not retryable
-	// (0, nil) is a special result that means 'use default algorithm'
-	RetryAfterFunc func(*Client, *Response) (time.Duration, error)
-
-	// Options struct is used to hold retry settings.
-	Options struct {
-		maxRetries      int
-		waitTime        time.Duration
-		maxWaitTime     time.Duration
-		retryConditions []RetryConditionFunc
-		retryHooks      []OnRetryFunc
-		resetReaders    bool
-	}
+	// RetryStrategyFunc type is for custom retry strategy implementation
+	// By default Resty uses the capped exponential backoff with a jitter strategy
+	RetryStrategyFunc func(*Response, error) (time.Duration, error)
 )
 
-// Retries sets the max number of retries
-func Retries(value int) Option {
-	return func(o *Options) {
-		o.maxRetries = value
-	}
-}
+var (
+	regexErrTooManyRedirects = regexp.MustCompile(`stopped after \d+ redirects\z`)
+	regexErrScheme           = regexp.MustCompile("unsupported protocol scheme")
+	regexErrInvalidHeader    = regexp.MustCompile("invalid header")
+)
 
-// WaitTime sets the default wait time to sleep between requests
-func WaitTime(value time.Duration) Option {
-	return func(o *Options) {
-		o.waitTime = value
-	}
-}
-
-// MaxWaitTime sets the max wait time to sleep between requests
-func MaxWaitTime(value time.Duration) Option {
-	return func(o *Options) {
-		o.maxWaitTime = value
-	}
-}
-
-// RetryConditions sets the conditions that will be checked for retry
-func RetryConditions(conditions []RetryConditionFunc) Option {
-	return func(o *Options) {
-		o.retryConditions = conditions
-	}
-}
-
-// RetryHooks sets the hooks that will be executed after each retry
-func RetryHooks(hooks []OnRetryFunc) Option {
-	return func(o *Options) {
-		o.retryHooks = hooks
-	}
-}
-
-// ResetMultipartReaders sets a boolean value which will lead the start being seeked out
-// on all multipart file readers if they implement [io.ReadSeeker]
-func ResetMultipartReaders(value bool) Option {
-	return func(o *Options) {
-		o.resetReaders = value
-	}
-}
-
-// backoff retries with increasing timeout duration up until X amount of retries
-// (Default is 3 attempts, Override with option Retries(n))
-func backoff(operation func() (*Response, error), options ...Option) error {
-	// Defaults
-	opts := Options{
-		maxRetries:      defaultMaxRetries,
-		waitTime:        defaultWaitTime,
-		maxWaitTime:     defaultMaxWaitTime,
-		retryConditions: []RetryConditionFunc{},
+func applyRetryDefaultConditions(res *Response, err error) bool {
+	// no retry on TLS error
+	if _, ok := err.(*tls.CertificateVerificationError); ok {
+		return false
 	}
 
-	for _, o := range options {
-		o(&opts)
-	}
-
-	var (
-		resp *Response
-		err  error
-	)
-
-	for attempt := 0; attempt <= opts.maxRetries; attempt++ {
-		resp, err = operation()
-		ctx := context.Background()
-		if resp != nil && resp.Request.ctx != nil {
-			ctx = resp.Request.ctx
+	// validate url error, so we can decide to retry or not
+	if u, ok := err.(*url.Error); ok {
+		if regexErrTooManyRedirects.MatchString(u.Error()) {
+			return false
 		}
-		if ctx.Err() != nil {
-			return err
+		if regexErrScheme.MatchString(u.Error()) {
+			return false
 		}
+		if regexErrInvalidHeader.MatchString(u.Error()) {
+			return false
+		}
+		return u.Temporary() // possible retry if it's true
+	}
 
-		err1 := unwrapNoRetryErr(err)           // raw error, it used for return users callback.
-		needsRetry := err != nil && err == err1 // retry on a few operation errors by default
+	if res == nil {
+		return false
+	}
 
-		for _, condition := range opts.retryConditions {
-			needsRetry = condition(resp, err1)
-			if needsRetry {
-				break
+	// certain HTTP status codes are temporary so that we can retry
+	//	- 429 Too Many Requests
+	//	- 500 or above (it's better to ignore 501 Not Implemented)
+	//	- 0 No status code received
+	if res.StatusCode() == http.StatusTooManyRequests ||
+		(res.StatusCode() >= 500 && res.StatusCode() != http.StatusNotImplemented) ||
+		res.StatusCode() == 0 {
+		return true
+	}
+
+	return false
+}
+
+func newBackoffWithJitter(min, max time.Duration) *backoffWithJitter {
+	if min <= 0 {
+		min = defaultWaitTime
+	}
+	if max == 0 {
+		max = defaultMaxWaitTime
+	}
+
+	return &backoffWithJitter{
+		lock: new(sync.Mutex),
+		rnd:  rand.New(rand.NewSource(time.Now().UnixNano())),
+		min:  min,
+		max:  max,
+	}
+}
+
+type backoffWithJitter struct {
+	lock *sync.Mutex
+	rnd  *rand.Rand
+	min  time.Duration
+	max  time.Duration
+}
+
+func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error, attempt int) (time.Duration, error) {
+	if res != nil {
+		if res.StatusCode() == http.StatusTooManyRequests || res.StatusCode() == http.StatusServiceUnavailable {
+			if delay, ok := parseRetryAfterHeader(res.Header().Get(hdrRetryAfterKey)); ok {
+				return delay, nil
 			}
 		}
-
-		if !needsRetry {
-			return err
-		}
-
-		if opts.resetReaders {
-			if err := resetFileReaders(resp.Request.multipartFields...); err != nil {
-				return err
-			}
-		}
-
-		for _, hook := range opts.retryHooks {
-			hook(resp, err)
-		}
-
-		// Don't need to wait when no retries left.
-		// Still run retry hooks even on last retry to keep compatibility.
-		if attempt == opts.maxRetries {
-			return err
-		}
-
-		waitTime, err2 := sleepDuration(resp, opts.waitTime, opts.maxWaitTime, attempt)
-		if err2 != nil {
-			if err == nil {
-				err = err2
-			}
-			return err
-		}
-
-		select {
-		case <-time.After(waitTime):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
 	}
 
-	return err
-}
-
-func sleepDuration(resp *Response, min, max time.Duration, attempt int) (time.Duration, error) {
 	const maxInt = 1<<31 - 1 // max int for arch 386
-	if max < 0 {
-		max = maxInt
-	}
-	if resp == nil {
-		return jitterBackoff(min, max, attempt), nil
+	if b.max < 0 {
+		b.max = maxInt
 	}
 
-	retryAfterFunc := resp.Request.client.RetryAfter()
-
-	// Check for custom callback
-	if retryAfterFunc == nil {
-		return jitterBackoff(min, max, attempt), nil
+	retryStrategyFunc := c.RetryStrategy()
+	if res == nil || retryStrategyFunc == nil {
+		return b.balanceMinMax(b.defaultStrategy(attempt)), nil
 	}
 
-	result, err := retryAfterFunc(resp.Request.client, resp)
-	if err != nil {
-		return 0, err // i.e. 'API quota exceeded'
+	delay, rsErr := retryStrategyFunc(res, err)
+	if rsErr != nil {
+		return 0, rsErr
 	}
-	if result == 0 {
-		return jitterBackoff(min, max, attempt), nil
-	}
-	if result < 0 || max < result {
-		result = max
-	}
-	if result < min {
-		result = min
-	}
-	return result, nil
+	return b.balanceMinMax(delay), nil
 }
 
 // Return capped exponential backoff with jitter
 // https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-func jitterBackoff(min, max time.Duration, attempt int) time.Duration {
-	base := float64(min)
-	capLevel := float64(max)
-
-	temp := math.Min(capLevel, base*math.Exp2(float64(attempt)))
+func (b *backoffWithJitter) defaultStrategy(attempt int) time.Duration {
+	temp := math.Min(float64(b.max), float64(b.min)*math.Exp2(float64(attempt)))
 	ri := time.Duration(temp / 2)
-	if ri == 0 {
+	if ri <= 0 {
 		ri = time.Nanosecond
 	}
-	result := randDuration(ri)
-
-	if result < min {
-		result = min
-	}
-
-	return result
+	return b.randDuration(ri)
 }
 
-var rnd = newRnd()
-var rndMu sync.Mutex
-
-func randDuration(center time.Duration) time.Duration {
-	rndMu.Lock()
-	defer rndMu.Unlock()
+func (b *backoffWithJitter) randDuration(center time.Duration) time.Duration {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 
 	var ri = int64(center)
-	var jitter = rnd.Int63n(ri)
+	var jitter = b.rnd.Int63n(ri)
 	return time.Duration(math.Abs(float64(ri + jitter)))
 }
 
-func newRnd() *rand.Rand {
-	var seed = time.Now().UnixNano()
-	var src = rand.NewSource(seed)
-	return rand.New(src)
+func (b *backoffWithJitter) balanceMinMax(delay time.Duration) time.Duration {
+	if delay <= 0 || b.max < delay {
+		return b.max
+	}
+	if delay < b.min {
+		return b.min
+	}
+	return delay
 }
 
-func resetFileReaders(fields ...*MultipartField) error {
-	for _, f := range fields {
-		if err := f.resetReader(); err != nil {
-			return err
-		}
+var timeNow = time.Now
+
+// parseRetryAfterHeader parses the Retry-After header and returns the
+// delay duration according to the spec: https://httpwg.org/specs/rfc7231.html#header.retry-after
+// The bool returned will be true if the header was successfully parsed.
+// Otherwise, the header was either not present, or was not parseable according to the spec.
+//
+// Retry-After headers come in two flavors: Seconds or HTTP-Date
+//
+// Examples:
+//   - Retry-After: Fri, 31 Dec 1999 23:59:59 GMT
+//   - Retry-After: 120
+func parseRetryAfterHeader(v string) (time.Duration, bool) {
+	if isStringEmpty(v) {
+		return 0, false
 	}
 
-	return nil
+	// Retry-After: 120
+	if delay, err := strconv.ParseInt(v, 10, 64); err == nil {
+		if delay < 0 { // a negative delay doesn't make sense
+			return 0, false
+		}
+		return time.Second * time.Duration(delay), true
+	}
+
+	// Retry-After: Fri, 31 Dec 1999 23:59:59 GMT
+	retryTime, err := time.Parse(time.RFC1123, v)
+	if err != nil {
+		return 0, false
+	}
+	if until := retryTime.Sub(timeNow()); until > 0 {
+		return until, true
+	}
+
+	// date is in the past
+	return 0, true
 }

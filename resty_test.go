@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -28,6 +29,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+)
+
+var (
+	hdrLocationKey = http.CanonicalHeaderKey("Location")
 )
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -71,7 +76,7 @@ func createGetServer(t *testing.T) *httptest.Server {
 			case "/set-retrycount-test":
 				attp := atomic.AddInt32(&attempt, 1)
 				if attp <= 4 {
-					time.Sleep(time.Second * 6)
+					time.Sleep(time.Millisecond * 150)
 				}
 				_, _ = w.Write([]byte("TestClientRetry page"))
 			case "/set-retrywaittime-test":
@@ -99,10 +104,10 @@ func createGetServer(t *testing.T) *httptest.Server {
 				atomic.AddInt32(&attempt, 1)
 			case "/set-timeout-test-with-sequence":
 				seq := atomic.AddInt32(&sequence, 1)
-				time.Sleep(time.Second * 2)
+				time.Sleep(100 * time.Millisecond)
 				_, _ = fmt.Fprintf(w, "%d", seq)
 			case "/set-timeout-test":
-				time.Sleep(time.Second * 6)
+				time.Sleep(400 * time.Millisecond)
 				_, _ = w.Write([]byte("TestClientTimeout page"))
 			case "/my-image.png":
 				fileBytes, _ := os.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
@@ -124,6 +129,16 @@ func createGetServer(t *testing.T) *httptest.Server {
 			case "/not-found-no-error":
 				w.Header().Set(hdrContentTypeKey, "application/json")
 				w.WriteHeader(http.StatusNotFound)
+			case "/retry-after-delay":
+				w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
+				if atomic.LoadInt32(&attempt) == 0 {
+					w.Header().Set(hdrRetryAfterKey, "1")
+					w.WriteHeader(http.StatusTooManyRequests)
+					_, _ = w.Write([]byte(`{ "message": "too many" }`))
+				} else {
+					_, _ = w.Write([]byte(`{ "message": "hello" }`))
+				}
+				atomic.AddInt32(&attempt, 1)
 			}
 
 			switch {

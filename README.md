@@ -700,6 +700,8 @@ client.RemoveProxy()
 Resty uses [backoff](http://www.awsarchitectureblog.com/2015/03/backoff.html)
 to increase retry intervals after each attempt.
 
+TODO update retry docs
+
 Usage example:
 
 ```go

@@ -191,20 +191,19 @@ func TestSetContextCancelWithError(t *testing.T) {
 }
 
 func TestClientRetryWithSetContext(t *testing.T) {
-	var attemptctx int32
+	var attempt int32
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
-		attp := atomic.AddInt32(&attemptctx, 1)
-		if attp <= 4 {
-			time.Sleep(time.Second * 2)
+		if atomic.AddInt32(&attempt, 1) <= 4 {
+			time.Sleep(100 * time.Millisecond)
 		}
 		_, _ = w.Write([]byte("TestClientRetry page"))
 	})
 	defer ts.Close()
 
 	c := dcnl().
-		SetTimeout(time.Second * 1).
+		SetTimeout(50 * time.Millisecond).
 		SetRetryCount(3)
 
 	_, err := c.R().

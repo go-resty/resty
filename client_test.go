@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -9,13 +10,14 @@ import (
 	"compress/gzip"
 	"compress/lzw"
 	"context"
-	"crypto/rand"
+	cryprand "crypto/rand"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -202,19 +204,19 @@ func TestClientTimeout(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dcnl().SetTimeout(time.Second * 3)
+	c := dcnl().SetTimeout(time.Millisecond * 200)
 	_, err := c.R().Get(ts.URL + "/set-timeout-test")
 
-	assertEqual(t, true, strings.Contains(strings.ToLower(err.Error()), "timeout"))
+	assertEqual(t, true, strings.Contains(err.Error(), "Client.Timeout"))
 }
 
 func TestClientTimeoutWithinThreshold(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dcnl().SetTimeout(time.Second * 3)
-	resp, err := c.R().Get(ts.URL + "/set-timeout-test-with-sequence")
+	c := dcnl().SetTimeout(200 * time.Millisecond)
 
+	resp, err := c.R().Get(ts.URL + "/set-timeout-test-with-sequence")
 	assertError(t, err)
 
 	seq1, _ := strconv.ParseInt(resp.String(), 10, 32)
@@ -489,6 +491,12 @@ func TestClientSettingsCoverage(t *testing.T) {
 	c.SetCloseConnection(true)
 
 	c.DisableDebug()
+
+	assertEqual(t, true, c.IsRetryDefaultConditions())
+	c.DisableRetryDefaultConditions()
+	assertEqual(t, false, c.IsRetryDefaultConditions())
+	c.EnableRetryDefaultConditions()
+	assertEqual(t, true, c.IsRetryDefaultConditions())
 
 	// [Start] Custom Transport scenario
 	ct := dcnl()
@@ -1204,19 +1212,26 @@ func TestPostRedirectWithBody(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	targetURL, _ := url.Parse(ts.URL)
-	t.Log("ts.URL:", ts.URL)
-	t.Log("targetURL.Host:", targetURL.Host)
+	mu := sync.Mutex{}
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	c := dcnl()
+	c := dcnl().SetBaseURL(ts.URL)
+
+	totalRequests := 4000
 	wg := sync.WaitGroup{}
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
+	wg.Add(totalRequests)
+	for i := 0; i < totalRequests; i++ {
+		if i%50 == 0 {
+			time.Sleep(20 * time.Millisecond) // to prevent test server socket exhaustion
+		}
 		go func() {
 			defer wg.Done()
+			mu.Lock()
+			randNumber := rnd.Int()
+			mu.Unlock()
 			resp, err := c.R().
-				SetBody([]byte(strconv.Itoa(newRnd().Int()))).
-				Post(targetURL.String() + "/redirect-with-body")
+				SetBody([]byte(strconv.Itoa(randNumber))).
+				Post("/redirect-with-body")
 			assertError(t, err)
 			assertNotNil(t, resp)
 		}()
@@ -1252,14 +1267,6 @@ func TestUnixSocket(t *testing.T) {
 	assertEqual(t, "Hello resty client from a server running on endpoint /hello!", res.String())
 }
 
-var _ RateLimiter = (*testRateLimiter)(nil)
-
-type testRateLimiter struct{}
-
-func (t *testRateLimiter) Allow() bool {
-	return false
-}
-
 func TestClientClone(t *testing.T) {
 	parent := New()
 
@@ -1268,9 +1275,6 @@ func TestClientClone(t *testing.T) {
 	parent.SetBasicAuth("parent", "")
 	parent.SetProxy("http://localhost:8080")
 
-	// set an interface field
-	tr := &testRateLimiter{}
-	parent.SetRateLimiter(tr)
 	parent.SetCookie(&http.Cookie{
 		Name:  "go-resty-1",
 		Value: "This is cookie 1 value",
@@ -1300,12 +1304,11 @@ func TestClientClone(t *testing.T) {
 
 	// assert interface/pointer type
 	assertEqual(t, parent.Client(), clone.Client())
-	assertEqual(t, parent.RateLimiter(), clone.RateLimiter())
 }
 
 func TestResponseBodyLimit(t *testing.T) {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		io.CopyN(w, rand.Reader, 100*800)
+		io.CopyN(w, cryprand.Reader, 100*800)
 	})
 	defer ts.Close()
 
