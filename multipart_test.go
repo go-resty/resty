@@ -309,7 +309,7 @@ func TestMultipartCustomBoundary(t *testing.T) {
 }
 
 func TestMultipartLargeFile(t *testing.T) {
-	ts := createFilePostServer(t)
+	ts := createFileUploadServer(t)
 	defer ts.Close()
 
 	t.Run("upload a 2+mb image file with content-type and custom boundary", func(t *testing.T) {
@@ -432,7 +432,7 @@ func (errorReader) Read(p []byte) (n int, err error) {
 }
 
 func TestMultipartReaderErrors(t *testing.T) {
-	ts := createFilePostServer(t)
+	ts := createFileUploadServer(t)
 	defer ts.Close()
 
 	c := dcnl().SetBaseURL(ts.URL)

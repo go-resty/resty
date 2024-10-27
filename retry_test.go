@@ -658,7 +658,7 @@ func (f failingSeeker) Seek(offset int64, whence int) (int64, error) {
 }
 
 func TestResetMultipartReaderSeekStartError(t *testing.T) {
-	ts := createFilePostServer(t)
+	ts := createFileUploadServer(t)
 	defer ts.Close()
 
 	testSeeker := &failingSeeker{
@@ -671,14 +671,14 @@ func TestResetMultipartReaderSeekStartError(t *testing.T) {
 
 	resp, err := c.R().
 		SetFileReader("name", "filename", testSeeker).
-		Post(ts.URL + "/set-reset-multipart-readers-test")
+		Put(ts.URL + "/set-reset-multipart-readers-test")
 
 	assertEqual(t, 500, resp.StatusCode())
 	assertEqual(t, err.Error(), errSeekFailure.Error())
 }
 
 func TestClientResetMultipartReaders(t *testing.T) {
-	ts := createFilePostServer(t)
+	ts := createFileUploadServer(t)
 	defer ts.Close()
 
 	str := "test"
@@ -702,14 +702,14 @@ func TestClientResetMultipartReaders(t *testing.T) {
 
 	resp, err := c.R().
 		SetFileReader("name", "filename", bufReader).
-		Post(ts.URL + "/set-reset-multipart-readers-test")
+		Put(ts.URL + "/set-reset-multipart-readers-test")
 
 	assertEqual(t, 500, resp.StatusCode())
 	assertNil(t, err)
 }
 
 func TestRequestResetMultipartReaders(t *testing.T) {
-	ts := createFilePostServer(t)
+	ts := createFileUploadServer(t)
 	defer ts.Close()
 
 	str := "test"
@@ -733,7 +733,7 @@ func TestRequestResetMultipartReaders(t *testing.T) {
 	req := c.R().
 		SetRetryCount(2).
 		SetFileReader("name", "filename", bufReader)
-	resp, err := req.Post(ts.URL + "/set-reset-multipart-readers-test")
+	resp, err := req.Put(ts.URL + "/set-reset-multipart-readers-test")
 
 	assertEqual(t, 500, resp.StatusCode())
 	assertNil(t, err)

@@ -1215,12 +1215,11 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	}
 
 	var backoff *backoffWithJitter
-	if r.RetryCount > 0 {
+	if r.RetryCount > 0 && r.isIdempotent() {
 		backoff = newBackoffWithJitter(r.RetryWaitTime, r.RetryMaxWaitTime)
 	}
 
-	// first request + retry count = total no. of requests
-
+	// first request + retry count = total no. of requests (aka total attempts)
 	for i := 0; i <= r.RetryCount; i++ {
 		r.Attempt++
 		err = nil
@@ -1234,7 +1233,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			}
 		}
 
-		// we have reached the maximum retry count stop here
+		// we have reached the maximum no. of requests
 		if r.Attempt-1 == r.RetryCount {
 			break
 		}
@@ -1517,6 +1516,22 @@ func (r *Request) resetFileReaders() error {
 		}
 	}
 	return nil
+}
+
+// https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
+// https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
+var idempotentMethods = map[string]bool{
+	MethodDelete:  true,
+	MethodGet:     true,
+	MethodHead:    true,
+	MethodOptions: true,
+	MethodPut:     true,
+	MethodTrace:   true,
+}
+
+func (r *Request) isIdempotent() bool {
+	_, found := idempotentMethods[r.Method]
+	return found
 }
 
 func jsonIndent(v []byte) []byte {
