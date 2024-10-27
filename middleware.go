@@ -1,11 +1,11 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -230,10 +230,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, nil)
 		}
 	} else {
-		// fix data race: must deep copy.
-		// TODO investigate in details and remove this copy line
-		bodyBuf := bytes.NewBuffer(append([]byte{}, r.bodyBuf.Bytes()...))
-		r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, bodyBuf)
+		r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, r.bodyBuf)
 	}
 
 	if err != nil {

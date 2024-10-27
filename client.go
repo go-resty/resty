@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -63,9 +64,9 @@ var (
 	hdrContentLengthKey   = http.CanonicalHeaderKey("Content-Length")
 	hdrContentEncodingKey = http.CanonicalHeaderKey("Content-Encoding")
 	hdrContentDisposition = http.CanonicalHeaderKey("Content-Disposition")
-	hdrLocationKey        = http.CanonicalHeaderKey("Location")
 	hdrAuthorizationKey   = http.CanonicalHeaderKey("Authorization")
 	hdrWwwAuthenticateKey = http.CanonicalHeaderKey("WWW-Authenticate")
+	hdrRetryAfterKey      = http.CanonicalHeaderKey("Retry-After")
 
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json"
@@ -178,9 +179,9 @@ type Client struct {
 	retryWaitTime            time.Duration
 	retryMaxWaitTime         time.Duration
 	retryConditions          []RetryConditionFunc
-	retryHooks               []OnRetryFunc
-	retryAfter               RetryAfterFunc
-	retryResetReaders        bool
+	retryHooks               []RetryHookFunc
+	retryStrategy            RetryStrategyFunc
+	isRetryDefaultConditions bool
 	headerAuthorizationKey   string
 	responseBodyLimit        int64
 	resBodyUnlimitedReads    bool
@@ -198,7 +199,6 @@ type Client struct {
 	proxyURL                 *url.URL
 	requestLog               RequestLogCallback
 	responseLog              ResponseLogCallback
-	rateLimiter              RateLimiter
 	generateCurlOnDebug      bool
 	loadBalancer             LoadBalancer
 	beforeRequest            []RequestMiddleware
@@ -635,7 +635,8 @@ func (c *Client) R() *Request {
 		RetryCount:                 c.retryCount,
 		RetryWaitTime:              c.retryWaitTime,
 		RetryMaxWaitTime:           c.retryMaxWaitTime,
-		RetryResetReaders:          c.retryResetReaders,
+		RetryStrategy:              c.retryStrategy,
+		IsRetryDefaultConditions:   c.isRetryDefaultConditions,
 		CloseConnection:            c.closeConnection,
 		DoNotParseResponse:         c.notParseResponse,
 		DebugBodyLimit:             c.debugBodyLimit,
@@ -1204,20 +1205,57 @@ func (c *Client) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
 	return c
 }
 
-// RetryAfter method returns the retry after callback function, that is
-// used to calculate wait time between retries if it's registered; otherwise, it is nil.
-func (c *Client) RetryAfter() RetryAfterFunc {
+// RetryStrategy method returns the retry strategy function; otherwise, it is nil.
+//
+// See [Client.SetRetryStrategy]
+func (c *Client) RetryStrategy() RetryStrategyFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryAfter
+	return c.retryStrategy
 }
 
-// SetRetryAfter sets a callback to calculate the wait time between retries.
-// Default (nil) implies exponential backoff with jitter
-func (c *Client) SetRetryAfter(callback RetryAfterFunc) *Client {
+// SetRetryStrategy method used to set the custom Retry strategy into Resty client,
+// it is used to get wait time before each retry. It can be overridden at request
+// level, see [Request.SetRetryStrategy]
+//
+// Default (nil) implies exponential backoff with a jitter strategy
+func (c *Client) SetRetryStrategy(rs RetryStrategyFunc) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.retryAfter = callback
+	c.retryStrategy = rs
+	return c
+}
+
+// EnableRetryDefaultConditions method enables the Resty's default retry conditions
+func (c *Client) EnableRetryDefaultConditions() *Client {
+	c.SetRetryDefaultConditions(true)
+	return c
+}
+
+// DisableRetryDefaultConditions method disables the Resty's default retry conditions
+func (c *Client) DisableRetryDefaultConditions() *Client {
+	c.SetRetryDefaultConditions(false)
+	return c
+}
+
+// IsRetryDefaultConditions method returns true if Resty's default retry conditions
+// are enabled otherwise false
+//
+// Default value is `true`
+func (c *Client) IsRetryDefaultConditions() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.isRetryDefaultConditions
+}
+
+// SetRetryDefaultConditions method is used to enable/disable the Resty's default
+// retry conditions
+//
+// It can be overridden at request level, see [Request.SetRetryDefaultConditions]
+func (c *Client) SetRetryDefaultConditions(b bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.isRetryDefaultConditions = b
 	return c
 }
 
@@ -1241,17 +1279,8 @@ func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 	return c
 }
 
-// AddRetryAfterErrorCondition adds the basic condition of retrying after encountering
-// an error from the HTTP response
-func (c *Client) AddRetryAfterErrorCondition() *Client {
-	c.AddRetryCondition(func(response *Response, err error) bool {
-		return response.IsError()
-	})
-	return c
-}
-
 // RetryHooks method returns all the retry hook functions.
-func (c *Client) RetryHooks() []OnRetryFunc {
+func (c *Client) RetryHooks() []RetryHookFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.retryHooks
@@ -1259,26 +1288,10 @@ func (c *Client) RetryHooks() []OnRetryFunc {
 
 // AddRetryHook adds a side-effecting retry hook to an array of hooks
 // that will be executed on each retry.
-func (c *Client) AddRetryHook(hook OnRetryFunc) *Client {
+func (c *Client) AddRetryHook(hook RetryHookFunc) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.retryHooks = append(c.retryHooks, hook)
-	return c
-}
-
-// RetryResetReaders method returns true if the retry reset readers are enabled; otherwise, it is nil.
-func (c *Client) RetryResetReaders() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.retryResetReaders
-}
-
-// SetRetryResetReaders method enables the Resty client to seek the start of all
-// file readers are given as multipart files if the object implements [io.ReadSeeker].
-func (c *Client) SetRetryResetReaders(b bool) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.retryResetReaders = b
 	return c
 }
 
@@ -1536,22 +1549,6 @@ func (c *Client) SetOutputDirectory(dirPath string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.outputDirectory = dirPath
-	return c
-}
-
-// RateLimiter method returns the rate limiter interface
-func (c *Client) RateLimiter() RateLimiter {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.rateLimiter
-}
-
-// SetRateLimiter sets an optional [RateLimiter]. If set, the rate limiter will control
-// all requests were made by this client.
-func (c *Client) SetRateLimiter(rl RateLimiter) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.rateLimiter = rl
 	return c
 }
 
@@ -1947,30 +1944,18 @@ func (c *Client) Close() error {
 func (c *Client) executeBefore(req *Request) error {
 	var err error
 
-	if isStringEmpty(req.Method) {
-		req.Method = MethodGet
-	}
-
 	// user defined on before request methods
 	// to modify the *resty.Request object
 	for _, f := range c.beforeRequestMiddlewares() {
 		if err = f(c, req); err != nil {
-			return wrapNoRetryErr(err)
-		}
-	}
-
-	// If there is a rate limiter set for this client, the Execute call
-	// will return an error if the rate limit is exceeded.
-	if req.client.RateLimiter() != nil {
-		if !req.client.RateLimiter().Allow() {
-			return ErrRateLimitExceeded
+			return err
 		}
 	}
 
 	// resty middlewares
 	for _, f := range c.beforeRequest {
 		if err = f(c, req); err != nil {
-			return wrapNoRetryErr(err)
+			return err
 		}
 	}
 
@@ -1981,7 +1966,7 @@ func (c *Client) executeBefore(req *Request) error {
 	// call pre-request if defined
 	if c.preReqHook != nil {
 		if err = c.preReqHook(c, req.RawRequest); err != nil {
-			return wrapNoRetryErr(err)
+			return err
 		}
 	}
 
@@ -1996,10 +1981,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if err := requestDebugLogger(c, req); err != nil {
-		return nil, wrapNoRetryErr(err)
+		return nil, err
 	}
 
-	req.RawRequest.Body = wrapRequestBufferReleaser(req)
 	req.Time = time.Now()
 	resp, err := c.Client().Do(req.RawRequest)
 
@@ -2046,7 +2030,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	return response, wrapNoRetryErr(err)
+	return response, err
 }
 
 // getting TLS client config if not exists then create one

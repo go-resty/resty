@@ -1,12 +1,12 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,7 +17,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
 )
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -61,16 +60,6 @@ func (l *logger) output(format string, v ...any) {
 		return
 	}
 	l.l.Printf(format, v...)
-}
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Rate Limiter interface
-//_______________________________________________________________________
-
-var ErrRateLimitExceeded = errors.New("resty: rate limit exceeded")
-
-type RateLimiter interface {
-	Allow() bool
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -200,35 +189,6 @@ func releaseBuffer(buf *bytes.Buffer) {
 	}
 }
 
-func wrapRequestBufferReleaser(r *Request) io.ReadCloser {
-	if r.bodyBuf == nil {
-		return r.RawRequest.Body
-	}
-	return &requestBufferReleaser{
-		reqBuf:     r.bodyBuf,
-		ReadCloser: r.RawRequest.Body,
-	}
-}
-
-var _ io.ReadCloser = (*requestBufferReleaser)(nil)
-
-// requestBufferReleaser wraps request body and implements custom Close for it.
-// The Close method closes original body and releases request body back to sync.Pool.
-type requestBufferReleaser struct {
-	releaseOnce sync.Once
-	reqBuf      *bytes.Buffer
-	io.ReadCloser
-}
-
-func (rr *requestBufferReleaser) Close() error {
-	err := rr.ReadCloser.Close()
-	rr.releaseOnce.Do(func() {
-		releaseBuffer(rr.reqBuf)
-	})
-
-	return err
-}
-
 func closeq(v any) {
 	if c, ok := v.(io.Closer); ok {
 		silently(c.Close())
@@ -283,28 +243,6 @@ func (e *restyError) Unwrap() error {
 	return e.inner
 }
 
-type noRetryErr struct {
-	err error
-}
-
-func (e *noRetryErr) Error() string {
-	return e.err.Error()
-}
-
-func wrapNoRetryErr(err error) error {
-	if err != nil {
-		err = &noRetryErr{err: err}
-	}
-	return err
-}
-
-func unwrapNoRetryErr(err error) error {
-	if e, ok := err.(*noRetryErr); ok {
-		err = e.err
-	}
-	return err
-}
-
 // cloneURLValues is a helper function to deep copy url.Values.
 func cloneURLValues(v url.Values) url.Values {
 	if v == nil {
@@ -327,5 +265,28 @@ func cloneCookie(c *http.Cookie) *http.Cookie {
 		SameSite:   c.SameSite,
 		Raw:        c.Raw,
 		Unparsed:   c.Unparsed,
+	}
+}
+
+var mimeInvalidBoundaryErrStr = "mime: invalid boundary character"
+
+func isInvalidRequestError(err error) bool {
+	if u, ok := err.(*url.Error); ok {
+		if u.Op == "parse" {
+			return true
+		}
+	}
+	if err.Error() == mimeInvalidBoundaryErrStr ||
+		err == ErrNoActiveHost ||
+		err == ErrUnsupportedRequestBodyKind {
+		return true
+	}
+	return false
+}
+
+func drainBody(res *Response) {
+	if res != nil && res.Body != nil {
+		defer closeq(res.Body)
+		_, _ = io.Copy(io.Discard, res.Body)
 	}
 }

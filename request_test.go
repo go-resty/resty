@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -17,10 +18,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
 type AuthSuccess struct {
@@ -67,52 +67,15 @@ func TestGetGH524(t *testing.T) {
 	assertEqual(t, resp.Request.Header.Get("Content-Type"), "") //  unable to reproduce reported issue
 }
 
-func TestRateLimiter(t *testing.T) {
-	ts := createGetServer(t)
-	defer ts.Close()
-
-	// Test a burst with a valid capacity and then a consecutive request that must fail.
-
-	// Allow a rate of 1 every 100 ms but also allow bursts of 10 requests.
-	client := dcnl().SetRateLimiter(rate.NewLimiter(rate.Every(100*time.Millisecond), 10))
-
-	// Execute a burst of 10 requests.
-	for i := 0; i < 10; i++ {
-		resp, err := client.R().
-			SetQueryParam("request_no", strconv.Itoa(i)).Get(ts.URL + "/")
-		assertError(t, err)
-		assertEqual(t, http.StatusOK, resp.StatusCode())
-	}
-	// Next request issued directly should fail because burst of 10 has been consumed.
-	{
-		_, err := client.R().
-			SetQueryParam("request_no", strconv.Itoa(11)).Get(ts.URL + "/")
-		assertErrorIs(t, ErrRateLimitExceeded, err)
-	}
-
-	// Test continues request at a valid rate
-
-	// Allow a rate of 1 every ms with no burst.
-	client = dcnl().SetRateLimiter(rate.NewLimiter(rate.Every(1*time.Millisecond), 1))
-
-	// Sending requests every ms+tiny delta must succeed.
-	for i := 0; i < 100; i++ {
-		resp, err := client.R().
-			SetQueryParam("request_no", strconv.Itoa(i)).Get(ts.URL + "/")
-		assertError(t, err)
-		assertEqual(t, http.StatusOK, resp.StatusCode())
-		time.Sleep(1*time.Millisecond + 100*time.Microsecond)
-	}
-}
-
-func TestIllegalRetryCount(t *testing.T) {
+func TestRequestNegativeRetryCount(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
 	resp, err := dcnl().SetRetryCount(-1).R().Get(ts.URL + "/")
 
 	assertNil(t, err)
-	assertNil(t, resp)
+	assertNotNil(t, resp)
+	assertEqual(t, "TestGet: text response", resp.String())
 }
 
 func TestGetCustomUserAgent(t *testing.T) {
@@ -425,10 +388,6 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	c := dcnl()
 	c.SetDebug(false)
 	c.SetRetryCount(3)
-	c.SetRetryAfter(RetryAfterFunc(func(*Client, *Response) (time.Duration, error) {
-		retried++
-		return 0, nil
-	}))
 
 	resp, err := c.R().
 		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
@@ -1826,8 +1785,11 @@ func TestTraceInfoWithoutEnableTrace(t *testing.T) {
 }
 
 func TestTraceInfoOnTimeout(t *testing.T) {
-	client := dcnl()
-	client.SetBaseURL("http://resty-nowhere.local").EnableTrace()
+	client := NewWithTransportSettings(&TransportSettings{
+		DialerTimeout: 100 * time.Millisecond,
+	}).
+		SetBaseURL("http://resty-nowhere.local").
+		EnableTrace()
 
 	resp, err := client.R().Get("/")
 	assertNotNil(t, err)
@@ -2157,15 +2119,72 @@ func TestRequestPanicContext(t *testing.T) {
 func TestRequestSettingsCoverage(t *testing.T) {
 	c := dcnl()
 
-	c.R().SetCloseConnection(true)
+	r1 := c.R()
+	assertEqual(t, false, r1.CloseConnection)
+	r1.SetCloseConnection(true)
+	assertEqual(t, true, r1.CloseConnection)
 
-	c.R().DisableTrace()
+	r2 := c.R()
+	assertEqual(t, false, r2.IsTrace)
+	r2.EnableTrace()
+	assertEqual(t, true, r2.IsTrace)
+	r2.DisableTrace()
+	assertEqual(t, false, r2.IsTrace)
 
-	c.R().SetResponseBodyUnlimitedReads(true)
+	r3 := c.R()
+	assertEqual(t, false, r3.ResponseBodyUnlimitedReads)
+	r3.SetResponseBodyUnlimitedReads(true)
+	assertEqual(t, true, r3.ResponseBodyUnlimitedReads)
+	r3.SetResponseBodyUnlimitedReads(false)
+	assertEqual(t, false, r3.ResponseBodyUnlimitedReads)
 
-	c.R().DisableDebug()
+	r4 := c.R()
+	assertEqual(t, false, r4.Debug)
+	r4.EnableDebug()
+	assertEqual(t, true, r4.Debug)
+	r4.DisableDebug()
+	assertEqual(t, false, r4.Debug)
+
+	r5 := c.R()
+	assertEqual(t, true, r5.IsRetryDefaultConditions)
+	r5.DisableRetryDefaultConditions()
+	assertEqual(t, false, r5.IsRetryDefaultConditions)
+	r5.EnableRetryDefaultConditions()
+	assertEqual(t, true, r5.IsRetryDefaultConditions)
 
 	invalidJsonBytes := []byte(`{\" \": "value here"}`)
 	result := jsonIndent(invalidJsonBytes)
 	assertEqual(t, string(invalidJsonBytes), string(result))
+}
+
+func TestRequestDataRace(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	usersmap := map[string]any{
+		"user1": ExampleUser{FirstName: "firstname1", LastName: "lastname1", ZipCode: "10001"},
+		"user2": &ExampleUser{FirstName: "firstname2", LastName: "lastname3", ZipCode: "10002"},
+		"user3": ExampleUser{FirstName: "firstname3", LastName: "lastname3", ZipCode: "10003"},
+	}
+
+	var users []map[string]any
+	users = append(users, usersmap)
+
+	c := dcnl().SetBaseURL(ts.URL)
+
+	totalRequests := 4000
+	wg := sync.WaitGroup{}
+	wg.Add(totalRequests)
+	for i := 0; i < totalRequests; i++ {
+		if i%100 == 0 {
+			time.Sleep(20 * time.Millisecond) // to prevent test server socket exhaustion
+		}
+		go func() {
+			defer wg.Done()
+			res, err := c.R().SetContext(context.Background()).SetBody(users).Post("/usersmap")
+			assertError(t, err)
+			assertEqual(t, http.StatusAccepted, res.StatusCode())
+		}()
+	}
+	wg.Wait()
 }

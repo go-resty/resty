@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 // Package resty provides Simple HTTP and REST client library for Go.
 package resty
@@ -158,24 +159,25 @@ func createCookieJar() *cookiejar.Jar {
 
 func createClient(hc *http.Client) *Client {
 	c := &Client{ // not setting language default values
-		lock:                    &sync.RWMutex{},
-		queryParams:             url.Values{},
-		formData:                url.Values{},
-		header:                  http.Header{},
-		cookies:                 make([]*http.Cookie, 0),
-		retryWaitTime:           defaultWaitTime,
-		retryMaxWaitTime:        defaultMaxWaitTime,
-		pathParams:              make(map[string]string),
-		rawPathParams:           make(map[string]string),
-		headerAuthorizationKey:  hdrAuthorizationKey,
-		jsonEscapeHTML:          true,
-		httpClient:              hc,
-		debugBodyLimit:          math.MaxInt32,
-		contentTypeEncoders:     make(map[string]ContentTypeEncoder),
-		contentTypeDecoders:     make(map[string]ContentTypeDecoder),
-		contentDecompressorKeys: make([]string, 0),
-		contentDecompressors:    make(map[string]ContentDecompressor),
-		stopChan:                make(chan bool),
+		lock:                     &sync.RWMutex{},
+		queryParams:              url.Values{},
+		formData:                 url.Values{},
+		header:                   http.Header{},
+		cookies:                  make([]*http.Cookie, 0),
+		retryWaitTime:            defaultWaitTime,
+		retryMaxWaitTime:         defaultMaxWaitTime,
+		isRetryDefaultConditions: true,
+		pathParams:               make(map[string]string),
+		rawPathParams:            make(map[string]string),
+		headerAuthorizationKey:   hdrAuthorizationKey,
+		jsonEscapeHTML:           true,
+		httpClient:               hc,
+		debugBodyLimit:           math.MaxInt32,
+		contentTypeEncoders:      make(map[string]ContentTypeEncoder),
+		contentTypeDecoders:      make(map[string]ContentTypeDecoder),
+		contentDecompressorKeys:  make([]string, 0),
+		contentDecompressors:     make(map[string]ContentDecompressor),
+		stopChan:                 make(chan bool),
 	}
 
 	// Logger
