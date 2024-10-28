@@ -2097,6 +2097,38 @@ func TestRequestAllowPayload(t *testing.T) {
 
 }
 
+func TestRequestNoRetryOnNonIdempotentMethod(t *testing.T) {
+	ts := createFileUploadServer(t)
+	defer ts.Close()
+
+	str := "test"
+	buf := []byte(str)
+
+	bufReader := bytes.NewReader(buf)
+	bufCpy := make([]byte, len(buf))
+
+	c := dcnl().
+		SetTimeout(time.Second * 3).
+		AddRetryHook(
+			func(response *Response, _ error) {
+				read, err := bufReader.Read(bufCpy)
+
+				assertNil(t, err)
+				assertEqual(t, len(buf), read)
+				assertEqual(t, str, string(bufCpy))
+			},
+		)
+
+	req := c.R().
+		SetRetryCount(3).
+		SetFileReader("name", "filename", bufReader)
+	resp, err := req.Post(ts.URL + "/set-reset-multipart-readers-test")
+
+	assertNil(t, err)
+	assertEqual(t, 1, resp.Request.Attempt)
+	assertEqual(t, 500, resp.StatusCode())
+}
+
 func TestRequestPanicContext(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
