@@ -1214,8 +1214,9 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		r.RetryCount = 0 // default behavior is no retry
 	}
 
+	isIdempotent := r.isIdempotent()
 	var backoff *backoffWithJitter
-	if r.RetryCount > 0 && r.isIdempotent() {
+	if r.RetryCount > 0 && isIdempotent {
 		backoff = newBackoffWithJitter(r.RetryWaitTime, r.RetryMaxWaitTime)
 	}
 
@@ -1234,7 +1235,8 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		}
 
 		// we have reached the maximum no. of requests
-		if r.Attempt-1 == r.RetryCount {
+		// or request method is not an idempotent
+		if r.Attempt-1 == r.RetryCount || !isIdempotent {
 			break
 		}
 
