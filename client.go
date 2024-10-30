@@ -212,7 +212,7 @@ type Client struct {
 	contentTypeDecoders      map[string]ContentTypeDecoder
 	contentDecompressorKeys  []string
 	contentDecompressors     map[string]ContentDecompressor
-	stopChan                 chan bool
+	certWatcherStopChan      chan bool
 
 	// TODO don't put mutex now, it may go away
 	preReqHook PreRequestHook
@@ -1465,7 +1465,7 @@ func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcher
 
 		for {
 			select {
-			case <-c.stopChan:
+			case <-c.certWatcherStopChan:
 				ticker.Stop()
 				return
 			case <-ticker.C:
@@ -1937,7 +1937,7 @@ func (c *Client) Close() error {
 	if c.LoadBalancer() != nil {
 		silently(c.LoadBalancer().Close())
 	}
-	close(c.stopChan)
+	close(c.certWatcherStopChan)
 	return nil
 }
 

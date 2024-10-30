@@ -11,6 +11,7 @@ import (
 	"compress/gzip"
 	"compress/lzw"
 	"crypto/md5"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -880,6 +881,21 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 
 func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(fn))
+}
+
+func createTestTLSServer(fn func(w http.ResponseWriter, r *http.Request), certPath, certKeyPath string) *httptest.Server {
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(fn))
+	ts.TLS = &tls.Config{
+		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			cert, err := tls.LoadX509KeyPair(certPath, certKeyPath)
+			if err != nil {
+				return nil, err
+			}
+			return &cert, nil
+		},
+	}
+	ts.StartTLS()
+	return ts
 }
 
 func dcnl() *Client {
