@@ -7,6 +7,7 @@ package resty
 import (
 	"errors"
 	"net"
+	"net/http"
 	"net/url"
 	"sync/atomic"
 	"testing"
@@ -494,4 +495,61 @@ func Test_extractBaseURL(t *testing.T) {
 			assertEqual(t, tt.expectedURL, outputURL)
 		})
 	}
+}
+
+func TestLoadBalancerRequestFailures(t *testing.T) {
+	ts1 := createGetServer(t)
+	ts1.Close()
+
+	ts2 := createGetServer(t)
+	defer ts2.Close()
+
+	rr, err := NewWeightedRoundRobin(200*time.Millisecond,
+		&Host{BaseURL: ts1.URL, Weight: 50}, &Host{BaseURL: ts2.URL, Weight: 50})
+	assertNil(t, err)
+
+	c := dcnl()
+	defer c.Close()
+
+	c.SetLoadBalancer(rr)
+
+	ts1URL, ts2URL := 0, 0
+	for i := 0; i < 10; i++ {
+		resp, _ := c.R().Get("/")
+		switch resp.Request.baseURL {
+		case ts1.URL:
+			ts1URL++
+		case ts2.URL:
+			assertError(t, err)
+			ts2URL++
+		}
+	}
+	assertEqual(t, 3, ts1URL)
+	assertEqual(t, 7, ts2URL)
+}
+
+type mockTimeoutErr struct{}
+
+func (e *mockTimeoutErr) Error() string { return "i/o timeout" }
+func (e *mockTimeoutErr) Timeout() bool { return true }
+
+func TestLoadBalancerCoverage(t *testing.T) {
+	t.Run("mock net op timeout error", func(t *testing.T) {
+		wrr, err := NewWeightedRoundRobin(0)
+		assertNil(t, err)
+
+		c := dcnl()
+		defer c.Close()
+
+		c.SetLoadBalancer(wrr)
+
+		req := c.R()
+
+		netOpErr := &net.OpError{Op: "mock", Net: "mock", Err: &mockTimeoutErr{}}
+		req.sendLoadBalancerFeedback(&Response{}, netOpErr)
+
+		req.sendLoadBalancerFeedback(&Response{RawResponse: &http.Response{
+			StatusCode: http.StatusInternalServerError,
+		}}, nil)
+	})
 }
