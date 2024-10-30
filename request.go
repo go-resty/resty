@@ -1308,6 +1308,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	r.IsDone = true
 	r.client.onErrorHooks(r, res, err)
 	r.sendLoadBalancerFeedback() // TODO revisit on call and success criteria
+	releaseBuffer(r.bodyBuf)
 	return
 }
 
