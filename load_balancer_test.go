@@ -505,7 +505,7 @@ func TestLoadBalancerRequestFailures(t *testing.T) {
 	defer ts2.Close()
 
 	rr, err := NewWeightedRoundRobin(200*time.Millisecond,
-		&Host{BaseURL: ts1.URL, Weight: 50}, &Host{BaseURL: ts2.URL, Weight: 50})
+		&Host{BaseURL: ts1.URL, Weight: 50, MaxFailures: 3}, &Host{BaseURL: ts2.URL, Weight: 50})
 	assertNil(t, err)
 
 	c := dcnl()

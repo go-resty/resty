@@ -836,6 +836,11 @@ func TestRetryDefaultConditions(t *testing.T) {
 		assertNotNil(t, err)
 		assertEqual(t, true, strings.Contains(err.Error(), "net/http: invalid header field name"))
 	})
+
+	t.Run("nil values", func(t *testing.T) {
+		result := applyRetryDefaultConditions(nil, nil)
+		assertEqual(t, false, result)
+	})
 }
 
 func TestRetryCoverage(t *testing.T) {

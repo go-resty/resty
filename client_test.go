@@ -1087,14 +1087,14 @@ func TestClientOnResponseError(t *testing.T) {
 					assertNotNil(t, v.Err)
 				}
 			}
-			var hook1, hook2, hook3, hook4, hook5, hook6 int
+			var errorHook1, errorHook2, successHook1, successHook2, panicHook1, panicHook2 int
 			defer func() {
 				if rec := recover(); rec != nil {
 					assertEqual(t, true, test.panics)
-					assertEqual(t, 0, hook1)
-					assertEqual(t, 0, hook3)
-					assertEqual(t, 1, hook5)
-					assertEqual(t, 1, hook6)
+					assertEqual(t, 0, errorHook1)
+					assertEqual(t, 0, successHook1)
+					assertEqual(t, 1, panicHook1)
+					assertEqual(t, 1, panicHook2)
 				}
 			}()
 			c := dcnl().
@@ -1110,29 +1110,29 @@ func TestClientOnResponseError(t *testing.T) {
 				}).
 				OnError(func(r *Request, err error) {
 					assertErrorHook(r, err)
-					hook1++
+					errorHook1++
 				}).
 				OnError(func(r *Request, err error) {
 					assertErrorHook(r, err)
-					hook2++
+					errorHook2++
 				}).
 				OnPanic(func(r *Request, err error) {
 					assertErrorHook(r, err)
-					hook5++
+					panicHook1++
 				}).
 				OnPanic(func(r *Request, err error) {
 					assertErrorHook(r, err)
-					hook6++
+					panicHook2++
 				}).
 				OnSuccess(func(c *Client, resp *Response) {
 					assertNotNil(t, c)
 					assertNotNil(t, resp)
-					hook3++
+					successHook1++
 				}).
 				OnSuccess(func(c *Client, resp *Response) {
 					assertNotNil(t, c)
 					assertNotNil(t, resp)
-					hook4++
+					successHook2++
 				})
 			if test.setup != nil {
 				test.setup(c)
@@ -1140,16 +1140,16 @@ func TestClientOnResponseError(t *testing.T) {
 			_, err := c.R().Get(ts.URL + "/profile")
 			if test.isError {
 				assertNotNil(t, err)
-				assertEqual(t, 1, hook1)
-				assertEqual(t, 1, hook2)
-				assertEqual(t, 0, hook3)
-				assertEqual(t, 0, hook5)
+				assertEqual(t, 1, errorHook1)
+				assertEqual(t, 1, errorHook2)
+				assertEqual(t, 0, successHook1)
+				assertEqual(t, 0, panicHook1)
 			} else {
 				assertError(t, err)
-				assertEqual(t, 0, hook1)
-				assertEqual(t, 1, hook3)
-				assertEqual(t, 1, hook4)
-				assertEqual(t, 0, hook5)
+				assertEqual(t, 0, errorHook1)
+				assertEqual(t, 1, successHook1)
+				assertEqual(t, 1, successHook2)
+				assertEqual(t, 0, panicHook1)
 			}
 		})
 	}

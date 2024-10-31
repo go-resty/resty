@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -122,4 +123,7 @@ func TestUtilMiscTestCoverage(t *testing.T) {
 	}{}
 	err := decodeJSON(bytes.NewReader([]byte(`{\"  \": \"some value\"}`)), &v)
 	assertEqual(t, "invalid character '\\\\' looking for beginning of object key string", err.Error())
+
+	ireErr := &invalidRequestError{Err: errors.New("test coverage")}
+	assertEqual(t, "test coverage", ireErr.Error())
 }

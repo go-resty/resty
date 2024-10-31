@@ -102,7 +102,7 @@ func parseRequestURL(c *Client, r *Request) error {
 	// Parsing request URL
 	reqURL, err := url.Parse(r.URL)
 	if err != nil {
-		return err
+		return &invalidRequestError{Err: err}
 	}
 
 	// If [Request.URL] is a relative path, then the following
@@ -119,13 +119,13 @@ func parseRequestURL(c *Client, r *Request) error {
 		if r.client.LoadBalancer() != nil {
 			r.baseURL, err = r.client.LoadBalancer().Next()
 			if err != nil {
-				return err
+				return &invalidRequestError{Err: err}
 			}
 		}
 
 		reqURL, err = url.Parse(r.baseURL + r.URL)
 		if err != nil {
-			return err
+			return &invalidRequestError{Err: err}
 		}
 	}
 
@@ -190,17 +190,22 @@ func parseRequestHeader(c *Client, r *Request) error {
 }
 
 func parseRequestBody(c *Client, r *Request) error {
+	if r.isMultiPart && !(r.Method == MethodPost || r.Method == MethodPut || r.Method == MethodPatch) {
+		err := fmt.Errorf("resty: multipart is not allowed in HTTP verb: %v", r.Method)
+		return &invalidRequestError{Err: err}
+	}
+
 	if r.isPayloadSupported() {
 		switch {
 		case r.isMultiPart: // Handling Multipart
 			if err := handleMultipart(c, r); err != nil {
-				return err
+				return &invalidRequestError{Err: err}
 			}
 		case len(c.FormData()) > 0 || len(r.FormData) > 0: // Handling Form Data
 			handleFormData(c, r)
 		case r.Body != nil: // Handling Request body
 			if err := handleRequestBody(c, r); err != nil {
-				return err
+				return &invalidRequestError{Err: err}
 			}
 		}
 	} else {
@@ -234,7 +239,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	}
 
 	if err != nil {
-		return
+		return &invalidRequestError{Err: err}
 	}
 
 	// get the context reference back from underlying RawRequest

@@ -275,20 +275,12 @@ func cloneCookie(c *http.Cookie) *http.Cookie {
 	}
 }
 
-var mimeInvalidBoundaryErrStr = "mime: invalid boundary character"
+type invalidRequestError struct {
+	Err error
+}
 
-func isInvalidRequestError(err error) bool {
-	if u, ok := err.(*url.Error); ok {
-		if u.Op == "parse" {
-			return true
-		}
-	}
-	if err.Error() == mimeInvalidBoundaryErrStr ||
-		err == ErrNoActiveHost ||
-		err == ErrUnsupportedRequestBodyKind {
-		return true
-	}
-	return false
+func (ire *invalidRequestError) Error() string {
+	return ire.Err.Error()
 }
 
 func drainBody(res *Response) {

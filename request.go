@@ -1203,13 +1203,6 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		}
 	}()
 
-	if r.isMultiPart && !(method == MethodPost || method == MethodPut || method == MethodPatch) {
-		// No OnError hook here since this is a request validation error
-		err := fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
-		r.client.onInvalidHooks(r, err)
-		return nil, err
-	}
-
 	r.Method = method
 	r.URL = url
 
@@ -1223,18 +1216,21 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		backoff = newBackoffWithJitter(r.RetryWaitTime, r.RetryMaxWaitTime)
 	}
 
+	isInvalidRequestErr := false
 	// first request + retry count = total no. of requests (aka total attempts)
 	for i := 0; i <= r.RetryCount; i++ {
 		r.Attempt++
 		err = nil
 		res, err = r.client.execute(r)
 		if err != nil {
-			r.sendLoadBalancerFeedback(res, err)
-			if isInvalidRequestError(err) {
-				return
+			if irErr, ok := err.(*invalidRequestError); ok {
+				err = irErr.Err
+				isInvalidRequestErr = true
+				break
 			}
 			if r.Context().Err() != nil {
-				return res, wrapErrors(r.Context().Err(), err)
+				err = wrapErrors(r.Context().Err(), err)
+				break
 			}
 		}
 
@@ -1307,7 +1303,13 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	}
 
 	r.IsDone = true
-	r.client.onErrorHooks(r, res, err)
+
+	if isInvalidRequestErr {
+		r.client.onInvalidHooks(r, err)
+	} else {
+		r.client.onErrorHooks(r, res, err)
+	}
+
 	r.sendLoadBalancerFeedback(res, err)
 	releaseBuffer(r.bodyBuf)
 	return

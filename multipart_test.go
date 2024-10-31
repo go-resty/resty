@@ -167,24 +167,24 @@ func TestMultipartUploadFileNotOnGetOrDelete(t *testing.T) {
 		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
 		Get(ts.URL + "/upload")
 
-	assertEqual(t, "multipart content is not allowed in HTTP verb [GET]", err.Error())
+	assertEqual(t, "resty: multipart is not allowed in HTTP verb: GET", err.Error())
 
 	_, err = dcnldr().
 		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
 		Delete(ts.URL + "/upload")
 
-	assertEqual(t, "multipart content is not allowed in HTTP verb [DELETE]", err.Error())
+	assertEqual(t, "resty: multipart is not allowed in HTTP verb: DELETE", err.Error())
 
 	var hook1Count int
 	var hook2Count int
 	_, err = dcnl().
 		OnInvalid(func(r *Request, err error) {
-			assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+			assertEqual(t, "resty: multipart is not allowed in HTTP verb: HEAD", err.Error())
 			assertNotNil(t, r)
 			hook1Count++
 		}).
 		OnInvalid(func(r *Request, err error) {
-			assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+			assertEqual(t, "resty: multipart is not allowed in HTTP verb: HEAD", err.Error())
 			assertNotNil(t, r)
 			hook2Count++
 		}).
@@ -192,7 +192,7 @@ func TestMultipartUploadFileNotOnGetOrDelete(t *testing.T) {
 		SetFile("profile_img", filepath.Join(basePath, "test-img.png")).
 		Head(ts.URL + "/upload")
 
-	assertEqual(t, "multipart content is not allowed in HTTP verb [HEAD]", err.Error())
+	assertEqual(t, "resty: multipart is not allowed in HTTP verb: HEAD", err.Error())
 	assertEqual(t, 1, hook1Count)
 	assertEqual(t, 1, hook2Count)
 }
