@@ -1305,9 +1305,6 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			mf.close()
 		}
 	}
-	if err != nil {
-		r.log.Errorf("%v", err)
-	}
 
 	r.IsDone = true
 	r.client.onErrorHooks(r, res, err)
