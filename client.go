@@ -1161,7 +1161,11 @@ func (c *Client) RetryCount() int {
 }
 
 // SetRetryCount method enables retry on Resty client and allows you
-// to set no. of retry count. Resty uses a Backoff mechanism.
+// to set no. of retry count.
+//
+//	first attempt + retry count = total attempts
+//
+// See [Request.SetRetryStrategy]
 func (c *Client) SetRetryCount(count int) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()

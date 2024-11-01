@@ -67,7 +67,12 @@ type Request struct {
 	RetryMaxWaitTime           time.Duration
 	RetryStrategy              RetryStrategyFunc
 	IsRetryDefaultConditions   bool
-	Attempt                    int
+
+	// Attempt provides insights into no. of attempts
+	// Resty made.
+	//
+	//	first attempt + retry count = total attempts
+	Attempt int
 
 	isMultiPart         bool
 	isFormData          bool
@@ -942,7 +947,11 @@ func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 }
 
 // SetRetryCount method enables retry on Resty client and allows you
-// to set no. of retry count. Resty uses a Backoff mechanism.
+// to set no. of retry count.
+//
+//	first attempt + retry count = total attempts
+//
+// See [Request.SetRetryStrategy]
 func (r *Request) SetRetryCount(count int) *Request {
 	r.RetryCount = count
 	return r
@@ -968,7 +977,7 @@ func (r *Request) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Request {
 // it is used to get wait time before each retry. It overrides the retry
 // strategy set at the client instance level, see [Client.SetRetryStrategy]
 //
-// Default (nil) implies exponential backoff with a jitter strategy
+// Default (nil) implies capped exponential backoff with a jitter strategy
 func (r *Request) SetRetryStrategy(rs RetryStrategyFunc) *Request {
 	r.RetryStrategy = rs
 	return r
@@ -1217,7 +1226,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	}
 
 	isInvalidRequestErr := false
-	// first request + retry count = total no. of requests (aka total attempts)
+	// first attempt + retry count = total attempts
 	for i := 0; i <= r.RetryCount; i++ {
 		r.Attempt++
 		err = nil
