@@ -11,11 +11,13 @@ import (
 	"crypto/tls"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -1722,41 +1724,66 @@ func TestTraceInfo(t *testing.T) {
 	serverAddr := ts.URL[strings.LastIndex(ts.URL, "/")+1:]
 
 	client := dcnl()
-	client.SetBaseURL(ts.URL).EnableTrace()
-	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
-		resp, err := client.R().Get(u)
-		assertNil(t, err)
-		assertNotNil(t, resp)
 
-		tr := resp.Request.TraceInfo()
-		assertEqual(t, true, tr.DNSLookup >= 0)
-		assertEqual(t, true, tr.ConnTime >= 0)
-		assertEqual(t, true, tr.TLSHandshake >= 0)
-		assertEqual(t, true, tr.ServerTime >= 0)
-		assertEqual(t, true, tr.ResponseTime >= 0)
-		assertEqual(t, true, tr.TotalTime >= 0)
-		assertEqual(t, true, tr.TotalTime < time.Hour)
-		assertEqual(t, true, tr.TotalTime == resp.Time())
-		assertEqual(t, tr.RemoteAddr.String(), serverAddr)
-	}
+	t.Run("enable trace on client", func(t *testing.T) {
+		client.SetBaseURL(ts.URL).EnableTrace()
+		for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
+			resp, err := client.R().Get(u)
+			assertNil(t, err)
+			assertNotNil(t, resp)
 
-	client.DisableTrace()
+			tr := resp.Request.TraceInfo()
+			assertEqual(t, true, tr.DNSLookup >= 0)
+			assertEqual(t, true, tr.ConnTime >= 0)
+			assertEqual(t, true, tr.TLSHandshake >= 0)
+			assertEqual(t, true, tr.ServerTime >= 0)
+			assertEqual(t, true, tr.ResponseTime >= 0)
+			assertEqual(t, true, tr.TotalTime >= 0)
+			assertEqual(t, true, tr.TotalTime < time.Hour)
+			assertEqual(t, true, tr.TotalTime == resp.Time())
+			assertEqual(t, tr.RemoteAddr.String(), serverAddr)
+		}
 
-	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
-		resp, err := client.R().EnableTrace().Get(u)
-		assertNil(t, err)
-		assertNotNil(t, resp)
+		client.DisableTrace()
+	})
 
-		tr := resp.Request.TraceInfo()
-		assertEqual(t, true, tr.DNSLookup >= 0)
-		assertEqual(t, true, tr.ConnTime >= 0)
-		assertEqual(t, true, tr.TLSHandshake >= 0)
-		assertEqual(t, true, tr.ServerTime >= 0)
-		assertEqual(t, true, tr.ResponseTime >= 0)
-		assertEqual(t, true, tr.TotalTime >= 0)
-		assertEqual(t, true, tr.TotalTime == resp.Time())
-		assertEqual(t, tr.RemoteAddr.String(), serverAddr)
-	}
+	t.Run("enable trace on request", func(t *testing.T) {
+		for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
+			resp, err := client.R().EnableTrace().Get(u)
+			assertNil(t, err)
+			assertNotNil(t, resp)
+
+			tr := resp.Request.TraceInfo()
+			assertEqual(t, true, tr.DNSLookup >= 0)
+			assertEqual(t, true, tr.ConnTime >= 0)
+			assertEqual(t, true, tr.TLSHandshake >= 0)
+			assertEqual(t, true, tr.ServerTime >= 0)
+			assertEqual(t, true, tr.ResponseTime >= 0)
+			assertEqual(t, true, tr.TotalTime >= 0)
+			assertEqual(t, true, tr.TotalTime == resp.Time())
+			assertEqual(t, tr.RemoteAddr.String(), serverAddr)
+		}
+
+	})
+
+	t.Run("enable trace and debug on request", func(t *testing.T) {
+		c, logBuf := dcldb()
+		c.SetBaseURL(ts.URL)
+
+		requestURLs := []string{"/", "/json", "/long-text", "/long-json"}
+		for _, u := range requestURLs {
+			resp, err := c.R().EnableTrace().EnableDebug().Get(u)
+			assertNil(t, err)
+			assertNotNil(t, resp)
+		}
+
+		logContent := logBuf.String()
+		t.Log(logContent)
+		fmt.Println(logContent)
+		regexTraceInfoHeader := regexp.MustCompile("TRACE INFO:")
+		matches := regexTraceInfoHeader.FindAllStringIndex(logContent, -1)
+		assertEqual(t, len(requestURLs), len(matches))
+	})
 
 	// for sake of hook funcs
 	_, _ = client.R().SetTrace(true).Get("https://httpbin.org/get")

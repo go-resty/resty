@@ -83,7 +83,7 @@ type Request struct {
 	values              map[string]any
 	client              *Client
 	bodyBuf             *bytes.Buffer
-	clientTrace         *clientTrace
+	trace               *clientTrace
 	log                 Logger
 	baseURL             string
 	multipartBoundary   string
@@ -1094,7 +1094,7 @@ func (r *Request) SetAllowMethodDeletePayload(allow bool) *Request {
 // If either the [Client.EnableTrace] or [Request.EnableTrace] function has not been called
 // before the request is made, an empty [resty.TraceInfo] object is returned.
 func (r *Request) TraceInfo() TraceInfo {
-	ct := r.clientTrace
+	ct := r.trace
 
 	if ct == nil {
 		return TraceInfo{}
@@ -1382,7 +1382,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	// reset values
 	rr.Time = time.Time{}
 	rr.Attempt = 0
-	rr.initClientTrace()
+	rr.initTraceIfEnabled()
 	rr.resultCurlCmd = new(string)
 	r.values = make(map[string]any)
 	r.multipartErrChan = nil
@@ -1470,10 +1470,10 @@ func (r *Request) initValuesMap() {
 	}
 }
 
-func (r *Request) initClientTrace() {
+func (r *Request) initTraceIfEnabled() {
 	if r.IsTrace {
-		r.clientTrace = new(clientTrace)
-		r.ctx = r.clientTrace.createContext(r.Context())
+		r.trace = new(clientTrace)
+		r.ctx = r.trace.createContext(r.Context())
 	}
 }
 

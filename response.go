@@ -108,7 +108,7 @@ func (r *Response) String() string {
 // See [Response.ReceivedAt] to know when the client received a response and see
 // `Response.Request.Time` to know when the client sent a request.
 func (r *Response) Time() time.Duration {
-	if r.Request.clientTrace != nil {
+	if r.Request.trace != nil {
 		return r.Request.TraceInfo().TotalTime
 	}
 	return r.receivedAt.Sub(r.Request.Time)
@@ -139,8 +139,8 @@ func (r *Response) IsError() bool {
 
 func (r *Response) setReceivedAt() {
 	r.receivedAt = time.Now()
-	if r.Request.clientTrace != nil {
-		r.Request.clientTrace.endTime = r.receivedAt
+	if r.Request.trace != nil {
+		r.Request.trace.endTime = r.receivedAt
 	}
 }
 

@@ -226,7 +226,7 @@ func parseRequestBody(c *Client, r *Request) error {
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
 	// init client trace if enabled
-	r.initClientTrace()
+	r.initTraceIfEnabled()
 
 	if r.bodyBuf == nil {
 		if reader, ok := r.Body.(io.Reader); ok {
@@ -381,6 +381,10 @@ func responseDebugLogger(c *Client, res *Response) error {
 		debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
 	} else {
 		debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)
+	}
+	if res.Request.IsTrace {
+		debugLog += "------------------------------------------------------------------------------\n"
+		debugLog += fmt.Sprintf("%v\n", res.Request.TraceInfo())
 	}
 	debugLog += "==============================================================================\n"
 
