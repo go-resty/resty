@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"errors"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -106,6 +108,20 @@ func TestRestyErrorFuncs(t *testing.T) {
 
 	e = wrapErrors(nil, nie1)
 	assertEqual(t, "inner error 1", e.Error())
+}
+
+func Test_createDirectory(t *testing.T) {
+	errMsg := "test dir error"
+	mkdirAll = func(path string, perm os.FileMode) error {
+		return errors.New(errMsg)
+	}
+	t.Cleanup(func() {
+		mkdirAll = os.MkdirAll
+	})
+
+	tempDir := filepath.Join(t.TempDir(), "test-dir")
+	err := createDirectory(tempDir)
+	assertEqual(t, errMsg, err.Error())
 }
 
 // This test methods exist for test coverage purpose

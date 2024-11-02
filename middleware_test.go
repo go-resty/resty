@@ -1,13 +1,21 @@
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// resty source code and usage is governed by a MIT style
+// license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
+
 package resty
 
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -1036,4 +1044,43 @@ func Benchmark_parseRequestBody_MultiPart(b *testing.B) {
 			b.Errorf("parseRequestBody() error = %v", err)
 		}
 	}
+}
+
+func TestSaveResponseToFile(t *testing.T) {
+	c := dcnl()
+	tempDir := t.TempDir()
+
+	errDirMsg := "test dir error"
+	mkdirAll = func(_ string, _ os.FileMode) error {
+		return errors.New(errDirMsg)
+	}
+	errFileMsg := "test file error"
+	createFile = func(_ string) (*os.File, error) {
+		return nil, errors.New(errFileMsg)
+	}
+	t.Cleanup(func() {
+		mkdirAll = os.MkdirAll
+		createFile = os.Create
+	})
+
+	// dir create error
+	req1 := c.R()
+	req1.SetOutputFile(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
+	err1 := saveResponseIntoFile(c, &Response{Request: req1})
+	assertEqual(t, errDirMsg, err1.Error())
+
+	// file create error
+	req2 := c.R()
+	req2.SetOutputFile(filepath.Join(tempDir, "sample.txt"))
+	err2 := saveResponseIntoFile(c, &Response{Request: req2})
+	assertEqual(t, errFileMsg, err2.Error())
+}
+
+func TestMiddlewareCoverage(t *testing.T) {
+	c := dcnl()
+
+	req1 := c.R()
+	req1.URL = "//invalid-url  .local"
+	err1 := createHTTPRequest(c, req1)
+	assertEqual(t, true, strings.Contains(err1.Error(), "invalid character"))
 }

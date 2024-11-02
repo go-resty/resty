@@ -11,7 +11,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -585,6 +584,7 @@ func handleRequestBody(c *Client, r *Request) error {
 		} else if xmlKey == encKey {
 			if inferKind(r.Body) != reflect.Struct {
 				releaseBuffer(r.bodyBuf)
+				r.bodyBuf = nil
 				return ErrUnsupportedRequestBodyKind
 			}
 		}
@@ -593,10 +593,12 @@ func handleRequestBody(c *Client, r *Request) error {
 		encFunc, found := c.inferContentTypeEncoder(contentType, encKey)
 		if !found {
 			releaseBuffer(r.bodyBuf)
+			r.bodyBuf = nil
 			return fmt.Errorf("resty: content-type encoder not found for %s", contentType)
 		}
 		if err := encFunc(r.bodyBuf, r.Body); err != nil {
 			releaseBuffer(r.bodyBuf)
+			r.bodyBuf = nil
 			return err
 		}
 	}
@@ -617,7 +619,7 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 			return err
 		}
 
-		outFile, err := os.Create(file)
+		outFile, err := createFile(file)
 		if err != nil {
 			return err
 		}

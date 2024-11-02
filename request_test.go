@@ -2167,9 +2167,6 @@ func TestRequestPanicContext(t *testing.T) {
 
 	//lint:ignore SA1012 test case nil check
 	_ = c.R().WithContext(nil)
-
-	//lint:ignore SA1012 test case nil check
-	_ = c.R().Clone(nil)
 }
 
 // This test methods exist for test coverage purpose
@@ -2213,6 +2210,18 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	invalidJsonBytes := []byte(`{\" \": "value here"}`)
 	result := jsonIndent(invalidJsonBytes)
 	assertEqual(t, string(invalidJsonBytes), string(result))
+
+	defer func() {
+		if rec := recover(); rec != nil {
+			if err, ok := rec.(error); ok {
+				assertEqual(t, true, strings.Contains(err.Error(), "resty: Request.Clone nil context"))
+			}
+		}
+	}()
+	r6 := c.R()
+	//lint:ignore SA1012 test case nil check
+	r62 := r6.Clone(nil)
+	assertEqual(t, nil, r62.ctx)
 }
 
 func TestRequestDataRace(t *testing.T) {

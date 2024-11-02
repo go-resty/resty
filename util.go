@@ -137,10 +137,15 @@ func firstNonEmpty(v ...string) string {
 	return ""
 }
 
+var (
+	mkdirAll   = os.MkdirAll
+	createFile = os.Create
+)
+
 func createDirectory(dir string) (err error) {
 	if _, err = os.Stat(dir); err != nil {
 		if os.IsNotExist(err) {
-			if err = os.MkdirAll(dir, 0755); err != nil {
+			if err = mkdirAll(dir, 0755); err != nil {
 				return
 			}
 		}
@@ -184,14 +189,19 @@ func acquireBuffer() *bytes.Buffer {
 		buf.Reset()
 		return buf
 	}
+	bufPool.Put(buf)
 	return new(bytes.Buffer)
 }
 
 func releaseBuffer(buf *bytes.Buffer) {
 	if buf != nil {
-		if buf.Len() == 0 {
-			buf.Reset()
-		}
+		buf.Reset()
+		bufPool.Put(buf)
+	}
+}
+
+func backToBufPool(buf *bytes.Buffer) {
+	if buf != nil {
 		bufPool.Put(buf)
 	}
 }

@@ -1320,7 +1320,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	}
 
 	r.sendLoadBalancerFeedback(res, err)
-	releaseBuffer(r.bodyBuf)
+	backToBufPool(r.bodyBuf)
 	return
 }
 
