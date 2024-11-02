@@ -296,7 +296,7 @@ func createCurlCmd(c *Client, r *Request) (err error) {
 		if r.resultCurlCmd == nil {
 			r.resultCurlCmd = new(string)
 		}
-		*r.resultCurlCmd = buildCurlRequest(r)
+		*r.resultCurlCmd = buildCurlCmd(r)
 	}
 	return nil
 }

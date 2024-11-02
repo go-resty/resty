@@ -4,26 +4,25 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"regexp"
 
 	"net/url"
 	"strings"
-
-	"github.com/go-resty/resty/v3/shellescape"
 )
 
-func buildCurlRequest(req *Request) (curl string) {
+func buildCurlCmd(req *Request) string {
 	// 1. Generate curl raw headers
-	curl = "curl -X " + req.Method + " "
+	var curl = "curl -X " + req.Method + " "
 	headers := dumpCurlHeaders(req.RawRequest)
 	for _, kv := range *headers {
-		curl += "-H " + shellescape.Quote(kv[0]+": "+kv[1]) + " "
+		curl += "-H " + cmdQuote(kv[0]+": "+kv[1]) + " "
 	}
 
 	// 2. Generate curl cookies
 	// TODO validate this block of code, I think its not required since cookie captured via Headers
 	if cookieJar := req.client.CookieJar(); cookieJar != nil {
 		if cookies := cookieJar.Cookies(req.RawRequest.URL); len(cookies) > 0 {
-			curl += " -H " + shellescape.Quote(dumpCurlCookies(cookies)) + " "
+			curl += "-H " + cmdQuote(dumpCurlCookies(cookies)) + " "
 		}
 	}
 
@@ -31,17 +30,18 @@ func buildCurlRequest(req *Request) (curl string) {
 	if req.RawRequest.GetBody != nil {
 		body, err := req.RawRequest.GetBody()
 		if err != nil {
+			req.log.Errorf("curl: %v", err)
 			return ""
 		}
 		buf, _ := io.ReadAll(body)
-		curl += "-d " + shellescape.Quote(string(bytes.TrimRight(buf, "\n")))
+		curl += "-d " + cmdQuote(string(bytes.TrimRight(buf, "\n"))) + " "
 	}
 
-	urlString := shellescape.Quote(req.RawRequest.URL.String())
+	urlString := cmdQuote(req.RawRequest.URL.String())
 	if urlString == "''" {
 		urlString = "'http://unexecuted-request'"
 	}
-	curl += " " + urlString
+	curl += urlString
 	return curl
 }
 
@@ -74,4 +74,23 @@ func dumpCurlHeaders(req *http.Request) *[][2]string {
 		}
 	}
 	return &headers
+}
+
+var regexCmdQuote = regexp.MustCompile(`[^\w@%+=:,./-]`)
+
+// cmdQuote method to escape arbitrary strings for a safe use as
+// command line arguments in the most common POSIX shells.
+//
+// The original Python package which this work was inspired by can be found
+// at https://pypi.python.org/pypi/shellescape.
+func cmdQuote(s string) string {
+	if len(s) == 0 {
+		return "''"
+	}
+
+	if regexCmdQuote.MatchString(s) {
+		return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+	}
+
+	return s
 }

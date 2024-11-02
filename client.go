@@ -367,7 +367,9 @@ func (c *Client) CookieJar() http.CookieJar {
 //
 //	client.SetCookieJar(nil)
 func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
-	c.Client().Jar = jar
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.httpClient.Jar = jar
 	return c
 }
 

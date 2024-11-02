@@ -105,13 +105,19 @@ func (r *Request) GenerateCurlCommand() string {
 	if r.RawRequest == nil {
 		r.client.executeBefore(r) // mock with r.Get("/")
 	}
-	*r.resultCurlCmd = buildCurlRequest(r)
+	*r.resultCurlCmd = buildCurlCmd(r)
 	return *r.resultCurlCmd
 }
 
 // SetMethod method used to set the HTTP verb for the request
 func (r *Request) SetMethod(m string) *Request {
 	r.Method = m
+	return r
+}
+
+// SetURL method used to set the request URL for the request
+func (r *Request) SetURL(url string) *Request {
+	r.URL = url
 	return r
 }
 
