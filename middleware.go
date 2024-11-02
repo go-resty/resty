@@ -402,7 +402,9 @@ func responseDebugLogger(c *Client, res *Response) error {
 }
 
 func parseResponseBody(c *Client, res *Response) (err error) {
-	if res.Request.DoNotParseResponse || res.Request.isSaveResponse {
+	if res.Err != nil ||
+		res.Request.DoNotParseResponse ||
+		res.Request.isSaveResponse {
 		return // move on
 	}
 
@@ -616,34 +618,36 @@ func handleRequestBody(c *Client, r *Request) error {
 }
 
 func saveResponseIntoFile(c *Client, res *Response) error {
-	if res.Request.isSaveResponse {
-		file := ""
-
-		if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(res.Request.OutputFile) {
-			file += c.OutputDirectory() + string(filepath.Separator)
-		}
-
-		file = filepath.Clean(file + res.Request.OutputFile)
-		if err := createDirectory(filepath.Dir(file)); err != nil {
-			return err
-		}
-
-		outFile, err := createFile(file)
-		if err != nil {
-			return err
-		}
-		defer closeq(outFile)
-
-		// io.Copy reads maximum 32kb size, it is perfect for large file download too
-		defer closeq(res.Body)
-
-		written, err := io.Copy(outFile, res.Body)
-		if err != nil {
-			return err
-		}
-
-		res.size = written
+	if res.Err != nil || !res.Request.isSaveResponse {
+		return nil
 	}
+
+	file := ""
+
+	if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(res.Request.OutputFile) {
+		file += c.OutputDirectory() + string(filepath.Separator)
+	}
+
+	file = filepath.Clean(file + res.Request.OutputFile)
+	if err := createDirectory(filepath.Dir(file)); err != nil {
+		return err
+	}
+
+	outFile, err := createFile(file)
+	if err != nil {
+		return err
+	}
+	defer closeq(outFile)
+
+	// io.Copy reads maximum 32kb size, it is perfect for large file download too
+	defer closeq(res.Body)
+
+	written, err := io.Copy(outFile, res.Body)
+	if err != nil {
+		return err
+	}
+
+	res.size = written
 
 	return nil
 }

@@ -11,7 +11,6 @@ import (
 	"crypto/tls"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -1778,8 +1777,6 @@ func TestTraceInfo(t *testing.T) {
 		}
 
 		logContent := logBuf.String()
-		t.Log(logContent)
-		fmt.Println(logContent)
 		regexTraceInfoHeader := regexp.MustCompile("TRACE INFO:")
 		matches := regexTraceInfoHeader.FindAllStringIndex(logContent, -1)
 		assertEqual(t, len(requestURLs), len(matches))

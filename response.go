@@ -26,6 +26,10 @@ type Response struct {
 	RawResponse *http.Response
 	IsRead      bool
 
+	// Err field used to cascade the response middleware error
+	// in the chain
+	Err error
+
 	bodyBytes  []byte
 	size       int64
 	receivedAt time.Time

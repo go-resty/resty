@@ -1312,7 +1312,7 @@ func TestResponseBodyLimit(t *testing.T) {
 	})
 	defer ts.Close()
 
-	t.Run("Client body limit", func(t *testing.T) {
+	t.Run("client body limit", func(t *testing.T) {
 		c := dcnl().SetResponseBodyLimit(1024)
 		assertEqual(t, int64(1024), c.ResponseBodyLimit())
 		resp, err := c.R().Get(ts.URL + "/")

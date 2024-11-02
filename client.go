@@ -2020,9 +2020,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 	if resp != nil {
 		response.Body = resp.Body
-
-		err := response.wrapContentDecompressor()
-		if err != nil {
+		if err = response.wrapContentDecompressor(); err != nil {
 			return response, err
 		}
 
@@ -2031,7 +2029,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	if !req.DoNotParseResponse && (req.Debug || req.ResponseBodyUnlimitedReads) {
 		response.wrapCopyReadCloser()
 
-		if err := response.readAll(); err != nil {
+		if err = response.readAll(); err != nil {
 			return response, err
 		}
 	}
@@ -2040,17 +2038,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		return response, err
 	}
 
-	if req.DoNotParseResponse {
-		return response, err
-	}
-
 	// Apply Response middleware
 	for _, f := range c.afterResponseMiddlewares() {
 		if err = f(c, response); err != nil {
-			return response, err
+			response.Err = wrapErrors(err, response.Err)
 		}
 	}
 
+	err = response.Err
 	return response, err
 }
 
@@ -2092,19 +2087,19 @@ func (e *ResponseError) Unwrap() error {
 // Helper to run errorHooks hooks.
 // It wraps the error in a [ResponseError] if the resp is not nil
 // so hooks can access it.
-func (c *Client) onErrorHooks(req *Request, resp *Response, err error) {
+func (c *Client) onErrorHooks(req *Request, res *Response, err error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	if err != nil {
-		if resp != nil { // wrap with ResponseError
-			err = &ResponseError{Response: resp, Err: err}
+		if res != nil { // wrap with ResponseError
+			err = &ResponseError{Response: res, Err: err}
 		}
 		for _, h := range c.errorHooks {
 			h(req, err)
 		}
 	} else {
 		for _, h := range c.successHooks {
-			h(c, resp)
+			h(c, res)
 		}
 	}
 }
