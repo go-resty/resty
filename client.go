@@ -67,6 +67,7 @@ var (
 	hdrAuthorizationKey   = http.CanonicalHeaderKey("Authorization")
 	hdrWwwAuthenticateKey = http.CanonicalHeaderKey("WWW-Authenticate")
 	hdrRetryAfterKey      = http.CanonicalHeaderKey("Retry-After")
+	hdrCookieKey          = http.CanonicalHeaderKey("Cookie")
 
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json"
@@ -89,11 +90,9 @@ type (
 	// PreRequestHook type is for the request hook, called right before the request is sent
 	PreRequestHook func(*Client, *http.Request) error
 
-	// RequestLogCallback type is for request logs, called before the request is logged
-	RequestLogCallback func(*RequestLog) error
-
-	// ResponseLogCallback type is for response logs, called before the response is logged
-	ResponseLogCallback func(*ResponseLog) error
+	// DebugLogCallback type is for request and response debug log callback purpose.
+	// It gets called before Resty logs it
+	DebugLogCallback func(*DebugLog)
 
 	// ErrorHook type is for reacting to request errors, called after all retries were attempted
 	ErrorHook func(*Request, error)
@@ -197,8 +196,8 @@ type Client struct {
 	ctx                      context.Context
 	httpClient               *http.Client
 	proxyURL                 *url.URL
-	requestLog               RequestLogCallback
-	responseLog              ResponseLogCallback
+	requestDebugLog          DebugLogCallback
+	responseDebugLog         DebugLogCallback
 	generateCurlOnDebug      bool
 	unescapeQueryParams      bool
 	loadBalancer             LoadBalancer
@@ -962,29 +961,29 @@ func (c *Client) SetDebugBodyLimit(sl int) *Client {
 	return c
 }
 
-// OnRequestLog method sets the request log callback to Resty. Registered callback gets
-// called before the resty logs the information.
-func (c *Client) OnRequestLog(rl RequestLogCallback) *Client {
+// OnRequestDebugLog method sets the request debug log callback to the client instance.
+// Registered callback gets called before the Resty logs the information.
+func (c *Client) OnRequestDebugLog(dlc DebugLogCallback) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if c.requestLog != nil {
-		c.log.Warnf("Overwriting an existing on-request-log callback from=%s to=%s",
-			functionName(c.requestLog), functionName(rl))
+	if c.requestDebugLog != nil {
+		c.log.Warnf("Overwriting an existing on-request-debug-log callback from=%s to=%s",
+			functionName(c.requestDebugLog), functionName(dlc))
 	}
-	c.requestLog = rl
+	c.requestDebugLog = dlc
 	return c
 }
 
-// OnResponseLog method sets the response log callback to Resty. Registered callback gets
-// called before the resty logs the information.
-func (c *Client) OnResponseLog(rl ResponseLogCallback) *Client {
+// OnResponseDebugLog method sets the response debug log callback to the client instance.
+// Registered callback gets called before the Resty logs the information.
+func (c *Client) OnResponseDebugLog(dlc DebugLogCallback) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if c.responseLog != nil {
-		c.log.Warnf("Overwriting an existing on-response-log callback from=%s to=%s",
-			functionName(c.responseLog), functionName(rl))
+	if c.responseDebugLog != nil {
+		c.log.Warnf("Overwriting an existing on-response-debug-log callback from=%s to=%s",
+			functionName(c.responseDebugLog), functionName(dlc))
 	}
-	c.responseLog = rl
+	c.responseDebugLog = dlc
 	return c
 }
 
@@ -2001,9 +2000,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		return nil, err
 	}
 
-	if err := requestDebugLogger(c, req); err != nil {
-		return nil, err
-	}
+	requestDebugLogger(c, req)
 
 	req.Time = time.Now()
 	resp, err := c.Client().Do(req.RawRequest)
@@ -2034,9 +2031,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	if err := responseDebugLogger(c, response); err != nil {
-		return response, err
-	}
+	responseDebugLogger(c, response)
 
 	// Apply Response middleware
 	for _, f := range c.afterResponseMiddlewares() {

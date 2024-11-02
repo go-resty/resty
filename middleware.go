@@ -15,7 +15,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const debugRequestLogKey = "__restyDebugRequestLog"
@@ -310,96 +309,9 @@ func createCurlCmd(c *Client, r *Request) (err error) {
 	return nil
 }
 
-func requestDebugLogger(c *Client, r *Request) error {
-	if !r.Debug {
-		return nil
-	}
-
-	rr := r.RawRequest
-	rh := rr.Header.Clone()
-	if c.Client().Jar != nil {
-		for _, cookie := range c.Client().Jar.Cookies(r.RawRequest.URL) {
-			s := fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
-			if c := rh.Get("Cookie"); c != "" {
-				rh.Set("Cookie", c+"; "+s)
-			} else {
-				rh.Set("Cookie", s)
-			}
-		}
-	}
-	rl := &RequestLog{Header: rh, Body: r.fmtBodyString(r.DebugBodyLimit)}
-	if c.requestLog != nil {
-		if err := c.requestLog(rl); err != nil {
-			return err
-		}
-	}
-
-	reqLog := "\n==============================================================================\n"
-
-	if r.Debug && r.generateCurlOnDebug {
-		reqLog += "~~~ REQUEST(CURL) ~~~\n" +
-			fmt.Sprintf("	%v\n", *r.resultCurlCmd)
-	}
-
-	reqLog += "~~~ REQUEST ~~~\n" +
-		fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
-		fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
-		fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(rl.Header)) +
-		fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
-		"------------------------------------------------------------------------------\n"
-
-	r.initValuesMap()
-	r.values[debugRequestLogKey] = reqLog
-
-	return nil
-}
-
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Response Middleware(s)
 //_______________________________________________________________________
-
-func responseDebugLogger(c *Client, res *Response) error {
-	if !res.Request.Debug {
-		return nil
-	}
-
-	bodyStr, err := res.fmtBodyString(res.Request.DebugBodyLimit)
-	if err != nil {
-		return err
-	}
-
-	rl := &ResponseLog{Header: res.Header().Clone(), Body: bodyStr}
-	if c.responseLog != nil {
-		c.lock.RLock()
-		defer c.lock.RUnlock()
-		if err := c.responseLog(rl); err != nil {
-			return err
-		}
-	}
-
-	debugLog := res.Request.values[debugRequestLogKey].(string)
-	debugLog += "~~~ RESPONSE ~~~\n" +
-		fmt.Sprintf("STATUS       : %s\n", res.Status()) +
-		fmt.Sprintf("PROTO        : %s\n", res.Proto()) +
-		fmt.Sprintf("RECEIVED AT  : %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
-		fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
-		"HEADERS      :\n" +
-		composeHeaders(rl.Header) + "\n"
-	if res.Request.isSaveResponse {
-		debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
-	} else {
-		debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)
-	}
-	if res.Request.IsTrace {
-		debugLog += "------------------------------------------------------------------------------\n"
-		debugLog += fmt.Sprintf("%v\n", res.Request.TraceInfo())
-	}
-	debugLog += "==============================================================================\n"
-
-	res.Request.log.Debugf("%s", debugLog)
-
-	return nil
-}
 
 func parseResponseBody(c *Client, res *Response) (err error) {
 	if res.Err != nil ||

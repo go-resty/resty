@@ -517,8 +517,7 @@ func TestClientSettingsCoverage(t *testing.T) {
 
 	// Response - for now stay here
 	resp := &Response{Request: &Request{}}
-	s, err := resp.fmtBodyString(0)
-	assertNil(t, err)
+	s := resp.fmtBodyString(0)
 	assertEqual(t, "***** NO CONTENT *****", s)
 }
 
@@ -699,14 +698,14 @@ func TestClientNewRequest(t *testing.T) {
 	assertNotNil(t, request)
 }
 
-func TestDebugBodySizeLimit(t *testing.T) {
+func TestClientDebugBodySizeLimit(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
 	c, lb := dcldb()
 	c.SetDebugBodyLimit(30)
 
-	testcases := []struct{ url, want, wantErr string }{
+	testcases := []struct{ url, want string }{
 		// Text, does not exceed limit.
 		{url: ts.URL, want: "TestGet: text response"},
 		// Empty response.
@@ -714,7 +713,7 @@ func TestDebugBodySizeLimit(t *testing.T) {
 		// JSON, does not exceed limit.
 		{url: ts.URL + "/json", want: "{\n   \"TestGet\": \"JSON response\"\n}"},
 		// Invalid JSON, does not exceed limit.
-		{url: ts.URL + "/json-invalid", wantErr: "invalid character 'T' looking for beginning of value"},
+		{url: ts.URL + "/json-invalid", want: "Debug: Response.fmtBodyString: invalid character 'T' looking for beginning of value"},
 		// Text, exceeds limit.
 		{url: ts.URL + "/long-text", want: "RESPONSE TOO LARGE"},
 		// JSON, exceeds limit.
@@ -722,10 +721,7 @@ func TestDebugBodySizeLimit(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		_, err := c.R().Get(tc.url)
-		if tc.wantErr != "" {
-			assertNotNil(t, err)
-			assertEqual(t, tc.wantErr, err.Error())
-		} else if tc.want != "" {
+		if tc.want != "" {
 			assertError(t, err)
 			debugLog := lb.String()
 			if !strings.Contains(debugLog, tc.want) {
@@ -842,21 +838,19 @@ func TestLzwCompress(t *testing.T) {
 	}
 }
 
-func TestLogCallbacks(t *testing.T) {
+func TestClientLogCallbacks(t *testing.T) {
 	ts := createAuthServer(t)
 	defer ts.Close()
 
 	c, lb := dcldb()
 
-	c.OnRequestLog(func(r *RequestLog) error {
+	c.OnRequestDebugLog(func(r *DebugLog) {
 		// masking authorization header
 		r.Header.Set("Authorization", "Bearer *******************************")
-		return nil
 	})
-	c.OnResponseLog(func(r *ResponseLog) error {
+	c.OnResponseDebugLog(func(r *DebugLog) {
 		r.Header.Add("X-Debug-Response-Log", "Modified :)")
 		r.Body += "\nModified the response body content"
-		return nil
 	})
 
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
@@ -875,22 +869,29 @@ func TestLogCallbacks(t *testing.T) {
 	assertEqual(t, true, strings.Contains(logInfo, "X-Debug-Response-Log"))
 	assertEqual(t, true, strings.Contains(logInfo, "Modified the response body content"))
 
-	// Error scenario
-	c.OnRequestLog(func(r *RequestLog) error { return errors.New("request test error") })
+	// overwrite scenario
+	c.OnRequestDebugLog(func(r *DebugLog) {
+		// overwrite request debug log
+	})
 	resp, err = c.R().
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
 		Get(ts.URL + "/profile")
-	assertEqual(t, errors.New("request test error"), err)
-	assertNil(t, resp)
-	assertNotNil(t, err)
-
-	c.OnRequestLog(nil)
-	c.OnResponseLog(func(r *ResponseLog) error { return errors.New("response test error") })
-	resp, err = c.R().
-		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
-		Get(ts.URL + "/profile")
-	assertEqual(t, errors.New("response test error"), err)
+	assertNil(t, err)
 	assertNotNil(t, resp)
+	assertEqual(t, int64(50), resp.Size())
+	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-request-debug-log callback from=github.com/go-resty/resty/v3.TestClientLogCallbacks.func1 to=github.com/go-resty/resty/v3.TestClientLogCallbacks.func3"))
+
+	c.OnRequestDebugLog(nil)
+	c.OnResponseDebugLog(func(r *DebugLog) {
+		// overwrite response debug log
+	})
+	resp, err = c.R().
+		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
+		Get(ts.URL + "/profile")
+	assertNil(t, err)
+	assertNotNil(t, resp)
+	assertEqual(t, int64(50), resp.Size())
+	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-response-debug-log callback from=github.com/go-resty/resty/v3.TestClientLogCallbacks.func2 to=github.com/go-resty/resty/v3.TestClientLogCallbacks.func4"))
 }
 
 func TestDebugLogSimultaneously(t *testing.T) {

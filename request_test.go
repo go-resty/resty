@@ -844,7 +844,7 @@ func TestGetWithCookies(t *testing.T) {
 		},
 	})
 
-	resp, err := c.R().SetHeader("Cookie", "").Get("mypage2")
+	resp, err := c.R().SetHeader(hdrCookieKey, "").Get("mypage2")
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 

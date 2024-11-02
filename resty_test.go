@@ -525,9 +525,8 @@ func createAuthServer(t *testing.T) *httptest.Server {
 
 func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("Method: %v", r.Method)
-		t.Logf("Path: %v", r.URL.Path)
-		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
+		t.Logf(`createAuthServerTLSOptional: Method: %v, Path: %v, Content-Type: %v`,
+			r.Method, r.URL.Path, r.Header.Get(hdrContentTypeKey))
 
 		if r.Method == MethodGet {
 			if r.URL.Path == "/profile" {

@@ -149,19 +149,19 @@ func (r *Response) setReceivedAt() {
 	}
 }
 
-func (r *Response) fmtBodyString(sl int) (string, error) {
+func (r *Response) fmtBodyString(sl int) string {
 	if r.Request.DoNotParseResponse {
-		return "***** DO NOT PARSE RESPONSE - Enabled *****", nil
+		return "***** DO NOT PARSE RESPONSE - Enabled *****"
 	}
 
 	bl := len(r.bodyBytes)
 	if r.IsRead && bl == 0 {
-		return "***** RESPONSE BODY IS ALREADY READ - see Response.{Result()/Error()} *****", nil
+		return "***** RESPONSE BODY IS ALREADY READ - see Response.{Result()/Error()} *****"
 	}
 
 	if bl > 0 {
 		if bl > sl {
-			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", bl), nil
+			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", bl)
 		}
 
 		ct := r.Header().Get(hdrContentTypeKey)
@@ -171,14 +171,15 @@ func (r *Response) fmtBodyString(sl int) (string, error) {
 			defer releaseBuffer(out)
 			err := json.Indent(out, r.bodyBytes, "", "   ")
 			if err != nil {
-				return "", err
+				r.Request.log.Errorf("Debug: Response.fmtBodyString: %v", err)
+				return ""
 			}
-			return out.String(), nil
+			return out.String()
 		}
-		return r.String(), nil
+		return r.String()
 	}
 
-	return "***** NO CONTENT *****", nil
+	return "***** NO CONTENT *****"
 }
 
 // auto-unmarshal didn't happen, so fallback to
