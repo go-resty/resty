@@ -67,6 +67,7 @@ var (
 	hdrAuthorizationKey   = http.CanonicalHeaderKey("Authorization")
 	hdrWwwAuthenticateKey = http.CanonicalHeaderKey("WWW-Authenticate")
 	hdrRetryAfterKey      = http.CanonicalHeaderKey("Retry-After")
+	hdrCookieKey          = http.CanonicalHeaderKey("Cookie")
 
 	plainTextType   = "text/plain; charset=utf-8"
 	jsonContentType = "application/json"
@@ -89,11 +90,9 @@ type (
 	// PreRequestHook type is for the request hook, called right before the request is sent
 	PreRequestHook func(*Client, *http.Request) error
 
-	// RequestLogCallback type is for request logs, called before the request is logged
-	RequestLogCallback func(*RequestLog) error
-
-	// ResponseLogCallback type is for response logs, called before the response is logged
-	ResponseLogCallback func(*ResponseLog) error
+	// DebugLogCallback type is for request and response debug log callback purpose.
+	// It gets called before Resty logs it
+	DebugLogCallback func(*DebugLog)
 
 	// ErrorHook type is for reacting to request errors, called after all retries were attempted
 	ErrorHook func(*Request, error)
@@ -197,9 +196,10 @@ type Client struct {
 	ctx                      context.Context
 	httpClient               *http.Client
 	proxyURL                 *url.URL
-	requestLog               RequestLogCallback
-	responseLog              ResponseLogCallback
+	requestDebugLog          DebugLogCallback
+	responseDebugLog         DebugLogCallback
 	generateCurlOnDebug      bool
+	unescapeQueryParams      bool
 	loadBalancer             LoadBalancer
 	beforeRequest            []RequestMiddleware
 	udBeforeRequest          []RequestMiddleware
@@ -212,7 +212,7 @@ type Client struct {
 	contentTypeDecoders      map[string]ContentTypeDecoder
 	contentDecompressorKeys  []string
 	contentDecompressors     map[string]ContentDecompressor
-	stopChan                 chan bool
+	certWatcherStopChan      chan bool
 
 	// TODO don't put mutex now, it may go away
 	preReqHook PreRequestHook
@@ -367,7 +367,9 @@ func (c *Client) CookieJar() http.CookieJar {
 //
 //	client.SetCookieJar(nil)
 func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
-	c.Client().Jar = jar
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.httpClient.Jar = jar
 	return c
 }
 
@@ -652,6 +654,7 @@ func (c *Client) R() *Request {
 		log:                 c.log,
 		setContentLength:    c.setContentLength,
 		generateCurlOnDebug: c.generateCurlOnDebug,
+		unescapeQueryParams: c.unescapeQueryParams,
 	}
 
 	if c.ctx != nil {
@@ -958,29 +961,29 @@ func (c *Client) SetDebugBodyLimit(sl int) *Client {
 	return c
 }
 
-// OnRequestLog method sets the request log callback to Resty. Registered callback gets
-// called before the resty logs the information.
-func (c *Client) OnRequestLog(rl RequestLogCallback) *Client {
+// OnRequestDebugLog method sets the request debug log callback to the client instance.
+// Registered callback gets called before the Resty logs the information.
+func (c *Client) OnRequestDebugLog(dlc DebugLogCallback) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if c.requestLog != nil {
-		c.log.Warnf("Overwriting an existing on-request-log callback from=%s to=%s",
-			functionName(c.requestLog), functionName(rl))
+	if c.requestDebugLog != nil {
+		c.log.Warnf("Overwriting an existing on-request-debug-log callback from=%s to=%s",
+			functionName(c.requestDebugLog), functionName(dlc))
 	}
-	c.requestLog = rl
+	c.requestDebugLog = dlc
 	return c
 }
 
-// OnResponseLog method sets the response log callback to Resty. Registered callback gets
-// called before the resty logs the information.
-func (c *Client) OnResponseLog(rl ResponseLogCallback) *Client {
+// OnResponseDebugLog method sets the response debug log callback to the client instance.
+// Registered callback gets called before the Resty logs the information.
+func (c *Client) OnResponseDebugLog(dlc DebugLogCallback) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if c.responseLog != nil {
-		c.log.Warnf("Overwriting an existing on-response-log callback from=%s to=%s",
-			functionName(c.responseLog), functionName(rl))
+	if c.responseDebugLog != nil {
+		c.log.Warnf("Overwriting an existing on-response-debug-log callback from=%s to=%s",
+			functionName(c.responseDebugLog), functionName(dlc))
 	}
-	c.responseLog = rl
+	c.responseDebugLog = dlc
 	return c
 }
 
@@ -1161,7 +1164,11 @@ func (c *Client) RetryCount() int {
 }
 
 // SetRetryCount method enables retry on Resty client and allows you
-// to set no. of retry count. Resty uses a Backoff mechanism.
+// to set no. of retry count.
+//
+//	first attempt + retry count = total attempts
+//
+// See [Request.SetRetryStrategy]
 func (c *Client) SetRetryCount(count int) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -1465,7 +1472,7 @@ func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcher
 
 		for {
 			select {
-			case <-c.stopChan:
+			case <-c.certWatcherStopChan:
 				ticker.Stop()
 				return
 			case <-ticker.C:
@@ -1855,6 +1862,19 @@ func (c *Client) SetGenerateCurlOnDebug(b bool) *Client {
 	return c
 }
 
+// SetUnescapeQueryParams method sets the choice of unescape query parameters for the request URL.
+// To prevent broken URL, Resty replaces space (" ") with "+" in the query parameters.
+//
+// See [Request.SetUnescapeQueryParams]
+//
+// NOTE: Request failure is possible due to non-standard usage of Unescaped Query Parameters.
+func (c *Client) SetUnescapeQueryParams(unescape bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.unescapeQueryParams = unescape
+	return c
+}
+
 // ResponseBodyUnlimitedReads method returns true if enabled. Otherwise, it returns false
 func (c *Client) ResponseBodyUnlimitedReads() bool {
 	c.lock.RLock()
@@ -1937,7 +1957,7 @@ func (c *Client) Close() error {
 	if c.LoadBalancer() != nil {
 		silently(c.LoadBalancer().Close())
 	}
-	close(c.stopChan)
+	close(c.certWatcherStopChan)
 	return nil
 }
 
@@ -1980,9 +2000,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		return nil, err
 	}
 
-	if err := requestDebugLogger(c, req); err != nil {
-		return nil, err
-	}
+	requestDebugLogger(c, req)
 
 	req.Time = time.Now()
 	resp, err := c.Client().Do(req.RawRequest)
@@ -1999,9 +2017,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 	if resp != nil {
 		response.Body = resp.Body
-
-		err := response.wrapContentDecompressor()
-		if err != nil {
+		if err = response.wrapContentDecompressor(); err != nil {
 			return response, err
 		}
 
@@ -2010,26 +2026,21 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	if !req.DoNotParseResponse && (req.Debug || req.ResponseBodyUnlimitedReads) {
 		response.wrapCopyReadCloser()
 
-		if err := response.readAll(); err != nil {
+		if err = response.readAll(); err != nil {
 			return response, err
 		}
 	}
 
-	if err := responseDebugLogger(c, response); err != nil {
-		return response, err
-	}
-
-	if req.DoNotParseResponse {
-		return response, err
-	}
+	responseDebugLogger(c, response)
 
 	// Apply Response middleware
 	for _, f := range c.afterResponseMiddlewares() {
 		if err = f(c, response); err != nil {
-			return response, err
+			response.Err = wrapErrors(err, response.Err)
 		}
 	}
 
+	err = response.Err
 	return response, err
 }
 
@@ -2071,19 +2082,19 @@ func (e *ResponseError) Unwrap() error {
 // Helper to run errorHooks hooks.
 // It wraps the error in a [ResponseError] if the resp is not nil
 // so hooks can access it.
-func (c *Client) onErrorHooks(req *Request, resp *Response, err error) {
+func (c *Client) onErrorHooks(req *Request, res *Response, err error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	if err != nil {
-		if resp != nil { // wrap with ResponseError
-			err = &ResponseError{Response: resp, Err: err}
+		if res != nil { // wrap with ResponseError
+			err = &ResponseError{Response: res, Err: err}
 		}
 		for _, h := range c.errorHooks {
 			h(req, err)
 		}
 	} else {
 		for _, h := range c.successHooks {
-			h(c, resp)
+			h(c, res)
 		}
 	}
 }

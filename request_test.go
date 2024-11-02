@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -843,7 +844,7 @@ func TestGetWithCookies(t *testing.T) {
 		},
 	})
 
-	resp, err := c.R().SetHeader("Cookie", "").Get("mypage2")
+	resp, err := c.R().SetHeader(hdrCookieKey, "").Get("mypage2")
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
@@ -1722,41 +1723,64 @@ func TestTraceInfo(t *testing.T) {
 	serverAddr := ts.URL[strings.LastIndex(ts.URL, "/")+1:]
 
 	client := dcnl()
-	client.SetBaseURL(ts.URL).EnableTrace()
-	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
-		resp, err := client.R().Get(u)
-		assertNil(t, err)
-		assertNotNil(t, resp)
 
-		tr := resp.Request.TraceInfo()
-		assertEqual(t, true, tr.DNSLookup >= 0)
-		assertEqual(t, true, tr.ConnTime >= 0)
-		assertEqual(t, true, tr.TLSHandshake >= 0)
-		assertEqual(t, true, tr.ServerTime >= 0)
-		assertEqual(t, true, tr.ResponseTime >= 0)
-		assertEqual(t, true, tr.TotalTime >= 0)
-		assertEqual(t, true, tr.TotalTime < time.Hour)
-		assertEqual(t, true, tr.TotalTime == resp.Time())
-		assertEqual(t, tr.RemoteAddr.String(), serverAddr)
-	}
+	t.Run("enable trace on client", func(t *testing.T) {
+		client.SetBaseURL(ts.URL).EnableTrace()
+		for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
+			resp, err := client.R().Get(u)
+			assertNil(t, err)
+			assertNotNil(t, resp)
 
-	client.DisableTrace()
+			tr := resp.Request.TraceInfo()
+			assertEqual(t, true, tr.DNSLookup >= 0)
+			assertEqual(t, true, tr.ConnTime >= 0)
+			assertEqual(t, true, tr.TLSHandshake >= 0)
+			assertEqual(t, true, tr.ServerTime >= 0)
+			assertEqual(t, true, tr.ResponseTime >= 0)
+			assertEqual(t, true, tr.TotalTime >= 0)
+			assertEqual(t, true, tr.TotalTime < time.Hour)
+			assertEqual(t, true, tr.TotalTime == resp.Time())
+			assertEqual(t, tr.RemoteAddr.String(), serverAddr)
+		}
 
-	for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
-		resp, err := client.R().EnableTrace().Get(u)
-		assertNil(t, err)
-		assertNotNil(t, resp)
+		client.DisableTrace()
+	})
 
-		tr := resp.Request.TraceInfo()
-		assertEqual(t, true, tr.DNSLookup >= 0)
-		assertEqual(t, true, tr.ConnTime >= 0)
-		assertEqual(t, true, tr.TLSHandshake >= 0)
-		assertEqual(t, true, tr.ServerTime >= 0)
-		assertEqual(t, true, tr.ResponseTime >= 0)
-		assertEqual(t, true, tr.TotalTime >= 0)
-		assertEqual(t, true, tr.TotalTime == resp.Time())
-		assertEqual(t, tr.RemoteAddr.String(), serverAddr)
-	}
+	t.Run("enable trace on request", func(t *testing.T) {
+		for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
+			resp, err := client.R().EnableTrace().Get(u)
+			assertNil(t, err)
+			assertNotNil(t, resp)
+
+			tr := resp.Request.TraceInfo()
+			assertEqual(t, true, tr.DNSLookup >= 0)
+			assertEqual(t, true, tr.ConnTime >= 0)
+			assertEqual(t, true, tr.TLSHandshake >= 0)
+			assertEqual(t, true, tr.ServerTime >= 0)
+			assertEqual(t, true, tr.ResponseTime >= 0)
+			assertEqual(t, true, tr.TotalTime >= 0)
+			assertEqual(t, true, tr.TotalTime == resp.Time())
+			assertEqual(t, tr.RemoteAddr.String(), serverAddr)
+		}
+
+	})
+
+	t.Run("enable trace and debug on request", func(t *testing.T) {
+		c, logBuf := dcldb()
+		c.SetBaseURL(ts.URL)
+
+		requestURLs := []string{"/", "/json", "/long-text", "/long-json"}
+		for _, u := range requestURLs {
+			resp, err := c.R().EnableTrace().EnableDebug().Get(u)
+			assertNil(t, err)
+			assertNotNil(t, resp)
+		}
+
+		logContent := logBuf.String()
+		regexTraceInfoHeader := regexp.MustCompile("TRACE INFO:")
+		matches := regexTraceInfoHeader.FindAllStringIndex(logContent, -1)
+		assertEqual(t, len(requestURLs), len(matches))
+	})
 
 	// for sake of hook funcs
 	_, _ = client.R().SetTrace(true).Get("https://httpbin.org/get")
@@ -2140,9 +2164,6 @@ func TestRequestPanicContext(t *testing.T) {
 
 	//lint:ignore SA1012 test case nil check
 	_ = c.R().WithContext(nil)
-
-	//lint:ignore SA1012 test case nil check
-	_ = c.R().Clone(nil)
 }
 
 // This test methods exist for test coverage purpose
@@ -2186,6 +2207,18 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	invalidJsonBytes := []byte(`{\" \": "value here"}`)
 	result := jsonIndent(invalidJsonBytes)
 	assertEqual(t, string(invalidJsonBytes), string(result))
+
+	defer func() {
+		if rec := recover(); rec != nil {
+			if err, ok := rec.(error); ok {
+				assertEqual(t, true, strings.Contains(err.Error(), "resty: Request.Clone nil context"))
+			}
+		}
+	}()
+	r6 := c.R()
+	//lint:ignore SA1012 test case nil check
+	r62 := r6.Clone(nil)
+	assertEqual(t, nil, r62.ctx)
 }
 
 func TestRequestDataRace(t *testing.T) {

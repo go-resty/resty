@@ -1,22 +1,22 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"fmt"
 	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -32,9 +32,9 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 	// For this test, we want to:
 	// - Generate root CA
 	// - Generate TLS cert signed with root CA
-	// - Start an HTTPS server
-	// - Create a resty client with SetRootCertificateWatcher
-	// - Send multiple request and re-generate the certs periodically to reproduce renewal
+	// - Start a Test HTTPS server
+	// - Create a Resty client with SetRootCertificateWatcher and SetClientRootCertificateWatcher
+	// - Send multiple requests and re-generate the certs periodically to reproduce renewal
 
 	certDir := t.TempDir()
 	paths := certPaths{
@@ -44,28 +44,27 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 		TLSCert:    filepath.Join(certDir, "tls.crt"),
 	}
 
-	port := findAvailablePort(t)
 	generateCerts(t, paths)
-	startHTTPSServer(fmt.Sprintf(":%d", port), paths)
 
-	poolingInterval := time.Second * 1
+	ts := createTestTLSServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}, paths.TLSCert, paths.TLSKey)
+	defer ts.Close()
 
-	//client := New().SetRootCertificate(paths.RootCACert).SetDebug(true)
-	client := New().SetRootCertificateWatcher(paths.RootCACert, &CertWatcherOptions{
+	poolingInterval := 100 * time.Millisecond
+
+	client := NewWithTransportSettings(&TransportSettings{
+		// Make sure that TLS handshake happens for all request
+		// (otherwise, test may succeed because 1st TLS session is re-used)
+		DisableKeepAlives: true,
+	}).SetRootCertificateWatcher(paths.RootCACert, &CertWatcherOptions{
 		PoolInterval: poolingInterval,
 	}).SetClientRootCertificateWatcher(paths.RootCACert, &CertWatcherOptions{
 		PoolInterval: poolingInterval,
 	}).SetDebug(false)
 
-	tr, err := client.Transport()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Make sure that TLS handshake happens for all request
-	// (otherwise, test may succeed because 1st TLS session is re-used)
-	tr.DisableKeepAlives = true
-
-	url := fmt.Sprintf("https://localhost:%d/", port)
+	url := strings.Replace(ts.URL, "127.0.0.1", "localhost", 1)
+	t.Log("Test URL:", url)
 
 	t.Run("Cert Watcher should handle certs rotation", func(t *testing.T) {
 		for i := 0; i < 5; i++ {
@@ -79,8 +78,9 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 			if i%2 == 1 {
 				// Re-generate certs to simulate renewal scenario
 				generateCerts(t, paths)
+				time.Sleep(50 * time.Millisecond)
 			}
-			time.Sleep(poolingInterval)
+
 		}
 	})
 
@@ -90,16 +90,16 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 		// Re-generate certs to invalidate existing cert
 		generateCerts(t, paths)
 		// Delete root cert so that Cert Watcher will fail
-		err = os.RemoveAll(paths.RootCACert)
+		err := os.RemoveAll(paths.RootCACert)
 		assertNil(t, err)
 
 		// Reset TLS config to ensure that previous root cert is not re-used
-		tr, err = client.Transport()
+		tr, err := client.Transport()
 		assertNil(t, err)
 		tr.TLSClientConfig = nil
 		client.SetTransport(tr)
 
-		time.Sleep(poolingInterval)
+		time.Sleep(50 * time.Millisecond)
 
 		_, err = client.R().Get(url)
 		// We expect an error since root cert has been deleted
@@ -107,58 +107,13 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 
 		// Re-generate certs. We except cert watcher to reload the new root cert.
 		generateCerts(t, paths)
-		time.Sleep(poolingInterval)
+		time.Sleep(50 * time.Millisecond)
 		_, err = client.R().Get(url)
 		assertNil(t, err)
 	})
 
-	err = client.Close()
+	err := client.Close()
 	assertNil(t, err)
-}
-
-func startHTTPSServer(addr string, path certPaths) {
-	tlsConfig := &tls.Config{
-		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-			cert, err := tls.LoadX509KeyPair(path.TLSCert, path.TLSKey)
-			if err != nil {
-				return nil, err
-			}
-			return &cert, nil
-		},
-	}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	srv := &http.Server{
-		Addr:      addr,
-		TLSConfig: tlsConfig,
-	}
-
-	go func() {
-		err := srv.ListenAndServeTLS("", "")
-		if err != nil {
-			panic(err)
-		}
-	}()
-}
-
-func findAvailablePort(t *testing.T) int {
-	port := -1
-
-	for port == -1 {
-		listener, err := net.Listen("tcp", ":0")
-		if err != nil {
-			continue
-		}
-		port = listener.Addr().(*net.TCPAddr).Port
-		if err := listener.Close(); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return port
 }
 
 func generateCerts(t *testing.T, paths certPaths) {

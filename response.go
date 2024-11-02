@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -24,6 +25,10 @@ type Response struct {
 	Body        io.ReadCloser
 	RawResponse *http.Response
 	IsRead      bool
+
+	// Err field used to cascade the response middleware error
+	// in the chain
+	Err error
 
 	bodyBytes  []byte
 	size       int64
@@ -95,7 +100,7 @@ func (r *Response) Cookies() []*http.Cookie {
 //   - Returns an empty string on auto-unmarshal scenarios, unless
 //     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
 //   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set
-func (r *Response) String() string {
+func (r Response) String() string {
 	if len(r.bodyBytes) == 0 && !r.Request.DoNotParseResponse {
 		_ = r.readAll()
 	}
@@ -108,7 +113,7 @@ func (r *Response) String() string {
 // See [Response.ReceivedAt] to know when the client received a response and see
 // `Response.Request.Time` to know when the client sent a request.
 func (r *Response) Time() time.Duration {
-	if r.Request.clientTrace != nil {
+	if r.Request.trace != nil {
 		return r.Request.TraceInfo().TotalTime
 	}
 	return r.receivedAt.Sub(r.Request.Time)
@@ -139,24 +144,24 @@ func (r *Response) IsError() bool {
 
 func (r *Response) setReceivedAt() {
 	r.receivedAt = time.Now()
-	if r.Request.clientTrace != nil {
-		r.Request.clientTrace.endTime = r.receivedAt
+	if r.Request.trace != nil {
+		r.Request.trace.endTime = r.receivedAt
 	}
 }
 
-func (r *Response) fmtBodyString(sl int) (string, error) {
+func (r *Response) fmtBodyString(sl int) string {
 	if r.Request.DoNotParseResponse {
-		return "***** DO NOT PARSE RESPONSE - Enabled *****", nil
+		return "***** DO NOT PARSE RESPONSE - Enabled *****"
 	}
 
 	bl := len(r.bodyBytes)
 	if r.IsRead && bl == 0 {
-		return "***** RESPONSE BODY IS ALREADY READ - see Response.{Result()/Error()} *****", nil
+		return "***** RESPONSE BODY IS ALREADY READ - see Response.{Result()/Error()} *****"
 	}
 
 	if bl > 0 {
 		if bl > sl {
-			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", bl), nil
+			return fmt.Sprintf("***** RESPONSE TOO LARGE (size - %d) *****", bl)
 		}
 
 		ct := r.Header().Get(hdrContentTypeKey)
@@ -166,14 +171,15 @@ func (r *Response) fmtBodyString(sl int) (string, error) {
 			defer releaseBuffer(out)
 			err := json.Indent(out, r.bodyBytes, "", "   ")
 			if err != nil {
-				return "", err
+				r.Request.log.Errorf("Debug: Response.fmtBodyString: %v", err)
+				return ""
 			}
-			return out.String(), nil
+			return out.String()
 		}
-		return r.String(), nil
+		return r.String()
 	}
 
-	return "***** NO CONTENT *****", nil
+	return "***** NO CONTENT *****"
 }
 
 // auto-unmarshal didn't happen, so fallback to

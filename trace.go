@@ -1,20 +1,18 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http/httptrace"
 	"time"
 )
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// TraceInfo struct
-//_______________________________________________________________________
 
 // TraceInfo struct is used to provide request trace info such as DNS lookup
 // duration, Connection obtain duration, Server processing duration, etc.
@@ -62,9 +60,25 @@ type TraceInfo struct {
 	RemoteAddr net.Addr
 }
 
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// ClientTrace struct and its methods
-//_______________________________________________________________________
+// String method returns string representation of request trace information.
+func (ti TraceInfo) String() string {
+	return fmt.Sprintf(`TRACE INFO:
+  DNSLookupTime : %v
+  ConnTime      : %v
+  TCPConnTime   : %v
+  TLSHandshake  : %v
+  ServerTime    : %v
+  ResponseTime  : %v
+  TotalTime     : %v
+  IsConnReused  : %v
+  IsConnWasIdle : %v
+  ConnIdleTime  : %v
+  RequestAttempt: %v
+  RemoteAddr    : %v`, ti.DNSLookup, ti.ConnTime, ti.TCPConnTime,
+		ti.TLSHandshake, ti.ServerTime, ti.ResponseTime, ti.TotalTime,
+		ti.IsConnReused, ti.IsConnWasIdle, ti.ConnIdleTime, ti.RequestAttempt,
+		ti.RemoteAddr)
+}
 
 // clientTrace struct maps the [httptrace.ClientTrace] hooks into Fields
 // with the same naming for easy understanding. Plus additional insights

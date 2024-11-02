@@ -10,15 +10,18 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -64,7 +67,12 @@ type Request struct {
 	RetryMaxWaitTime           time.Duration
 	RetryStrategy              RetryStrategyFunc
 	IsRetryDefaultConditions   bool
-	Attempt                    int
+
+	// Attempt provides insights into no. of attempts
+	// Resty made.
+	//
+	//	first attempt + retry count = total attempts
+	Attempt int
 
 	isMultiPart         bool
 	isFormData          bool
@@ -75,7 +83,7 @@ type Request struct {
 	values              map[string]any
 	client              *Client
 	bodyBuf             *bytes.Buffer
-	clientTrace         *clientTrace
+	trace               *clientTrace
 	log                 Logger
 	baseURL             string
 	multipartBoundary   string
@@ -83,6 +91,7 @@ type Request struct {
 	retryConditions     []RetryConditionFunc
 	resultCurlCmd       *string
 	generateCurlOnDebug bool
+	unescapeQueryParams bool
 	multipartErrChan    chan error
 }
 
@@ -97,13 +106,19 @@ func (r *Request) GenerateCurlCommand() string {
 	if r.RawRequest == nil {
 		r.client.executeBefore(r) // mock with r.Get("/")
 	}
-	*r.resultCurlCmd = buildCurlRequest(r)
+	*r.resultCurlCmd = buildCurlCmd(r)
 	return *r.resultCurlCmd
 }
 
 // SetMethod method used to set the HTTP verb for the request
 func (r *Request) SetMethod(m string) *Request {
 	r.Method = m
+	return r
+}
+
+// SetURL method used to set the request URL for the request
+func (r *Request) SetURL(url string) *Request {
+	r.URL = url
 	return r
 }
 
@@ -939,7 +954,11 @@ func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 }
 
 // SetRetryCount method enables retry on Resty client and allows you
-// to set no. of retry count. Resty uses a Backoff mechanism.
+// to set no. of retry count.
+//
+//	first attempt + retry count = total attempts
+//
+// See [Request.SetRetryStrategy]
 func (r *Request) SetRetryCount(count int) *Request {
 	r.RetryCount = count
 	return r
@@ -965,7 +984,7 @@ func (r *Request) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Request {
 // it is used to get wait time before each retry. It overrides the retry
 // strategy set at the client instance level, see [Client.SetRetryStrategy]
 //
-// Default (nil) implies exponential backoff with a jitter strategy
+// Default (nil) implies capped exponential backoff with a jitter strategy
 func (r *Request) SetRetryStrategy(rs RetryStrategyFunc) *Request {
 	r.RetryStrategy = rs
 	return r
@@ -1054,6 +1073,17 @@ func (r *Request) SetGenerateCurlOnDebug(b bool) *Request {
 	return r
 }
 
+// SetUnescapeQueryParams method sets the choice of unescape query parameters for the request URL.
+// To prevent broken URL, Resty replaces space (" ") with "+" in the query parameters.
+//
+// This method overrides the value set by [Client.SetUnescapeQueryParams]
+//
+// NOTE: Request failure is possible due to non-standard usage of Unescaped Query Parameters.
+func (r *Request) SetUnescapeQueryParams(unescape bool) *Request {
+	r.unescapeQueryParams = unescape
+	return r
+}
+
 // SetAllowMethodGetPayload method allows the GET method with payload on the request level.
 // By default, Resty does not allow.
 //
@@ -1082,7 +1112,7 @@ func (r *Request) SetAllowMethodDeletePayload(allow bool) *Request {
 // If either the [Client.EnableTrace] or [Request.EnableTrace] function has not been called
 // before the request is made, an empty [resty.TraceInfo] object is returned.
 func (r *Request) TraceInfo() TraceInfo {
-	ct := r.clientTrace
+	ct := r.trace
 
 	if ct == nil {
 		return TraceInfo{}
@@ -1200,13 +1230,6 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		}
 	}()
 
-	if r.isMultiPart && !(method == MethodPost || method == MethodPut || method == MethodPatch) {
-		// No OnError hook here since this is a request validation error
-		err := fmt.Errorf("multipart content is not allowed in HTTP verb [%v]", method)
-		r.client.onInvalidHooks(r, err)
-		return nil, err
-	}
-
 	r.Method = method
 	r.URL = url
 
@@ -1220,17 +1243,21 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		backoff = newBackoffWithJitter(r.RetryWaitTime, r.RetryMaxWaitTime)
 	}
 
-	// first request + retry count = total no. of requests (aka total attempts)
+	isInvalidRequestErr := false
+	// first attempt + retry count = total attempts
 	for i := 0; i <= r.RetryCount; i++ {
 		r.Attempt++
 		err = nil
 		res, err = r.client.execute(r)
 		if err != nil {
-			if isInvalidRequestError(err) {
-				return
+			if irErr, ok := err.(*invalidRequestError); ok {
+				err = irErr.Err
+				isInvalidRequestErr = true
+				break
 			}
 			if r.Context().Err() != nil {
-				return res, wrapErrors(r.Context().Err(), err)
+				err = wrapErrors(r.Context().Err(), err)
+				break
 			}
 		}
 
@@ -1301,13 +1328,17 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			mf.close()
 		}
 	}
-	if err != nil {
-		r.log.Errorf("%v", err)
-	}
 
 	r.IsDone = true
-	r.client.onErrorHooks(r, res, err)
-	r.sendLoadBalancerFeedback() // TODO revisit on call and success criteria
+
+	if isInvalidRequestErr {
+		r.client.onInvalidHooks(r, err)
+	} else {
+		r.client.onErrorHooks(r, res, err)
+	}
+
+	r.sendLoadBalancerFeedback(res, err)
+	backToBufPool(r.bodyBuf)
 	return
 }
 
@@ -1369,7 +1400,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	// reset values
 	rr.Time = time.Time{}
 	rr.Attempt = 0
-	rr.initClientTrace()
+	rr.initTraceIfEnabled()
 	rr.resultCurlCmd = new(string)
 	r.values = make(map[string]any)
 	r.multipartErrChan = nil
@@ -1457,10 +1488,10 @@ func (r *Request) initValuesMap() {
 	}
 }
 
-func (r *Request) initClientTrace() {
+func (r *Request) initTraceIfEnabled() {
 	if r.IsTrace {
-		r.clientTrace = new(clientTrace)
-		r.ctx = r.clientTrace.createContext(r.Context())
+		r.trace = new(clientTrace)
+		r.ctx = r.trace.createContext(r.Context())
 	}
 }
 
@@ -1501,14 +1532,33 @@ func (r *Request) isPayloadSupported() bool {
 	return false
 }
 
-func (r *Request) sendLoadBalancerFeedback() {
-	if r.client.LoadBalancer() != nil {
-		r.client.LoadBalancer().Feedback(&RequestFeedback{
-			BaseURL: r.baseURL,
-			Success: false, // TODO revisit condition to define success or not
-			Attempt: r.Attempt,
-		})
+func (r *Request) sendLoadBalancerFeedback(res *Response, err error) {
+	if r.client.LoadBalancer() == nil {
+		return
 	}
+
+	success := true
+
+	// load balancer feedback mainly focuses on connection
+	// failures and status code >= 500
+	// so that we can prevent sending the request to
+	// that server which may fail
+	if err != nil {
+		var noe *net.OpError
+		if errors.As(err, &noe) {
+			success = !errors.Is(noe.Err, syscall.ECONNREFUSED) || noe.Timeout()
+		}
+	}
+	if success && res != nil &&
+		(res.StatusCode() >= 500 && res.StatusCode() != http.StatusNotImplemented) {
+		success = false
+	}
+
+	r.client.LoadBalancer().Feedback(&RequestFeedback{
+		BaseURL: r.baseURL,
+		Success: success,
+		Attempt: r.Attempt,
+	})
 }
 
 func (r *Request) resetFileReaders() error {

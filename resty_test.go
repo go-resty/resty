@@ -11,6 +11,7 @@ import (
 	"compress/gzip"
 	"compress/lzw"
 	"crypto/md5"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -139,6 +140,14 @@ func createGetServer(t *testing.T) *httptest.Server {
 					_, _ = w.Write([]byte(`{ "message": "hello" }`))
 				}
 				atomic.AddInt32(&attempt, 1)
+			case "/unescape-query-params":
+				initOne := r.URL.Query().Get("initone")
+				fromClient := r.URL.Query().Get("fromclient")
+				registry := r.URL.Query().Get("registry")
+				assertEqual(t, "cáfe", initOne)
+				assertEqual(t, "hey unescape", fromClient)
+				assertEqual(t, "nacos://test:6801", registry)
+				_, _ = w.Write([]byte(`query params looks good`))
 			}
 
 			switch {
@@ -516,9 +525,8 @@ func createAuthServer(t *testing.T) *httptest.Server {
 
 func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("Method: %v", r.Method)
-		t.Logf("Path: %v", r.URL.Path)
-		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
+		t.Logf(`createAuthServerTLSOptional: Method: %v, Path: %v, Content-Type: %v`,
+			r.Method, r.URL.Path, r.Header.Get(hdrContentTypeKey))
 
 		if r.Method == MethodGet {
 			if r.URL.Path == "/profile" {
@@ -880,6 +888,21 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 
 func createTestServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(fn))
+}
+
+func createTestTLSServer(fn func(w http.ResponseWriter, r *http.Request), certPath, certKeyPath string) *httptest.Server {
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(fn))
+	ts.TLS = &tls.Config{
+		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			cert, err := tls.LoadX509KeyPair(certPath, certKeyPath)
+			if err != nil {
+				return nil, err
+			}
+			return &cert, nil
+		},
+	}
+	ts.StartTLS()
+	return ts
 }
 
 func dcnl() *Client {

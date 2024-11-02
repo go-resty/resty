@@ -1,8 +1,8 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com)
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // 2016 Andrew Grigorev (https://github.com/ei-grad)
-// All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 

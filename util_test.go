@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -8,6 +9,8 @@ import (
 	"bytes"
 	"errors"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -107,6 +110,20 @@ func TestRestyErrorFuncs(t *testing.T) {
 	assertEqual(t, "inner error 1", e.Error())
 }
 
+func Test_createDirectory(t *testing.T) {
+	errMsg := "test dir error"
+	mkdirAll = func(path string, perm os.FileMode) error {
+		return errors.New(errMsg)
+	}
+	t.Cleanup(func() {
+		mkdirAll = os.MkdirAll
+	})
+
+	tempDir := filepath.Join(t.TempDir(), "test-dir")
+	err := createDirectory(tempDir)
+	assertEqual(t, errMsg, err.Error())
+}
+
 // This test methods exist for test coverage purpose
 // to validate the getter and setter
 func TestUtilMiscTestCoverage(t *testing.T) {
@@ -122,4 +139,7 @@ func TestUtilMiscTestCoverage(t *testing.T) {
 	}{}
 	err := decodeJSON(bytes.NewReader([]byte(`{\"  \": \"some value\"}`)), &v)
 	assertEqual(t, "invalid character '\\\\' looking for beginning of object key string", err.Error())
+
+	ireErr := &invalidRequestError{Err: errors.New("test coverage")}
+	assertEqual(t, "test coverage", ireErr.Error())
 }

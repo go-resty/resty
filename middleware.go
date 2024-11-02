@@ -11,12 +11,10 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const debugRequestLogKey = "__restyDebugRequestLog"
@@ -102,7 +100,7 @@ func parseRequestURL(c *Client, r *Request) error {
 	// Parsing request URL
 	reqURL, err := url.Parse(r.URL)
 	if err != nil {
-		return err
+		return &invalidRequestError{Err: err}
 	}
 
 	// If [Request.URL] is a relative path, then the following
@@ -119,13 +117,13 @@ func parseRequestURL(c *Client, r *Request) error {
 		if r.client.LoadBalancer() != nil {
 			r.baseURL, err = r.client.LoadBalancer().Next()
 			if err != nil {
-				return err
+				return &invalidRequestError{Err: err}
 			}
 		}
 
 		reqURL, err = url.Parse(r.baseURL + r.URL)
 		if err != nil {
-			return err
+			return &invalidRequestError{Err: err}
 		}
 	}
 
@@ -156,6 +154,15 @@ func parseRequestURL(c *Client, r *Request) error {
 				reqURL.RawQuery = reqURL.RawQuery + "&" + r.QueryParams.Encode()
 			}
 		}
+	}
+
+	// GH#797 Unescape query parameters (non-standard - not recommended)
+	if r.unescapeQueryParams && len(reqURL.RawQuery) > 0 {
+		// at this point, all errors caught up in the above operations
+		// so ignore the return error on query unescape; I realized
+		// while writing the unit test
+		unescapedQuery, _ := url.QueryUnescape(reqURL.RawQuery)
+		reqURL.RawQuery = strings.ReplaceAll(unescapedQuery, " ", "+") // otherwise request becomes bad request
 	}
 
 	r.URL = reqURL.String()
@@ -190,17 +197,22 @@ func parseRequestHeader(c *Client, r *Request) error {
 }
 
 func parseRequestBody(c *Client, r *Request) error {
+	if r.isMultiPart && !(r.Method == MethodPost || r.Method == MethodPut || r.Method == MethodPatch) {
+		err := fmt.Errorf("resty: multipart is not allowed in HTTP verb: %v", r.Method)
+		return &invalidRequestError{Err: err}
+	}
+
 	if r.isPayloadSupported() {
 		switch {
 		case r.isMultiPart: // Handling Multipart
 			if err := handleMultipart(c, r); err != nil {
-				return err
+				return &invalidRequestError{Err: err}
 			}
 		case len(c.FormData()) > 0 || len(r.FormData) > 0: // Handling Form Data
 			handleFormData(c, r)
 		case r.Body != nil: // Handling Request body
 			if err := handleRequestBody(c, r); err != nil {
-				return err
+				return &invalidRequestError{Err: err}
 			}
 		}
 	} else {
@@ -221,7 +233,7 @@ func parseRequestBody(c *Client, r *Request) error {
 
 func createHTTPRequest(c *Client, r *Request) (err error) {
 	// init client trace if enabled
-	r.initClientTrace()
+	r.initTraceIfEnabled()
 
 	if r.bodyBuf == nil {
 		if reader, ok := r.Body.(io.Reader); ok {
@@ -234,7 +246,7 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 	}
 
 	if err != nil {
-		return
+		return &invalidRequestError{Err: err}
 	}
 
 	// get the context reference back from underlying RawRequest
@@ -292,52 +304,8 @@ func createCurlCmd(c *Client, r *Request) (err error) {
 		if r.resultCurlCmd == nil {
 			r.resultCurlCmd = new(string)
 		}
-		*r.resultCurlCmd = buildCurlRequest(r)
+		*r.resultCurlCmd = buildCurlCmd(r)
 	}
-	return nil
-}
-
-func requestDebugLogger(c *Client, r *Request) error {
-	if !r.Debug {
-		return nil
-	}
-
-	rr := r.RawRequest
-	rh := rr.Header.Clone()
-	if c.Client().Jar != nil {
-		for _, cookie := range c.Client().Jar.Cookies(r.RawRequest.URL) {
-			s := fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
-			if c := rh.Get("Cookie"); c != "" {
-				rh.Set("Cookie", c+"; "+s)
-			} else {
-				rh.Set("Cookie", s)
-			}
-		}
-	}
-	rl := &RequestLog{Header: rh, Body: r.fmtBodyString(r.DebugBodyLimit)}
-	if c.requestLog != nil {
-		if err := c.requestLog(rl); err != nil {
-			return err
-		}
-	}
-
-	reqLog := "\n==============================================================================\n"
-
-	if r.Debug && r.generateCurlOnDebug {
-		reqLog += "~~~ REQUEST(CURL) ~~~\n" +
-			fmt.Sprintf("	%v\n", *r.resultCurlCmd)
-	}
-
-	reqLog += "~~~ REQUEST ~~~\n" +
-		fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
-		fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
-		fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(rl.Header)) +
-		fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
-		"------------------------------------------------------------------------------\n"
-
-	r.initValuesMap()
-	r.values[debugRequestLogKey] = reqLog
-
 	return nil
 }
 
@@ -345,47 +313,10 @@ func requestDebugLogger(c *Client, r *Request) error {
 // Response Middleware(s)
 //_______________________________________________________________________
 
-func responseDebugLogger(c *Client, res *Response) error {
-	if !res.Request.Debug {
-		return nil
-	}
-
-	bodyStr, err := res.fmtBodyString(res.Request.DebugBodyLimit)
-	if err != nil {
-		return err
-	}
-
-	rl := &ResponseLog{Header: res.Header().Clone(), Body: bodyStr}
-	if c.responseLog != nil {
-		c.lock.RLock()
-		defer c.lock.RUnlock()
-		if err := c.responseLog(rl); err != nil {
-			return err
-		}
-	}
-
-	debugLog := res.Request.values[debugRequestLogKey].(string)
-	debugLog += "~~~ RESPONSE ~~~\n" +
-		fmt.Sprintf("STATUS       : %s\n", res.Status()) +
-		fmt.Sprintf("PROTO        : %s\n", res.RawResponse.Proto) +
-		fmt.Sprintf("RECEIVED AT  : %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
-		fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
-		"HEADERS      :\n" +
-		composeHeaders(rl.Header) + "\n"
-	if res.Request.isSaveResponse {
-		debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
-	} else {
-		debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)
-	}
-	debugLog += "==============================================================================\n"
-
-	res.Request.log.Debugf("%s", debugLog)
-
-	return nil
-}
-
 func parseResponseBody(c *Client, res *Response) (err error) {
-	if res.Request.DoNotParseResponse || res.Request.isSaveResponse {
+	if res.Err != nil ||
+		res.Request.DoNotParseResponse ||
+		res.Request.isSaveResponse {
 		return // move on
 	}
 
@@ -576,6 +507,7 @@ func handleRequestBody(c *Client, r *Request) error {
 		} else if xmlKey == encKey {
 			if inferKind(r.Body) != reflect.Struct {
 				releaseBuffer(r.bodyBuf)
+				r.bodyBuf = nil
 				return ErrUnsupportedRequestBodyKind
 			}
 		}
@@ -584,10 +516,12 @@ func handleRequestBody(c *Client, r *Request) error {
 		encFunc, found := c.inferContentTypeEncoder(contentType, encKey)
 		if !found {
 			releaseBuffer(r.bodyBuf)
+			r.bodyBuf = nil
 			return fmt.Errorf("resty: content-type encoder not found for %s", contentType)
 		}
 		if err := encFunc(r.bodyBuf, r.Body); err != nil {
 			releaseBuffer(r.bodyBuf)
+			r.bodyBuf = nil
 			return err
 		}
 	}
@@ -596,34 +530,36 @@ func handleRequestBody(c *Client, r *Request) error {
 }
 
 func saveResponseIntoFile(c *Client, res *Response) error {
-	if res.Request.isSaveResponse {
-		file := ""
-
-		if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(res.Request.OutputFile) {
-			file += c.OutputDirectory() + string(filepath.Separator)
-		}
-
-		file = filepath.Clean(file + res.Request.OutputFile)
-		if err := createDirectory(filepath.Dir(file)); err != nil {
-			return err
-		}
-
-		outFile, err := os.Create(file)
-		if err != nil {
-			return err
-		}
-		defer closeq(outFile)
-
-		// io.Copy reads maximum 32kb size, it is perfect for large file download too
-		defer closeq(res.Body)
-
-		written, err := io.Copy(outFile, res.Body)
-		if err != nil {
-			return err
-		}
-
-		res.size = written
+	if res.Err != nil || !res.Request.isSaveResponse {
+		return nil
 	}
+
+	file := ""
+
+	if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(res.Request.OutputFile) {
+		file += c.OutputDirectory() + string(filepath.Separator)
+	}
+
+	file = filepath.Clean(file + res.Request.OutputFile)
+	if err := createDirectory(filepath.Dir(file)); err != nil {
+		return err
+	}
+
+	outFile, err := createFile(file)
+	if err != nil {
+		return err
+	}
+	defer closeq(outFile)
+
+	// io.Copy reads maximum 32kb size, it is perfect for large file download too
+	defer closeq(res.Body)
+
+	written, err := io.Copy(outFile, res.Body)
+	if err != nil {
+		return err
+	}
+
+	res.size = written
 
 	return nil
 }

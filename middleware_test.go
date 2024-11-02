@@ -1,13 +1,21 @@
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// resty source code and usage is governed by a MIT style
+// license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
+
 package resty
 
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -291,6 +299,24 @@ func Test_parseRequestURL(t *testing.T) {
 				r.URL = "https://example.com/"
 			},
 			expectedURL: "https://example.com/?foo=1&foo=2",
+		},
+		{
+			name: "unescape query params",
+			initClient: func(c *Client) {
+				c.SetBaseURL("https://example.com/").
+					SetUnescapeQueryParams(true). // this line is just code coverage; I will restructure this test in v3 for the client and request the respective init method
+					SetQueryParam("fromclient", "hey unescape").
+					SetQueryParam("initone", "cáfe")
+			},
+			initRequest: func(r *Request) {
+				r.SetUnescapeQueryParams(true) // this line takes effect
+				r.SetQueryParams(
+					map[string]string{
+						"registry": "nacos://test:6801", // GH #797
+					},
+				)
+			},
+			expectedURL: "https://example.com?initone=cáfe&fromclient=hey+unescape&registry=nacos://test:6801",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1036,4 +1062,63 @@ func Benchmark_parseRequestBody_MultiPart(b *testing.B) {
 			b.Errorf("parseRequestBody() error = %v", err)
 		}
 	}
+}
+
+func TestSaveResponseToFile(t *testing.T) {
+	c := dcnl()
+	tempDir := t.TempDir()
+
+	errDirMsg := "test dir error"
+	mkdirAll = func(_ string, _ os.FileMode) error {
+		return errors.New(errDirMsg)
+	}
+	errFileMsg := "test file error"
+	createFile = func(_ string) (*os.File, error) {
+		return nil, errors.New(errFileMsg)
+	}
+	t.Cleanup(func() {
+		mkdirAll = os.MkdirAll
+		createFile = os.Create
+	})
+
+	// dir create error
+	req1 := c.R()
+	req1.SetOutputFile(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
+	err1 := saveResponseIntoFile(c, &Response{Request: req1})
+	assertEqual(t, errDirMsg, err1.Error())
+
+	// file create error
+	req2 := c.R()
+	req2.SetOutputFile(filepath.Join(tempDir, "sample.txt"))
+	err2 := saveResponseIntoFile(c, &Response{Request: req2})
+	assertEqual(t, errFileMsg, err2.Error())
+}
+
+func TestRequestURL_GH797(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+	c := dcnl().
+		SetBaseURL(ts.URL).
+		SetUnescapeQueryParams(true). // this line is just code coverage; I will restructure this test in v3 for the client and request the respective init method
+		SetQueryParam("fromclient", "hey unescape").
+		SetQueryParam("initone", "cáfe")
+	resp, err := c.R().
+		SetUnescapeQueryParams(true). // this line takes effect
+		SetQueryParams(
+			map[string]string{
+				"registry": "nacos://test:6801", // GH #797
+			},
+		).
+		Get("/unescape-query-params")
+	assertError(t, err)
+	assertEqual(t, "query params looks good", resp.String())
+}
+
+func TestMiddlewareCoverage(t *testing.T) {
+	c := dcnl()
+
+	req1 := c.R()
+	req1.URL = "//invalid-url  .local"
+	err1 := createHTTPRequest(c, req1)
+	assertEqual(t, true, strings.Contains(err1.Error(), "invalid character"))
 }

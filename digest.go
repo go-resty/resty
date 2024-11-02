@@ -1,9 +1,9 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com)
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // 2023 Segev Dagan (https://github.com/segevda)
 // 2024 Philipp Wolfer (https://github.com/phw)
-// All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
