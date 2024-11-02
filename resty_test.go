@@ -140,6 +140,14 @@ func createGetServer(t *testing.T) *httptest.Server {
 					_, _ = w.Write([]byte(`{ "message": "hello" }`))
 				}
 				atomic.AddInt32(&attempt, 1)
+			case "/unescape-query-params":
+				initOne := r.URL.Query().Get("initone")
+				fromClient := r.URL.Query().Get("fromclient")
+				registry := r.URL.Query().Get("registry")
+				assertEqual(t, "cáfe", initOne)
+				assertEqual(t, "hey unescape", fromClient)
+				assertEqual(t, "nacos://test:6801", registry)
+				_, _ = w.Write([]byte(`query params looks good`))
 			}
 
 			switch {

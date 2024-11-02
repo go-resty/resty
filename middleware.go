@@ -157,6 +157,15 @@ func parseRequestURL(c *Client, r *Request) error {
 		}
 	}
 
+	// GH#797 Unescape query parameters (non-standard - not recommended)
+	if r.unescapeQueryParams && len(reqURL.RawQuery) > 0 {
+		// at this point, all errors caught up in the above operations
+		// so ignore the return error on query unescape; I realized
+		// while writing the unit test
+		unescapedQuery, _ := url.QueryUnescape(reqURL.RawQuery)
+		reqURL.RawQuery = strings.ReplaceAll(unescapedQuery, " ", "+") // otherwise request becomes bad request
+	}
+
 	r.URL = reqURL.String()
 
 	return nil

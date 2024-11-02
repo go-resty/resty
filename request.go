@@ -91,6 +91,7 @@ type Request struct {
 	retryConditions     []RetryConditionFunc
 	resultCurlCmd       *string
 	generateCurlOnDebug bool
+	unescapeQueryParams bool
 	multipartErrChan    chan error
 }
 
@@ -1069,6 +1070,17 @@ func (r *Request) DisableGenerateCurlOnDebug() *Request {
 // It overrides the options set by the [Client.SetGenerateCurlOnDebug]
 func (r *Request) SetGenerateCurlOnDebug(b bool) *Request {
 	r.generateCurlOnDebug = b
+	return r
+}
+
+// SetUnescapeQueryParams method sets the choice of unescape query parameters for the request URL.
+// To prevent broken URL, Resty replaces space (" ") with "+" in the query parameters.
+//
+// This method overrides the value set by [Client.SetUnescapeQueryParams]
+//
+// NOTE: Request failure is possible due to non-standard usage of Unescaped Query Parameters.
+func (r *Request) SetUnescapeQueryParams(unescape bool) *Request {
+	r.unescapeQueryParams = unescape
 	return r
 }
 

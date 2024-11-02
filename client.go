@@ -200,6 +200,7 @@ type Client struct {
 	requestLog               RequestLogCallback
 	responseLog              ResponseLogCallback
 	generateCurlOnDebug      bool
+	unescapeQueryParams      bool
 	loadBalancer             LoadBalancer
 	beforeRequest            []RequestMiddleware
 	udBeforeRequest          []RequestMiddleware
@@ -654,6 +655,7 @@ func (c *Client) R() *Request {
 		log:                 c.log,
 		setContentLength:    c.setContentLength,
 		generateCurlOnDebug: c.generateCurlOnDebug,
+		unescapeQueryParams: c.unescapeQueryParams,
 	}
 
 	if c.ctx != nil {
@@ -1858,6 +1860,19 @@ func (c *Client) SetGenerateCurlOnDebug(b bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.generateCurlOnDebug = b
+	return c
+}
+
+// SetUnescapeQueryParams method sets the choice of unescape query parameters for the request URL.
+// To prevent broken URL, Resty replaces space (" ") with "+" in the query parameters.
+//
+// See [Request.SetUnescapeQueryParams]
+//
+// NOTE: Request failure is possible due to non-standard usage of Unescaped Query Parameters.
+func (c *Client) SetUnescapeQueryParams(unescape bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.unescapeQueryParams = unescape
 	return c
 }
 
