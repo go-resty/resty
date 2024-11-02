@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -95,7 +96,7 @@ func (r *Response) Cookies() []*http.Cookie {
 //   - Returns an empty string on auto-unmarshal scenarios, unless
 //     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
 //   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set
-func (r *Response) String() string {
+func (r Response) String() string {
 	if len(r.bodyBytes) == 0 && !r.Request.DoNotParseResponse {
 		_ = r.readAll()
 	}

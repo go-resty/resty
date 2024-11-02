@@ -937,7 +937,7 @@ func TestCustomTransportSettings(t *testing.T) {
 
 	resp, err := client.R().Get("/")
 	assertNil(t, err)
-	assertEqual(t, resp.String(), "TestGet: text response")
+	assertEqual(t, "TestGet: text response", resp.String())
 }
 
 func TestDefaultDialerTransportSettings(t *testing.T) {
@@ -950,7 +950,7 @@ func TestDefaultDialerTransportSettings(t *testing.T) {
 
 		resp, err := client.R().Get("/")
 		assertNil(t, err)
-		assertEqual(t, resp.String(), "TestGet: text response")
+		assertEqual(t, "TestGet: text response", resp.String())
 	})
 
 	t.Run("dialer-transport-default", func(t *testing.T) {
@@ -959,7 +959,7 @@ func TestDefaultDialerTransportSettings(t *testing.T) {
 
 		resp, err := client.R().Get("/")
 		assertNil(t, err)
-		assertEqual(t, resp.String(), "TestGet: text response")
+		assertEqual(t, "TestGet: text response", resp.String())
 	})
 }
 
@@ -976,7 +976,7 @@ func TestNewWithDialer(t *testing.T) {
 
 	resp, err := client.R().Get("/")
 	assertNil(t, err)
-	assertEqual(t, resp.String(), "TestGet: text response")
+	assertEqual(t, "TestGet: text response", resp.String())
 }
 
 func TestNewWithLocalAddr(t *testing.T) {
@@ -989,7 +989,7 @@ func TestNewWithLocalAddr(t *testing.T) {
 
 	resp, err := client.R().Get("/")
 	assertNil(t, err)
-	assertEqual(t, resp.String(), "TestGet: text response")
+	assertEqual(t, "TestGet: text response", resp.String())
 }
 
 func TestClientOnResponseError(t *testing.T) {
