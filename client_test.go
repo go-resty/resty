@@ -188,16 +188,21 @@ func TestClientRedirectPolicy(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
 
-	c := dcnl().SetRedirectPolicy(FlexibleRedirectPolicy(20))
-	_, err := c.R().Get(ts.URL + "/redirect-1")
+	c := dcnl().SetRedirectPolicy(FlexibleRedirectPolicy(20), DomainCheckRedirectPolicy("127.0.0.1"))
+	_, err := c.R().
+		SetHeader("Name1", "Value1").
+		SetHeader("Name2", "Value2").
+		SetHeader("Name3", "Value3").
+		Get(ts.URL + "/redirect-1")
 
 	assertEqual(t, true, (err.Error() == "Get /redirect-21: stopped after 20 redirects" ||
 		err.Error() == "Get \"/redirect-21\": stopped after 20 redirects"))
 
 	c.SetRedirectPolicy(NoRedirectPolicy())
-	_, err = c.R().Get(ts.URL + "/redirect-1")
-	assertEqual(t, true, (err.Error() == "Get /redirect-2: resty: auto redirect is disabled" ||
-		err.Error() == "Get \"/redirect-2\": resty: auto redirect is disabled"))
+	res, err := c.R().Get(ts.URL + "/redirect-1")
+	assertNil(t, err)
+	assertEqual(t, http.StatusTemporaryRedirect, res.StatusCode())
+	assertEqual(t, `<a href="/redirect-2">Temporary Redirect</a>.`, res.String())
 }
 
 func TestClientTimeout(t *testing.T) {
@@ -484,9 +489,6 @@ func TestClientSettingsCoverage(t *testing.T) {
 	authToken := "sample auth token value"
 	c.SetAuthToken(authToken)
 	assertEqual(t, authToken, c.AuthToken())
-
-	type brokenRedirectPolicy struct{}
-	c.SetRedirectPolicy(&brokenRedirectPolicy{})
 
 	c.SetCloseConnection(true)
 

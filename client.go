@@ -1131,23 +1131,18 @@ func (c *Client) newErrorInterface() any {
 // SetRedirectPolicy method sets the redirect policy for the client. Resty provides ready-to-use
 // redirect policies. Wanna create one for yourself, refer to `redirect.go`.
 //
-//	client.SetRedirectPolicy(FlexibleRedirectPolicy(20))
+//	client.SetRedirectPolicy(resty.FlexibleRedirectPolicy(20))
 //
 //	// Need multiple redirect policies together
-//	client.SetRedirectPolicy(FlexibleRedirectPolicy(20), DomainCheckRedirectPolicy("host1.com", "host2.net"))
-func (c *Client) SetRedirectPolicy(policies ...any) *Client {
-	for _, p := range policies {
-		if _, ok := p.(RedirectPolicy); !ok {
-			c.log.Errorf("%v does not implement resty.RedirectPolicy (missing Apply method)",
-				functionName(p))
-		}
-	}
-
+//	client.SetRedirectPolicy(resty.FlexibleRedirectPolicy(20), resty.DomainCheckRedirectPolicy("host1.com", "host2.net"))
+//
+// NOTE: It overwrites the previous redirect policies in the client instance.
+func (c *Client) SetRedirectPolicy(policies ...RedirectPolicy) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		for _, p := range policies {
-			if err := p.(RedirectPolicy).Apply(req, via); err != nil {
+			if err := p.Apply(req, via); err != nil {
 				return err
 			}
 		}

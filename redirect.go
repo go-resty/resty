@@ -1,6 +1,7 @@
-// Copyright (c) 2015-2024 Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
 
 package resty
 
@@ -11,8 +12,6 @@ import (
 	"net/http"
 	"strings"
 )
-
-var ErrAutoRedirectDisabled = errors.New("resty: auto redirect is disabled")
 
 type (
 	// RedirectPolicy to regulate the redirects in the Resty client.
@@ -35,12 +34,12 @@ func (f RedirectPolicyFunc) Apply(req *http.Request, via []*http.Request) error 
 	return f(req, via)
 }
 
-// NoRedirectPolicy is used to disable redirects in the Resty client
+// NoRedirectPolicy is used to disable the redirects in the Resty client
 //
-//	resty.SetRedirectPolicy(NoRedirectPolicy())
+//	resty.SetRedirectPolicy(resty.NoRedirectPolicy())
 func NoRedirectPolicy() RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
-		return ErrAutoRedirectDisabled
+		return http.ErrUseLastResponse
 	})
 }
 
@@ -60,22 +59,20 @@ func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 // DomainCheckRedirectPolicy method is convenient for defining domain name redirect rules in Resty clients.
 // Redirect is allowed only for the host mentioned in the policy.
 //
-//	resty.SetRedirectPolicy(DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
+//	resty.SetRedirectPolicy(resty.DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
 func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
 	hosts := make(map[string]bool)
 	for _, h := range hostnames {
 		hosts[strings.ToLower(h)] = true
 	}
 
-	fn := RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
+	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		if ok := hosts[getHostname(req.URL.Host)]; !ok {
 			return errors.New("redirect is not allowed as per DomainCheckRedirectPolicy")
 		}
-
+		checkHostAndAddHeaders(req, via[0])
 		return nil
 	})
-
-	return fn
 }
 
 func getHostname(host string) (hostname string) {
