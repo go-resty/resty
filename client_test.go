@@ -264,7 +264,7 @@ func TestClientSetCertificates(t *testing.T) {
 	client := dcnl()
 	client.SetCertificates(tls.Certificate{})
 
-	transport, err := client.Transport()
+	transport, err := client.HTTPTransport()
 
 	assertNil(t, err)
 	assertEqual(t, 1, len(transport.TLSClientConfig.Certificates))
@@ -275,7 +275,7 @@ func TestClientSetRootCertificate(t *testing.T) {
 		client := dcnl()
 		client.SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
-		transport, err := client.Transport()
+		transport, err := client.HTTPTransport()
 
 		assertNil(t, err)
 		assertNotNil(t, transport.TLSClientConfig.RootCAs)
@@ -285,7 +285,7 @@ func TestClientSetRootCertificate(t *testing.T) {
 		client := dcnl()
 		client.SetRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
-		transport, err := client.Transport()
+		transport, err := client.HTTPTransport()
 
 		assertNil(t, err)
 		assertNil(t, transport.TLSClientConfig)
@@ -298,11 +298,18 @@ func TestClientSetRootCertificate(t *testing.T) {
 
 		client.SetRootCertificateFromString(string(rootPemData))
 
-		transport, err := client.Transport()
+		transport, err := client.HTTPTransport()
 
 		assertNil(t, err)
 		assertNotNil(t, transport.TLSClientConfig.RootCAs)
 	})
+}
+
+type CustomRoundTripper1 struct{}
+
+// RoundTrip just for test
+func (rt *CustomRoundTripper1) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return &http.Response{}, nil
 }
 
 func TestClientCACertificateFromStringErrorTls(t *testing.T) {
@@ -312,9 +319,9 @@ func TestClientCACertificateFromStringErrorTls(t *testing.T) {
 
 		rootPemData, err := os.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
 		assertNil(t, err)
-		rt := &CustomRoundTripper{}
+		rt := &CustomRoundTripper1{}
 		client.SetTransport(rt)
-		transport, err := client.Transport()
+		transport, err := client.HTTPTransport()
 
 		client.SetRootCertificateFromString(string(rootPemData))
 
@@ -329,9 +336,9 @@ func TestClientCACertificateFromStringErrorTls(t *testing.T) {
 
 		rootPemData, err := os.ReadFile(filepath.Join(getTestDataPath(), "sample-root.pem"))
 		assertNil(t, err)
-		rt := &CustomRoundTripper{}
+		rt := &CustomRoundTripper1{}
 		client.SetTransport(rt)
-		transport, err := client.Transport()
+		transport, err := client.HTTPTransport()
 
 		client.SetClientRootCertificateFromString(string(rootPemData))
 
@@ -341,11 +348,78 @@ func TestClientCACertificateFromStringErrorTls(t *testing.T) {
 	})
 }
 
+// CustomRoundTripper2 just for test
+type CustomRoundTripper2 struct {
+	tlsConfig *tls.Config
+	returnErr bool
+}
+
+// RoundTrip just for test
+func (rt *CustomRoundTripper2) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return &http.Response{}, nil
+}
+
+func (rt *CustomRoundTripper2) TLSClientConfig() *tls.Config {
+	return rt.tlsConfig
+}
+func (rt *CustomRoundTripper2) SetTLSClientConfig(tlsConfig *tls.Config) error {
+	if rt.returnErr {
+		return errors.New("test mock error")
+	}
+	rt.tlsConfig = tlsConfig
+	return nil
+}
+
+func TestClientTLSConfigerInterface(t *testing.T) {
+
+	t.Run("assert transport and custom roundtripper", func(t *testing.T) {
+		c := dcnl()
+
+		assertNotNil(t, c.Transport())
+		assertEqual(t, "http.Transport", inferType(c.Transport()).String())
+
+		ct := &CustomRoundTripper2{}
+		c.SetTransport(ct)
+		assertNotNil(t, c.Transport())
+		assertEqual(t, "resty.CustomRoundTripper2", inferType(c.Transport()).String())
+	})
+
+	t.Run("get and set tls config", func(t *testing.T) {
+		c := dcnl()
+
+		ct := &CustomRoundTripper2{}
+		c.SetTransport(ct)
+
+		tlsConfig := &tls.Config{InsecureSkipVerify: true}
+		c.SetTLSClientConfig(tlsConfig)
+		assertEqual(t, tlsConfig, c.TLSClientConfig())
+	})
+
+	t.Run("get tls config error", func(t *testing.T) {
+		c := dcnl()
+
+		ct := &CustomRoundTripper1{}
+		c.SetTransport(ct)
+		assertNil(t, c.TLSClientConfig())
+	})
+
+	t.Run("set tls config error", func(t *testing.T) {
+		c := dcnl()
+
+		ct := &CustomRoundTripper2{returnErr: true}
+		c.SetTransport(ct)
+
+		tlsConfig := &tls.Config{InsecureSkipVerify: true}
+		c.SetTLSClientConfig(tlsConfig)
+		assertNil(t, c.TLSClientConfig())
+	})
+}
+
 func TestClientSetClientRootCertificate(t *testing.T) {
 	client := dcnl()
 	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
-	transport, err := client.Transport()
+	transport, err := client.HTTPTransport()
 
 	assertNil(t, err)
 	assertNotNil(t, transport.TLSClientConfig.ClientCAs)
@@ -355,7 +429,7 @@ func TestClientSetClientRootCertificateNotExists(t *testing.T) {
 	client := dcnl()
 	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
-	transport, err := client.Transport()
+	transport, err := client.HTTPTransport()
 
 	assertNil(t, err)
 	assertNil(t, transport.TLSClientConfig)
@@ -368,7 +442,7 @@ func TestClientSetClientRootCertificateWatcher(t *testing.T) {
 			PoolInterval: time.Second * 1,
 		})
 
-		transport, err := client.Transport()
+		transport, err := client.HTTPTransport()
 
 		assertNil(t, err)
 		assertNotNil(t, transport.TLSClientConfig.ClientCAs)
@@ -378,7 +452,7 @@ func TestClientSetClientRootCertificateWatcher(t *testing.T) {
 		client := dcnl()
 		client.SetClientRootCertificateWatcher(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"), nil)
 
-		transport, err := client.Transport()
+		transport, err := client.HTTPTransport()
 
 		assertNil(t, err)
 		assertNil(t, transport.TLSClientConfig)
@@ -392,7 +466,7 @@ func TestClientSetClientRootCertificateFromString(t *testing.T) {
 
 	client.SetClientRootCertificateFromString(string(rootPemData))
 
-	transport, err := client.Transport()
+	transport, err := client.HTTPTransport()
 
 	assertNil(t, err)
 	assertNotNil(t, transport.TLSClientConfig.ClientCAs)
@@ -444,7 +518,7 @@ func TestClientSetTransport(t *testing.T) {
 		},
 	}
 	client.SetTransport(transport)
-	transportInUse, err := client.Transport()
+	transportInUse, err := client.HTTPTransport()
 
 	assertNil(t, err)
 	assertEqual(t, true, transport == transportInUse)
@@ -502,8 +576,8 @@ func TestClientSettingsCoverage(t *testing.T) {
 
 	// [Start] Custom Transport scenario
 	ct := dcnl()
-	ct.SetTransport(&CustomRoundTripper{})
-	_, err := ct.Transport()
+	ct.SetTransport(&CustomRoundTripper1{})
+	_, err := ct.HTTPTransport()
 	assertNotNil(t, err)
 	assertEqual(t, ErrNotHttpTransportType, err)
 
@@ -685,10 +759,10 @@ func TestClientRoundTripper(t *testing.T) {
 	c := NewWithClient(&http.Client{})
 	c.outputLogTo(io.Discard)
 
-	rt := &CustomRoundTripper{}
+	rt := &CustomRoundTripper2{}
 	c.SetTransport(rt)
 
-	ct, err := c.Transport()
+	ct, err := c.HTTPTransport()
 	assertNotNil(t, err)
 	assertNil(t, ct)
 	assertEqual(t, ErrNotHttpTransportType, err)
@@ -732,15 +806,6 @@ func TestClientDebugBodySizeLimit(t *testing.T) {
 			lb.Reset()
 		}
 	}
-}
-
-// CustomRoundTripper just for test
-type CustomRoundTripper struct {
-}
-
-// RoundTrip just for test
-func (rt *CustomRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
-	return &http.Response{}, nil
 }
 
 func TestGzipCompress(t *testing.T) {

@@ -1108,7 +1108,7 @@ func TestRawFileUploadByBody(t *testing.T) {
 func TestProxySetting(t *testing.T) {
 	c := dcnl()
 
-	transport, err := c.Transport()
+	transport, err := c.HTTPTransport()
 
 	assertNil(t, err)
 

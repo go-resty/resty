@@ -94,7 +94,7 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 		assertNil(t, err)
 
 		// Reset TLS config to ensure that previous root cert is not re-used
-		tr, err := client.Transport()
+		tr, err := client.HTTPTransport()
 		assertNil(t, err)
 		tr.TLSClientConfig = nil
 		client.SetTransport(tr)
