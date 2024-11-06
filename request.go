@@ -104,7 +104,10 @@ func (r *Request) GenerateCurlCommand() string {
 		return *r.resultCurlCmd
 	}
 	if r.RawRequest == nil {
-		r.client.executeBefore(r) // mock with r.Get("/")
+		// mock with r.Get("/")
+		if err := r.client.executeRequestMiddlewares(r); err != nil {
+			r.log.Errorf("%v", err)
+		}
 	}
 	*r.resultCurlCmd = buildCurlCmd(r)
 	return *r.resultCurlCmd
@@ -656,14 +659,14 @@ func (r *Request) SetAuthScheme(scheme string) *Request {
 // [RFC 7616]: https://datatracker.ietf.org/doc/html/rfc7616
 func (r *Request) SetDigestAuth(username, password string) *Request {
 	oldTransport := r.client.httpClient.Transport
-	r.client.OnBeforeRequest(func(c *Client, _ *Request) error {
+	r.client.AddRequestMiddleware(func(c *Client, _ *Request) error {
 		c.httpClient.Transport = &digestTransport{
 			digestCredentials: digestCredentials{username, password},
 			transport:         oldTransport,
 		}
 		return nil
 	})
-	r.client.OnAfterResponse(func(c *Client, _ *Response) error {
+	r.client.AddResponseMiddleware(func(c *Client, _ *Response) error {
 		c.httpClient.Transport = oldTransport
 		return nil
 	})
@@ -1066,6 +1069,11 @@ func (r *Request) DisableGenerateCurlOnDebug() *Request {
 }
 
 // SetGenerateCurlOnDebug method is used to turn on/off the generate CURL command in debug mode.
+// It works in conjunction with debug mode.
+//
+// NOTE: Use with care.
+//   - Potential to leak sensitive data from [Request] and [Response] in the debug log.
+//   - Beware of memory usage since the request body is reread.
 //
 // It overrides the options set by the [Client.SetGenerateCurlOnDebug]
 func (r *Request) SetGenerateCurlOnDebug(b bool) *Request {

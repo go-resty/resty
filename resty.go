@@ -193,24 +193,17 @@ func createClient(hc *http.Client) *Client {
 	c.AddContentDecompressor("deflate", decompressDeflate)
 	c.AddContentDecompressor("gzip", decompressGzip)
 
-	// default before request middlewares
-	c.beforeRequest = []RequestMiddleware{
-		parseRequestURL,
-		parseRequestHeader,
-		parseRequestBody,
-		createHTTPRequest,
-		addCredentials,
-		createCurlCmd,
-	}
+	// request middlewares
+	c.SetRequestMiddlewares(
+		PrepareRequestMiddleware,
+		GenerateCurlRequestMiddleware,
+	)
 
-	// user defined request middlewares
-	c.udBeforeRequest = []RequestMiddleware{}
-
-	// default after response middlewares
-	c.afterResponse = []ResponseMiddleware{
-		parseResponseBody,
-		saveResponseIntoFile,
-	}
+	// response middlewares
+	c.SetResponseMiddlewares(
+		AutoParseResponseMiddleware,
+		SaveToFileResponseMiddleware,
+	)
 
 	return c
 }

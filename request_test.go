@@ -895,17 +895,16 @@ func TestPutJSONString(t *testing.T) {
 
 	client := dcnl()
 
-	client.OnBeforeRequest(func(c *Client, r *Request) error {
-		r.SetHeader("X-Custom-Request-Middleware", "OnBeforeRequest middleware")
+	client.AddRequestMiddleware(func(c *Client, r *Request) error {
+		r.SetHeader("X-Custom-Request-Middleware", "Request middleware")
 		return nil
 	})
-	client.OnBeforeRequest(func(c *Client, r *Request) error {
-		c.SetContentLength(true)
-		r.SetHeader("X-ContentLength", "OnBeforeRequest ContentLength set")
+	client.AddRequestMiddleware(func(c *Client, r *Request) error {
+		r.SetHeader("X-ContentLength", "Request middleware ContentLength set")
 		return nil
 	})
 
-	client.SetDebug(true)
+	client.SetDebug(true).SetContentLength(true)
 	client.outputLogTo(io.Discard)
 
 	resp, err := client.R().
@@ -932,23 +931,24 @@ func TestPutXMLString(t *testing.T) {
 	assertEqual(t, `<?xml version="1.0" encoding="UTF-8"?><Response>XML response</Response>`, resp.String())
 }
 
-func TestOnBeforeMiddleware(t *testing.T) {
+func TestRequestMiddleware(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dcnl()
-	c.OnBeforeRequest(func(c *Client, r *Request) error {
-		r.SetHeader("X-Custom-Request-Middleware", "OnBeforeRequest middleware")
+	c.SetContentLength(true)
+
+	c.AddRequestMiddleware(func(c *Client, r *Request) error {
+		r.SetHeader("X-Custom-Request-Middleware", "Request middleware")
 		return nil
 	})
-	c.OnBeforeRequest(func(c *Client, r *Request) error {
-		c.SetContentLength(true)
-		r.SetHeader("X-ContentLength", "OnBeforeRequest ContentLength set")
+	c.AddRequestMiddleware(func(c *Client, r *Request) error {
+		r.SetHeader("X-ContentLength", "Request middleware ContentLength set")
 		return nil
 	})
 
 	resp, err := c.R().
-		SetBody("OnBeforeRequest: This is plain text body to server").
+		SetBody("RequestMiddleware: This is plain text body to server").
 		Put(ts.URL + "/plaintext")
 
 	assertError(t, err)

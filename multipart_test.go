@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
@@ -483,7 +484,7 @@ func (mwe *mpWriterError) Write(p []byte) (int, error) {
 	return 0, errors.New("multipart write error")
 }
 
-func TestRequest_writeFormData(t *testing.T) {
+func TestMulipartRequest_createMultipart(t *testing.T) {
 	mw := multipart.NewWriter(&mpWriterError{})
 
 	c := dcnl()
@@ -492,13 +493,37 @@ func TestRequest_writeFormData(t *testing.T) {
 		"name2": "value2",
 	})
 
-	err1 := req1.writeFormData(mw)
-	assertNotNil(t, err1)
-	assertEqual(t, "multipart write error", err1.Error())
+	t.Run("writeFormData", func(t *testing.T) {
+		err1 := req1.writeFormData(mw)
+		assertNotNil(t, err1)
+		assertEqual(t, "multipart write error", err1.Error())
+	})
 
-	err2 := createMultipart(mw, req1)
-	assertNotNil(t, err2)
-	assertEqual(t, "multipart write error", err2.Error())
+	t.Run("createMultipart", func(t *testing.T) {
+		err2 := createMultipart(mw, req1)
+		assertNotNil(t, err2)
+		assertEqual(t, "multipart write error", err2.Error())
+	})
+
+	t.Run("io copy error", func(t *testing.T) {
+		errCopyMsg := "test copy error"
+		ioCopy = func(dst io.Writer, src io.Reader) (written int64, err error) {
+			return 0, errors.New(errCopyMsg)
+		}
+		t.Cleanup(func() {
+			ioCopy = io.Copy
+		})
+
+		req1 := c.R().
+			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
+			SetMultipartBoundary("custom-boundary-"+strconv.FormatInt(time.Now().Unix(), 10)).
+			SetHeader("Content-Type", "image/png")
+
+		mw := multipart.NewWriter(new(bytes.Buffer))
+		err := createMultipart(mw, req1)
+		assertNotNil(t, err)
+		assertEqual(t, "test copy error", err.Error())
+	})
 }
 
 type returnValueTestWriter struct {

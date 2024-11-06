@@ -23,6 +23,44 @@ const debugRequestLogKey = "__restyDebugRequestLog"
 // Request Middleware(s)
 //_______________________________________________________________________
 
+// PrepareRequestMiddleware method is used to prepare HTTP requests from
+// user provides request values. Request preparation fails if any error occurs
+func PrepareRequestMiddleware(c *Client, r *Request) error {
+	var err error
+
+	if err = parseRequestURL(c, r); err != nil {
+		return err
+	}
+
+	// no error returned
+	parseRequestHeader(c, r)
+
+	if err = parseRequestBody(c, r); err != nil {
+		return err
+	}
+
+	if err = createHTTPRequest(c, r); err != nil {
+		return err
+	}
+
+	// last one doesn't need if condition
+	return addCredentials(c, r)
+}
+
+// GenerateCurlRequestMiddleware method is used to perform CURL command
+// generation during a request preparation
+//
+// See, [Client.SetGenerateCurlOnDebug], [Request.SetGenerateCurlOnDebug]
+func GenerateCurlRequestMiddleware(c *Client, r *Request) (err error) {
+	if r.Debug && r.generateCurlOnDebug {
+		if r.resultCurlCmd == nil {
+			r.resultCurlCmd = new(string)
+		}
+		*r.resultCurlCmd = buildCurlCmd(r)
+	}
+	return nil
+}
+
 func parseRequestURL(c *Client, r *Request) error {
 	if l := len(c.PathParams()) + len(c.RawPathParams()) + len(r.PathParams) + len(r.RawPathParams); l > 0 {
 		params := make(map[string]string, l)
@@ -299,74 +337,6 @@ func addCredentials(c *Client, r *Request) error {
 	return nil
 }
 
-func createCurlCmd(c *Client, r *Request) (err error) {
-	if r.Debug && r.generateCurlOnDebug {
-		if r.resultCurlCmd == nil {
-			r.resultCurlCmd = new(string)
-		}
-		*r.resultCurlCmd = buildCurlCmd(r)
-	}
-	return nil
-}
-
-//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
-// Response Middleware(s)
-//_______________________________________________________________________
-
-func parseResponseBody(c *Client, res *Response) (err error) {
-	if res.Err != nil ||
-		res.Request.DoNotParseResponse ||
-		res.Request.isSaveResponse {
-		return // move on
-	}
-
-	if res.StatusCode() == http.StatusNoContent {
-		res.Request.Error = nil
-		return
-	}
-
-	rct := firstNonEmpty(
-		res.Request.ForceResponseContentType,
-		res.Header().Get(hdrContentTypeKey),
-		res.Request.ExpectResponseContentType,
-	)
-	decKey := inferContentTypeMapKey(rct)
-	decFunc, found := c.inferContentTypeDecoder(rct, decKey)
-	if !found {
-		// the Content-Type decoder is not found; just read all the body bytes
-		err = res.readAll()
-		return
-	}
-
-	// HTTP status code > 199 and < 300, considered as Result
-	if res.IsSuccess() && res.Request.Result != nil {
-		res.Request.Error = nil
-		defer closeq(res.Body)
-		err = decFunc(res.Body, res.Request.Result)
-		res.IsRead = true
-		return
-	}
-
-	// HTTP status code > 399, considered as Error
-	if res.IsError() {
-		// global error type registered at client-instance
-		if res.Request.Error == nil {
-			res.Request.Error = c.newErrorInterface()
-		}
-
-		if res.Request.Error != nil {
-			defer closeq(res.Body)
-			err = decFunc(res.Body, res.Request.Error)
-			res.IsRead = true
-			return
-		}
-	}
-
-	// read all bytes when auto-unmarshal didn't take place
-	err = res.readAll()
-	return
-}
-
 func handleMultipart(c *Client, r *Request) error {
 	for k, v := range c.FormData() {
 		if _, ok := r.FormData[k]; ok {
@@ -453,7 +423,7 @@ func createMultipart(w *multipart.Writer, r *Request) error {
 		if _, err = partWriter.Write(p[:size]); err != nil {
 			return err
 		}
-		_, err = io.Copy(partWriter, mf.Reader)
+		_, err = ioCopy(partWriter, mf.Reader)
 		if err != nil {
 			return err
 		}
@@ -529,7 +499,70 @@ func handleRequestBody(c *Client, r *Request) error {
 	return nil
 }
 
-func saveResponseIntoFile(c *Client, res *Response) error {
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// Response Middleware(s)
+//_______________________________________________________________________
+
+// AutoParseResponseMiddleware method is used to parse the response body automatically
+// based on registered HTTP response `Content-Type` decoder, see [Client.AddContentTypeDecoder];
+// if [Request.SetResult], [Request.SetError], or [Client.SetError] is used
+func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
+	if res.Err != nil ||
+		res.Request.DoNotParseResponse ||
+		res.Request.isSaveResponse {
+		return // move on
+	}
+
+	if res.StatusCode() == http.StatusNoContent {
+		res.Request.Error = nil
+		return
+	}
+
+	rct := firstNonEmpty(
+		res.Request.ForceResponseContentType,
+		res.Header().Get(hdrContentTypeKey),
+		res.Request.ExpectResponseContentType,
+	)
+	decKey := inferContentTypeMapKey(rct)
+	decFunc, found := c.inferContentTypeDecoder(rct, decKey)
+	if !found {
+		// the Content-Type decoder is not found; just read all the body bytes
+		err = res.readAll()
+		return
+	}
+
+	// HTTP status code > 199 and < 300, considered as Result
+	if res.IsSuccess() && res.Request.Result != nil {
+		res.Request.Error = nil
+		defer closeq(res.Body)
+		err = decFunc(res.Body, res.Request.Result)
+		res.IsRead = true
+		return
+	}
+
+	// HTTP status code > 399, considered as Error
+	if res.IsError() {
+		// global error type registered at client-instance
+		if res.Request.Error == nil {
+			res.Request.Error = c.newErrorInterface()
+		}
+
+		if res.Request.Error != nil {
+			defer closeq(res.Body)
+			err = decFunc(res.Body, res.Request.Error)
+			res.IsRead = true
+			return
+		}
+	}
+
+	// read all bytes when auto-unmarshal didn't take place
+	err = res.readAll()
+	return
+}
+
+// SaveToFileResponseMiddleware method used to write HTTP response body into
+// given file details via [Request.SetOutputFile]
+func SaveToFileResponseMiddleware(c *Client, res *Response) error {
 	if res.Err != nil || !res.Request.isSaveResponse {
 		return nil
 	}
@@ -549,12 +582,13 @@ func saveResponseIntoFile(c *Client, res *Response) error {
 	if err != nil {
 		return err
 	}
-	defer closeq(outFile)
+	defer func() {
+		closeq(outFile)
+		closeq(res.Body)
+	}()
 
 	// io.Copy reads maximum 32kb size, it is perfect for large file download too
-	defer closeq(res.Body)
-
-	written, err := io.Copy(outFile, res.Body)
+	written, err := ioCopy(outFile, res.Body)
 	if err != nil {
 		return err
 	}

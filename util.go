@@ -128,6 +128,7 @@ func firstNonEmpty(v ...string) string {
 var (
 	mkdirAll   = os.MkdirAll
 	createFile = os.Create
+	ioCopy     = io.Copy
 )
 
 func createDirectory(dir string) (err error) {
