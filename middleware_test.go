@@ -1064,7 +1064,7 @@ func Benchmark_parseRequestBody_MultiPart(b *testing.B) {
 	}
 }
 
-func TestSaveResponseToFile(t *testing.T) {
+func TestMiddlewareSaveToFileErrorCases(t *testing.T) {
 	c := dcnl()
 	tempDir := t.TempDir()
 
@@ -1084,14 +1084,33 @@ func TestSaveResponseToFile(t *testing.T) {
 	// dir create error
 	req1 := c.R()
 	req1.SetOutputFile(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
-	err1 := saveResponseIntoFile(c, &Response{Request: req1})
+	err1 := SaveToFileResponseMiddleware(c, &Response{Request: req1})
 	assertEqual(t, errDirMsg, err1.Error())
 
 	// file create error
 	req2 := c.R()
 	req2.SetOutputFile(filepath.Join(tempDir, "sample.txt"))
-	err2 := saveResponseIntoFile(c, &Response{Request: req2})
+	err2 := SaveToFileResponseMiddleware(c, &Response{Request: req2})
 	assertEqual(t, errFileMsg, err2.Error())
+}
+
+func TestMiddlewareSaveToFileCopyError(t *testing.T) {
+	c := dcnl()
+	tempDir := t.TempDir()
+
+	errCopyMsg := "test copy error"
+	ioCopy = func(dst io.Writer, src io.Reader) (written int64, err error) {
+		return 0, errors.New(errCopyMsg)
+	}
+	t.Cleanup(func() {
+		ioCopy = io.Copy
+	})
+
+	// copy error
+	req1 := c.R()
+	req1.SetOutputFile(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
+	err1 := SaveToFileResponseMiddleware(c, &Response{Request: req1, Body: io.NopCloser(bytes.NewBufferString("Test context"))})
+	assertEqual(t, errCopyMsg, err1.Error())
 }
 
 func TestRequestURL_GH797(t *testing.T) {

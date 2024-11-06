@@ -87,9 +87,6 @@ type (
 	// ResponseMiddleware type is for response middleware, called after a response has been received
 	ResponseMiddleware func(*Client, *Response) error
 
-	// PreRequestHook type is for the request hook, called right before the request is sent
-	PreRequestHook func(*Client, *http.Request) error
-
 	// DebugLogCallback type is for request and response debug log callback purpose.
 	// It gets called before Resty logs it
 	DebugLogCallback func(*DebugLog)
@@ -209,7 +206,6 @@ type Client struct {
 	unescapeQueryParams      bool
 	loadBalancer             LoadBalancer
 	beforeRequest            []RequestMiddleware
-	udBeforeRequest          []RequestMiddleware
 	afterResponse            []ResponseMiddleware
 	errorHooks               []ErrorHook
 	invalidHooks             []ErrorHook
@@ -220,9 +216,6 @@ type Client struct {
 	contentDecompressorKeys  []string
 	contentDecompressors     map[string]ContentDecompressor
 	certWatcherStopChan      chan bool
-
-	// TODO don't put mutex now, it may go away
-	preReqHook PreRequestHook
 }
 
 // User type is to hold an username and password information
@@ -611,14 +604,14 @@ func (c *Client) SetDigestAuth(username, password string) *Client {
 	c.lock.Lock()
 	oldTransport := c.httpClient.Transport
 	c.lock.Unlock()
-	c.OnBeforeRequest(func(c *Client, _ *Request) error {
+	c.AddRequestMiddleware(func(c *Client, _ *Request) error {
 		c.httpClient.Transport = &digestTransport{
 			digestCredentials: digestCredentials{username, password},
 			transport:         oldTransport,
 		}
 		return nil
 	})
-	c.OnAfterResponse(func(c *Client, _ *Response) error {
+	c.AddResponseMiddleware(func(c *Client, _ *Response) error {
 		c.httpClient.Transport = oldTransport
 		return nil
 	})
@@ -676,26 +669,78 @@ func (c *Client) NewRequest() *Request {
 	return c.R()
 }
 
-func (c *Client) beforeRequestMiddlewares() []RequestMiddleware {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.udBeforeRequest
-}
-
-// OnBeforeRequest method appends a request middleware to the before request chain.
-// The user-defined middlewares are applied before the default Resty request middlewares.
-// After all middlewares have been applied, the request is sent from Resty to the host server.
+// SetRequestMiddlewares method allows Resty users to override the default request
+// middlewares sequence
 //
-//	client.OnBeforeRequest(func(c *resty.Client, r *resty.Request) error {
-//			// Now you have access to the Client and Request instance
-//			// manipulate it as per your need
+//	client := New()
+//	defer client.Close()
 //
-//			return nil 	// if its successful otherwise return error
-//		})
-func (c *Client) OnBeforeRequest(m RequestMiddleware) *Client {
+//	client.SetRequestMiddlewares(
+//		CustomRequest1Middleware,
+//		CustomRequest2Middleware,
+//		resty.PrepareRequestMiddleware, // after this, Request.RawRequest is available
+//		resty.GenerateCurlRequestMiddleware,
+//		CustomRequest3Middleware,
+//		CustomRequest4Middleware,
+//	)
+//
+// See, [Client.AddRequestMiddleware]
+//
+// NOTE:
+//   - It overwrites the existing request middleware list.
+//   - Be sure to include Resty request middlewares in the request chain at the appropriate spot.
+func (c *Client) SetRequestMiddlewares(middlewares ...RequestMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.udBeforeRequest = append(c.udBeforeRequest, m)
+	c.beforeRequest = middlewares
+	return c
+}
+
+// SetResponseMiddlewares method allows Resty users to override the default response
+// middlewares sequence
+//
+//	client := New()
+//	defer client.Close()
+//
+//	client.SetResponseMiddlewares(
+//		CustomResponse1Middleware,
+//		CustomResponse2Middleware,
+//		resty.AutoParseResponseMiddleware, // before this, body is not read except on debug flow
+//		CustomResponse3Middleware,
+//		resty.SaveToFileResponseMiddleware, // See, Request.SetOutputFile
+//		CustomResponse4Middleware,
+//		CustomResponse5Middleware,
+//	)
+//
+// See, [Client.AddResponseMiddleware]
+//
+// NOTE:
+//   - It overwrites the existing request middleware list.
+//   - Be sure to include Resty response middlewares in the response chain at the appropriate spot.
+func (c *Client) SetResponseMiddlewares(middlewares ...ResponseMiddleware) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.afterResponse = middlewares
+	return c
+}
+
+// AddRequestMiddleware method appends a request middleware to the before request chain.
+// After all requests, middlewares are applied, and the request is sent to the host server.
+//
+//	client.AddRequestMiddleware(func(c *resty.Client, r *resty.Request) error {
+//		// Now you have access to the Client and Request instance
+//		// manipulate it as per your need
+//
+//		return nil 	// if its successful otherwise return error
+//	})
+//
+// NOTE:
+//   - Do not use [Client] setter methods within Request middleware; deadlock will happen.
+func (c *Client) AddRequestMiddleware(m RequestMiddleware) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	idx := len(c.beforeRequest) - 2
+	c.beforeRequest = slices.Insert(c.beforeRequest, idx, m)
 	return c
 }
 
@@ -705,17 +750,20 @@ func (c *Client) afterResponseMiddlewares() []ResponseMiddleware {
 	return c.afterResponse
 }
 
-// OnAfterResponse method appends response middleware to the after-response chain.
-// Once we receive a response from the host server, the default Resty response middleware
-// gets applied, and then the user-assigned response middleware is applied.
+// AddResponseMiddleware method appends response middleware to the after-response chain.
+// All the response middlewares are applied; once we receive a response
+// from the host server.
 //
-//	client.OnAfterResponse(func(c *resty.Client, r *resty.Response) error {
-//			// Now you have access to the Client and Response instance
-//			// manipulate it as per your need
+//	client.AddResponseMiddleware(func(c *resty.Client, r *resty.Response) error {
+//		// Now you have access to the Client and Response instance
+//		// manipulate it as per your need
 //
-//			return nil 	// if its successful otherwise return error
-//		})
-func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
+//		return nil 	// if its successful otherwise return error
+//	})
+//
+// NOTE:
+//   - Do not use [Client] setter methods within Response middleware; deadlock will happen.
+func (c *Client) AddResponseMiddleware(m ResponseMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.afterResponse = append(c.afterResponse, m)
@@ -736,6 +784,9 @@ func (c *Client) OnAfterResponse(m ResponseMiddleware) *Client {
 //
 // Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
 // callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
+//
+// NOTE:
+//   - Do not use [Client] setter methods within OnError hooks; deadlock will happen.
 func (c *Client) OnError(h ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -748,6 +799,9 @@ func (c *Client) OnError(h ErrorHook) *Client {
 //
 // Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
 // callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
+//
+// NOTE:
+//   - Do not use [Client] setter methods within OnSuccess hooks; deadlock will happen.
 func (c *Client) OnSuccess(h SuccessHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -760,6 +814,9 @@ func (c *Client) OnSuccess(h SuccessHook) *Client {
 //
 // Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
 // callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
+//
+// NOTE:
+//   - Do not use [Client] setter methods within OnInvalid hooks; deadlock will happen.
 func (c *Client) OnInvalid(h ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -775,22 +832,13 @@ func (c *Client) OnInvalid(h ErrorHook) *Client {
 //
 // If an [Client.OnSuccess], [Client.OnError], or [Client.OnInvalid] callback panics,
 // then exactly one rule can be violated.
+//
+// NOTE:
+//   - Do not use [Client] setter methods within OnPanic hooks; deadlock will happen.
 func (c *Client) OnPanic(h ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.panicHooks = append(c.panicHooks, h)
-	return c
-}
-
-// SetPreRequestHook method sets the given pre-request function into a resty client.
-// It is called right before the request is fired.
-//
-// NOTE: Only one pre-request hook can be registered. Use [Client.OnBeforeRequest] for multiple.
-func (c *Client) SetPreRequestHook(h PreRequestHook) *Client {
-	if c.preReqHook != nil {
-		c.log.Warnf("Overwriting an existing pre-request hook: %s", functionName(h))
-	}
-	c.preReqHook = h
 	return c
 }
 
@@ -1884,7 +1932,11 @@ func (c *Client) DisableGenerateCurlOnDebug() *Client {
 }
 
 // SetGenerateCurlOnDebug method is used to turn on/off the generate CURL command in debug mode
-// at the client instance level.
+// at the client instance level. It works in conjunction with debug mode.
+//
+// NOTE: Use with care.
+//   - Potential to leak sensitive data from [Request] and [Response] in the debug log.
+//   - Beware of memory usage since the request body is reread.
 //
 // It can be overridden at the request level; see [Request.SetGenerateCurlOnDebug]
 func (c *Client) SetGenerateCurlOnDebug(b bool) *Client {
@@ -1993,43 +2045,26 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func (c *Client) executeBefore(req *Request) error {
-	var err error
-
-	// user defined on before request methods
-	// to modify the *resty.Request object
-	for _, f := range c.beforeRequestMiddlewares() {
-		if err = f(c, req); err != nil {
-			return err
-		}
-	}
-
-	// resty middlewares
+func (c *Client) executeRequestMiddlewares(req *Request) (err error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	for _, f := range c.beforeRequest {
 		if err = f(c, req); err != nil {
 			return err
 		}
 	}
-
-	if hostHeader := req.Header.Get("Host"); hostHeader != "" {
-		req.RawRequest.Host = hostHeader
-	}
-
-	// call pre-request if defined
-	if c.preReqHook != nil {
-		if err = c.preReqHook(c, req.RawRequest); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
 // Executes method executes the given `Request` object and returns
 // response or error.
 func (c *Client) execute(req *Request) (*Response, error) {
-	if err := c.executeBefore(req); err != nil {
+	if err := c.executeRequestMiddlewares(req); err != nil {
 		return nil, err
+	}
+
+	if hostHeader := req.Header.Get("Host"); hostHeader != "" {
+		req.RawRequest.Host = hostHeader
 	}
 
 	requestDebugLogger(c, req)

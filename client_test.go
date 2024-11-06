@@ -163,12 +163,12 @@ func TestClientDigestErrors(t *testing.T) {
 	}
 }
 
-func TestOnAfterMiddleware(t *testing.T) {
+func TestClientResponseMiddleware(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
 	c := dcnl()
-	c.OnAfterResponse(func(c *Client, res *Response) error {
+	c.AddResponseMiddleware(func(c *Client, res *Response) error {
 		t.Logf("Request sent at: %v", res.Request.Time)
 		t.Logf("Response Received at: %v", res.ReceivedAt())
 
@@ -176,7 +176,7 @@ func TestOnAfterMiddleware(t *testing.T) {
 	})
 
 	resp, err := c.R().
-		SetBody("OnAfterResponse: This is plain text body to server").
+		SetBody("ResponseMiddleware: This is plain text body to server").
 		Put(ts.URL + "/plaintext")
 
 	assertError(t, err)
@@ -472,9 +472,9 @@ func TestClientSetClientRootCertificateFromString(t *testing.T) {
 	assertNotNil(t, transport.TLSClientConfig.ClientCAs)
 }
 
-func TestClientOnBeforeRequestModification(t *testing.T) {
+func TestClientRequestMiddlewareModification(t *testing.T) {
 	tc := dcnl()
-	tc.OnBeforeRequest(func(c *Client, r *Request) error {
+	tc.AddRequestMiddleware(func(c *Client, r *Request) error {
 		r.SetAuthToken("This is test auth token")
 		return nil
 	})
@@ -600,33 +600,44 @@ func TestClientSettingsCoverage(t *testing.T) {
 func TestContentLengthWhenBodyIsNil(t *testing.T) {
 	client := dcnl()
 
-	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
+	fnPreRequestMiddleware1 := func(c *Client, r *Request) error {
 		assertEqual(t, "0", r.Header.Get(hdrContentLengthKey))
 		return nil
-	})
+	}
+	client.SetRequestMiddlewares(
+		PrepareRequestMiddleware,
+		fnPreRequestMiddleware1,
+	)
 
 	client.R().SetContentLength(true).SetBody(nil).Get("http://localhost")
 }
 
-func TestClientPreRequestHook(t *testing.T) {
+func TestClientPreRequestMiddlewares(t *testing.T) {
 	client := dcnl()
-	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
+
+	fnPreRequestMiddleware1 := func(c *Client, r *Request) error {
 		c.log.Debugf("I'm in Pre-Request Hook")
 		return nil
-	})
+	}
 
-	client.SetPreRequestHook(func(c *Client, r *http.Request) error {
+	fnPreRequestMiddleware2 := func(c *Client, r *Request) error {
 		c.log.Debugf("I'm Overwriting existing Pre-Request Hook")
 
 		// Reading Request `N` no of times
 		for i := 0; i < 5; i++ {
-			b, _ := r.GetBody()
+			b, _ := r.RawRequest.GetBody()
 			rb, _ := io.ReadAll(b)
 			c.log.Debugf("%s %v", string(rb), len(rb))
 			assertEqual(t, true, len(rb) >= 45)
 		}
 		return nil
-	})
+	}
+
+	client.SetRequestMiddlewares(
+		PrepareRequestMiddleware,
+		fnPreRequestMiddleware1,
+		fnPreRequestMiddleware2,
+	)
 
 	ts := createPostServer(t)
 	defer ts.Close()
@@ -647,18 +658,22 @@ func TestClientPreRequestHook(t *testing.T) {
 	assertEqual(t, `{ "id": "success", "message": "login successful" }`, resp.String())
 }
 
-func TestClientPreRequestHookError(t *testing.T) {
+func TestClientPreRequestMiddlewareError(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
 	c := dcnl()
-	c.SetPreRequestHook(func(c *Client, r *http.Request) error {
-		return errors.New("error from PreRequestHook")
-	})
+	fnPreRequestMiddleware1 := func(c *Client, r *Request) error {
+		return errors.New("error from PreRequestMiddleware")
+	}
+	c.SetRequestMiddlewares(
+		PrepareRequestMiddleware,
+		fnPreRequestMiddleware1,
+	)
 
 	resp, err := c.R().Get(ts.URL)
 	assertNotNil(t, err)
-	assertEqual(t, "error from PreRequestHook", err.Error())
+	assertEqual(t, "error from PreRequestMiddleware", err.Error())
 	assertNil(t, resp)
 }
 
@@ -1080,7 +1095,7 @@ func TestClientOnResponseError(t *testing.T) {
 		{
 			name: "before_request_error",
 			setup: func(client *Client) {
-				client.OnBeforeRequest(func(client *Client, request *Request) error {
+				client.AddRequestMiddleware(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
 				})
 			},
@@ -1089,7 +1104,7 @@ func TestClientOnResponseError(t *testing.T) {
 		{
 			name: "before_request_error_retry",
 			setup: func(client *Client) {
-				client.SetRetryCount(3).OnBeforeRequest(func(client *Client, request *Request) error {
+				client.SetRetryCount(3).AddRequestMiddleware(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
 				})
 			},
@@ -1098,7 +1113,7 @@ func TestClientOnResponseError(t *testing.T) {
 		{
 			name: "after_response_error",
 			setup: func(client *Client) {
-				client.OnAfterResponse(func(client *Client, response *Response) error {
+				client.AddResponseMiddleware(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
 				})
 			},
@@ -1108,7 +1123,7 @@ func TestClientOnResponseError(t *testing.T) {
 		{
 			name: "after_response_error_retry",
 			setup: func(client *Client) {
-				client.SetRetryCount(3).OnAfterResponse(func(client *Client, response *Response) error {
+				client.SetRetryCount(3).AddResponseMiddleware(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
 				})
 			},
@@ -1118,7 +1133,7 @@ func TestClientOnResponseError(t *testing.T) {
 		{
 			name: "panic with error",
 			setup: func(client *Client) {
-				client.OnBeforeRequest(func(client *Client, request *Request) error {
+				client.AddRequestMiddleware(func(client *Client, request *Request) error {
 					panic(fmt.Errorf("before request"))
 				})
 			},
@@ -1129,7 +1144,7 @@ func TestClientOnResponseError(t *testing.T) {
 		{
 			name: "panic with string",
 			setup: func(client *Client) {
-				client.OnBeforeRequest(func(client *Client, request *Request) error {
+				client.AddRequestMiddleware(func(client *Client, request *Request) error {
 					panic("before request")
 				})
 			},

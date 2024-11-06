@@ -517,7 +517,7 @@ Resty provides middleware ability to manipulate for Request and Response. It is 
 client := resty.New()
 
 // Registering Request Middleware
-client.OnBeforeRequest(func(c *resty.Client, req *resty.Request) error {
+client.OnBeforeRequest(func(c *resty.Client, req *resty.Request) error { // TODO update docs
     // Now you have access to Client and current Request object
     // manipulate it as per your need
 
@@ -525,7 +525,7 @@ client.OnBeforeRequest(func(c *resty.Client, req *resty.Request) error {
   })
 
 // Registering Response Middleware
-client.OnAfterResponse(func(c *resty.Client, resp *resty.Response) error {
+client.OnAfterResponse(func(c *resty.Client, resp *resty.Response) error { // TODO update docs
     // Now you have access to Client and current Response object
     // manipulate it as per your need
 
