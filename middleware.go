@@ -507,9 +507,7 @@ func handleRequestBody(c *Client, r *Request) error {
 // based on registered HTTP response `Content-Type` decoder, see [Client.AddContentTypeDecoder];
 // if [Request.SetResult], [Request.SetError], or [Client.SetError] is used
 func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
-	if res.Err != nil ||
-		res.Request.DoNotParseResponse ||
-		res.Request.isSaveResponse {
+	if res.Err != nil || res.Request.DoNotParseResponse {
 		return // move on
 	}
 
@@ -555,8 +553,6 @@ func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
 		}
 	}
 
-	// read all bytes when auto-unmarshal didn't take place
-	err = res.readAll()
 	return
 }
 
@@ -582,18 +578,14 @@ func SaveToFileResponseMiddleware(c *Client, res *Response) error {
 	if err != nil {
 		return err
 	}
+
 	defer func() {
 		closeq(outFile)
 		closeq(res.Body)
 	}()
 
 	// io.Copy reads maximum 32kb size, it is perfect for large file download too
-	written, err := ioCopy(outFile, res.Body)
-	if err != nil {
-		return err
-	}
+	res.size, err = ioCopy(outFile, res.Body)
 
-	res.size = written
-
-	return nil
+	return err
 }
