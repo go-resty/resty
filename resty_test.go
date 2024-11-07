@@ -387,6 +387,9 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				targetPath := filepath.Join(getTestDataPath(), "upload")
 				_ = os.MkdirAll(targetPath, 0700)
 
+				values := r.MultipartForm.Value
+				t.Logf("%v", values)
+
 				for _, fhdrs := range r.MultipartForm.File {
 					for _, hdr := range fhdrs {
 						t.Logf("Name: %v", hdr.Filename)

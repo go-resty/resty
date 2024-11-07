@@ -399,6 +399,13 @@ func createMultipart(w *multipart.Writer, r *Request) error {
 	}
 
 	for _, mf := range r.multipartFields {
+		if len(mf.Values) > 0 {
+			for _, v := range mf.Values {
+				w.WriteField(mf.Name, v)
+			}
+			continue
+		}
+
 		if err := mf.openFileIfRequired(); err != nil {
 			return err
 		}

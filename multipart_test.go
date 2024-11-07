@@ -426,6 +426,66 @@ func TestMultipartFieldProgressCallback(t *testing.T) {
 	assertEqual(t, true, strings.Contains(responseStr, "100mbfile.bin"))
 }
 
+func TestMultipartOrderedFormData(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
+
+	jsonStr1 := `{"input": {"name": "Uploaded document 1", "_filename" : ["file1.txt"]}}`
+	jsonStr2 := `{"input": {"name": "Uploaded document 2", "_filename" : ["file2.txt"]}}`
+
+	fields := []*MultipartField{
+		{
+			Name:   "field1",
+			Values: []string{"field1value1", "field1value2"},
+		},
+		{
+			Name:   "field2",
+			Values: []string{"field2value1", "field2value2"},
+		},
+		{
+			Name:        "uploadManifest1",
+			FileName:    "upload-file-1.json",
+			ContentType: "application/json",
+			Reader:      bytes.NewBufferString(jsonStr1),
+		},
+		{
+			Name:   "field3",
+			Values: []string{"field3value1", "field3value2"},
+		},
+		{
+			Name:        "uploadManifest2",
+			FileName:    "upload-file-2.json",
+			ContentType: "application/json",
+			Reader:      bytes.NewBufferString(jsonStr2),
+		},
+		{
+			Name:   "field4",
+			Values: []string{"field4value1", "field4value2"},
+		},
+		{
+			Name:        "uploadManifest3",
+			ContentType: "application/json",
+			Reader:      bytes.NewBufferString(jsonStr2),
+		},
+	}
+
+	c := dcnld().SetBaseURL(ts.URL)
+
+	resp, err := c.R().
+		SetMultipartOrderedFormData("first_name", []string{"Jeevanandam"}).
+		SetMultipartOrderedFormData("last_name", []string{"M"}).
+		SetMultipartFields(fields...).
+		Post("/upload")
+
+	responseStr := resp.String()
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(responseStr, "upload-file-1.json"))
+	assertEqual(t, true, strings.Contains(responseStr, "upload-file-2.json"))
+}
+
 var errTestErrorReader = errors.New("fake")
 
 type errorReader struct{}
@@ -484,7 +544,7 @@ func (mwe *mpWriterError) Write(p []byte) (int, error) {
 	return 0, errors.New("multipart write error")
 }
 
-func TestMulipartRequest_createMultipart(t *testing.T) {
+func TestMultipartRequest_createMultipart(t *testing.T) {
 	mw := multipart.NewWriter(&mpWriterError{})
 
 	c := dcnl()
