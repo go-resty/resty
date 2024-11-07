@@ -1418,7 +1418,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		res, err := c.R().SetResponseBodyLimit(800*100 + 10).Get(ts.URL + "/")
 		assertNil(t, err)
-		assertEqual(t, 800*100, len(res.bodyBytes))
+		assertEqual(t, 800*100, len(res.Bytes()))
 		assertEqual(t, int64(800*100), res.Size())
 	})
 
@@ -1427,7 +1427,7 @@ func TestResponseBodyLimit(t *testing.T) {
 
 		res, err := c.R().Get(ts.URL + "/")
 		assertNil(t, err)
-		assertEqual(t, 800*100, len(res.bodyBytes))
+		assertEqual(t, 800*100, len(res.Bytes()))
 		assertEqual(t, int64(800*100), res.Size())
 	})
 

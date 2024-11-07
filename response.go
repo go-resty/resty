@@ -100,11 +100,21 @@ func (r *Response) Cookies() []*http.Cookie {
 //   - Returns an empty string on auto-unmarshal scenarios, unless
 //     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
 //   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set
-func (r Response) String() string {
-	if len(r.bodyBytes) == 0 && !r.Request.DoNotParseResponse {
-		_ = r.readAll()
-	}
+func (r *Response) String() string {
+	r.readIfRequired()
 	return strings.TrimSpace(string(r.bodyBytes))
+}
+
+// Bytes method returns the body of the HTTP response as a byte slice.
+// It returns an empty byte slice if it is nil or the body is zero length.
+//
+// NOTE:
+//   - Returns an empty byte slice on auto-unmarshal scenarios, unless
+//     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
+//   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set
+func (r *Response) Bytes() []byte {
+	r.readIfRequired()
+	return r.bodyBytes
 }
 
 // Time method returns the duration of HTTP response time from the request we sent
@@ -129,6 +139,7 @@ func (r *Response) ReceivedAt() time.Time {
 // Since Resty captures response size details when processing the response body
 // when possible. So that users get the actual size of response bytes.
 func (r *Response) Size() int64 {
+	r.readIfRequired()
 	return r.size
 }
 
@@ -180,6 +191,12 @@ func (r *Response) fmtBodyString(sl int) string {
 	}
 
 	return "***** NO CONTENT *****"
+}
+
+func (r *Response) readIfRequired() {
+	if len(r.bodyBytes) == 0 && !r.Request.DoNotParseResponse {
+		_ = r.readAll()
+	}
 }
 
 // auto-unmarshal didn't happen, so fallback to

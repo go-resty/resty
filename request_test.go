@@ -1394,11 +1394,17 @@ func TestOutputFileAbsPath(t *testing.T) {
 	defer ts.Close()
 	defer cleanupFiles(filepath.Join(".testdata", "go-resty"))
 
-	_, err := dcnlr().
-		SetOutputFile(filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")).
+	outputFile := filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")
+
+	res, err := dcnlr().
+		SetOutputFile(outputFile).
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
+	assertEqual(t, int64(2579468), res.Size())
+
+	_, err = os.Stat(outputFile)
+	assertNil(t, err)
 }
 
 func TestContextInternal(t *testing.T) {
@@ -2164,6 +2170,35 @@ func TestRequestPanicContext(t *testing.T) {
 
 	//lint:ignore SA1012 test case nil check
 	_ = c.R().WithContext(nil)
+}
+
+func TestRequestSetResultAndSetOutputFile(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	outputFile := filepath.Join(getTestDataPath(), "login-success.txt")
+	defer cleanupFiles(outputFile)
+
+	c := dcnl().SetBaseURL(ts.URL)
+
+	res, err := c.R().
+		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
+		SetBody(&User{Username: "testuser", Password: "testpass"}).
+		SetResponseBodyUnlimitedReads(true).
+		SetResult(&AuthSuccess{}).
+		SetOutputFile(outputFile).
+		Post("/login")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+	assertEqual(t, int64(50), res.Size())
+
+	loginResult := res.Result().(*AuthSuccess)
+	assertEqual(t, "success", loginResult.ID)
+	assertEqual(t, "login successful", loginResult.Message)
+
+	fileContent, _ := os.ReadFile(outputFile)
+	assertEqual(t, `{ "id": "success", "message": "login successful" }`, string(fileContent))
 }
 
 // This test methods exist for test coverage purpose

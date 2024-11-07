@@ -735,13 +735,13 @@ func (r *Request) SetResponseBodyLimit(v int64) *Request {
 // SetResponseBodyUnlimitedReads method is to turn on/off the response body copy
 // that provides an ability to do unlimited reads.
 //
-// It overriddes the value set at client level; see [Client.SetResponseBodyUnlimitedReads]
+// It overrides the value set at the client level; see [Client.SetResponseBodyUnlimitedReads]
 //
-// NOTE: Turning on this feature uses additional memory to store a copy of the response body buffer.
+// Unlimited reads are possible in a few scenarios, even without enabling it.
+//   - When debug mode is enabled
 //
-// Unlimited reads are possible in a few scenarios, even without enabling this method.
-//   - When [Client.SetDebug] or [Request.SetDebug] set to true
-//   - When [Request.SetResult] or [Request.SetError] methods are not used
+// NOTE: Use with care
+//   - Turning on this feature uses additional memory to store a copy of the response body buffer.
 func (r *Request) SetResponseBodyUnlimitedReads(b bool) *Request {
 	r.ResponseBodyUnlimitedReads = b
 	return r

@@ -1971,11 +1971,11 @@ func (c *Client) ResponseBodyUnlimitedReads() bool {
 //
 // It can be overridden at the request level; see [Request.SetResponseBodyUnlimitedReads]
 //
-// NOTE: Turning on this feature uses additional memory to store a copy of the response body buffer.
+// Unlimited reads are possible in a few scenarios, even without enabling it.
+//   - When debug mode is enabled
 //
-// Unlimited reads are possible in a few scenarios, even without enabling this method.
-//   - When [Client.SetDebug] set to true
-//   - When [Request.SetResult] or [Request.SetError] methods are not used
+// NOTE: Use with care
+//   - Turning on this feature uses additional memory to store a copy of the response body buffer.
 func (c *Client) SetResponseBodyUnlimitedReads(b bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -2090,7 +2090,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 		response.wrapLimitReadCloser()
 	}
-	if !req.DoNotParseResponse && (req.Debug || req.ResponseBodyUnlimitedReads) {
+	if req.ResponseBodyUnlimitedReads || req.Debug {
 		response.wrapCopyReadCloser()
 
 		if err = response.readAll(); err != nil {
