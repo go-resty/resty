@@ -52,6 +52,11 @@ type MultipartField struct {
 	// ProgressCallback feature so that Resty sends the FileSize
 	// value via [MultipartFieldProgress]
 	ProgressCallback MultipartFieldCallbackFunc
+
+	// Values field is used to provide form field value. (Optional, unless it's a form-data field)
+	//
+	// It is primarily added for ordered multipart form-data field use cases
+	Values []string
 }
 
 // Clone method returns the deep copy of m except [io.Reader].

@@ -507,6 +507,17 @@ func (r *Request) SetMultipartFormData(data map[string]string) *Request {
 	return r
 }
 
+// SetMultipartOrderedFormData method allows add ordered form data to be attached to the request
+// as `multipart:form-data`
+func (r *Request) SetMultipartOrderedFormData(name string, values []string) *Request {
+	r.isMultiPart = true
+	r.multipartFields = append(r.multipartFields, &MultipartField{
+		Name:   name,
+		Values: values,
+	})
+	return r
+}
+
 // SetMultipartField method sets custom data with Content-Type using [io.Reader] for multipart upload.
 //
 // Resty provides an optional multipart live upload progress callback;
