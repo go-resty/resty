@@ -469,7 +469,6 @@ func Test_parseRequestHeader(t *testing.T) {
 			},
 			expectedHeader: http.Header{
 				hdrContentTypeKey: []string{"application/json"},
-				hdrAcceptKey:      []string{"application/json"},
 				hdrUserAgentKey:   []string{hdrUserAgentValue},
 			},
 		},
