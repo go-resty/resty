@@ -62,8 +62,10 @@ func TestConditionalGetRequestLevel(t *testing.T) {
 	})
 
 	// Clear the default client.
-	c := dcnl()
+	c, lb := dcldb()
+
 	resp, err := c.R().
+		EnableDebug().
 		AddRetryCondition(check).
 		SetRetryCount(1).
 		SetRetryWaitTime(50*time.Millisecond).
@@ -77,6 +79,7 @@ func TestConditionalGetRequestLevel(t *testing.T) {
 	assertEqual(t, "TestGet: text response", resp.String())
 	assertEqual(t, 1, resp.Request.Attempt)
 	assertEqual(t, 1, externalCounter)
+	assertEqual(t, true, strings.Contains(lb.String(), "RETRY TRACE ID:"))
 
 	logResponse(t, resp)
 }
@@ -111,8 +114,9 @@ func TestClientRetryWithMinAndMaxWaitTime(t *testing.T) {
 	retryWaitTime := 10 * time.Millisecond
 	retryMaxWaitTime := 100 * time.Millisecond
 
-	c := dcnl().
-		SetRetryCount(retryCount).
+	c, lb := dcldb()
+
+	c.SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		AddRetryCondition(
@@ -121,12 +125,14 @@ func TestClientRetryWithMinAndMaxWaitTime(t *testing.T) {
 				return true
 			},
 		)
-	res, _ := c.R().Get(ts.URL + "/set-retrywaittime-test")
+	res, _ := c.R().EnableDebug().Get(ts.URL + "/set-retrywaittime-test")
 
 	retryIntervals[res.Request.Attempt-1] = parseTimeSleptFromResponse(res.String())
 
 	// retryCount+1 == attempts were made
 	assertEqual(t, retryCount+1, res.Request.Attempt)
+
+	assertEqual(t, true, strings.Contains(lb.String(), "RETRY TRACE ID:"))
 
 	// Initial attempt has 0 time slept since last request
 	assertEqual(t, retryIntervals[0], uint64(0))

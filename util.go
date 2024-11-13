@@ -7,6 +7,11 @@ package resty
 
 import (
 	"bytes"
+	"crypto/md5"
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +22,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -348,10 +354,15 @@ func requestDebugLogger(c *Client, r *Request) {
 	reqLog += "~~~ REQUEST ~~~\n" +
 		fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
 		fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
-		fmt.Sprintf("ATTEMPT: %d\n", r.Attempt) +
 		fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(rl.Header)) +
 		fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
 		"------------------------------------------------------------------------------\n"
+
+	if len(r.RetryTraceID) > 0 {
+		reqLog += fmt.Sprintf("RETRY TRACE ID: %s\n", r.RetryTraceID) +
+			fmt.Sprintf("ATTEMPT       : %d\n", r.Attempt) +
+			"------------------------------------------------------------------------------\n"
+	}
 
 	r.initValuesMap()
 	r.values[debugRequestLogKey] = reqLog
@@ -391,4 +402,89 @@ func responseDebugLogger(c *Client, res *Response) {
 	debugLog += "==============================================================================\n"
 
 	res.Request.log.Debugf("%s", debugLog)
+}
+
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// GUID generation
+// Code inspired from mgo/bson ObjectId
+// Code obtained from https://github.com/go-aah/aah/blob/edge/essentials/guid.go
+//___________________________________
+
+var (
+	// guidCounter is atomically incremented when generating a new GUID
+	// using UniqueID() function. It's used as a counter part of an id.
+	guidCounter = readRandomUint32()
+
+	// machineID stores machine id generated once and used in subsequent calls
+	// to UniqueId function.
+	machineID = readMachineID()
+
+	// processID is current Process Id
+	processID = os.Getpid()
+)
+
+// newGUID method returns a new Globally Unique Identifier (GUID).
+//
+// The 12-byte `UniqueId` consists of-
+//   - 4-byte value representing the seconds since the Unix epoch,
+//   - 3-byte machine identifier,
+//   - 2-byte process id, and
+//   - 3-byte counter, starting with a random value.
+//
+// Uses Mongo Object ID algorithm to generate globally unique ids -
+// https://docs.mongodb.com/manual/reference/method/ObjectId/
+func newGUID() string {
+	var b [12]byte
+	// Timestamp, 4 bytes, big endian
+	binary.BigEndian.PutUint32(b[:], uint32(time.Now().Unix()))
+
+	// Machine, first 3 bytes of md5(hostname)
+	b[4], b[5], b[6] = machineID[0], machineID[1], machineID[2]
+
+	// Pid, 2 bytes, specs don't specify endianness, but we use big endian.
+	b[7], b[8] = byte(processID>>8), byte(processID)
+
+	// Increment, 3 bytes, big endian
+	i := atomic.AddUint32(&guidCounter, 1)
+	b[9], b[10], b[11] = byte(i>>16), byte(i>>8), byte(i)
+
+	return hex.EncodeToString(b[:])
+}
+
+var ioReadFull = io.ReadFull
+
+// readRandomUint32 returns a random guidCounter.
+func readRandomUint32() uint32 {
+	var b [4]byte
+	if _, err := ioReadFull(rand.Reader, b[:]); err == nil {
+		return (uint32(b[0]) << 0) | (uint32(b[1]) << 8) | (uint32(b[2]) << 16) | (uint32(b[3]) << 24)
+	}
+
+	// To initialize package unexported variable 'guidCounter'.
+	// This panic would happen at program startup, so no worries at runtime panic.
+	panic(errors.New("resty - guid: unable to generate random object id"))
+}
+
+var osHostname = os.Hostname
+
+// readMachineID generates and returns a machine id.
+// If this function fails to get the hostname it will cause a runtime error.
+func readMachineID() []byte {
+	var sum [3]byte
+	id := sum[:]
+
+	if hostname, err := osHostname(); err == nil {
+		hw := md5.New()
+		_, _ = hw.Write([]byte(hostname))
+		copy(id, hw.Sum(nil))
+		return id
+	}
+
+	if _, err := ioReadFull(rand.Reader, id); err == nil {
+		return id
+	}
+
+	// To initialize package unexported variable 'machineID'.
+	// This panic would happen at program startup, so no worries at runtime panic.
+	panic(errors.New("resty - guid: unable to get hostname and random bytes"))
 }
