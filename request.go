@@ -68,6 +68,9 @@ type Request struct {
 	RetryStrategy              RetryStrategyFunc
 	IsRetryDefaultConditions   bool
 
+	// RetryTraceID provides GUID for retry count > 0
+	RetryTraceID string
+
 	// Attempt provides insights into no. of attempts
 	// Resty made.
 	//
@@ -1260,6 +1263,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	var backoff *backoffWithJitter
 	if r.RetryCount > 0 && isIdempotent {
 		backoff = newBackoffWithJitter(r.RetryWaitTime, r.RetryMaxWaitTime)
+		r.RetryTraceID = newGUID()
 	}
 
 	isInvalidRequestErr := false

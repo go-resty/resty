@@ -8,6 +8,7 @@ package resty
 import (
 	"bytes"
 	"errors"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -122,6 +123,61 @@ func Test_createDirectory(t *testing.T) {
 	tempDir := filepath.Join(t.TempDir(), "test-dir")
 	err := createDirectory(tempDir)
 	assertEqual(t, errMsg, err.Error())
+}
+
+func TestUtil_readRandomUint32(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			// panic: resty - guid: unable to generate random object id
+			t.Errorf("The code did not panic")
+		}
+	}()
+	errMsg := "read full error"
+	ioReadFull = func(_ io.Reader, _ []byte) (int, error) {
+		return 0, errors.New(errMsg)
+	}
+	t.Cleanup(func() {
+		ioReadFull = io.ReadFull
+	})
+
+	readRandomUint32()
+}
+
+func TestUtil_readMachineID(t *testing.T) {
+	t.Run("hostname error", func(t *testing.T) {
+		errHostMsg := "hostname error"
+		osHostname = func() (string, error) {
+			return "", errors.New(errHostMsg)
+		}
+		t.Cleanup(func() {
+			osHostname = os.Hostname
+		})
+
+		readMachineID()
+	})
+
+	t.Run("hostname and read full error", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				// panic: resty - guid: unable to get hostname and random bytes
+				t.Errorf("The code did not panic")
+			}
+		}()
+		errHostMsg := "hostname error"
+		osHostname = func() (string, error) {
+			return "", errors.New(errHostMsg)
+		}
+		errReadMsg := "read full error"
+		ioReadFull = func(_ io.Reader, _ []byte) (int, error) {
+			return 0, errors.New(errReadMsg)
+		}
+		t.Cleanup(func() {
+			osHostname = os.Hostname
+			ioReadFull = io.ReadFull
+		})
+
+		readMachineID()
+	})
 }
 
 // This test methods exist for test coverage purpose
