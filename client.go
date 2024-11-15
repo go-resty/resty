@@ -97,6 +97,9 @@ type (
 	// SuccessHook type is for reacting to request success
 	SuccessHook func(*Client, *Response)
 
+	// RequestFunc type is for extended manipulation of the Request instance
+	RequestFunc func(*Request) *Request
+
 	// TLSClientConfiger interface is to configure TLS Client configuration on custom transport
 	// implemented using [http.RoundTripper]
 	TLSClientConfiger interface {
