@@ -2201,6 +2201,40 @@ func TestRequestSetResultAndSetOutputFile(t *testing.T) {
 	assertEqual(t, `{ "id": "success", "message": "login successful" }`, string(fileContent))
 }
 
+func TestRequestFuncs(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl().
+		SetQueryParam("client_param", "true").
+		SetQueryParams(map[string]string{"req_1": "value1", "req_3": "value3"}).
+		SetDebug(true)
+
+	addRequestQueryParams := func(page, size int) func(r *Request) *Request {
+		return func(r *Request) *Request {
+			return r.SetQueryParam("page", strconv.Itoa(page)).
+				SetQueryParam("size", strconv.Itoa(size)).
+				SetQueryParam("request_no", strconv.Itoa(int(time.Now().Unix())))
+		}
+	}
+
+	addRequestHeaders := func(r *Request) *Request {
+		return r.SetHeader(hdrAcceptKey, "application/json").
+			SetHeader(hdrUserAgentKey, "my-client/v1.0")
+	}
+
+	resp, err := c.R().
+		Funcs(addRequestQueryParams(1, 100), addRequestHeaders).
+		SetHeader(hdrUserAgentKey, "Test Custom User agent").
+		Get(ts.URL + "/")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "HTTP/1.1", resp.Proto())
+	assertEqual(t, "200 OK", resp.Status())
+	assertEqual(t, "TestGet: text response", resp.String())
+}
+
 // This test methods exist for test coverage purpose
 // to validate the getter and setter
 func TestRequestSettingsCoverage(t *testing.T) {

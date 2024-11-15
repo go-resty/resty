@@ -1437,6 +1437,33 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	return rr
 }
 
+// Funcs method gets executed on request composition that passes the
+// current request instance to provided [RequestFunc], which could be
+// used to apply common/reusable logic to the given request instance.
+//
+//	func addRequestContentType(r *Request) *Request {
+//		return r.SetHeader("Content-Type", "application/json").
+//			SetHeader("Accept", "application/json")
+//	}
+//
+//	func addRequestQueryParams(page, size int) func(r *Request) *Request {
+//		return func(r *Request) *Request {
+//			return r.SetQueryParam("page", strconv.Itoa(page)).
+//				SetQueryParam("size", strconv.Itoa(size)).
+//				SetQueryParam("request_no", strconv.Itoa(int(time.Now().Unix())))
+//		}
+//	}
+//
+//	client.R().
+//		Funcs(addRequestContentType, addRequestQueryParams(1, 100)).
+//		Get("https://localhost:8080/foobar")
+func (r *Request) Funcs(funcs ...RequestFunc) *Request {
+	for _, f := range funcs {
+		r = f(r)
+	}
+	return r
+}
+
 func (r *Request) fmtBodyString(sl int) (body string) {
 	body = "***** NO CONTENT *****"
 	if !r.isPayloadSupported() {
