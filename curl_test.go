@@ -1,7 +1,14 @@
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// resty source code and usage is governed by a MIT style
+// license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
+
 package resty
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
@@ -204,6 +211,45 @@ func TestCurl_buildCurlCmd(t *testing.T) {
 			assertEqual(t, tt.expected, curlCmd)
 		})
 	}
+}
+
+func TestCurlRequestGetBodyError(t *testing.T) {
+	c := dcnl().
+		EnableDebug().
+		SetRequestMiddlewares(
+			PrepareRequestMiddleware,
+			func(_ *Client, r *Request) error {
+				r.RawRequest.GetBody = func() (io.ReadCloser, error) {
+					return nil, errors.New("test case error")
+				}
+				return nil
+			},
+		)
+
+	req := c.R().
+		SetBody(map[string]string{
+			"name": "Resty",
+		}).
+		SetCookies(
+			[]*http.Cookie{
+				{Name: "count", Value: "1"},
+			},
+		).
+		SetMethod(MethodPost)
+
+	assertEqual(t, "", req.GenerateCurlCommand())
+
+	curlCmdUnexecuted := req.EnableGenerateCurlOnDebug().GenerateCurlCommand()
+	req.DisableGenerateCurlOnDebug()
+
+	if !strings.Contains(curlCmdUnexecuted, "Cookie: count=1") ||
+		!strings.Contains(curlCmdUnexecuted, "curl -X POST") ||
+		!strings.Contains(curlCmdUnexecuted, `-d ''`) {
+		t.Fatal("Incomplete curl:", curlCmdUnexecuted)
+	} else {
+		t.Log("curlCmdUnexecuted: \n", curlCmdUnexecuted)
+	}
+
 }
 
 func TestCurlMiscTestCoverage(t *testing.T) {

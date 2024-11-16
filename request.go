@@ -92,7 +92,7 @@ type Request struct {
 	multipartBoundary   string
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
-	resultCurlCmd       *string
+	resultCurlCmd       string
 	generateCurlOnDebug bool
 	unescapeQueryParams bool
 	multipartErrChan    chan error
@@ -103,8 +103,8 @@ func (r *Request) GenerateCurlCommand() string {
 	if !(r.Debug && r.generateCurlOnDebug) {
 		return ""
 	}
-	if r.resultCurlCmd != nil {
-		return *r.resultCurlCmd
+	if len(r.resultCurlCmd) > 0 {
+		return r.resultCurlCmd
 	}
 	if r.RawRequest == nil {
 		// mock with r.Get("/")
@@ -112,8 +112,8 @@ func (r *Request) GenerateCurlCommand() string {
 			r.log.Errorf("%v", err)
 		}
 	}
-	*r.resultCurlCmd = buildCurlCmd(r)
-	return *r.resultCurlCmd
+	r.resultCurlCmd = buildCurlCmd(r)
+	return r.resultCurlCmd
 }
 
 // SetMethod method used to set the HTTP verb for the request
@@ -1424,7 +1424,6 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.Time = time.Time{}
 	rr.Attempt = 0
 	rr.initTraceIfEnabled()
-	rr.resultCurlCmd = new(string)
 	r.values = make(map[string]any)
 	r.multipartErrChan = nil
 

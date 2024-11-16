@@ -49,7 +49,7 @@ func NoRedirectPolicy() RedirectPolicy {
 func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		if len(via) >= noOfRedirect {
-			return fmt.Errorf("stopped after %d redirects", noOfRedirect)
+			return fmt.Errorf("resty: stopped after %d redirects", noOfRedirect)
 		}
 		checkHostAndAddHeaders(req, via[0])
 		return nil
@@ -95,7 +95,5 @@ func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {
 		for key, val := range pre.Header {
 			cur.Header[key] = val
 		}
-	} else { // only library User-Agent header is added
-		cur.Header.Set(hdrUserAgentKey, hdrUserAgentValue)
 	}
 }

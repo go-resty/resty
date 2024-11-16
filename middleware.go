@@ -53,10 +53,9 @@ func PrepareRequestMiddleware(c *Client, r *Request) error {
 // See, [Client.SetGenerateCurlOnDebug], [Request.SetGenerateCurlOnDebug]
 func GenerateCurlRequestMiddleware(c *Client, r *Request) (err error) {
 	if r.Debug && r.generateCurlOnDebug {
-		if r.resultCurlCmd == nil {
-			r.resultCurlCmd = new(string)
+		if isStringEmpty(r.resultCurlCmd) {
+			r.resultCurlCmd = buildCurlCmd(r)
 		}
-		*r.resultCurlCmd = buildCurlCmd(r)
 	}
 	return nil
 }
