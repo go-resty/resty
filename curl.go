@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// resty source code and usage is governed by a MIT style
+// license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
+
 package resty
 
 import (
@@ -19,22 +24,22 @@ func buildCurlCmd(req *Request) string {
 	}
 
 	// 2. Generate curl cookies
-	// TODO validate this block of code, I think its not required since cookie captured via Headers
 	if cookieJar := req.client.CookieJar(); cookieJar != nil {
 		if cookies := cookieJar.Cookies(req.RawRequest.URL); len(cookies) > 0 {
 			curl += "-H " + cmdQuote(dumpCurlCookies(cookies)) + " "
 		}
 	}
 
-	// 3. Generate curl body
+	// 3. Generate curl body except for io.Reader and multipart request
 	if req.RawRequest.GetBody != nil {
 		body, err := req.RawRequest.GetBody()
-		if err != nil {
+		if err == nil {
+			buf, _ := io.ReadAll(body)
+			curl += "-d " + cmdQuote(string(bytes.TrimRight(buf, "\n"))) + " "
+		} else {
 			req.log.Errorf("curl: %v", err)
-			return ""
+			curl += "-d ''"
 		}
-		buf, _ := io.ReadAll(body)
-		curl += "-d " + cmdQuote(string(bytes.TrimRight(buf, "\n"))) + " "
 	}
 
 	urlString := cmdQuote(req.RawRequest.URL.String())

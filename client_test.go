@@ -195,8 +195,7 @@ func TestClientRedirectPolicy(t *testing.T) {
 		SetHeader("Name3", "Value3").
 		Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, true, (err.Error() == "Get /redirect-21: stopped after 20 redirects" ||
-		err.Error() == "Get \"/redirect-21\": stopped after 20 redirects"))
+	assertEqual(t, true, err.Error() == "Get \"/redirect-21\": resty: stopped after 20 redirects")
 
 	c.SetRedirectPolicy(NoRedirectPolicy())
 	res, err := c.R().Get(ts.URL + "/redirect-1")
@@ -804,7 +803,7 @@ func TestClientDebugBodySizeLimit(t *testing.T) {
 		// JSON, does not exceed limit.
 		{url: ts.URL + "/json", want: "{\n   \"TestGet\": \"JSON response\"\n}"},
 		// Invalid JSON, does not exceed limit.
-		{url: ts.URL + "/json-invalid", want: "Debug: Response.fmtBodyString: invalid character 'T' looking for beginning of value"},
+		{url: ts.URL + "/json-invalid", want: "DebugLog: Response.fmtBodyString: invalid character 'T' looking for beginning of value"},
 		// Text, exceeds limit.
 		{url: ts.URL + "/long-text", want: "RESPONSE TOO LARGE"},
 		// JSON, exceeds limit.
@@ -1444,6 +1443,29 @@ func TestResponseBodyLimit(t *testing.T) {
 		_, err := c.R().SetResponseBodyLimit(10240).Get(tse.URL + "/")
 		assertErrorIs(t, gzip.ErrHeader, err)
 	})
+}
+
+func TestClient_executeReadAllError(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	ioReadAll = func(_ io.Reader) ([]byte, error) {
+		return nil, errors.New("test case error")
+	}
+	t.Cleanup(func() {
+		ioReadAll = io.ReadAll
+	})
+
+	c := dcnld()
+
+	resp, err := c.R().
+		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
+		Get(ts.URL + "/json")
+
+	assertNotNil(t, err)
+	assertEqual(t, "test case error", err.Error())
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "", resp.String())
 }
 
 func TestClientDebugf(t *testing.T) {

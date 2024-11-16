@@ -182,7 +182,7 @@ func (r *Response) fmtBodyString(sl int) string {
 			defer releaseBuffer(out)
 			err := json.Indent(out, r.bodyBytes, "", "   ")
 			if err != nil {
-				r.Request.log.Errorf("Debug: Response.fmtBodyString: %v", err)
+				r.Request.log.Errorf("DebugLog: Response.fmtBodyString: %v", err)
 				return ""
 			}
 			return out.String()
@@ -199,6 +199,8 @@ func (r *Response) readIfRequired() {
 	}
 }
 
+var ioReadAll = io.ReadAll
+
 // auto-unmarshal didn't happen, so fallback to
 // old behavior of reading response as body bytes
 func (r *Response) readAll() (err error) {
@@ -207,9 +209,9 @@ func (r *Response) readAll() (err error) {
 	}
 
 	if _, ok := r.Body.(*copyReadCloser); ok {
-		_, err = io.ReadAll(r.Body)
+		_, err = ioReadAll(r.Body)
 	} else {
-		r.bodyBytes, err = io.ReadAll(r.Body)
+		r.bodyBytes, err = ioReadAll(r.Body)
 		closeq(r.Body)
 		r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes)}
 	}

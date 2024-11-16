@@ -915,10 +915,11 @@ func (c *Client) ContentDecompressors() map[string]ContentDecompressor {
 //
 // [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
 func (c *Client) AddContentDecompressor(k string, d ContentDecompressor) *Client {
-	c.insertFirstContentDecompressor(k)
-
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	if !slices.Contains(c.contentDecompressorKeys, k) {
+		c.contentDecompressorKeys = slices.Insert(c.contentDecompressorKeys, 0, k)
+	}
 	c.contentDecompressors[k] = d
 	return c
 }
@@ -953,16 +954,6 @@ func (c *Client) SetContentDecompressorKeys(keys []string) *Client {
 	defer c.lock.Unlock()
 	c.contentDecompressorKeys = result
 	return c
-}
-
-func (c *Client) insertFirstContentDecompressor(k string) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	if !slices.Contains(c.contentDecompressorKeys, k) {
-		c.contentDecompressorKeys = append(c.contentDecompressorKeys, "")
-		copy(c.contentDecompressorKeys[1:], c.contentDecompressorKeys)
-		c.contentDecompressorKeys[0] = k
-	}
 }
 
 // IsDebug method returns `true` if the client is in debug mode; otherwise, it is `false`.
