@@ -220,13 +220,15 @@ func (r *Request) SetHeaderMultiValues(headers map[string][]string) *Request {
 	return r
 }
 
-// SetHeaderVerbatim method sets a single header field and its value verbatim in the current request.
+// SetHeaderVerbatim method is used to set the HTTP header key and value verbatim in the current request.
+// It is typically helpful for legacy applications or servers that require HTTP headers in a certain way
 //
-// For Example: To set `all_lowercase` and `UPPERCASE` as `available`.
+// For Example: To set header key as `all_lowercase`, `UPPERCASE`, and `x-cloud-trace-id`
 //
 //	client.R().
 //		SetHeaderVerbatim("all_lowercase", "available").
-//		SetHeaderVerbatim("UPPERCASE", "available")
+//		SetHeaderVerbatim("UPPERCASE", "available").
+//		SetHeaderVerbatim("x-cloud-trace-id", "798e94019e5fc4d57fbb8901eb4c6cae")
 //
 // It overrides the header value set at the client instance level.
 func (r *Request) SetHeaderVerbatim(header, value string) *Request {
@@ -471,10 +473,10 @@ func (r *Request) SetFile(fieldName, filePath string) *Request {
 //
 //	client.R().
 //		SetFiles(map[string]string{
-//				"my_file1": "/Users/jeeva/Gas Bill - Sep.pdf",
-//				"my_file2": "/Users/jeeva/Electricity Bill - Sep.pdf",
-//				"my_file3": "/Users/jeeva/Water Bill - Sep.pdf",
-//			})
+//			"my_file1": "/Users/jeeva/Gas Bill - Sep.pdf",
+//			"my_file2": "/Users/jeeva/Electricity Bill - Sep.pdf",
+//			"my_file3": "/Users/jeeva/Water Bill - Sep.pdf",
+//		})
 func (r *Request) SetFiles(files map[string]string) *Request {
 	r.isMultiPart = true
 	for f, fp := range files {
@@ -947,7 +949,9 @@ func (r *Request) DisableDebug() *Request {
 // SetDebug method enables the debug mode on the current request. It logs
 // the details current request and response.
 //
-//	client.SetDebug(true)
+//	client.R().SetDebug(true)
+//	// OR
+//	client.R().EnableDebug()
 //
 // Also, it can be enabled at the request level for a particular request; see [Request.SetDebug].
 //   - For [Request], it logs information such as HTTP verb, Relative URL path,
@@ -1228,10 +1232,10 @@ func (r *Request) Trace(url string) (*Response, error) {
 // Send method performs the HTTP request using the method and URL already defined
 // for current [Request].
 //
-//	req := client.R()
-//	req.Method = resty.MethodGet
-//	req.URL = "http://httpbin.org/get"
-//	resp, err := req.Send()
+//	res, err := client.R().
+//		SetMethod(resty.MethodGet).
+//		SetURL("http://httpbin.org/get").
+//		Send()
 func (r *Request) Send() (*Response, error) {
 	return r.Execute(r.Method, r.URL)
 }
@@ -1371,10 +1375,10 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 //
 // The body is not copied, but it's a reference to the original body.
 //
-//	request := client.R()
-//	request.SetBody("body")
-//	request.SetHeader("header", "value")
-//	clonedRequest := request.Clone(context.Background())
+//	req := client.R().
+//		SetBody("body").
+//		SetHeader("header", "value")
+//	clonedRequest := req.Clone(context.Background())
 func (r *Request) Clone(ctx context.Context) *Request {
 	if ctx == nil {
 		panic("resty: Request.Clone nil context")
