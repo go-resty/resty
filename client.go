@@ -316,9 +316,9 @@ func (c *Client) SetHeader(header, value string) *Client {
 // For Example: To set `Content-Type` and `Accept` as `application/json`
 //
 //	client.SetHeaders(map[string]string{
-//			"Content-Type": "application/json",
-//			"Accept": "application/json",
-//		})
+//		"Content-Type": "application/json",
+//		"Accept": "application/json",
+//	})
 func (c *Client) SetHeaders(headers map[string]string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -328,13 +328,15 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 	return c
 }
 
-// SetHeaderVerbatim method sets a single header field and its value verbatim in the current request.
+// SetHeaderVerbatim method is used to set the HTTP header key and value verbatim in the current request.
+// It is typically helpful for legacy applications or servers that require HTTP headers in a certain way
 //
-// For Example: To set `all_lowercase` and `UPPERCASE` as `available`.
+// For Example: To set header key as `all_lowercase`, `UPPERCASE`, and `x-cloud-trace-id`
 //
 //	client.
 //		SetHeaderVerbatim("all_lowercase", "available").
-//		SetHeaderVerbatim("UPPERCASE", "available")
+//		SetHeaderVerbatim("UPPERCASE", "available").
+//		SetHeaderVerbatim("x-cloud-trace-id", "798e94019e5fc4d57fbb8901eb4c6cae")
 func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -387,9 +389,9 @@ func (c *Client) Cookies() []*http.Cookie {
 // These cookies will be added to all the requests from this client instance.
 //
 //	client.SetCookie(&http.Cookie{
-//				Name:"go-resty",
-//				Value:"This is cookie value",
-//			})
+//		Name:"go-resty",
+//		Value:"This is cookie value",
+//	})
 func (c *Client) SetCookie(hc *http.Cookie) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -458,9 +460,9 @@ func (c *Client) SetQueryParam(param, value string) *Client {
 // See [Request.SetQueryParams] or [Request.SetQueryParam].
 //
 //	client.SetQueryParams(map[string]string{
-//			"search": "kitchen papers",
-//			"size": "large",
-//		})
+//		"search": "kitchen papers",
+//		"size": "large",
+//	})
 func (c *Client) SetQueryParams(params map[string]string) *Client {
 	// Do not lock here since there is potential deadlock.
 	for p, v := range params {
@@ -484,9 +486,9 @@ func (c *Client) FormData() url.Values {
 // See [Request.SetFormData].
 //
 //	client.SetFormData(map[string]string{
-//			"access_token": "BC594900-518B-4F7E-AC75-BD37F019E08F",
-//			"user_id": "3455454545",
-//		})
+//		"access_token": "BC594900-518B-4F7E-AC75-BD37F019E08F",
+//		"user_id": "3455454545",
+//	})
 func (c *Client) SetFormData(data map[string]string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -979,6 +981,8 @@ func (c *Client) DisableDebug() *Client {
 // of every request and response.
 //
 //	client.SetDebug(true)
+//	// OR
+//	client.EnableDebug()
 //
 // Also, it can be enabled at the request level for a particular request; see [Request.SetDebug].
 //   - For [Request], it logs information such as HTTP verb, Relative URL path,
@@ -1473,10 +1477,10 @@ func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 // The caller is responsible for calling Close to stop the watcher.
 //
 //	client.SetRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
-//			PoolInterval: time.Hour * 24,
+//		PoolInterval: time.Hour * 24,
 //	})
 //
-// defer client.Close()
+//	defer client.Close()
 func (c *Client) SetRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
 	c.SetRootCertificate(pemFilePath)
 	c.initCertWatcher(pemFilePath, "root", options)
@@ -1511,9 +1515,9 @@ func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
 // The caller is responsible for calling Close to stop the watcher.
 //
 //	client.SetClientRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
-//			PoolInterval: time.Hour * 24,
-//		})
-//		defer client.Close()
+//		PoolInterval: time.Hour * 24,
+//	})
+//	defer client.Close()
 func (c *Client) SetClientRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
 	c.SetClientRootCertificate(pemFilePath)
 	c.initCertWatcher(pemFilePath, "client", options)
