@@ -76,6 +76,8 @@ var (
 	jsonKey = "json"
 	xmlKey  = "xml"
 
+	defaultAuthScheme = "Bearer"
+
 	hdrUserAgentValue = "go-resty/" + Version + " (https://github.com/go-resty/resty)"
 	bufPool           = &sync.Pool{New: func() any { return &bytes.Buffer{} }}
 )

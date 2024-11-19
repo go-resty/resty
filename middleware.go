@@ -312,11 +312,7 @@ func addCredentials(c *Client, r *Request) error {
 	// Build the token Auth header
 	if !isStringEmpty(r.AuthToken) {
 		credentialsAdded = true
-		authScheme := r.AuthScheme
-		if isStringEmpty(authScheme) {
-			authScheme = "Bearer"
-		}
-		r.RawRequest.Header.Set(c.HeaderAuthorizationKey(), authScheme+" "+r.AuthToken)
+		r.RawRequest.Header.Set(c.HeaderAuthorizationKey(), r.AuthScheme+" "+r.AuthToken)
 	}
 
 	if !c.IsDisableWarn() && credentialsAdded {
