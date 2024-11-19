@@ -1381,8 +1381,8 @@ func TestClientClone(t *testing.T) {
 	// assert non-interface type
 	assertEqual(t, "http://localhost", parent.BaseURL())
 	assertEqual(t, "https://local.host", clone.BaseURL())
-	assertEqual(t, "parent", parent.UserInfo().Username)
-	assertEqual(t, "clone", clone.UserInfo().Username)
+	assertEqual(t, "parent", parent.credentials.Username)
+	assertEqual(t, "clone", clone.credentials.Username)
 
 	// assert interface/pointer type
 	assertEqual(t, parent.Client(), clone.Client())

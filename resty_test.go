@@ -167,7 +167,7 @@ func createGetServer(t *testing.T) *httptest.Server {
 
 func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/login" {
-		user := &User{}
+		user := &credentials{}
 
 		// JSON
 		if isJSONContentType(r.Header.Get(hdrContentTypeKey)) {

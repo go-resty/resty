@@ -38,12 +38,8 @@ var hashFuncs = map[string]func() hash.Hash{
 	"SHA-512-256-sess": sha512.New,
 }
 
-type digestCredentials struct {
-	username, password string
-}
-
 type digestTransport struct {
-	digestCredentials
+	credentials
 	transport http.RoundTripper
 }
 
@@ -98,9 +94,9 @@ func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return dt.transport.RoundTrip(req2)
 }
 
-func (dt *digestTransport) newCredentials(req *http.Request, c *challenge) *credentials {
-	return &credentials{
-		username:   dt.username,
+func (dt *digestTransport) newCredentials(req *http.Request, c *challenge) *digestCredentials {
+	return &digestCredentials{
+		username:   dt.Username,
 		userhash:   c.userhash,
 		realm:      c.realm,
 		nonce:      c.nonce,
@@ -111,7 +107,7 @@ func (dt *digestTransport) newCredentials(req *http.Request, c *challenge) *cred
 		messageQop: c.qop,
 		nc:         0,
 		method:     req.Method,
-		password:   dt.password,
+		password:   dt.Password,
 	}
 }
 
@@ -203,7 +199,7 @@ func parseChallenge(input string) (*challenge, error) {
 	return c, nil
 }
 
-type credentials struct {
+type digestCredentials struct {
 	username   string
 	userhash   string
 	realm      string
@@ -219,7 +215,7 @@ type credentials struct {
 	password   string
 }
 
-func (c *credentials) authorize() (string, error) {
+func (c *digestCredentials) authorize() (string, error) {
 	if _, ok := hashFuncs[c.algorithm]; !ok {
 		return "", ErrDigestAlgNotSupported
 	}
@@ -257,7 +253,7 @@ func (c *credentials) authorize() (string, error) {
 	return fmt.Sprintf("Digest %s", strings.Join(sl, ", ")), nil
 }
 
-func (c *credentials) validateQop() error {
+func (c *digestCredentials) validateQop() error {
 	// Currently only supporting auth quality of protection. TODO: add auth-int support
 	// NOTE: cURL support auth-int qop for requests other than POST and PUT (i.e. w/o body) by hashing an empty string
 	// is this applicable for resty? see: https://github.com/curl/curl/blob/307b7543ea1e73ab04e062bdbe4b5bb409eaba3a/lib/vauth/digest.c#L774
@@ -282,14 +278,14 @@ func (c *credentials) validateQop() error {
 	return nil
 }
 
-func (c *credentials) h(data string) string {
+func (c *digestCredentials) h(data string) string {
 	hfCtor := hashFuncs[c.algorithm]
 	hf := hfCtor()
 	_, _ = hf.Write([]byte(data)) // Hash.Write never returns an error
 	return fmt.Sprintf("%x", hf.Sum(nil))
 }
 
-func (c *credentials) resp() (string, error) {
+func (c *digestCredentials) resp() (string, error) {
 	c.nc++
 
 	b := make([]byte, 16)
@@ -306,12 +302,12 @@ func (c *credentials) resp() (string, error) {
 		c.nonce, c.nc, c.cNonce, c.messageQop, ha2)), nil
 }
 
-func (c *credentials) kd(secret, data string) string {
+func (c *digestCredentials) kd(secret, data string) string {
 	return c.h(fmt.Sprintf("%s:%s", secret, data))
 }
 
 // RFC 7616 3.4.2
-func (c *credentials) ha1() string {
+func (c *digestCredentials) ha1() string {
 	ret := c.h(fmt.Sprintf("%s:%s:%s", c.username, c.realm, c.password))
 	if c.sessionAlg {
 		return c.h(fmt.Sprintf("%s:%s:%s", ret, c.nonce, c.cNonce))
@@ -321,7 +317,7 @@ func (c *credentials) ha1() string {
 }
 
 // RFC 7616 3.4.3
-func (c *credentials) ha2() string {
+func (c *digestCredentials) ha2() string {
 	// currently no auth-int support
 	return c.h(fmt.Sprintf("%s:%s", c.method, c.digestURI))
 }

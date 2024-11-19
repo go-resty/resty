@@ -302,28 +302,23 @@ func createHTTPRequest(c *Client, r *Request) (err error) {
 }
 
 func addCredentials(c *Client, r *Request) error {
-	var isBasicAuth bool
+	credentialsAdded := false
 	// Basic Auth
-	if r.UserInfo != nil {
-		r.RawRequest.SetBasicAuth(r.UserInfo.Username, r.UserInfo.Password)
-		isBasicAuth = true
-	}
-
-	if !c.IsDisableWarn() {
-		if isBasicAuth && !strings.HasPrefix(r.URL, "https") {
-			r.log.Warnf("Using Basic Auth in HTTP mode is not secure, use HTTPS")
-		}
+	if r.credentials != nil {
+		credentialsAdded = true
+		r.RawRequest.SetBasicAuth(r.credentials.Username, r.credentials.Password)
 	}
 
 	// Build the token Auth header
 	if !isStringEmpty(r.AuthToken) {
-		var authScheme string
-		if isStringEmpty(r.AuthScheme) {
-			authScheme = "Bearer"
-		} else {
-			authScheme = r.AuthScheme
+		credentialsAdded = true
+		r.RawRequest.Header.Set(c.HeaderAuthorizationKey(), r.AuthScheme+" "+r.AuthToken)
+	}
+
+	if !c.IsDisableWarn() && credentialsAdded {
+		if strings.HasPrefix(r.URL, "http") {
+			r.log.Warnf("Using sensitive credentials in HTTP mode is not secure. Use HTTPS")
 		}
-		r.RawRequest.Header.Set(c.HeaderAuthorizationKey(), authScheme+" "+r.AuthToken)
 	}
 
 	return nil

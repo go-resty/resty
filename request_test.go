@@ -220,7 +220,8 @@ func TestPostJSONStructSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	user := &User{Username: "testuser", Password: "testpass"}
+	user := &credentials{Username: "testuser", Password: "testpass"}
+	assertEqual(t, "Username: **********, Password: **********", user.String())
 
 	c := dcnl().SetJSONEscapeHTML(false)
 	r := c.R().
@@ -246,7 +247,8 @@ func TestPostJSONRPCStructSuccess(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	user := &User{Username: "testuser", Password: "testpass"}
+	user := &credentials{Username: "testuser", Password: "testpass"}
+	assertEqual(t, "Username: **********, Password: **********", user.String())
 
 	c := dcnl().SetJSONEscapeHTML(false)
 	r := c.R().
@@ -276,7 +278,7 @@ func TestPostJSONStructInvalidLogin(t *testing.T) {
 
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
-		SetBody(User{Username: "testuser", Password: "testpass1"}).
+		SetBody(credentials{Username: "testuser", Password: "testpass1"}).
 		SetError(AuthError{}).
 		SetJSONEscapeHTML(false).
 		Post(ts.URL + "/login")
@@ -299,7 +301,7 @@ func TestPostJSONErrorRFC7807(t *testing.T) {
 	c := dcnl()
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
-		SetBody(User{Username: "testuser", Password: "testpass1"}).
+		SetBody(credentials{Username: "testuser", Password: "testpass1"}).
 		SetError(AuthError{}).
 		Post(ts.URL + "/login?ct=problem")
 
@@ -493,7 +495,7 @@ func TestPostXMLStructSuccess(t *testing.T) {
 
 	resp, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/xml").
-		SetBody(User{Username: "testuser", Password: "testpass"}).
+		SetBody(credentials{Username: "testuser", Password: "testpass"}).
 		SetContentLength(true).
 		SetResult(&AuthSuccess{}).
 		Post(ts.URL + "/login")
@@ -515,7 +517,7 @@ func TestPostXMLStructInvalidLogin(t *testing.T) {
 
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/xml").
-		SetBody(User{Username: "testuser", Password: "testpass1"}).
+		SetBody(credentials{Username: "testuser", Password: "testpass1"}).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
@@ -533,7 +535,7 @@ func TestPostXMLStructInvalidResponseXml(t *testing.T) {
 
 	resp, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/xml").
-		SetBody(User{Username: "testuser", Password: "invalidxml"}).
+		SetBody(credentials{Username: "testuser", Password: "invalidxml"}).
 		SetResult(&AuthSuccess{}).
 		Post(ts.URL + "/login")
 
@@ -617,7 +619,8 @@ func TestRequestInsecureBasicAuth(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(logBuf.String(), "WARN RESTY Using Basic Auth in HTTP mode is not secure, use HTTPS"))
+	assertEqual(t, true, strings.Contains(logBuf.String(),
+		"WARN RESTY Using sensitive credentials in HTTP mode is not secure. Use HTTPS"))
 
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
 	logResponse(t, resp)
@@ -1157,7 +1160,7 @@ func TestDetectContentTypeForPointer(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	user := &User{Username: "testuser", Password: "testpass"}
+	user := &credentials{Username: "testuser", Password: "testpass"}
 
 	resp, err := dcnldr().
 		SetBody(user).
@@ -1987,7 +1990,7 @@ func TestRequestClone(t *testing.T) {
 	// update value of http header - change will only happen on clone
 	clone.SetHeader("X-Header", "clone")
 	// update value of interface type - change will only happen on clone
-	clone.UserInfo.Username = "clone"
+	clone.credentials.Username = "clone"
 	clone.bodyBuf.Reset()
 	clone.bodyBuf.WriteString("clone")
 
@@ -2002,8 +2005,8 @@ func TestRequestClone(t *testing.T) {
 	assertEqual(t, "parent", parent.Header.Get("X-Header"))
 	assertEqual(t, "clone", clone.Header.Get("X-Header"))
 	// assert interface type
-	assertEqual(t, "parent", parent.UserInfo.Username)
-	assertEqual(t, "clone", clone.UserInfo.Username)
+	assertEqual(t, "parent", parent.credentials.Username)
+	assertEqual(t, "clone", clone.credentials.Username)
 	assertEqual(t, "", parent.bodyBuf.String())
 	assertEqual(t, "clone", clone.bodyBuf.String())
 
@@ -2017,7 +2020,7 @@ func TestResponseBodyUnlimitedReads(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	user := &User{Username: "testuser", Password: "testpass"}
+	user := &credentials{Username: "testuser", Password: "testpass"}
 
 	c := dcnl().
 		SetJSONEscapeHTML(false).
@@ -2183,7 +2186,7 @@ func TestRequestSetResultAndSetOutputFile(t *testing.T) {
 
 	res, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
-		SetBody(&User{Username: "testuser", Password: "testpass"}).
+		SetBody(&credentials{Username: "testuser", Password: "testpass"}).
 		SetResponseBodyUnlimitedReads(true).
 		SetResult(&AuthSuccess{}).
 		SetOutputFile(outputFile).

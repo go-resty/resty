@@ -163,6 +163,7 @@ func createClient(hc *http.Client) *Client {
 		queryParams:              url.Values{},
 		formData:                 url.Values{},
 		header:                   http.Header{},
+		authScheme:               defaultAuthScheme,
 		cookies:                  make([]*http.Cookie, 0),
 		retryWaitTime:            defaultWaitTime,
 		retryMaxWaitTime:         defaultMaxWaitTime,
