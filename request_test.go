@@ -899,6 +899,7 @@ func TestPutJSONString(t *testing.T) {
 	client := dcnl()
 
 	client.AddRequestMiddleware(func(c *Client, r *Request) error {
+		c.SetContentLength(true)
 		r.SetHeader("X-Custom-Request-Middleware", "Request middleware")
 		return nil
 	})
@@ -907,7 +908,7 @@ func TestPutJSONString(t *testing.T) {
 		return nil
 	})
 
-	client.SetDebug(true).SetContentLength(true)
+	client.SetDebug(true)
 	client.outputLogTo(io.Discard)
 
 	resp, err := client.R().
