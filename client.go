@@ -729,6 +729,12 @@ func (c *Client) SetResponseMiddlewares(middlewares ...ResponseMiddleware) *Clie
 	return c
 }
 
+func (c *Client) requestMiddlewares() []RequestMiddleware {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.beforeRequest
+}
+
 // AddRequestMiddleware method appends a request middleware to the before request chain.
 // After all requests, middlewares are applied, and the request is sent to the host server.
 //
@@ -738,9 +744,6 @@ func (c *Client) SetResponseMiddlewares(middlewares ...ResponseMiddleware) *Clie
 //
 //		return nil 	// if its successful otherwise return error
 //	})
-//
-// NOTE:
-//   - Do not use [Client] setter methods within Request middleware; deadlock will happen.
 func (c *Client) AddRequestMiddleware(m RequestMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -749,7 +752,7 @@ func (c *Client) AddRequestMiddleware(m RequestMiddleware) *Client {
 	return c
 }
 
-func (c *Client) afterResponseMiddlewares() []ResponseMiddleware {
+func (c *Client) responseMiddlewares() []ResponseMiddleware {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.afterResponse
@@ -761,13 +764,11 @@ func (c *Client) afterResponseMiddlewares() []ResponseMiddleware {
 //
 //	client.AddResponseMiddleware(func(c *resty.Client, r *resty.Response) error {
 //		// Now you have access to the Client and Response instance
+//		// Also, you could access request via Response.Request i.e., r.Request
 //		// manipulate it as per your need
 //
 //		return nil 	// if its successful otherwise return error
 //	})
-//
-// NOTE:
-//   - Do not use [Client] setter methods within Response middleware; deadlock will happen.
 func (c *Client) AddResponseMiddleware(m ResponseMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -2044,9 +2045,7 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) executeRequestMiddlewares(req *Request) (err error) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	for _, f := range c.beforeRequest {
+	for _, f := range c.requestMiddlewares() {
 		if err = f(c, req); err != nil {
 			return err
 		}
@@ -2099,7 +2098,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	responseDebugLogger(c, response)
 
 	// Apply Response middleware
-	for _, f := range c.afterResponseMiddlewares() {
+	for _, f := range c.responseMiddlewares() {
 		if err = f(c, response); err != nil {
 			response.Err = wrapErrors(err, response.Err)
 		}
