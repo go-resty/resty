@@ -69,6 +69,23 @@ func (l *logger) output(format string, v ...any) {
 	l.l.Printf(format, v...)
 }
 
+// credentials type is to hold an username and password information
+type credentials struct {
+	Username, Password string
+}
+
+// Clone method returns clone of c.
+func (c *credentials) Clone() *credentials {
+	cc := new(credentials)
+	*cc = *c
+	return cc
+}
+
+// String method returns masked value of username and password
+func (c credentials) String() string {
+	return "Username: **********, Password: **********"
+}
+
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
 // Package Helper methods
 //_______________________________________________________________________

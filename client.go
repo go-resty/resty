@@ -172,7 +172,7 @@ type Client struct {
 	pathParams               map[string]string
 	rawPathParams            map[string]string
 	header                   http.Header
-	userInfo                 *User
+	credentials              *credentials
 	authToken                string
 	authScheme               string
 	cookies                  []*http.Cookie
@@ -221,23 +221,11 @@ type Client struct {
 	certWatcherStopChan      chan bool
 }
 
-// User type is to hold an username and password information
-type User struct {
-	Username, Password string
-}
-
 // CertWatcherOptions allows configuring a watcher that reloads dynamically TLS certs.
 type CertWatcherOptions struct {
 	// PoolInterval is the frequency at which resty will check if the PEM file needs to be reloaded.
 	// Default is 24 hours.
 	PoolInterval time.Duration
-}
-
-// Clone method returns deep copy of u.
-func (u *User) Clone() *User {
-	uu := new(User)
-	*uu = *u
-	return uu
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -498,15 +486,6 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 	return c
 }
 
-// UserInfo method returns the authorization username and password.
-//
-//	userInfo := client.UserInfo()
-func (c *Client) UserInfo() *User {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.userInfo
-}
-
 // SetBasicAuth method sets the basic authentication header in the HTTP request. For Example:
 //
 //	Authorization: Basic <base64-encoded-value>
@@ -522,7 +501,7 @@ func (c *Client) UserInfo() *User {
 func (c *Client) SetBasicAuth(username, password string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.userInfo = &User{Username: username, Password: password}
+	c.credentials = &credentials{Username: username, Password: password}
 	return c
 }
 
@@ -611,8 +590,8 @@ func (c *Client) SetDigestAuth(username, password string) *Client {
 	c.lock.Unlock()
 	c.AddRequestMiddleware(func(c *Client, _ *Request) error {
 		c.httpClient.Transport = &digestTransport{
-			digestCredentials: digestCredentials{username, password},
-			transport:         oldTransport,
+			credentials: credentials{username, password},
+			transport:   oldTransport,
 		}
 		return nil
 	})
@@ -638,7 +617,6 @@ func (c *Client) R() *Request {
 		IsTrace:                    c.isTrace,
 		AuthScheme:                 c.authScheme,
 		AuthToken:                  c.authToken,
-		UserInfo:                   c.userInfo,
 		RetryCount:                 c.retryCount,
 		RetryWaitTime:              c.retryWaitTime,
 		RetryMaxWaitTime:           c.retryMaxWaitTime,
@@ -660,6 +638,7 @@ func (c *Client) R() *Request {
 		setContentLength:    c.setContentLength,
 		generateCurlOnDebug: c.generateCurlOnDebug,
 		unescapeQueryParams: c.unescapeQueryParams,
+		credentials:         c.credentials,
 	}
 
 	if c.ctx != nil {
@@ -2012,7 +1991,7 @@ func (c *Client) Clone(ctx context.Context) *Client {
 	cc.header = c.header.Clone()
 	cc.pathParams = maps.Clone(c.pathParams)
 	cc.rawPathParams = maps.Clone(c.rawPathParams)
-	cc.userInfo = c.userInfo.Clone()
+	cc.credentials = c.credentials.Clone()
 	cc.contentTypeEncoders = maps.Clone(c.contentTypeEncoders)
 	cc.contentTypeDecoders = maps.Clone(c.contentTypeDecoders)
 	cc.contentDecompressors = maps.Clone(c.contentDecompressors)

@@ -47,7 +47,6 @@ type Request struct {
 	Result                     any
 	Error                      any
 	RawRequest                 *http.Request
-	UserInfo                   *User
 	Cookies                    []*http.Cookie
 	Debug                      bool
 	CloseConnection            bool
@@ -77,6 +76,7 @@ type Request struct {
 	//	first attempt + retry count = total attempts
 	Attempt int
 
+	credentials         *credentials
 	isMultiPart         bool
 	isFormData          bool
 	setContentLength    bool
@@ -618,7 +618,7 @@ func (r *Request) SetContentLength(l bool) *Request {
 //
 // It overrides the credentials set by method [Client.SetBasicAuth].
 func (r *Request) SetBasicAuth(username, password string) *Request {
-	r.UserInfo = &User{Username: username, Password: password}
+	r.credentials = &credentials{Username: username, Password: password}
 	return r
 }
 
@@ -677,8 +677,8 @@ func (r *Request) SetDigestAuth(username, password string) *Request {
 	oldTransport := r.client.httpClient.Transport
 	r.client.AddRequestMiddleware(func(c *Client, _ *Request) error {
 		c.httpClient.Transport = &digestTransport{
-			digestCredentials: digestCredentials{username, password},
-			transport:         oldTransport,
+			credentials: credentials{username, password},
+			transport:   oldTransport,
 		}
 		return nil
 	})
@@ -1400,8 +1400,8 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.RawPathParams = maps.Clone(r.RawPathParams)
 
 	// clone basic auth
-	if r.UserInfo != nil {
-		rr.UserInfo = r.UserInfo.Clone()
+	if r.credentials != nil {
+		rr.credentials = r.credentials.Clone()
 	}
 
 	// clone cookies

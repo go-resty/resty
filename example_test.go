@@ -99,9 +99,12 @@ func Example_post() {
 
 	printOutput(resp1, err1)
 
+	type User struct {
+		Username, Password string
+	}
 	// POST Struct, default is JSON content type. No need to set one
 	resp2, err2 := client.R().
-		SetBody(resty.User{Username: "testuser", Password: "testpass"}).
+		SetBody(User{Username: "testuser", Password: "testpass"}).
 		SetResult(&AuthSuccess{}). // or SetResult(AuthSuccess{}).
 		SetError(&AuthError{}).    // or SetError(AuthError{}).
 		Post("https://myapp.com/login")
