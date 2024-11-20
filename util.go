@@ -286,12 +286,17 @@ func functionName(i interface{}) string {
 }
 
 func acquireBuffer() *bytes.Buffer {
-	return bufPool.Get().(*bytes.Buffer)
+	buf := bufPool.Get().(*bytes.Buffer)
+	if buf.Len() == 0 {
+		buf.Reset()
+		return buf
+	}
+	bufPool.Put(buf)
+	return new(bytes.Buffer)
 }
 
 func releaseBuffer(buf *bytes.Buffer) {
 	if buf != nil {
-		buf.Reset()
 		bufPool.Put(buf)
 	}
 }

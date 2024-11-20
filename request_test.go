@@ -12,11 +12,13 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2194,4 +2196,41 @@ func TestSetResultMustNotPanicOnNil(t *testing.T) {
 		}
 	}()
 	dc().R().SetResult(nil)
+}
+
+func TestRequestGH917(t *testing.T) {
+	// Mock server returns 500 status code to cause client retries.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		assertError(t, err)
+		if len(b) > 0 {
+			// sometimes, the body is "testtest" instead of "test"
+			assertEqual(t, "test", string(b))
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	client := New().AddRetryCondition(
+		func(r *Response, err error) bool {
+			return err != nil || r.StatusCode() > 499
+		},
+	).SetRetryCount(3)
+
+	wg := sync.WaitGroup{}
+	// Run tests concurrently to make the issue easily to observe.
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				buf := bytes.NewBufferString("test")
+				// Trigger some retries
+				resp, err := client.R().SetBody(buf).SetContentLength(true).Execute(http.MethodPost, srv.URL)
+				assertNil(t, err)
+				assertEqual(t, http.StatusInternalServerError, resp.StatusCode())
+				assertEqual(t, "", string(resp.Body()))
+			}
+		}()
+	}
+	wg.Wait()
 }
