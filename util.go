@@ -19,7 +19,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
 )
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -297,36 +296,15 @@ func acquireBuffer() *bytes.Buffer {
 
 func releaseBuffer(buf *bytes.Buffer) {
 	if buf != nil {
+		buf.Reset()
 		bufPool.Put(buf)
 	}
 }
 
-// requestBodyReleaser wraps requests's body and implements custom Close for it.
-// The Close method closes original body and releases request body back to sync.Pool.
-type requestBodyReleaser struct {
-	releaseOnce sync.Once
-	reqBuf      *bytes.Buffer
-	io.ReadCloser
-}
-
-func newRequestBodyReleaser(respBody io.ReadCloser, reqBuf *bytes.Buffer) io.ReadCloser {
-	if reqBuf == nil {
-		return respBody
+func backToBufPool(buf *bytes.Buffer) {
+	if buf != nil {
+		bufPool.Put(buf)
 	}
-
-	return &requestBodyReleaser{
-		reqBuf:     reqBuf,
-		ReadCloser: respBody,
-	}
-}
-
-func (rr *requestBodyReleaser) Close() error {
-	err := rr.ReadCloser.Close()
-	rr.releaseOnce.Do(func() {
-		releaseBuffer(rr.reqBuf)
-	})
-
-	return err
 }
 
 func closeq(v interface{}) {

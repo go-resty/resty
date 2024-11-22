@@ -2203,10 +2203,8 @@ func TestRequestGH917(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
 		assertError(t, err)
-		if len(b) > 0 {
-			// sometimes, the body is "testtest" instead of "test"
-			assertEqual(t, "test", string(b))
-		}
+		assertEqual(t, "test", string(b))
+
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 

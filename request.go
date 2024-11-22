@@ -1030,6 +1030,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 		r.Attempt = 1
 		resp, err = r.client.execute(r)
 		r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
+		backToBufPool(r.bodyBuf)
 		return resp, unwrapNoRetryErr(err)
 	}
 
@@ -1059,6 +1060,7 @@ func (r *Request) Execute(method, url string) (*Response, error) {
 	}
 
 	r.client.onErrorHooks(r, resp, unwrapNoRetryErr(err))
+	backToBufPool(r.bodyBuf)
 	return resp, unwrapNoRetryErr(err)
 }
 

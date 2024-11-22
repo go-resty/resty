@@ -1236,7 +1236,6 @@ func (c *Client) executeBefore(req *Request) error {
 		return wrapNoRetryErr(err)
 	}
 
-	req.RawRequest.Body = newRequestBodyReleaser(req.RawRequest.Body, req.bodyBuf)
 	return nil
 }
 
