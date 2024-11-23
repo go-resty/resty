@@ -66,6 +66,7 @@ type Request struct {
 	RetryMaxWaitTime           time.Duration
 	RetryStrategy              RetryStrategyFunc
 	IsRetryDefaultConditions   bool
+	AllowNonIdempotentRetry    bool
 
 	// RetryTraceID provides GUID for retry count > 0
 	RetryTraceID string
@@ -980,6 +981,12 @@ func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 //	first attempt + retry count = total attempts
 //
 // See [Request.SetRetryStrategy]
+//
+// NOTE:
+//   - By default, Resty only does retry on idempotent HTTP methods, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
+//
+// [RFC 9110 Section 9.2.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
+// [RFC 9110 Section 18.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
 func (r *Request) SetRetryCount(count int) *Request {
 	r.RetryCount = count
 	return r
@@ -1031,6 +1038,19 @@ func (r *Request) DisableRetryDefaultConditions() *Request {
 // It overrides value set at the client instance level, see [Client.SetRetryDefaultConditions]
 func (r *Request) SetRetryDefaultConditions(b bool) *Request {
 	r.IsRetryDefaultConditions = b
+	return r
+}
+
+// SetAllowNonIdempotentRetry method is used to enable/disable non-idempotent HTTP
+// methods retry. By default, Resty only allows idempotent HTTP methods, see
+// [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
+//
+// It overrides value set at the client instance level, see [Client.SetAllowNonIdempotentRetry]
+//
+// [RFC 9110 Section 9.2.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
+// [RFC 9110 Section 18.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
+func (r *Request) SetAllowNonIdempotentRetry(b bool) *Request {
+	r.AllowNonIdempotentRetry = b
 	return r
 }
 
@@ -1295,7 +1315,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		}
 
 		if backoff != nil {
-			needsRetry := false
+			needsRetry, isCtxDone := false, false
 
 			// apply default retry conditions
 			if r.IsRetryDefaultConditions {
@@ -1343,9 +1363,14 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			timer := time.NewTimer(waitDuration)
 			select {
 			case <-r.Context().Done():
+				isCtxDone = true
 				timer.Stop()
-				return nil, wrapErrors(r.Context().Err(), err)
+				err = wrapErrors(r.Context().Err(), err)
+				break
 			case <-timer.C:
+			}
+			if isCtxDone {
+				break
 			}
 		}
 	}
@@ -1625,18 +1650,18 @@ func (r *Request) resetFileReaders() error {
 
 // https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
 // https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
-var idempotentMethods = map[string]bool{
-	MethodDelete:  true,
-	MethodGet:     true,
-	MethodHead:    true,
-	MethodOptions: true,
-	MethodPut:     true,
-	MethodTrace:   true,
+var idempotentMethods = map[string]struct{}{
+	MethodDelete:  {},
+	MethodGet:     {},
+	MethodHead:    {},
+	MethodOptions: {},
+	MethodPut:     {},
+	MethodTrace:   {},
 }
 
 func (r *Request) isIdempotent() bool {
 	_, found := idempotentMethods[r.Method]
-	return found
+	return found || r.AllowNonIdempotentRetry
 }
 
 func jsonIndent(v []byte) []byte {

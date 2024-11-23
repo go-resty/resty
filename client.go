@@ -190,6 +190,7 @@ type Client struct {
 	retryHooks               []RetryHookFunc
 	retryStrategy            RetryStrategyFunc
 	isRetryDefaultConditions bool
+	allowNonIdempotentRetry  bool
 	headerAuthorizationKey   string
 	responseBodyLimit        int64
 	resBodyUnlimitedReads    bool
@@ -631,6 +632,7 @@ func (c *Client) R() *Request {
 		ResponseBodyUnlimitedReads: c.resBodyUnlimitedReads,
 		AllowMethodGetPayload:      c.allowMethodGetPayload,
 		AllowMethodDeletePayload:   c.allowMethodDeletePayload,
+		AllowNonIdempotentRetry:    c.allowNonIdempotentRetry,
 
 		client:              c,
 		baseURL:             c.baseURL,
@@ -1199,6 +1201,12 @@ func (c *Client) RetryCount() int {
 //	first attempt + retry count = total attempts
 //
 // See [Request.SetRetryStrategy]
+//
+// NOTE:
+//   - By default, Resty only does retry on idempotent HTTP methods, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
+//
+// [RFC 9110 Section 9.2.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
+// [RFC 9110 Section 18.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
 func (c *Client) SetRetryCount(count int) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -1293,6 +1301,31 @@ func (c *Client) SetRetryDefaultConditions(b bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.isRetryDefaultConditions = b
+	return c
+}
+
+// AllowNonIdempotentRetry method returns true if the client is enabled to allow
+// non-idempotent HTTP methods retry; otherwise, it is `false`
+//
+// Default value is `false`
+func (c *Client) AllowNonIdempotentRetry() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.allowNonIdempotentRetry
+}
+
+// SetAllowNonIdempotentRetry method is used to enable/disable non-idempotent HTTP
+// methods retry. By default, Resty only allows idempotent HTTP methods, see
+// [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
+//
+// It can be overridden at request level, see [Request.SetAllowNonIdempotentRetry]
+//
+// [RFC 9110 Section 9.2.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
+// [RFC 9110 Section 18.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
+func (c *Client) SetAllowNonIdempotentRetry(b bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.allowNonIdempotentRetry = b
 	return c
 }
 
