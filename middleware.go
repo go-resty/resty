@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -454,9 +455,27 @@ func handleRequestBody(c *Client, r *Request) error {
 	r.bodyBuf = acquireBuffer()
 
 	switch body := r.Body.(type) {
-	case io.Reader: // Resty v3 onwards io.Reader used as-is with the request body
+	case io.Reader:
+		// Resty v3 onwards io.Reader used as-is with the request body.
 		releaseBuffer(r.bodyBuf)
 		r.bodyBuf = nil
+
+		// enable multiple reads if retry enabled
+		// and body type is *bytes.Buffer
+		if r.RetryCount > 0 {
+			if b, ok := r.Body.(*bytes.Buffer); ok {
+				v := b.Bytes()
+				r.Body = bytes.NewReader(v)
+			}
+		}
+
+		// do seek start for retry attempt if io.ReadSeeker
+		// interface supported
+		if r.Attempt > 1 {
+			if rs, ok := r.Body.(io.ReadSeeker); ok {
+				_, _ = rs.Seek(0, io.SeekStart)
+			}
+		}
 		return nil
 	case []byte:
 		r.bodyBuf.Write(body)

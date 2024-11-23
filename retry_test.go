@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strconv"
 	"strings"
@@ -847,6 +848,69 @@ func TestRetryDefaultConditions(t *testing.T) {
 		result := applyRetryDefaultConditions(nil, nil)
 		assertEqual(t, false, result)
 	})
+}
+
+func TestRetryRequestPutIoReadSeekerForBuffer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		assertError(t, err)
+		assertEqual(t, 12, len(b))
+		assertEqual(t, "body content", string(b))
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	c := dcnl().
+		AddRetryCondition(
+			func(r *Response, err error) bool {
+				return err != nil || r.StatusCode() > 499
+			},
+		).
+		SetRetryCount(3).
+		SetAllowNonIdempotentRetry(true)
+
+	assertEqual(t, true, c.AllowNonIdempotentRetry())
+
+	buf := bytes.NewBuffer([]byte("body content"))
+	resp, err := c.R().
+		SetBody(buf).
+		SetAllowMethodGetPayload(false).
+		Put(srv.URL)
+
+	assertNil(t, err)
+	assertEqual(t, 4, resp.Request.Attempt)
+	assertEqual(t, http.StatusInternalServerError, resp.StatusCode())
+	assertEqual(t, "", resp.String())
+}
+
+func TestRetryRequestPostIoReadSeeker(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		assertError(t, err)
+		assertEqual(t, 12, len(b))
+		assertEqual(t, "body content", string(b))
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	c := dcnl().
+		AddRetryCondition(
+			func(r *Response, err error) bool {
+				return err != nil || r.StatusCode() > 499
+			},
+		).
+		SetRetryCount(3).
+		SetAllowNonIdempotentRetry(false)
+
+	assertEqual(t, false, c.AllowNonIdempotentRetry())
+
+	resp, err := c.R().
+		SetBody([]byte("body content")).
+		SetAllowNonIdempotentRetry(true).
+		Post(srv.URL)
+
+	assertNil(t, err)
+	assertEqual(t, 4, resp.Request.Attempt)
+	assertEqual(t, http.StatusInternalServerError, resp.StatusCode())
+	assertEqual(t, "", resp.String())
 }
 
 func TestRetryCoverage(t *testing.T) {
