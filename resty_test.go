@@ -10,9 +10,9 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"compress/lzw"
-	"crypto/md5"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -768,24 +768,6 @@ func createUnixSocketEchoServer(t *testing.T) string {
 	return socketPath
 }
 
-type digestServerConfig struct {
-	realm, qop, nonce, opaque, algo, uri, charset, username, password string
-}
-
-func defaultDigestServerConf() *digestServerConfig {
-	return &digestServerConfig{
-		realm:    "testrealm@host.com",
-		qop:      "auth",
-		nonce:    "dcd98b7102dd2f0e8b11d0f600bfb0c093",
-		opaque:   "5ccc069c403ebaf9f0171e9517f40e41",
-		algo:     "MD5",
-		uri:      "/dir/index.html",
-		charset:  "utf-8",
-		username: "Mufasa",
-		password: "Circle Of Life",
-	}
-}
-
 func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server {
 	if conf == nil {
 		conf = defaultDigestServerConf()
@@ -822,14 +804,14 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 
 		w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
-		if !authorizationHeaderValid(t, r, conf) {
-			setWWWAuthHeader(w,
-				fmt.Sprintf(`Digest realm="%s", domain="%s", qop="%s", algorithm=%s, nonce="%s", opaque="%s", userhash=true, charset=%s, stale=FALSE`,
-					conf.realm, conf.uri, conf.qop, conf.algo, conf.nonce, conf.opaque, conf.charset))
-			_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
-		} else {
+		if authorizationHeaderValid(t, r, conf) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
+		} else {
+			setWWWAuthHeader(w,
+				fmt.Sprintf(`Digest realm="%s", domain="%s", qop="%s", algorithm=%s, nonce="%s", opaque="%s", userhash=true, charset=%s, stale=FALSE, nc=%s`,
+					conf.realm, conf.uri, conf.qop, conf.algo, conf.nonce, conf.opaque, conf.charset, conf.nc))
+			_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
 		}
 	})
 
@@ -837,20 +819,11 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 }
 
 func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerConfig) bool {
-	h := func(data string) (string, error) {
-		hf := md5.New()
-
-		_, err := io.WriteString(hf, data)
-		if err != nil {
-			return "", err
-		}
-
-		return fmt.Sprintf("%x", hf.Sum(nil)), nil
-	}
 	input := r.Header.Get(hdrAuthorizationKey)
 	if input == "" {
 		return false
 	}
+
 	const ws = " \n\r\t"
 	const qs = `"`
 	s := strings.Trim(input, ws)
@@ -864,28 +837,53 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 		pairs[pair[0]] = strings.Trim(pair[1], qs)
 	}
 
-	assertEqual(t, conf.opaque, pairs["opaque"])
 	assertEqual(t, conf.algo, pairs["algorithm"])
+	h := func(data string) string {
+		h := newHashFunc(pairs["algorithm"])
+		_, _ = h.Write([]byte(data))
+		return hex.EncodeToString(h.Sum(nil))
+	}
+
+	assertEqual(t, conf.opaque, pairs["opaque"])
 	assertEqual(t, "true", pairs["userhash"])
 
-	userhash, err := h(fmt.Sprintf("%s:%s", conf.username, conf.realm))
-	assertError(t, err)
-	assertEqual(t, userhash, pairs["username"])
+	userHash := h(fmt.Sprintf("%s:%s", conf.username, conf.realm))
+	assertEqual(t, userHash, pairs["username"])
 
-	ha1, err := h(fmt.Sprintf("%s:%s:%s", conf.username, conf.realm, conf.password))
-	assertError(t, err)
+	ha1 := h(fmt.Sprintf("%s:%s:%s", conf.username, conf.realm, conf.password))
 	if strings.HasSuffix(conf.algo, "-sess") {
-		ha1, err = h(fmt.Sprintf("%s:%s:%s", ha1, pairs["nonce"], pairs["cnonce"]))
-		assertError(t, err)
+		ha1 = h(fmt.Sprintf("%s:%s:%s", ha1, pairs["nonce"], pairs["cnonce"]))
 	}
-	ha2, err := h(fmt.Sprintf("%s:%s", r.Method, conf.uri))
-	assertError(t, err)
+	ha2 := h(fmt.Sprintf("%s:%s", r.Method, conf.uri))
+
+	qop := pairs["qop"]
+	if qop == "" {
+		kd := h(fmt.Sprintf("%s:%s:%s", ha1, pairs["nonce"], ha2))
+		return kd == pairs["response"]
+	}
+
 	nonceCount, err := strconv.Atoi(pairs["nc"])
 	assertError(t, err)
-	kd, err := h(fmt.Sprintf("%s:%s", ha1, fmt.Sprintf("%s:%08x:%s:%s:%s",
-		pairs["nonce"], nonceCount, pairs["cnonce"], pairs["qop"], ha2)))
-	assertError(t, err)
 
+	// auth scenario
+	if qop == qopAuth {
+		kd := h(fmt.Sprintf("%s:%s", ha1, fmt.Sprintf("%s:%08x:%s:%s:%s",
+			pairs["nonce"], nonceCount, pairs["cnonce"], pairs["qop"], ha2)))
+		return kd == pairs["response"]
+	}
+
+	// auth-int scenario
+	body, err := io.ReadAll(r.Body)
+	r.Body.Close()
+	assertError(t, err)
+	bodyHash := ""
+	if len(body) > 0 {
+		bodyHash = h(string(body))
+	}
+
+	ha2 = h(fmt.Sprintf("%s:%s:%s", r.Method, conf.uri, bodyHash))
+	kd := h(fmt.Sprintf("%s:%s", ha1, fmt.Sprintf("%s:%08x:%s:%s:%s",
+		pairs["nonce"], nonceCount, pairs["cnonce"], pairs["qop"], ha2)))
 	return kd == pairs["response"]
 }
 

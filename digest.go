@@ -8,156 +8,108 @@
 package resty
 
 import (
+	"bytes"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
 var (
-	ErrDigestBadChallenge    = errors.New("digest: challenge is bad")
-	ErrDigestCharset         = errors.New("digest: unsupported charset")
-	ErrDigestAlgNotSupported = errors.New("digest: algorithm is not supported")
-	ErrDigestQopNotSupported = errors.New("digest: no supported qop in list")
-	ErrDigestNoQop           = errors.New("digest: qop must be specified")
+	ErrDigestBadChallenge    = errors.New("resty: digest: challenge is bad")
+	ErrDigestInvalidCharset  = errors.New("resty: digest: invalid charset")
+	ErrDigestAlgNotSupported = errors.New("resty: digest: algorithm is not supported")
+	ErrDigestQopNotSupported = errors.New("resty: digest: qop is not supported")
 )
 
-var hashFuncs = map[string]func() hash.Hash{
+// Reference: https://datatracker.ietf.org/doc/html/rfc7616#section-6.1
+var digestHashFuncs = map[string]func() hash.Hash{
 	"":                 md5.New,
 	"MD5":              md5.New,
 	"MD5-sess":         md5.New,
 	"SHA-256":          sha256.New,
 	"SHA-256-sess":     sha256.New,
-	"SHA-512-256":      sha512.New,
-	"SHA-512-256-sess": sha512.New,
+	"SHA-512":          sha512.New,
+	"SHA-512-sess":     sha512.New,
+	"SHA-512-256":      sha512.New512_256,
+	"SHA-512-256-sess": sha512.New512_256,
 }
 
+const (
+	qopAuth    = "auth"
+	qopAuthInt = "auth-int"
+)
+
 type digestTransport struct {
-	credentials
+	*credentials
 	transport http.RoundTripper
 }
 
 func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Copy the request, so we don't modify the input.
-	req2 := new(http.Request)
-	*req2 = *req
-	req2.Header = make(http.Header)
-	for k, s := range req.Header {
-		req2.Header[k] = s
+	// first request without body for all HTTP verbs
+	req1 := dt.cloneReq(req, true)
+
+	// make a request to get the 401 that contains the challenge.
+	res, err := dt.transport.RoundTrip(req1)
+	if err != nil || res.StatusCode != http.StatusUnauthorized {
+		return res, err
+	}
+	_, _ = ioCopy(io.Discard, res.Body)
+	closeq(res.Body)
+
+	chaHdrValue := strings.TrimSpace(res.Header.Get(hdrWwwAuthenticateKey))
+	if chaHdrValue == "" {
+		return res, ErrDigestBadChallenge
 	}
 
-	// Fix http: ContentLength=xxx with Body length 0
-	if req2.Body == nil {
-		req2.ContentLength = 0
-	} else if req2.GetBody != nil {
-		var err error
-		req2.Body, err = req2.GetBody()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Make a request to get the 401 that contains the challenge.
-	resp, err := dt.transport.RoundTrip(req)
-	if err != nil || resp.StatusCode != http.StatusUnauthorized {
-		return resp, err
-	}
-	chal := resp.Header.Get(hdrWwwAuthenticateKey)
-	if chal == "" {
-		return resp, ErrDigestBadChallenge
-	}
-
-	c, err := parseChallenge(chal)
-	if err != nil {
-		return resp, err
-	}
-
-	// Form credentials based on the challenge
-	cr := dt.newCredentials(req2, c)
-	auth, err := cr.authorize()
-	if err != nil {
-		return resp, err
-	}
-	err = resp.Body.Close()
+	cha, err := dt.parseChallenge(chaHdrValue)
 	if err != nil {
 		return nil, err
 	}
 
-	// Make authenticated request
+	// prepare second request
+	req2 := dt.cloneReq(req, false)
+	cred, err := dt.createCredentials(cha, req2)
+	if err != nil {
+		return nil, err
+	}
+
+	auth, err := cred.digest(cha)
+	if err != nil {
+		return nil, err
+	}
+
 	req2.Header.Set(hdrAuthorizationKey, auth)
 	return dt.transport.RoundTrip(req2)
 }
 
-func (dt *digestTransport) newCredentials(req *http.Request, c *challenge) *digestCredentials {
-	return &digestCredentials{
-		username:   dt.Username,
-		userhash:   c.userhash,
-		realm:      c.realm,
-		nonce:      c.nonce,
-		digestURI:  req.URL.RequestURI(),
-		algorithm:  c.algorithm,
-		sessionAlg: strings.HasSuffix(c.algorithm, "-sess"),
-		opaque:     c.opaque,
-		messageQop: c.qop,
-		nc:         0,
-		method:     req.Method,
-		password:   dt.Password,
+func (dt *digestTransport) cloneReq(r *http.Request, first bool) *http.Request {
+	r1 := r.Clone(r.Context())
+	if first {
+		r1.Body = http.NoBody
+		r1.ContentLength = 0
+		r1.GetBody = nil
 	}
+	return r1
 }
 
-type challenge struct {
-	realm     string
-	domain    string
-	nonce     string
-	opaque    string
-	stale     string
-	algorithm string
-	qop       string
-	userhash  string
-}
-
-func (c *challenge) setValue(k, v string) error {
-	switch k {
-	case "realm":
-		c.realm = v
-	case "domain":
-		c.domain = v
-	case "nonce":
-		c.nonce = v
-	case "opaque":
-		c.opaque = v
-	case "stale":
-		c.stale = v
-	case "algorithm":
-		c.algorithm = v
-	case "qop":
-		c.qop = v
-	case "charset":
-		if strings.ToUpper(v) != "UTF-8" {
-			return ErrDigestCharset
-		}
-	case "userhash":
-		c.userhash = v
-	default:
-		return ErrDigestBadChallenge
-	}
-	return nil
-}
-
-func parseChallenge(input string) (*challenge, error) {
+func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error) {
 	const ws = " \n\r\t"
 	s := strings.Trim(input, ws)
 	if !strings.HasPrefix(s, "Digest ") {
 		return nil, ErrDigestBadChallenge
 	}
+
 	s = strings.Trim(s[7:], ws)
-	c := &challenge{}
+	c := &digestChallenge{}
 	b := strings.Builder{}
 	key := ""
 	quoted := false
@@ -187,137 +139,260 @@ func parseChallenge(input string) (*challenge, error) {
 			b.WriteRune(r)
 		}
 	}
+
+	key = strings.TrimSpace(key)
 	if quoted || (key == "" && b.Len() > 0) {
 		return nil, ErrDigestBadChallenge
 	}
+
 	if key != "" {
 		val := strings.Trim(b.String(), ws)
 		if err := c.setValue(key, val); err != nil {
 			return nil, err
 		}
 	}
+
 	return c, nil
 }
 
-type digestCredentials struct {
-	username   string
-	userhash   string
-	realm      string
-	nonce      string
-	digestURI  string
-	algorithm  string
-	sessionAlg bool
-	cNonce     string
-	opaque     string
-	messageQop string
-	nc         int
-	method     string
-	password   string
-}
-
-func (c *digestCredentials) authorize() (string, error) {
-	if _, ok := hashFuncs[c.algorithm]; !ok {
-		return "", ErrDigestAlgNotSupported
+func (dt *digestTransport) createCredentials(cha *digestChallenge, req *http.Request) (*digestCredentials, error) {
+	cred := &digestCredentials{
+		username:      dt.Username,
+		password:      dt.Password,
+		uri:           req.URL.RequestURI(),
+		method:        req.Method,
+		realm:         cha.realm,
+		nonce:         cha.nonce,
+		nc:            cha.nc,
+		algorithm:     cha.algorithm,
+		sessAlgorithm: strings.HasSuffix(cha.algorithm, "-sess"),
+		opaque:        cha.opaque,
+		userHash:      cha.userHash,
 	}
 
-	if err := c.validateQop(); err != nil {
-		return "", err
-	}
-
-	resp, err := c.resp()
-	if err != nil {
-		return "", err
-	}
-
-	sl := make([]string, 0, 10)
-	if c.userhash == "true" {
-		// RFC 7616 3.4.4
-		c.username = c.h(fmt.Sprintf("%s:%s", c.username, c.realm))
-		sl = append(sl, fmt.Sprintf(`userhash=%s`, c.userhash))
-	}
-	sl = append(sl, fmt.Sprintf(`username="%s"`, c.username))
-	sl = append(sl, fmt.Sprintf(`realm="%s"`, c.realm))
-	sl = append(sl, fmt.Sprintf(`nonce="%s"`, c.nonce))
-	sl = append(sl, fmt.Sprintf(`uri="%s"`, c.digestURI))
-	sl = append(sl, fmt.Sprintf(`response="%s"`, resp))
-	sl = append(sl, fmt.Sprintf(`algorithm=%s`, c.algorithm))
-	if c.opaque != "" {
-		sl = append(sl, fmt.Sprintf(`opaque="%s"`, c.opaque))
-	}
-	if c.messageQop != "" {
-		sl = append(sl, fmt.Sprintf("qop=%s", c.messageQop))
-		sl = append(sl, fmt.Sprintf("nc=%08x", c.nc))
-		sl = append(sl, fmt.Sprintf(`cnonce="%s"`, c.cNonce))
-	}
-
-	return fmt.Sprintf("Digest %s", strings.Join(sl, ", ")), nil
-}
-
-func (c *digestCredentials) validateQop() error {
-	// Currently only supporting auth quality of protection. TODO: add auth-int support
-	// NOTE: cURL support auth-int qop for requests other than POST and PUT (i.e. w/o body) by hashing an empty string
-	// is this applicable for resty? see: https://github.com/curl/curl/blob/307b7543ea1e73ab04e062bdbe4b5bb409eaba3a/lib/vauth/digest.c#L774
-	if c.messageQop == "" {
-		return ErrDigestNoQop
-	}
-	possibleQops := strings.Split(c.messageQop, ",")
-	var authSupport bool
-	for _, qop := range possibleQops {
-		qop = strings.TrimSpace(qop)
-		if qop == "auth" {
-			authSupport = true
-			break
+	if cha.isQopSupported(qopAuthInt) {
+		if err := dt.prepareBody(req); err != nil {
+			return nil, fmt.Errorf("resty: digest: failed to prepare body for auth-int: %w", err)
+		}
+		body, err := req.GetBody()
+		if err != nil {
+			return nil, fmt.Errorf("resty: digest: failed to get body for auth-int: %w", err)
+		}
+		if body != http.NoBody {
+			defer closeq(body)
+			h := newHashFunc(cha.algorithm)
+			if _, err := ioCopy(h, body); err != nil {
+				return nil, err
+			}
+			cred.bodyHash = hex.EncodeToString(h.Sum(nil))
 		}
 	}
-	if !authSupport {
-		return ErrDigestQopNotSupported
+
+	return cred, nil
+}
+
+func (dt *digestTransport) prepareBody(req *http.Request) error {
+	if req.GetBody != nil {
+		return nil
 	}
 
-	c.messageQop = "auth"
+	if req.Body == nil || req.Body == http.NoBody {
+		req.GetBody = func() (io.ReadCloser, error) {
+			return http.NoBody, nil
+		}
+		return nil
+	}
+
+	b, err := ioReadAll(req.Body)
+	if err != nil {
+		return err
+	}
+	closeq(req.Body)
+	req.Body = io.NopCloser(bytes.NewReader(b))
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(b)), nil
+	}
 
 	return nil
 }
 
-func (c *digestCredentials) h(data string) string {
-	hfCtor := hashFuncs[c.algorithm]
-	hf := hfCtor()
-	_, _ = hf.Write([]byte(data)) // Hash.Write never returns an error
-	return fmt.Sprintf("%x", hf.Sum(nil))
+type digestChallenge struct {
+	realm     string
+	domain    string
+	nonce     string
+	opaque    string
+	stale     string
+	algorithm string
+	qop       []string
+	nc        int
+	userHash  string
 }
 
-func (c *digestCredentials) resp() (string, error) {
-	c.nc++
+func (dc *digestChallenge) isQopSupported(qop string) bool {
+	for _, v := range dc.qop {
+		if v == qop {
+			return true
+		}
+	}
+	return false
+}
 
-	b := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, b)
-	if err != nil {
+func (dc *digestChallenge) setValue(k, v string) error {
+	switch k {
+	case "realm":
+		dc.realm = v
+	case "domain":
+		dc.domain = v
+	case "nonce":
+		dc.nonce = v
+	case "opaque":
+		dc.opaque = v
+	case "stale":
+		dc.stale = v
+	case "algorithm":
+		dc.algorithm = v
+	case "qop":
+		if !isStringEmpty(v) {
+			dc.qop = strings.Split(v, ",")
+		}
+	case "charset":
+		if strings.ToUpper(v) != "UTF-8" {
+			return ErrDigestInvalidCharset
+		}
+	case "nc":
+		nc, err := strconv.ParseInt(v, 16, 32)
+		if err != nil {
+			return fmt.Errorf("resty: digest: invalid nc: %w", err)
+		}
+		dc.nc = int(nc)
+	case "userhash":
+		dc.userHash = v
+	default:
+		return ErrDigestBadChallenge
+	}
+	return nil
+}
+
+type digestCredentials struct {
+	username      string
+	password      string
+	userHash      string
+	method        string
+	uri           string
+	realm         string
+	nonce         string
+	algorithm     string
+	sessAlgorithm bool
+	cnonce        string
+	opaque        string
+	qop           string
+	nc            int
+	response      string
+	bodyHash      string
+}
+
+func (dc *digestCredentials) parseQop(cha *digestChallenge) error {
+	if len(cha.qop) == 0 {
+		return nil
+	}
+
+	if cha.isQopSupported(qopAuth) {
+		dc.qop = qopAuth
+		return nil
+	}
+
+	if cha.isQopSupported(qopAuthInt) {
+		dc.qop = qopAuthInt
+		return nil
+	}
+
+	return ErrDigestQopNotSupported
+}
+
+func (dc *digestCredentials) h(data string) string {
+	h := newHashFunc(dc.algorithm)
+	_, _ = h.Write([]byte(data))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (dc *digestCredentials) digest(cha *digestChallenge) (string, error) {
+	if _, ok := digestHashFuncs[dc.algorithm]; !ok {
+		return "", ErrDigestAlgNotSupported
+	}
+
+	if err := dc.parseQop(cha); err != nil {
 		return "", err
 	}
-	c.cNonce = fmt.Sprintf("%x", b)[:32]
 
-	ha1 := c.ha1()
-	ha2 := c.ha2()
+	dc.nc++
 
-	return c.kd(ha1, fmt.Sprintf("%s:%08x:%s:%s:%s",
-		c.nonce, c.nc, c.cNonce, c.messageQop, ha2)), nil
-}
+	b := make([]byte, 16)
+	_, _ = io.ReadFull(rand.Reader, b)
+	dc.cnonce = hex.EncodeToString(b)
 
-func (c *digestCredentials) kd(secret, data string) string {
-	return c.h(fmt.Sprintf("%s:%s", secret, data))
-}
+	ha1 := dc.ha1()
+	ha2 := dc.ha2()
 
-// RFC 7616 3.4.2
-func (c *digestCredentials) ha1() string {
-	ret := c.h(fmt.Sprintf("%s:%s:%s", c.username, c.realm, c.password))
-	if c.sessionAlg {
-		return c.h(fmt.Sprintf("%s:%s:%s", ret, c.nonce, c.cNonce))
+	var resp string
+	switch dc.qop {
+	case "":
+		resp = fmt.Sprintf("%s:%s:%s", ha1, dc.nonce, ha2)
+	case qopAuth, qopAuthInt:
+		resp = fmt.Sprintf("%s:%s:%08x:%s:%s:%s",
+			ha1, dc.nonce, dc.nc, dc.cnonce, dc.qop, ha2)
 	}
+	dc.response = dc.h(resp)
 
-	return ret
+	return "Digest " + dc.String(), nil
 }
 
-// RFC 7616 3.4.3
-func (c *digestCredentials) ha2() string {
-	// currently no auth-int support
-	return c.h(fmt.Sprintf("%s:%s", c.method, c.digestURI))
+// https://datatracker.ietf.org/doc/html/rfc7616#section-3.4.2
+func (dc *digestCredentials) ha1() string {
+	a1 := dc.h(fmt.Sprintf("%s:%s:%s", dc.username, dc.realm, dc.password))
+	if dc.sessAlgorithm {
+		return dc.h(fmt.Sprintf("%s:%s:%s", a1, dc.nonce, dc.cnonce))
+	}
+	return a1
+}
+
+// https://datatracker.ietf.org/doc/html/rfc7616#section-3.4.3
+func (dc *digestCredentials) ha2() string {
+	if dc.qop == qopAuthInt {
+		return dc.h(fmt.Sprintf("%s:%s:%s", dc.method, dc.uri, dc.bodyHash))
+	}
+	return dc.h(fmt.Sprintf("%s:%s", dc.method, dc.uri))
+}
+
+func (dc *digestCredentials) String() string {
+	sl := make([]string, 0, 10)
+	// https://datatracker.ietf.org/doc/html/rfc7616#section-3.4.4
+	if dc.userHash == "true" {
+		dc.username = dc.h(fmt.Sprintf("%s:%s", dc.username, dc.realm))
+	}
+	sl = append(sl, fmt.Sprintf(`username="%s"`, dc.username))
+	sl = append(sl, fmt.Sprintf(`realm="%s"`, dc.realm))
+	sl = append(sl, fmt.Sprintf(`nonce="%s"`, dc.nonce))
+	sl = append(sl, fmt.Sprintf(`uri="%s"`, dc.uri))
+	if dc.algorithm != "" {
+		sl = append(sl, fmt.Sprintf(`algorithm=%s`, dc.algorithm))
+	}
+	if dc.opaque != "" {
+		sl = append(sl, fmt.Sprintf(`opaque="%s"`, dc.opaque))
+	}
+	if dc.qop != "" {
+		sl = append(sl, fmt.Sprintf("qop=%s", dc.qop))
+		sl = append(sl, fmt.Sprintf("nc=%08x", dc.nc))
+		sl = append(sl, fmt.Sprintf(`cnonce="%s"`, dc.cnonce))
+	}
+	sl = append(sl, fmt.Sprintf(`userhash=%s`, dc.userHash))
+	sl = append(sl, fmt.Sprintf(`response="%s"`, dc.response))
+
+	return strings.Join(sl, ", ")
+}
+
+func newHashFunc(algorithm string) hash.Hash {
+	hf := digestHashFuncs[algorithm]
+	h := hf()
+	h.Reset()
+	return h
 }
