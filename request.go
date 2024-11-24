@@ -661,36 +661,6 @@ func (r *Request) SetAuthScheme(scheme string) *Request {
 	return r
 }
 
-// SetDigestAuth method sets the Digest Access auth scheme for the HTTP request.
-// If a server responds with 401 and sends a Digest challenge in the WWW-Authenticate Header,
-// the request will be resent with the appropriate Authorization Header.
-//
-// For Example: To set the Digest scheme with username "Mufasa" and password "Circle Of Life"
-//
-//	client.R().SetDigestAuth("Mufasa", "Circle Of Life")
-//
-// Information about Digest Access Authentication can be found in [RFC 7616]
-//
-// It overrides the digest username and password set by method [Client.SetDigestAuth].
-//
-// [RFC 7616]: https://datatracker.ietf.org/doc/html/rfc7616
-func (r *Request) SetDigestAuth(username, password string) *Request {
-	oldTransport := r.client.httpClient.Transport
-	r.client.AddRequestMiddleware(func(c *Client, _ *Request) error {
-		c.httpClient.Transport = &digestTransport{
-			credentials: credentials{username, password},
-			transport:   oldTransport,
-		}
-		return nil
-	})
-	r.client.AddResponseMiddleware(func(c *Client, _ *Response) error {
-		c.httpClient.Transport = oldTransport
-		return nil
-	})
-
-	return r
-}
-
 // SetOutputFile method sets the output file for the current HTTP request. The current
 // HTTP response will be saved in the given file. It is similar to the `curl -o` flag.
 //

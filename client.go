@@ -575,8 +575,9 @@ func (c *Client) SetAuthScheme(scheme string) *Client {
 	return c
 }
 
-// SetDigestAuth method sets the Digest Access auth scheme for the client. If a server responds with 401 and sends
-// a Digest challenge in the WWW-Authenticate header, requests will be resent with the appropriate Authorization header.
+// SetDigestAuth method sets the Digest Auth transport with provided credentials in the client.
+// If a server responds with 401 and sends a Digest challenge in the header `WWW-Authenticate`,
+// the request will be resent with the appropriate digest `Authorization` header.
 //
 // For Example: To set the Digest scheme with user "Mufasa" and password "Circle Of Life"
 //
@@ -584,24 +585,19 @@ func (c *Client) SetAuthScheme(scheme string) *Client {
 //
 // Information about Digest Access Authentication can be found in [RFC 7616].
 //
-// See [Request.SetDigestAuth].
+// NOTE:
+//   - On the QOP `auth-int` scenario, the request body is read into memory to
+//     compute the body hash that consumes additional memory usage.
+//   - It is recommended to create a dedicated client instance for digest auth,
+//     as it does digest auth for all the requests raised by the client.
 //
 // [RFC 7616]: https://datatracker.ietf.org/doc/html/rfc7616
 func (c *Client) SetDigestAuth(username, password string) *Client {
-	c.lock.Lock()
-	oldTransport := c.httpClient.Transport
-	c.lock.Unlock()
-	c.AddRequestMiddleware(func(c *Client, _ *Request) error {
-		c.httpClient.Transport = &digestTransport{
-			credentials: credentials{username, password},
-			transport:   oldTransport,
-		}
-		return nil
-	})
-	c.AddResponseMiddleware(func(c *Client, _ *Response) error {
-		c.httpClient.Transport = oldTransport
-		return nil
-	})
+	dt := &digestTransport{
+		credentials: &credentials{username, password},
+		transport:   c.Transport(),
+	}
+	c.SetTransport(dt)
 	return c
 }
 
