@@ -2110,6 +2110,47 @@ func TestRequestNoRetryOnNonIdempotentMethod(t *testing.T) {
 	assertEqual(t, 500, resp.StatusCode())
 }
 
+func TestRequestContextTimeout(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	t.Run("use client set timeout", func(t *testing.T) {
+		c := dcnl().SetTimeout(200 * time.Millisecond)
+		assertEqual(t, true, c.Timeout() > 0)
+
+		req := c.R()
+		assertEqual(t, true, req.Timeout > 0)
+
+		_, err := req.Get(ts.URL + "/set-timeout-test")
+
+		assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+	})
+
+	t.Run("use request set timeout", func(t *testing.T) {
+		c := dcnl()
+		assertEqual(t, true, c.Timeout() == 0)
+
+		_, err := c.R().
+			SetTimeout(200 * time.Millisecond).
+			Get(ts.URL + "/set-timeout-test")
+
+		assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+	})
+
+	t.Run("use external context for timeout", func(t *testing.T) {
+		ctx, ctxCancelFunc := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer ctxCancelFunc()
+
+		c := dcnl()
+		_, err := c.R().
+			SetContext(ctx).
+			Get(ts.URL + "/set-timeout-test")
+
+		assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+	})
+
+}
+
 func TestRequestPanicContext(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {

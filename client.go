@@ -183,6 +183,7 @@ type Client struct {
 	disableWarn              bool
 	allowMethodGetPayload    bool
 	allowMethodDeletePayload bool
+	timeout                  time.Duration
 	retryCount               int
 	retryWaitTime            time.Duration
 	retryMaxWaitTime         time.Duration
@@ -612,6 +613,7 @@ func (c *Client) R() *Request {
 		Cookies:                    make([]*http.Cookie, 0),
 		PathParams:                 make(map[string]string),
 		RawPathParams:              make(map[string]string),
+		Timeout:                    c.timeout,
 		Debug:                      c.debug,
 		IsTrace:                    c.isTrace,
 		AuthScheme:                 c.authScheme,
@@ -1122,13 +1124,24 @@ func (c *Client) SetContentLength(l bool) *Client {
 	return c
 }
 
-// SetTimeout method sets the timeout for a request raised by the client.
+// Timeout method returns the timeout duration value from the client
+func (c *Client) Timeout() time.Duration {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.timeout
+}
+
+// SetTimeout method is used to set a timeout for a request raised by the client.
 //
-//	client.SetTimeout(time.Duration(1 * time.Minute))
+//	client.SetTimeout(1 * time.Minute)
+//
+// It can be overridden at the request level. See [Request.SetTimeout]
+//
+// NOTE: Resty uses [context.WithTimeout] on the request, it does not use [http.Client.Timeout]
 func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.httpClient.Timeout = timeout
+	c.timeout = timeout
 	return c
 }
 
@@ -2077,7 +2090,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	requestDebugLogger(c, req)
 
 	req.Time = time.Now()
-	resp, err := c.Client().Do(req.RawRequest)
+	resp, err := c.Client().Do(req.withTimeout())
 
 	response := &Response{Request: req, RawResponse: resp}
 	response.setReceivedAt()

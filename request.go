@@ -61,6 +61,7 @@ type Request struct {
 	AllowMethodGetPayload      bool
 	AllowMethodDeletePayload   bool
 	IsDone                     bool
+	Timeout                    time.Duration
 	RetryCount                 int
 	RetryWaitTime              time.Duration
 	RetryMaxWaitTime           time.Duration
@@ -84,6 +85,7 @@ type Request struct {
 	isSaveResponse      bool
 	jsonEscapeHTML      bool
 	ctx                 context.Context
+	ctxCancelFunc       context.CancelFunc
 	values              map[string]any
 	client              *Client
 	bodyBuf             *bytes.Buffer
@@ -894,6 +896,18 @@ func (r *Request) SetCookies(rs []*http.Cookie) *Request {
 	return r
 }
 
+// SetTimeout method is used to set a timeout for the current request
+//
+//	client.R().SetTimeout(1 * time.Minute)
+//
+// It overrides the timeout set at the client instance level, See [Client.SetTimeout]
+//
+// NOTE: Resty uses [context.WithTimeout] on the request, it does not use [http.Client.Timeout]
+func (r *Request) SetTimeout(timeout time.Duration) *Request {
+	r.Timeout = timeout
+	return r
+}
+
 // SetLogger method sets given writer for logging Resty request and response details.
 // By default, requests and responses inherit their logger from the client.
 //
@@ -1273,8 +1287,14 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 				break
 			}
 			if r.Context().Err() != nil {
-				err = wrapErrors(r.Context().Err(), err)
-				break
+				if r.ctxCancelFunc != nil {
+					r.ctxCancelFunc()
+					r.ctxCancelFunc = nil
+				}
+				if !errors.Is(err, context.DeadlineExceeded) {
+					err = wrapErrors(r.Context().Err(), err)
+					break
+				}
 			}
 		}
 
@@ -1425,6 +1445,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.initTraceIfEnabled()
 	r.values = make(map[string]any)
 	r.multipartErrChan = nil
+	r.ctxCancelFunc = nil
 
 	// copy bodyBuf
 	if r.bodyBuf != nil {
@@ -1632,6 +1653,18 @@ var idempotentMethods = map[string]struct{}{
 func (r *Request) isIdempotent() bool {
 	_, found := idempotentMethods[r.Method]
 	return found || r.AllowNonIdempotentRetry
+}
+
+func (r *Request) withTimeout() *http.Request {
+	if _, found := r.Context().Deadline(); found {
+		return r.RawRequest
+	}
+	if r.Timeout > 0 {
+		ctx, ctxCancelFunc := context.WithTimeout(r.Context(), r.Timeout)
+		r.ctxCancelFunc = ctxCancelFunc
+		return r.RawRequest.WithContext(ctx)
+	}
+	return r.RawRequest
 }
 
 func jsonIndent(v []byte) []byte {
