@@ -85,12 +85,12 @@ func TestConditionalGetRequestLevel(t *testing.T) {
 	logResponse(t, resp)
 }
 
-func TestClientRetryGet(t *testing.T) {
+func TestClientRetryGetWithTimeout(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
 	c := dcnl().
-		SetTimeout(time.Millisecond * 50).
+		SetTimeout(50 * time.Millisecond).
 		SetRetryCount(3)
 
 	resp, err := c.R().Get(ts.URL + "/set-retrycount-test")
@@ -99,9 +99,7 @@ func TestClientRetryGet(t *testing.T) {
 	assertEqual(t, 0, resp.StatusCode())
 	assertEqual(t, 0, len(resp.Cookies()))
 	assertEqual(t, 0, len(resp.Header()))
-
-	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
-		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\""))
+	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
 }
 
 func TestClientRetryWithMinAndMaxWaitTime(t *testing.T) {
@@ -561,7 +559,7 @@ func TestClientRetryCountWithTimeout(t *testing.T) {
 	attempt := 0
 
 	c := dcnl().
-		SetTimeout(time.Millisecond * 50).
+		SetTimeout(50 * time.Millisecond).
 		SetRetryCount(1).
 		AddRetryCondition(
 			func(r *Response, _ error) bool {
@@ -576,12 +574,8 @@ func TestClientRetryCountWithTimeout(t *testing.T) {
 	assertEqual(t, 0, resp.StatusCode())
 	assertEqual(t, 0, len(resp.Cookies()))
 	assertEqual(t, 0, len(resp.Header()))
-
-	// 2 attempts were made
 	assertEqual(t, 2, resp.Request.Attempt)
-
-	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
-		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\""))
+	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
 }
 
 func TestClientRetryTooManyRequestsAndRecover(t *testing.T) {
@@ -596,6 +590,7 @@ func TestClientRetryTooManyRequestsAndRecover(t *testing.T) {
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetJSONEscapeHTML(false).
 		SetResult(AuthSuccess{}).
+		SetTimeout(10 * time.Millisecond).
 		Get(ts.URL + "/set-retry-error-recover")
 
 	assertError(t, err)
@@ -608,7 +603,7 @@ func TestClientRetryTooManyRequestsAndRecover(t *testing.T) {
 	assertNil(t, resp.Error())
 }
 
-func TestClientRetryHook(t *testing.T) {
+func TestClientRetryHookWithTimeout(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -641,9 +636,7 @@ func TestClientRetryHook(t *testing.T) {
 
 	assertEqual(t, retryCount+1, resp.Request.Attempt)
 	assertEqual(t, 3, hookCalledCount)
-
-	assertEqual(t, true, strings.HasPrefix(err.Error(), "Get "+ts.URL+"/set-retrycount-test") ||
-		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/set-retrycount-test\""))
+	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
 }
 
 var errSeekFailure = fmt.Errorf("failing seek test")

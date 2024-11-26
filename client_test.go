@@ -135,10 +135,9 @@ func TestClientTimeout(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dcnl().SetTimeout(time.Millisecond * 200)
+	c := dcnl().SetTimeout(200 * time.Millisecond)
 	_, err := c.R().Get(ts.URL + "/set-timeout-test")
-
-	assertEqual(t, true, strings.Contains(err.Error(), "Client.Timeout"))
+	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
 }
 
 func TestClientTimeoutWithinThreshold(t *testing.T) {

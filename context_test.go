@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -212,8 +211,7 @@ func TestClientRetryWithSetContext(t *testing.T) {
 
 	assertNotNil(t, ts)
 	assertNotNil(t, err)
-	assertEqual(t, true, (strings.HasPrefix(err.Error(), "Get "+ts.URL+"/") ||
-		strings.HasPrefix(err.Error(), "Get \""+ts.URL+"/\"")))
+	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
 }
 
 func TestRequestContext(t *testing.T) {
