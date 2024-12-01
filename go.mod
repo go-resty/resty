@@ -1,4 +1,4 @@
-module github.com/go-resty/resty/v3
+module resty.dev/v3
 
 go 1.21
 
