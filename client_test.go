@@ -886,7 +886,7 @@ func TestClientLogCallbacks(t *testing.T) {
 	assertNil(t, err)
 	assertNotNil(t, resp)
 	assertEqual(t, int64(50), resp.Size())
-	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-request-debug-log callback from=github.com/go-resty/resty/v3.TestClientLogCallbacks.func1 to=github.com/go-resty/resty/v3.TestClientLogCallbacks.func3"))
+	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-request-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func1 to=resty.dev/v3.TestClientLogCallbacks.func3"))
 
 	c.OnRequestDebugLog(nil)
 	c.OnResponseDebugLog(func(r *DebugLog) {
@@ -898,7 +898,7 @@ func TestClientLogCallbacks(t *testing.T) {
 	assertNil(t, err)
 	assertNotNil(t, resp)
 	assertEqual(t, int64(50), resp.Size())
-	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-response-debug-log callback from=github.com/go-resty/resty/v3.TestClientLogCallbacks.func2 to=github.com/go-resty/resty/v3.TestClientLogCallbacks.func4"))
+	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-response-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func2 to=resty.dev/v3.TestClientLogCallbacks.func4"))
 }
 
 func TestDebugLogSimultaneously(t *testing.T) {
