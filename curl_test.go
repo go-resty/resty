@@ -198,7 +198,7 @@ func TestCurl_buildCurlCmd(t *testing.T) {
 				req.SetHeader(k, v)
 			}
 
-			err := createHTTPRequest(c, req)
+			err := createRawRequest(c, req)
 			assertNil(t, err)
 
 			if len(tt.cookies) > 0 {
@@ -249,7 +249,20 @@ func TestCurlRequestGetBodyError(t *testing.T) {
 	} else {
 		t.Log("curlCmdUnexecuted: \n", curlCmdUnexecuted)
 	}
+}
 
+func TestCurlRequestMiddlewaresError(t *testing.T) {
+	errMsg := "middleware error"
+	c := dcnl().EnableDebug().
+		SetRequestMiddlewares(
+			func(c *Client, r *Request) error {
+				return errors.New(errMsg)
+			},
+			PrepareRequestMiddleware,
+		)
+
+	curlCmdUnexecuted := c.R().EnableGenerateCurlOnDebug().GenerateCurlCommand()
+	assertEqual(t, "", curlCmdUnexecuted)
 }
 
 func TestCurlMiscTestCoverage(t *testing.T) {

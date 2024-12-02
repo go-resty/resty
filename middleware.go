@@ -11,6 +11,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"path/filepath"
 	"reflect"
@@ -26,9 +27,7 @@ const debugRequestLogKey = "__restyDebugRequestLog"
 
 // PrepareRequestMiddleware method is used to prepare HTTP requests from
 // user provides request values. Request preparation fails if any error occurs
-func PrepareRequestMiddleware(c *Client, r *Request) error {
-	var err error
-
+func PrepareRequestMiddleware(c *Client, r *Request) (err error) {
 	if err = parseRequestURL(c, r); err != nil {
 		return err
 	}
@@ -40,9 +39,9 @@ func PrepareRequestMiddleware(c *Client, r *Request) error {
 		return err
 	}
 
-	if err = createHTTPRequest(c, r); err != nil {
-		return err
-	}
+	// at this point, possible error from `http.NewRequestWithContext`
+	// is URL-related, and those get caught up in the `parseRequestURL`
+	createRawRequest(c, r)
 
 	// last one doesn't need if condition
 	return addCredentials(c, r)
@@ -62,76 +61,58 @@ func GenerateCurlRequestMiddleware(c *Client, r *Request) (err error) {
 }
 
 func parseRequestURL(c *Client, r *Request) error {
-	if l := len(c.PathParams()) + len(c.RawPathParams()) + len(r.PathParams) + len(r.RawPathParams); l > 0 {
-		params := make(map[string]string, l)
-
-		// GitHub #103 Path Params
-		for p, v := range r.PathParams {
-			params[p] = url.PathEscape(v)
-		}
+	if len(c.PathParams())+len(r.PathParams) > 0 {
+		// GitHub #103 Path Params, #663 Raw Path Params
 		for p, v := range c.PathParams() {
-			if _, ok := params[p]; !ok {
-				params[p] = url.PathEscape(v)
+			if _, ok := r.PathParams[p]; ok {
+				continue
 			}
+			r.PathParams[p] = v
 		}
 
-		// GitHub #663 Raw Path Params
-		for p, v := range r.RawPathParams {
-			if _, ok := params[p]; !ok {
-				params[p] = v
+		var prev int
+		buf := acquireBuffer()
+		defer releaseBuffer(buf)
+		// search for the next or first opened curly bracket
+		for curr := strings.Index(r.URL, "{"); curr == 0 || curr > prev; curr = prev + strings.Index(r.URL[prev:], "{") {
+			// write everything from the previous position up to the current
+			if curr > prev {
+				buf.WriteString(r.URL[prev:curr])
+			}
+			// search for the closed curly bracket from current position
+			next := curr + strings.Index(r.URL[curr:], "}")
+			// if not found, then write the remainder and exit
+			if next < curr {
+				buf.WriteString(r.URL[curr:])
+				prev = len(r.URL)
+				break
+			}
+			// special case for {}, without parameter's name
+			if next == curr+1 {
+				buf.WriteString("{}")
+			} else {
+				// check for the replacement
+				key := r.URL[curr+1 : next]
+				value, ok := r.PathParams[key]
+				// keep the original string if the replacement not found
+				if !ok {
+					value = r.URL[curr : next+1]
+				}
+				buf.WriteString(value)
+			}
+
+			// set the previous position after the closed curly bracket
+			prev = next + 1
+			if prev >= len(r.URL) {
+				break
 			}
 		}
-		for p, v := range c.RawPathParams() {
-			if _, ok := params[p]; !ok {
-				params[p] = v
+		if buf.Len() > 0 {
+			// write remainder
+			if prev < len(r.URL) {
+				buf.WriteString(r.URL[prev:])
 			}
-		}
-
-		if len(params) > 0 {
-			var prev int
-			buf := acquireBuffer()
-			defer releaseBuffer(buf)
-			// search for the next or first opened curly bracket
-			for curr := strings.Index(r.URL, "{"); curr == 0 || curr > prev; curr = prev + strings.Index(r.URL[prev:], "{") {
-				// write everything from the previous position up to the current
-				if curr > prev {
-					buf.WriteString(r.URL[prev:curr])
-				}
-				// search for the closed curly bracket from current position
-				next := curr + strings.Index(r.URL[curr:], "}")
-				// if not found, then write the remainder and exit
-				if next < curr {
-					buf.WriteString(r.URL[curr:])
-					prev = len(r.URL)
-					break
-				}
-				// special case for {}, without parameter's name
-				if next == curr+1 {
-					buf.WriteString("{}")
-				} else {
-					// check for the replacement
-					key := r.URL[curr+1 : next]
-					value, ok := params[key]
-					/// keep the original string if the replacement not found
-					if !ok {
-						value = r.URL[curr : next+1]
-					}
-					buf.WriteString(value)
-				}
-
-				// set the previous position after the closed curly bracket
-				prev = next + 1
-				if prev >= len(r.URL) {
-					break
-				}
-			}
-			if buf.Len() > 0 {
-				// write remainder
-				if prev < len(r.URL) {
-					buf.WriteString(r.URL[prev:])
-				}
-				r.URL = buf.String()
-			}
+			r.URL = buf.String()
 		}
 	}
 
@@ -173,11 +154,9 @@ func parseRequestURL(c *Client, r *Request) error {
 	// Adding Query Param
 	if len(c.QueryParams())+len(r.QueryParams) > 0 {
 		for k, v := range c.QueryParams() {
-			// skip query parameter if it was set in request
 			if _, ok := r.QueryParams[k]; ok {
 				continue
 			}
-
 			r.QueryParams[k] = v[:]
 		}
 
@@ -185,12 +164,10 @@ func parseRequestURL(c *Client, r *Request) error {
 		// Since not feasible in `SetQuery*` resty methods, because
 		// standard package `url.Encode(...)` sorts the query params
 		// alphabetically
-		if len(r.QueryParams) > 0 {
-			if isStringEmpty(reqURL.RawQuery) {
-				reqURL.RawQuery = r.QueryParams.Encode()
-			} else {
-				reqURL.RawQuery = reqURL.RawQuery + "&" + r.QueryParams.Encode()
-			}
+		if isStringEmpty(reqURL.RawQuery) {
+			reqURL.RawQuery = r.QueryParams.Encode()
+		} else {
+			reqURL.RawQuery = reqURL.RawQuery + "&" + r.QueryParams.Encode()
 		}
 	}
 
@@ -221,7 +198,7 @@ func parseRequestHeader(c *Client, r *Request) error {
 	}
 
 	if !r.isHeaderExists(hdrAcceptEncodingKey) {
-		r.Header.Set(hdrAcceptEncodingKey, r.client.ContentDecompressorKeys())
+		r.Header.Set(hdrAcceptEncodingKey, r.client.ContentDecompresserKeys())
 	}
 
 	return nil
@@ -250,19 +227,21 @@ func parseRequestBody(c *Client, r *Request) error {
 		r.Body = nil // if the payload is not supported by HTTP verb, set explicit nil
 	}
 
-	// by default resty won't set content length, you can if you want to :)
+	// by default resty won't set content length, but user can opt-in
 	if r.setContentLength {
-		if r.bodyBuf == nil && r.Body == nil {
-			r.Header.Set(hdrContentLengthKey, "0")
-		} else if r.bodyBuf != nil {
-			r.Header.Set(hdrContentLengthKey, strconv.Itoa(r.bodyBuf.Len()))
+		cntLen := 0
+		if r.bodyBuf != nil {
+			cntLen = r.bodyBuf.Len()
+		} else if b, ok := r.Body.(*bytes.Reader); ok {
+			cntLen = b.Len()
 		}
+		r.Header.Set(hdrContentLengthKey, strconv.Itoa(cntLen))
 	}
 
 	return nil
 }
 
-func createHTTPRequest(c *Client, r *Request) (err error) {
+func createRawRequest(c *Client, r *Request) (err error) {
 	// init client trace if enabled
 	r.initTraceIfEnabled()
 
@@ -381,6 +360,10 @@ func handleMultipart(c *Client, r *Request) error {
 	return nil
 }
 
+var mpCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
+	return w.CreatePart(h)
+}
+
 func createMultipart(w *multipart.Writer, r *Request) error {
 	if err := r.writeFormData(w); err != nil {
 		return err
@@ -408,18 +391,15 @@ func createMultipart(w *multipart.Writer, r *Request) error {
 			mf.ContentType = http.DetectContentType(p[:size])
 		}
 
-		partWriter, err := w.CreatePart(mf.createHeader())
+		partWriter, err := mpCreatePart(w, mf.createHeader())
 		if err != nil {
 			return err
 		}
 
 		partWriter = mf.wrapProgressCallbackIfPresent(partWriter)
+		partWriter.Write(p[:size])
 
-		if _, err = partWriter.Write(p[:size]); err != nil {
-			return err
-		}
-		_, err = ioCopy(partWriter, mf.Reader)
-		if err != nil {
+		if _, err = ioCopy(partWriter, mf.Reader); err != nil {
 			return err
 		}
 	}
@@ -460,13 +440,10 @@ func handleRequestBody(c *Client, r *Request) error {
 		releaseBuffer(r.bodyBuf)
 		r.bodyBuf = nil
 
-		// enable multiple reads if retry enabled
-		// and body type is *bytes.Buffer
-		if r.RetryCount > 0 {
-			if b, ok := r.Body.(*bytes.Buffer); ok {
-				v := b.Bytes()
-				r.Body = bytes.NewReader(v)
-			}
+		// enable multiple reads if body is *bytes.Buffer
+		if b, ok := r.Body.(*bytes.Buffer); ok {
+			v := b.Bytes()
+			r.Body = bytes.NewReader(v)
 		}
 
 		// do seek start for retry attempt if io.ReadSeeker

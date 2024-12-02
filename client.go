@@ -58,7 +58,6 @@ var (
 	ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body kind")
 
 	hdrUserAgentKey       = http.CanonicalHeaderKey("User-Agent")
-	hdrAcceptKey          = http.CanonicalHeaderKey("Accept")
 	hdrAcceptEncodingKey  = http.CanonicalHeaderKey("Accept-Encoding")
 	hdrContentTypeKey     = http.CanonicalHeaderKey("Content-Type")
 	hdrContentLengthKey   = http.CanonicalHeaderKey("Content-Length")
@@ -172,7 +171,6 @@ type Client struct {
 	queryParams              url.Values
 	formData                 url.Values
 	pathParams               map[string]string
-	rawPathParams            map[string]string
 	header                   http.Header
 	credentials              *credentials
 	authToken                string
@@ -220,8 +218,8 @@ type Client struct {
 	successHooks             []SuccessHook
 	contentTypeEncoders      map[string]ContentTypeEncoder
 	contentTypeDecoders      map[string]ContentTypeDecoder
-	contentDecompressorKeys  []string
-	contentDecompressors     map[string]ContentDecompressor
+	contentDecompresserKeys  []string
+	contentDecompressers     map[string]ContentDecompresser
 	certWatcherStopChan      chan bool
 }
 
@@ -258,7 +256,7 @@ func (c *Client) SetBaseURL(url string) *Client {
 	return c
 }
 
-// LoadBalancer method returns the requestload balancer instance from the client
+// LoadBalancer method returns the request load balancer instance from the client
 // instance. Otherwise returns nil.
 func (c *Client) LoadBalancer() LoadBalancer {
 	c.lock.RLock()
@@ -281,17 +279,17 @@ func (c *Client) Header() http.Header {
 	return c.header
 }
 
-// SetHeader method sets a single header field and its value in the client instance.
-// These headers will be applied to all requests from this client instance.
+// SetHeader method sets a single header and its value in the client instance.
+// These headers will be applied to all requests raised from the client instance.
 // Also, it can be overridden by request-level header options.
-//
-// See [Request.SetHeader] or [Request.SetHeaders].
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`
 //
 //	client.
 //		SetHeader("Content-Type", "application/json").
 //		SetHeader("Accept", "application/json")
+//
+// See [Request.SetHeader] or [Request.SetHeaders].
 func (c *Client) SetHeader(header, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -299,11 +297,9 @@ func (c *Client) SetHeader(header, value string) *Client {
 	return c
 }
 
-// SetHeaders method sets multiple header fields and their values at one go in the client instance.
-// These headers will be applied to all requests from this client instance. Also, it can be
-// overridden at request level headers options.
-//
-// See [Request.SetHeaders] or [Request.SetHeader].
+// SetHeaders method sets multiple headers and their values at one go, and
+// these headers will be applied to all requests raised from the client instance.
+// Also, it can be overridden at request-level headers options.
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`
 //
@@ -311,6 +307,8 @@ func (c *Client) SetHeader(header, value string) *Client {
 //		"Content-Type": "application/json",
 //		"Accept": "application/json",
 //	})
+//
+// See [Request.SetHeaders] or [Request.SetHeader].
 func (c *Client) SetHeaders(headers map[string]string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -329,6 +327,8 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 //		SetHeaderVerbatim("all_lowercase", "available").
 //		SetHeaderVerbatim("UPPERCASE", "available").
 //		SetHeaderVerbatim("x-cloud-trace-id", "798e94019e5fc4d57fbb8901eb4c6cae")
+//
+// See [Request.SetHeaderVerbatim].
 func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -612,7 +612,6 @@ func (c *Client) R() *Request {
 		Header:                     http.Header{},
 		Cookies:                    make([]*http.Cookie, 0),
 		PathParams:                 make(map[string]string),
-		RawPathParams:              make(map[string]string),
 		Timeout:                    c.timeout,
 		Debug:                      c.debug,
 		IsTrace:                    c.isTrace,
@@ -885,49 +884,49 @@ func (c *Client) inferContentTypeDecoder(ct ...string) (ContentTypeDecoder, bool
 	return nil, false
 }
 
-// ContentDecompressors method returns all the registered content-encoding decompressors.
-func (c *Client) ContentDecompressors() map[string]ContentDecompressor {
+// ContentDecompressers method returns all the registered content-encoding Decompressers.
+func (c *Client) ContentDecompressers() map[string]ContentDecompresser {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.contentDecompressors
+	return c.contentDecompressers
 }
 
-// AddContentDecompressor method adds the user-provided Content-Encoding ([RFC 9110]) decompressor
+// AddContentDecompresser method adds the user-provided Content-Encoding ([RFC 9110]) Decompresser
 // and directive into a client.
 //
-// NOTE: It overwrites the decompressor function if the given Content-Encoding directive already exists.
+// NOTE: It overwrites the Decompresser function if the given Content-Encoding directive already exists.
 //
 // [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
-func (c *Client) AddContentDecompressor(k string, d ContentDecompressor) *Client {
+func (c *Client) AddContentDecompresser(k string, d ContentDecompresser) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if !slices.Contains(c.contentDecompressorKeys, k) {
-		c.contentDecompressorKeys = slices.Insert(c.contentDecompressorKeys, 0, k)
+	if !slices.Contains(c.contentDecompresserKeys, k) {
+		c.contentDecompresserKeys = slices.Insert(c.contentDecompresserKeys, 0, k)
 	}
-	c.contentDecompressors[k] = d
+	c.contentDecompressers[k] = d
 	return c
 }
 
-// ContentDecompressorKeys method returns all the registered content-encoding decompressors
+// ContentDecompresserKeys method returns all the registered content-encoding Decompressers
 // keys as comma-separated string.
-func (c *Client) ContentDecompressorKeys() string {
+func (c *Client) ContentDecompresserKeys() string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return strings.Join(c.contentDecompressorKeys, ", ")
+	return strings.Join(c.contentDecompresserKeys, ", ")
 }
 
-// SetContentDecompressorKeys method sets given Content-Encoding ([RFC 9110]) directives into the client instance.
+// SetContentDecompresserKeys method sets given Content-Encoding ([RFC 9110]) directives into the client instance.
 //
-// It checks the given Content-Encoding exists in the [ContentDecompressor] list before assigning it,
+// It checks the given Content-Encoding exists in the [ContentDecompresser] list before assigning it,
 // if it does not exist, it will skip that directive.
 //
-// Use this method to overwrite the default order. If a new content decompressor is added,
+// Use this method to overwrite the default order. If a new content Decompresser is added,
 // that directive will be the first.
 //
 // [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
-func (c *Client) SetContentDecompressorKeys(keys []string) *Client {
+func (c *Client) SetContentDecompresserKeys(keys []string) *Client {
 	result := make([]string, 0)
-	decoders := c.ContentDecompressors()
+	decoders := c.ContentDecompressers()
 	for _, k := range keys {
 		if _, f := decoders[k]; f {
 			result = append(result, k)
@@ -936,7 +935,7 @@ func (c *Client) SetContentDecompressorKeys(keys []string) *Client {
 
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.contentDecompressorKeys = result
+	c.contentDecompresserKeys = result
 	return c
 }
 
@@ -1379,9 +1378,7 @@ func (c *Client) AddRetryHook(hook RetryHookFunc) *Client {
 func (c *Client) TLSClientConfig() *tls.Config {
 	cfg, err := c.tlsConfig()
 	if err != nil {
-		c.lock.RLock()
-		c.log.Errorf("%v", err)
-		c.lock.RUnlock()
+		c.Logger().Errorf("%v", err)
 	}
 	return cfg
 }
@@ -1435,20 +1432,20 @@ func (c *Client) ProxyURL() *url.URL {
 func (c *Client) SetProxy(proxyURL string) *Client {
 	transport, err := c.HTTPTransport()
 	if err != nil {
-		c.log.Errorf("%v", err)
+		c.Logger().Errorf("%v", err)
 		return c
 	}
 
 	pURL, err := url.Parse(proxyURL)
 	if err != nil {
-		c.log.Errorf("%v", err)
+		c.Logger().Errorf("%v", err)
 		return c
 	}
 
 	c.lock.Lock()
 	c.proxyURL = pURL
+	transport.Proxy = http.ProxyURL(c.proxyURL)
 	c.lock.Unlock()
-	transport.Proxy = http.ProxyURL(c.ProxyURL())
 	return c
 }
 
@@ -1458,7 +1455,7 @@ func (c *Client) SetProxy(proxyURL string) *Client {
 func (c *Client) RemoveProxy() *Client {
 	transport, err := c.HTTPTransport()
 	if err != nil {
-		c.log.Errorf("%v", err)
+		c.Logger().Errorf("%v", err)
 		return c
 	}
 
@@ -1473,7 +1470,7 @@ func (c *Client) RemoveProxy() *Client {
 func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 	config, err := c.tlsConfig()
 	if err != nil {
-		c.log.Errorf("%v", err)
+		c.Logger().Errorf("%v", err)
 		return c
 	}
 
@@ -1489,7 +1486,7 @@ func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 func (c *Client) SetRootCertificate(pemFilePath string) *Client {
 	rootPemData, err := os.ReadFile(pemFilePath)
 	if err != nil {
-		c.log.Errorf("%v", err)
+		c.Logger().Errorf("%v", err)
 		return c
 	}
 	c.handleCAs("root", rootPemData)
@@ -1527,7 +1524,7 @@ func (c *Client) SetRootCertificateFromString(pemCerts string) *Client {
 func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
 	rootPemData, err := os.ReadFile(pemFilePath)
 	if err != nil {
-		c.log.Errorf("%v", err)
+		c.Logger().Errorf("%v", err)
 		return c
 	}
 	c.handleCAs("client", rootPemData)
@@ -1559,7 +1556,7 @@ func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcher
 		ticker := time.NewTicker(tickerDuration)
 		st, err := os.Stat(pemFilePath)
 		if err != nil {
-			c.log.Errorf("%v", err)
+			c.Logger().Errorf("%v", err)
 			return
 		}
 
@@ -1576,7 +1573,7 @@ func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcher
 
 				st, err = os.Stat(pemFilePath)
 				if err != nil {
-					c.log.Errorf("%v", err)
+					c.Logger().Errorf("%v", err)
 					continue
 				}
 				newModTime := st.ModTime().UTC()
@@ -1615,7 +1612,7 @@ func (c *Client) SetClientRootCertificateFromString(pemCerts string) *Client {
 func (c *Client) handleCAs(scope string, permCerts []byte) {
 	config, err := c.tlsConfig()
 	if err != nil {
-		c.log.Errorf("%v", err)
+		c.Logger().Errorf("%v", err)
 		return
 	}
 
@@ -1770,7 +1767,7 @@ func (c *Client) PathParams() map[string]string {
 func (c *Client) SetPathParam(param, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.pathParams[param] = value
+	c.pathParams[param] = url.PathEscape(value)
 	return c
 }
 
@@ -1799,44 +1796,31 @@ func (c *Client) SetPathParams(params map[string]string) *Client {
 	return c
 }
 
-// RawPathParams method returns the raw path parameters from the client.
-func (c *Client) RawPathParams() map[string]string {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.rawPathParams
-}
-
 // SetRawPathParam method sets a single URL path key-value pair in the
-// Resty client instance.
+// Resty client instance without path escape.
 //
-//	client.SetPathParam("userId", "sample@sample.com")
-//
-//	Result:
-//	   URL - /v1/users/{userId}/details
-//	   Composed URL - /v1/users/sample@sample.com/details
-//
-//	client.SetPathParam("path", "groups/developers")
+//	client.SetRawPathParam("path", "groups/developers")
 //
 //	Result:
-//	   URL - /v1/users/{userId}/details
-//	   Composed URL - /v1/users/groups%2Fdevelopers/details
+//		URL - /v1/users/{userId}/details
+//		Composed URL - /v1/users/groups/developers/details
 //
 // It replaces the value of the key while composing the request URL.
-// The value will be used as it is and will not be escaped.
+// The value will be used as-is, no path escape applied.
 //
 // It can be overridden at the request level,
 // see [Request.SetRawPathParam] or [Request.SetRawPathParams]
 func (c *Client) SetRawPathParam(param, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.rawPathParams[param] = value
+	c.pathParams[param] = value
 	return c
 }
 
 // SetRawPathParams method sets multiple URL path key-value pairs at one go in the
-// Resty client instance.
+// Resty client instance without path escape.
 //
-//	client.SetPathParams(map[string]string{
+//	client.SetRawPathParams(map[string]string{
 //		"userId":       "sample@sample.com",
 //		"subAccountId": "100002",
 //		"path":         "groups/developers",
@@ -1847,7 +1831,7 @@ func (c *Client) SetRawPathParam(param, value string) *Client {
 //	   Composed URL - /v1/users/sample@sample.com/100002/groups/developers/details
 //
 // It replaces the value of the key while composing the request URL.
-// The values will be used as they are and will not be escaped.
+// The value will be used as-is, no path escape applied.
 //
 // It can be overridden at the request level,
 // see [Request.SetRawPathParam] or [Request.SetRawPathParams]
@@ -2035,12 +2019,11 @@ func (c *Client) Clone(ctx context.Context) *Client {
 	cc.formData = cloneURLValues(c.formData)
 	cc.header = c.header.Clone()
 	cc.pathParams = maps.Clone(c.pathParams)
-	cc.rawPathParams = maps.Clone(c.rawPathParams)
 	cc.credentials = c.credentials.Clone()
 	cc.contentTypeEncoders = maps.Clone(c.contentTypeEncoders)
 	cc.contentTypeDecoders = maps.Clone(c.contentTypeDecoders)
-	cc.contentDecompressors = maps.Clone(c.contentDecompressors)
-	copy(cc.contentDecompressorKeys, c.contentDecompressorKeys)
+	cc.contentDecompressers = maps.Clone(c.contentDecompressers)
+	copy(cc.contentDecompresserKeys, c.contentDecompresserKeys)
 
 	if c.proxyURL != nil {
 		cc.proxyURL, _ = url.Parse(c.proxyURL.String())
@@ -2104,7 +2087,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 	if resp != nil {
 		response.Body = resp.Body
-		if err = response.wrapContentDecompressor(); err != nil {
+		if err = response.wrapContentDecompresser(); err != nil {
 			return response, err
 		}
 
@@ -2153,7 +2136,7 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 
 // just an internal helper method
 func (c *Client) outputLogTo(w io.Writer) *Client {
-	c.log.(*logger).l.SetOutput(w)
+	c.Logger().(*logger).l.SetOutput(w)
 	return c
 }
 
@@ -2210,12 +2193,8 @@ func (c *Client) onInvalidHooks(req *Request, err error) {
 	}
 }
 
-func (c *Client) debugf(format string, v ...interface{}) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if !c.debug {
-		return
+func (c *Client) debugf(format string, v ...any) {
+	if c.IsDebug() {
+		c.Logger().Debugf(format, v...)
 	}
-
-	c.log.Debugf(format, v...)
 }

@@ -247,13 +247,13 @@ func (r *Response) wrapCopyReadCloser() {
 	}
 }
 
-func (r *Response) wrapContentDecompressor() error {
+func (r *Response) wrapContentDecompresser() error {
 	ce := r.Header().Get(hdrContentEncodingKey)
 	if isStringEmpty(ce) {
 		return nil
 	}
 
-	if decFunc, f := r.Request.client.ContentDecompressors()[ce]; f {
+	if decFunc, f := r.Request.client.ContentDecompressers()[ce]; f {
 		dec, err := decFunc(r.Body)
 		if err != nil {
 			if err == io.EOF {
@@ -268,7 +268,7 @@ func (r *Response) wrapContentDecompressor() error {
 		r.Header().Del(hdrContentLengthKey)
 		r.RawResponse.ContentLength = -1
 	} else {
-		return ErrContentDecompressorNotFound
+		return ErrContentDecompresserNotFound
 	}
 
 	return nil

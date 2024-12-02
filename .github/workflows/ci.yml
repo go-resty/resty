@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches:
+      - v3
       - v2
     paths-ignore:
       - '**.md'
@@ -11,6 +12,7 @@ on:
   pull_request:
     branches:
       - main
+      - v3
       - v2
     paths-ignore:
       - '**.md'
@@ -47,7 +49,7 @@ jobs:
         run: diff -u <(echo -n) <(go fmt $(go list ./...))
 
       - name: Test
-        run: go test ./... -race -count=1 -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... -shuffle=on
+        run: go run gotest.tools/gotestsum@latest -f testname -- ./... -race -count=1 -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... -shuffle=on
 
       - name: Upload coverage to Codecov
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.go == 'stable' }}

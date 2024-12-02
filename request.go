@@ -40,7 +40,6 @@ type Request struct {
 	QueryParams                url.Values
 	FormData                   url.Values
 	PathParams                 map[string]string
-	RawPathParams              map[string]string
 	Header                     http.Header
 	Time                       time.Time
 	Body                       any
@@ -110,9 +109,9 @@ func (r *Request) GenerateCurlCommand() string {
 		return r.resultCurlCmd
 	}
 	if r.RawRequest == nil {
-		// mock with r.Get("/")
 		if err := r.client.executeRequestMiddlewares(r); err != nil {
 			r.log.Errorf("%v", err)
+			return ""
 		}
 	}
 	r.resultCurlCmd = buildCurlCmd(r)
@@ -756,7 +755,7 @@ func (r *Request) SetResponseBodyUnlimitedReads(b bool) *Request {
 //
 // It overrides the path parameter set at the client instance level.
 func (r *Request) SetPathParam(param, value string) *Request {
-	r.PathParams[param] = value
+	r.PathParams[param] = url.PathEscape(value)
 	return r
 }
 
@@ -785,7 +784,7 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 }
 
 // SetRawPathParam method sets a single URL path key-value pair in the
-// Resty current request instance.
+// Resty current request instance without path escape.
 //
 //	client.R().SetPathParam("userId", "sample@sample.com")
 //
@@ -800,16 +799,16 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 //	   Composed URL - /v1/users/groups/developers/details
 //
 // It replaces the value of the key while composing the request URL.
-// The value will be used as-is and has not been escaped.
+// The value will be used as-is, no path escape applied.
 //
 // It overrides the raw path parameter set at the client instance level.
 func (r *Request) SetRawPathParam(param, value string) *Request {
-	r.RawPathParams[param] = value
+	r.PathParams[param] = value
 	return r
 }
 
 // SetRawPathParams method sets multiple URL path key-value pairs at one go in the
-// Resty current request instance.
+// Resty current request instance without path escape.
 //
 //	client.R().SetPathParams(map[string]string{
 //		"userId": "sample@sample.com",
@@ -822,7 +821,7 @@ func (r *Request) SetRawPathParam(param, value string) *Request {
 //	   Composed URL - /v1/users/sample@sample.com/100002/groups/developers/details
 //
 // It replaces the value of the key while composing the request URL.
-// The value will be used as-is and has not been escaped.
+// The value will be used as-is, no path escape applied.
 //
 // It overrides the raw path parameter set at the client instance level.
 func (r *Request) SetRawPathParams(params map[string]string) *Request {
@@ -1412,7 +1411,6 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.FormData = cloneURLValues(r.FormData)
 	rr.QueryParams = cloneURLValues(r.QueryParams)
 	rr.PathParams = maps.Clone(r.PathParams)
-	rr.RawPathParams = maps.Clone(r.RawPathParams)
 
 	// clone basic auth
 	if r.credentials != nil {
@@ -1450,7 +1448,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	// copy bodyBuf
 	if r.bodyBuf != nil {
 		rr.bodyBuf = acquireBuffer()
-		_, _ = io.Copy(rr.bodyBuf, r.bodyBuf)
+		rr.bodyBuf.Write(r.bodyBuf.Bytes())
 	}
 
 	return rr

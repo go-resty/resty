@@ -114,12 +114,12 @@ func Test_parseRequestURL(t *testing.T) {
 				r.SetPathParams(map[string]string{
 					"foo": "4/5",
 				}).SetRawPathParams(map[string]string{
-					"foo": "4/5", // ignored, because the pathParams takes precedence over the rawPathParams
+					"foo": "4/5", // it gets overwritten since same key name
 					"bar": "6/7",
 				})
 				r.URL = "https://example.com/{foo}/{bar}"
 			},
-			expectedURL: "https://example.com/4%2F5/6/7",
+			expectedURL: "https://example.com/4/5/6/7",
 		},
 		{
 			name: "empty path parameter in URL",
@@ -351,48 +351,6 @@ func Test_parseRequestURL(t *testing.T) {
 	}
 }
 
-func Benchmark_parseRequestURL_PathParams(b *testing.B) {
-	c := New().SetPathParams(map[string]string{
-		"foo": "1",
-		"bar": "2",
-	}).SetRawPathParams(map[string]string{
-		"foo": "3",
-		"xyz": "4",
-	})
-	r := c.R().SetPathParams(map[string]string{
-		"foo": "5",
-		"qwe": "6",
-	}).SetRawPathParams(map[string]string{
-		"foo": "7",
-		"asd": "8",
-	})
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		r.URL = "https://example.com/{foo}/{bar}/{xyz}/{qwe}/{asd}"
-		if err := parseRequestURL(c, r); err != nil {
-			b.Errorf("parseRequestURL() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestURL_QueryParams(b *testing.B) {
-	c := New().SetQueryParams(map[string]string{
-		"foo": "1",
-		"bar": "2",
-	})
-	r := c.R().SetQueryParams(map[string]string{
-		"foo": "5",
-		"qwe": "6",
-	})
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		r.URL = "https://example.com/"
-		if err := parseRequestURL(c, r); err != nil {
-			b.Errorf("parseRequestURL() error = %v", err)
-		}
-	}
-}
-
 func Test_parseRequestHeader(t *testing.T) {
 	for _, tt := range []struct {
 		name           string
@@ -479,7 +437,7 @@ func Test_parseRequestHeader(t *testing.T) {
 			tt.init(c, r)
 
 			// add common expected headers from client into expectedHeader
-			tt.expectedHeader.Set(hdrAcceptEncodingKey, c.ContentDecompressorKeys())
+			tt.expectedHeader.Set(hdrAcceptEncodingKey, c.ContentDecompresserKeys())
 
 			if err := parseRequestHeader(c, r); err != nil {
 				t.Errorf("parseRequestHeader() error = %v", err)
@@ -488,25 +446,6 @@ func Test_parseRequestHeader(t *testing.T) {
 				t.Errorf("r.Header = %#+v does not match expected %#+v", r.Header, tt.expectedHeader)
 			}
 		})
-	}
-}
-
-func Benchmark_parseRequestHeader(b *testing.B) {
-	c := New()
-	r := c.R()
-	c.SetHeaders(map[string]string{
-		"foo": "1", // ignored, because of the same header in the request
-		"bar": "2",
-	})
-	r.SetHeaders(map[string]string{
-		"foo": "3",
-		"xyz": "4",
-	})
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestHeader(c, r); err != nil {
-			b.Errorf("parseRequestHeader() error = %v", err)
-		}
 	}
 }
 
@@ -920,149 +859,6 @@ func TestParseRequestBody(t *testing.T) {
 	}
 }
 
-func Benchmark_parseRequestBody_string(b *testing.B) {
-	c := New()
-	r := c.R()
-	r.SetBody("foo").SetContentLength(true)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestBody_byte(b *testing.B) {
-	c := New()
-	r := c.R()
-	r.SetBody([]byte("foo")).SetContentLength(true)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestBody_reader_with_SetContentLength(b *testing.B) {
-	c := New()
-	r := c.R()
-	r.SetBody(bytes.NewBufferString("foo")).SetContentLength(true)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestBody_reader_without_SetContentLength(b *testing.B) {
-	c := New()
-	r := c.R()
-	r.SetBody(bytes.NewBufferString("foo"))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestBody_struct(b *testing.B) {
-	type FooBar struct {
-		Foo string `json:"foo"`
-		Bar string `json:"bar"`
-	}
-	c := New()
-	r := c.R()
-	r.SetBody(FooBar{Foo: "1", Bar: "2"}).SetContentLength(true).SetHeader(hdrContentTypeKey, jsonContentType)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestBody_struct_xml(b *testing.B) {
-	type FooBar struct {
-		Foo string `xml:"foo"`
-		Bar string `xml:"bar"`
-	}
-	c := New()
-	r := c.R()
-	r.SetBody(FooBar{Foo: "1", Bar: "2"}).SetContentLength(true).SetHeader(hdrContentTypeKey, "text/xml")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestBody_map(b *testing.B) {
-	c := New()
-	r := c.R()
-	r.SetBody(map[string]string{
-		"foo": "1",
-		"bar": "2",
-	}).SetContentLength(true).SetHeader(hdrContentTypeKey, jsonContentType)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestBody_slice(b *testing.B) {
-	c := New()
-	r := c.R()
-	r.SetBody([]string{"1", "2"}).SetContentLength(true).SetHeader(hdrContentTypeKey, jsonContentType)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestBody_FormData(b *testing.B) {
-	c := New()
-	r := c.R()
-	c.SetFormData(map[string]string{"foo": "1", "bar": "2"})
-	r.SetFormData(map[string]string{"foo": "3", "baz": "4"}).SetContentLength(true)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
-func Benchmark_parseRequestBody_MultiPart(b *testing.B) {
-	c := New()
-	r := c.R()
-	c.SetFormData(map[string]string{"foo": "1", "bar": "2"})
-	r.SetFormData(map[string]string{"foo": "3", "baz": "4"}).
-		SetMultipartFormData(map[string]string{"foo": "5", "xyz": "6"}).
-		SetFileReader("qwe", "qwe.txt", strings.NewReader("7")).
-		SetMultipartFields(
-			&MultipartField{
-				Name:        "sdj",
-				ContentType: "text/plain",
-				Reader:      strings.NewReader("8"),
-			},
-		).
-		SetContentLength(true)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if err := parseRequestBody(c, r); err != nil {
-			b.Errorf("parseRequestBody() error = %v", err)
-		}
-	}
-}
-
 func TestMiddlewareSaveToFileErrorCases(t *testing.T) {
 	c := dcnl()
 	tempDir := t.TempDir()
@@ -1137,6 +933,6 @@ func TestMiddlewareCoverage(t *testing.T) {
 
 	req1 := c.R()
 	req1.URL = "//invalid-url  .local"
-	err1 := createHTTPRequest(c, req1)
+	err1 := createRawRequest(c, req1)
 	assertEqual(t, true, strings.Contains(err1.Error(), "invalid character"))
 }
