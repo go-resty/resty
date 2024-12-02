@@ -59,15 +59,18 @@ func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	// make a request to get the 401 that contains the challenge.
 	res, err := dt.transport.RoundTrip(req1)
-	if err != nil || res.StatusCode != http.StatusUnauthorized {
-		return res, err
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusUnauthorized {
+		return res, nil
 	}
 	_, _ = ioCopy(io.Discard, res.Body)
 	closeq(res.Body)
 
 	chaHdrValue := strings.TrimSpace(res.Header.Get(hdrWwwAuthenticateKey))
 	if chaHdrValue == "" {
-		return res, ErrDigestBadChallenge
+		return nil, ErrDigestBadChallenge
 	}
 
 	cha, err := dt.parseChallenge(chaHdrValue)

@@ -1655,8 +1655,8 @@ func TestRawPathParamURLInput(t *testing.T) {
 			"path":   "users/developers",
 		})
 
-	assertEqual(t, "sample@sample.com", c.RawPathParams()["userId"])
-	assertEqual(t, "users/developers", c.RawPathParams()["path"])
+	assertEqual(t, "sample@sample.com", c.PathParams()["userId"])
+	assertEqual(t, "users/developers", c.PathParams()["path"])
 
 	resp, err := c.R().EnableDebug().
 		SetRawPathParams(map[string]string{
@@ -1934,7 +1934,6 @@ func TestRequestClone(t *testing.T) {
 	// update value of non-interface type - change will only happen on clone
 	clone.URL = "http://localhost.clone"
 	clone.PathParams["name"] = "clone"
-	clone.RawPathParams["name"] = "clone"
 	// update value of http header - change will only happen on clone
 	clone.SetHeader("X-Header", "clone")
 	// update value of interface type - change will only happen on clone
@@ -1947,8 +1946,6 @@ func TestRequestClone(t *testing.T) {
 	assertEqual(t, ts.URL, parent.URL)
 	assertEqual(t, "clone", clone.PathParams["name"])
 	assertEqual(t, "parent", parent.PathParams["name"])
-	assertEqual(t, "clone", clone.RawPathParams["name"])
-	assertEqual(t, "parent", parent.RawPathParams["name"])
 	// assert http header
 	assertEqual(t, "parent", parent.Header.Get("X-Header"))
 	assertEqual(t, "clone", clone.Header.Get("X-Header"))
@@ -2191,6 +2188,34 @@ func TestRequestSetResultAndSetOutputFile(t *testing.T) {
 
 	fileContent, _ := os.ReadFile(outputFile)
 	assertEqual(t, `{ "id": "success", "message": "login successful" }`, string(fileContent))
+}
+
+func TestRequestBodyContentLength(t *testing.T) {
+	ts := createGenericServer(t)
+	defer ts.Close()
+
+	c := dcnl().SetBaseURL(ts.URL)
+
+	c.SetRequestMiddlewares(
+		PrepareRequestMiddleware,
+		func(c *Client, r *Request) error {
+			_, found := r.Header[hdrContentLengthKey]
+			assertEqual(t, true, found)
+			return nil
+		},
+	)
+
+	buf := bytes.NewBuffer([]byte(`{"content":"json content sending to server"}`))
+	res, err := c.R().
+		SetHeader(hdrContentTypeKey, "application/json").
+		SetContentLength(true).
+		SetBody(buf).
+		Put("/json")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+	assertEqual(t, `{"response":"json response"}`, res.String())
+	assertEqual(t, int64(44), res.Request.RawRequest.ContentLength)
 }
 
 func TestRequestFuncs(t *testing.T) {

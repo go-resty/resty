@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ErrContentDecompressorNotFound = errors.New("resty: content decoder not found")
+	ErrContentDecompresserNotFound = errors.New("resty: content decoder not found")
 )
 
 type (
@@ -26,13 +26,13 @@ type (
 	// ContentTypeDecoder type is for decoding the response body based on header Content-Type
 	ContentTypeDecoder func(io.Reader, any) error
 
-	// ContentDecompressor type is for decompressing response body based on header Content-Encoding
+	// ContentDecompresser type is for decompressing response body based on header Content-Encoding
 	// ([RFC 9110])
 	//
 	// For example, gzip, deflate, etc.
 	//
 	// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
-	ContentDecompressor func(io.ReadCloser) (io.ReadCloser, error)
+	ContentDecompresser func(io.ReadCloser) (io.ReadCloser, error)
 )
 
 func encodeJSON(w io.Writer, v any) error {
@@ -203,7 +203,7 @@ type nopReadCloser struct {
 func (r *nopReadCloser) Read(p []byte) (int, error) {
 	n, err := r.r.Read(p)
 	if err == io.EOF {
-		r.r.Seek(0, 0)
+		r.r.Seek(0, io.SeekStart)
 	}
 	return n, err
 }

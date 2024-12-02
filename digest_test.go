@@ -160,6 +160,24 @@ func TestClientDigestAuthWithBodyQopAuthIntIoCopyError(t *testing.T) {
 	assertEqual(t, 0, resp.StatusCode())
 }
 
+func TestClientDigestAuthRoundTripError(t *testing.T) {
+	conf := *defaultDigestServerConf()
+	ts := createDigestServer(t, &conf)
+	defer ts.Close()
+
+	c := dcnl().SetTransport(&CustomRoundTripper2{returnErr: true})
+	c.SetDigestAuth(conf.username, conf.password)
+
+	_, err := c.R().
+		SetResult(&AuthSuccess{}).
+		SetHeader(hdrContentTypeKey, "application/json").
+		SetBody(map[string]any{"zip_code": "00000", "city": "Los Angeles"}).
+		Post(ts.URL + conf.uri)
+
+	assertNotNil(t, err)
+	assertEqual(t, true, strings.Contains(err.Error(), "test req mock error"))
+}
+
 func TestClientDigestAuthWithBodyQopAuthIntGetBodyNil(t *testing.T) {
 	conf := *defaultDigestServerConf()
 	conf.qop = "auth-int"

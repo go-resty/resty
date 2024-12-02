@@ -281,6 +281,9 @@ type CustomRoundTripper2 struct {
 
 // RoundTrip just for test
 func (rt *CustomRoundTripper2) RoundTrip(_ *http.Request) (*http.Response, error) {
+	if rt.returnErr {
+		return nil, errors.New("test req mock error")
+	}
 	return &http.Response{}, nil
 }
 
@@ -541,18 +544,18 @@ func TestClientPreRequestMiddlewares(t *testing.T) {
 	client := dcnl()
 
 	fnPreRequestMiddleware1 := func(c *Client, r *Request) error {
-		c.log.Debugf("I'm in Pre-Request Hook")
+		c.Logger().Debugf("I'm in Pre-Request Hook")
 		return nil
 	}
 
 	fnPreRequestMiddleware2 := func(c *Client, r *Request) error {
-		c.log.Debugf("I'm Overwriting existing Pre-Request Hook")
+		c.Logger().Debugf("I'm Overwriting existing Pre-Request Hook")
 
 		// Reading Request `N` no of times
 		for i := 0; i < 5; i++ {
 			b, _ := r.RawRequest.GetBody()
 			rb, _ := io.ReadAll(b)
-			c.log.Debugf("%s %v", string(rb), len(rb))
+			c.Logger().Debugf("%s %v", string(rb), len(rb))
 			assertEqual(t, true, len(rb) >= 45)
 		}
 		return nil
@@ -816,17 +819,17 @@ func TestLzwCompress(t *testing.T) {
 	// Not found scenario
 	_, err := c.R().Get(ts.URL + "/lzw-test")
 	assertNotNil(t, err)
-	assertEqual(t, ErrContentDecompressorNotFound, err)
+	assertEqual(t, ErrContentDecompresserNotFound, err)
 
 	// Register LZW content decoder
-	c.AddContentDecompressor("compress", func(r io.ReadCloser) (io.ReadCloser, error) {
+	c.AddContentDecompresser("compress", func(r io.ReadCloser) (io.ReadCloser, error) {
 		l := &lzwReader{
 			s: r,
 			r: lzw.NewReader(r, lzw.LSB, 8),
 		}
 		return l, nil
 	})
-	c.SetContentDecompressorKeys([]string{"compress"})
+	c.SetContentDecompresserKeys([]string{"compress"})
 
 	testcases := []struct{ url, want string }{
 		{ts.URL + "/lzw-test", "This is LZW response testing"},

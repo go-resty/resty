@@ -169,15 +169,14 @@ func createClient(hc *http.Client) *Client {
 		retryMaxWaitTime:         defaultMaxWaitTime,
 		isRetryDefaultConditions: true,
 		pathParams:               make(map[string]string),
-		rawPathParams:            make(map[string]string),
 		headerAuthorizationKey:   hdrAuthorizationKey,
 		jsonEscapeHTML:           true,
 		httpClient:               hc,
 		debugBodyLimit:           math.MaxInt32,
 		contentTypeEncoders:      make(map[string]ContentTypeEncoder),
 		contentTypeDecoders:      make(map[string]ContentTypeDecoder),
-		contentDecompressorKeys:  make([]string, 0),
-		contentDecompressors:     make(map[string]ContentDecompressor),
+		contentDecompresserKeys:  make([]string, 0),
+		contentDecompressers:     make(map[string]ContentDecompresser),
 		certWatcherStopChan:      make(chan bool),
 	}
 
@@ -191,8 +190,8 @@ func createClient(hc *http.Client) *Client {
 	c.AddContentTypeDecoder(xmlKey, decodeXML)
 
 	// Order matter, giving priority to gzip
-	c.AddContentDecompressor("deflate", decompressDeflate)
-	c.AddContentDecompressor("gzip", decompressGzip)
+	c.AddContentDecompresser("deflate", decompressDeflate)
+	c.AddContentDecompresser("gzip", decompressGzip)
 
 	// request middlewares
 	c.SetRequestMiddlewares(

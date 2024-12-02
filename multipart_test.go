@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -205,6 +206,39 @@ func TestMultipartFormData(t *testing.T) {
 	defer ts.Close()
 	resp, err := dcnldr().
 		SetMultipartFormData(map[string]string{"first_name": "Jeevanandam", "last_name": "M", "zip_code": "00001"}).
+		SetBasicAuth("myuser", "mypass").
+		Post(ts.URL + "/profile")
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "Success", resp.String())
+}
+
+func TestMultipartFormDataFields(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+
+	fields := []*MultipartField{
+		{
+			Name:   "field1",
+			Values: []string{"field1value1", "field1value2"},
+		},
+		{
+			Name:   "field1",
+			Values: []string{"field1value3", "field1value4"},
+		},
+		{
+			Name:   "field3",
+			Values: []string{"field3value1", "field3value2"},
+		},
+		{
+			Name:   "field4",
+			Values: []string{"field4value1", "field4value2"},
+		},
+	}
+
+	resp, err := dcnldr().
+		SetMultipartFields(fields...).
 		SetBasicAuth("myuser", "mypass").
 		Post(ts.URL + "/profile")
 
@@ -582,7 +616,28 @@ func TestMultipartRequest_createMultipart(t *testing.T) {
 		mw := multipart.NewWriter(new(bytes.Buffer))
 		err := createMultipart(mw, req1)
 		assertNotNil(t, err)
-		assertEqual(t, "test copy error", err.Error())
+		assertEqual(t, errCopyMsg, err.Error())
+	})
+
+	t.Run("multipart create part error", func(t *testing.T) {
+		errMsg := "test create part error"
+		mpCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
+			return nil, errors.New(errMsg)
+		}
+		t.Cleanup(func() {
+			mpCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
+				return w.CreatePart(h)
+			}
+		})
+
+		req1 := c.R().
+			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
+			SetHeader("Content-Type", "image/png")
+
+		mw := multipart.NewWriter(new(bytes.Buffer))
+		err := createMultipart(mw, req1)
+		assertNotNil(t, err)
+		assertEqual(t, errMsg, err.Error())
 	})
 }
 

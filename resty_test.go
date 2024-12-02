@@ -34,6 +34,7 @@ import (
 
 var (
 	hdrLocationKey = http.CanonicalHeaderKey("Location")
+	hdrAcceptKey   = http.CanonicalHeaderKey("Accept")
 )
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -268,11 +269,6 @@ func handleUsersEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 
 func createPostServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("Method: %v", r.Method)
-		t.Logf("Path: %v", r.URL.Path)
-		t.Logf("RawQuery: %v", r.URL.RawQuery)
-		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
-
 		if r.Method == MethodPost {
 			handleLoginEndpoint(t, w, r)
 
@@ -356,18 +352,17 @@ func createPostServer(t *testing.T) *httptest.Server {
 
 func createFormPostServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("Method: %v", r.Method)
-		t.Logf("Path: %v", r.URL.Path)
-		t.Logf("Content-Type: %v", r.Header.Get(hdrContentTypeKey))
-
 		if r.Method == MethodPost {
 			_ = r.ParseMultipartForm(10e6)
 
 			if r.URL.Path == "/profile" {
-				t.Logf("FirstName: %v", r.FormValue("first_name"))
-				t.Logf("LastName: %v", r.FormValue("last_name"))
-				t.Logf("City: %v", r.FormValue("city"))
-				t.Logf("Zip Code: %v", r.FormValue("zip_code"))
+				if r.MultipartForm == nil {
+					values := r.Form
+					t.Log(values)
+				} else {
+					values := r.MultipartForm.Value
+					t.Log(values)
+				}
 
 				_, _ = w.Write([]byte("Success"))
 				return
