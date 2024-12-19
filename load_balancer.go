@@ -101,7 +101,7 @@ type Host struct {
 	//	Default value is 5
 	MaxFailures int
 
-	state          State
+	state          HostState
 	currentWeight  int
 	failedRequests int
 }
@@ -114,16 +114,16 @@ func (h *Host) resetWeight(totalWeight int) {
 	h.currentWeight -= totalWeight
 }
 
-type State int
+type HostState int
 
 // Host transition states
 const (
-	StateInActive State = iota
-	StateActive
+	HostStateInActive HostState = iota
+	HostStateActive
 )
 
 // HostStateChangeFunc type provides feedback on host state transitions
-type HostStateChangeFunc func(baseURL string, from, to State)
+type HostStateChangeFunc func(baseURL string, from, to HostState)
 
 // ErrNoActiveHost error returned when all hosts are inactive on the load balancer
 var ErrNoActiveHost = errors.New("resty: no active host")
@@ -173,7 +173,7 @@ func (wrr *WeightedRoundRobin) Next() (string, error) {
 	var best *Host
 	total := 0
 	for _, h := range wrr.hosts {
-		if h.state == StateInActive {
+		if h.state == HostStateInActive {
 			continue
 		}
 
@@ -205,9 +205,9 @@ func (wrr *WeightedRoundRobin) Feedback(f *RequestFeedback) {
 				host.failedRequests++
 			}
 			if host.failedRequests >= host.MaxFailures {
-				host.state = StateInActive
+				host.state = HostStateInActive
 				if wrr.onStateChange != nil {
-					wrr.onStateChange(host.BaseURL, StateActive, StateInActive)
+					wrr.onStateChange(host.BaseURL, HostStateActive, HostStateInActive)
 				}
 			}
 			break
@@ -240,7 +240,7 @@ func (wrr *WeightedRoundRobin) Refresh(hosts ...*Host) error {
 		}
 
 		h.BaseURL = baseURL
-		h.state = StateActive
+		h.state = HostStateActive
 		newTotalWeight += h.Weight
 
 		// assign defaults if not provided
@@ -274,12 +274,12 @@ func (wrr *WeightedRoundRobin) ticker() {
 	for range wrr.tick.C {
 		wrr.lock.Lock()
 		for _, host := range wrr.hosts {
-			if host.state == StateInActive {
-				host.state = StateActive
+			if host.state == HostStateInActive {
+				host.state = HostStateActive
 				host.failedRequests = 0
 
 				if wrr.onStateChange != nil {
-					wrr.onStateChange(host.BaseURL, StateInActive, StateActive)
+					wrr.onStateChange(host.BaseURL, HostStateInActive, HostStateActive)
 				}
 			}
 		}

@@ -137,7 +137,7 @@ func TestWeightedRoundRobin(t *testing.T) {
 		defer wrr.Close()
 
 		var stateChangeCalled int32
-		wrr.SetOnStateChange(func(baseURL string, from, to State) {
+		wrr.SetOnStateChange(func(baseURL string, from, to HostState) {
 			atomic.AddInt32(&stateChangeCalled, 1)
 		})
 
@@ -307,7 +307,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		assertNil(t, err)
 
 		var stateChangeCalled int32
-		srv.SetOnStateChange(func(baseURL string, from, to State) {
+		srv.SetOnStateChange(func(baseURL string, from, to HostState) {
 			atomic.AddInt32(&stateChangeCalled, 1)
 		})
 

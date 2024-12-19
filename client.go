@@ -77,7 +77,7 @@ var (
 
 	defaultAuthScheme = "Bearer"
 
-	hdrUserAgentValue = "go-resty/" + Version + " (https://github.com/go-resty/resty)"
+	hdrUserAgentValue = "go-resty/" + Version + " (https://resty.dev)"
 	bufPool           = &sync.Pool{New: func() any { return &bytes.Buffer{} }}
 )
 
@@ -1426,7 +1426,11 @@ func (c *Client) ProxyURL() *url.URL {
 
 // SetProxy method sets the Proxy URL and Port for the Resty client.
 //
+//	// HTTP/HTTPS proxy
 //	client.SetProxy("http://proxyserver:8888")
+//
+//	// SOCKS5 Proxy
+//	client.SetProxy("socks5://127.0.0.1:1080")
 //
 // OR you could also set Proxy via environment variable, refer to [http.ProxyFromEnvironment]
 func (c *Client) SetProxy(proxyURL string) *Client {
