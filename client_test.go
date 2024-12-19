@@ -275,6 +275,8 @@ func TestClientCACertificateFromStringErrorTls(t *testing.T) {
 
 // CustomRoundTripper2 just for test
 type CustomRoundTripper2 struct {
+	http.RoundTripper
+	TLSClientConfiger
 	tlsConfig *tls.Config
 	returnErr bool
 }
