@@ -223,6 +223,7 @@ type Client struct {
 	contentDecompresserKeys  []string
 	contentDecompressers     map[string]ContentDecompresser
 	certWatcherStopChan      chan bool
+	circuitBreaker           *CircuitBreaker
 }
 
 // CertWatcherOptions allows configuring a watcher that reloads dynamically TLS certs.
@@ -939,6 +940,18 @@ func (c *Client) SetContentDecompresserKeys(keys []string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.contentDecompresserKeys = result
+	return c
+}
+
+// SetCircuitBreaker method sets the Circuit Breaker instance into the client.
+// It is used to prevent the client from sending requests that are likely to fail.
+// For Example: To use the default Circuit Breaker:
+//
+//	client.SetCircuitBreaker(NewCircuitBreaker())
+func (c *Client) SetCircuitBreaker(b *CircuitBreaker) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.circuitBreaker = b
 	return c
 }
 
@@ -2094,6 +2107,10 @@ func (c *Client) executeRequestMiddlewares(req *Request) (err error) {
 // Executes method executes the given `Request` object and returns
 // response or error.
 func (c *Client) execute(req *Request) (*Response, error) {
+	if err := c.circuitBreaker.allow(); err != nil {
+		return nil, err
+	}
+
 	if err := c.executeRequestMiddlewares(req); err != nil {
 		return nil, err
 	}
@@ -2118,6 +2135,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 	if resp != nil {
+		c.circuitBreaker.applyPolicies(resp)
+
 		response.Body = resp.Body
 		if err = response.wrapContentDecompresser(); err != nil {
 			return response, err

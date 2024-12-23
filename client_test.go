@@ -1421,3 +1421,72 @@ func TestClientDebugf(t *testing.T) {
 		assertEqual(t, "", b.String())
 	})
 }
+
+var _ CircuitBreakerPolicy = CircuitBreaker5xxPolicy
+
+func TestClientCircuitBreaker(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("Method: %v", r.Method)
+		t.Logf("Path: %v", r.URL.Path)
+
+		switch r.URL.Path {
+		case "/200":
+			w.WriteHeader(http.StatusOK)
+			return
+		case "/500":
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	})
+	defer ts.Close()
+
+	failThreshold := uint32(2)
+	successThreshold := uint32(1)
+	timeout := 1 * time.Second
+
+	c := dcnl().SetCircuitBreaker(
+		NewCircuitBreaker().
+			SetTimeout(timeout).
+			SetFailThreshold(failThreshold).
+			SetSuccessThreshold(successThreshold).
+			SetPolicies([]CircuitBreakerPolicy{CircuitBreaker5xxPolicy}))
+
+	for i := uint32(0); i < failThreshold; i++ {
+		_, err := c.R().Get(ts.URL + "/500")
+		assertNil(t, err)
+	}
+	resp, err := c.R().Get(ts.URL + "/500")
+	assertErrorIs(t, ErrCircuitBreakerOpen, err)
+	assertNil(t, resp)
+	assertEqual(t, circuitBreakerStateOpen, c.circuitBreaker.getState())
+
+	time.Sleep(timeout + 1*time.Millisecond)
+	assertEqual(t, circuitBreakerStateHalfOpen, c.circuitBreaker.getState())
+
+	resp, err = c.R().Get(ts.URL + "/500")
+	assertError(t, err)
+	assertEqual(t, circuitBreakerStateOpen, c.circuitBreaker.getState())
+
+	time.Sleep(timeout + 1*time.Millisecond)
+	assertEqual(t, circuitBreakerStateHalfOpen, c.circuitBreaker.getState())
+
+	for i := uint32(0); i < successThreshold; i++ {
+		_, err := c.R().Get(ts.URL + "/200")
+		assertNil(t, err)
+	}
+	assertEqual(t, circuitBreakerStateClosed, c.circuitBreaker.getState())
+
+	resp, err = c.R().Get(ts.URL + "/200")
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	resp, err = c.R().Get(ts.URL + "/500")
+	assertError(t, err)
+	assertEqual(t, uint32(1), c.circuitBreaker.failCount.Load())
+
+	time.Sleep(timeout)
+
+	resp, err = c.R().Get(ts.URL + "/500")
+	assertError(t, err)
+	assertEqual(t, uint32(1), c.circuitBreaker.failCount.Load())
+}
