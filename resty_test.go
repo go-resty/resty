@@ -34,7 +34,6 @@ import (
 
 var (
 	hdrLocationKey = http.CanonicalHeaderKey("Location")
-	hdrAcceptKey   = http.CanonicalHeaderKey("Accept")
 )
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
