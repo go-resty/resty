@@ -115,7 +115,10 @@ func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error
 		b.max = maxInt
 	}
 
-	retryStrategyFunc := c.RetryStrategy()
+	var retryStrategyFunc RetryStrategyFunc
+	if c != nil {
+		retryStrategyFunc = c.RetryStrategy()
+	}
 	if res == nil || retryStrategyFunc == nil {
 		return b.balanceMinMax(b.defaultStrategy(attempt)), nil
 	}

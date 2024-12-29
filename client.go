@@ -58,6 +58,7 @@ var (
 	ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body kind")
 
 	hdrUserAgentKey       = http.CanonicalHeaderKey("User-Agent")
+	hdrAcceptKey          = http.CanonicalHeaderKey("Accept")
 	hdrAcceptEncodingKey  = http.CanonicalHeaderKey("Accept-Encoding")
 	hdrContentTypeKey     = http.CanonicalHeaderKey("Content-Type")
 	hdrContentLengthKey   = http.CanonicalHeaderKey("Content-Length")
