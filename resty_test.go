@@ -114,6 +114,10 @@ func createGetServer(t *testing.T) *httptest.Server {
 				fileBytes, _ := os.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
 				w.Header().Set("Content-Type", "image/png")
 				w.Header().Set("Content-Length", strconv.Itoa(len(fileBytes)))
+				if r.URL.Query().Get("content-disposition") == "true" {
+					filename := r.URL.Query().Get("filename")
+					w.Header().Set(hdrContentDisposition, "inline; filename=\""+filename+"\"")
+				}
 				_, _ = w.Write(fileBytes)
 			case "/get-method-payload-test":
 				body, err := io.ReadAll(r.Body)

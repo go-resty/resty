@@ -407,7 +407,7 @@ func responseDebugLogger(c *Client, res *Response) {
 		fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
 		"HEADERS      :\n" +
 		composeHeaders(rl.Header) + "\n"
-	if res.Request.isSaveResponse {
+	if res.Request.IsSaveResponse {
 		debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
 	} else {
 		debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)

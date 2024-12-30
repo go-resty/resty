@@ -878,13 +878,13 @@ func TestMiddlewareSaveToFileErrorCases(t *testing.T) {
 
 	// dir create error
 	req1 := c.R()
-	req1.SetOutputFile(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
+	req1.SetOutputFileName(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
 	err1 := SaveToFileResponseMiddleware(c, &Response{Request: req1})
 	assertEqual(t, errDirMsg, err1.Error())
 
 	// file create error
 	req2 := c.R()
-	req2.SetOutputFile(filepath.Join(tempDir, "sample.txt"))
+	req2.SetOutputFileName(filepath.Join(tempDir, "sample.txt"))
 	err2 := SaveToFileResponseMiddleware(c, &Response{Request: req2})
 	assertEqual(t, errFileMsg, err2.Error())
 }
@@ -903,7 +903,7 @@ func TestMiddlewareSaveToFileCopyError(t *testing.T) {
 
 	// copy error
 	req1 := c.R()
-	req1.SetOutputFile(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
+	req1.SetOutputFileName(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
 	err1 := SaveToFileResponseMiddleware(c, &Response{Request: req1, Body: io.NopCloser(bytes.NewBufferString("Test context"))})
 	assertEqual(t, errCopyMsg, err1.Error())
 }

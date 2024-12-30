@@ -201,6 +201,7 @@ type Client struct {
 	isTrace                  bool
 	debugBodyLimit           int
 	outputDirectory          string
+	isSaveResponse           bool
 	scheme                   string
 	log                      Logger
 	ctx                      context.Context
@@ -616,6 +617,7 @@ func (c *Client) R() *Request {
 		Timeout:                    c.timeout,
 		Debug:                      c.debug,
 		IsTrace:                    c.isTrace,
+		IsSaveResponse:             c.isSaveResponse,
 		AuthScheme:                 c.authScheme,
 		AuthToken:                  c.authToken,
 		RetryCount:                 c.retryCount,
@@ -1646,13 +1648,38 @@ func (c *Client) OutputDirectory() string {
 
 // SetOutputDirectory method sets the output directory for saving HTTP responses in a file.
 // Resty creates one if the output directory does not exist. This setting is optional,
-// if you plan to use the absolute path in [Request.SetOutputFile] and can used together.
+// if you plan to use the absolute path in [Request.SetOutputFileName] and can used together.
 //
 //	client.SetOutputDirectory("/save/http/response/here")
 func (c *Client) SetOutputDirectory(dirPath string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.outputDirectory = dirPath
+	return c
+}
+
+// IsSaveResponse method returns true if the save response is set to true; otherwise, false
+func (c *Client) IsSaveResponse() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.isSaveResponse
+}
+
+// SetSaveResponse method used to enable the save response option at the client level for
+// all requests
+//
+//	client.SetSaveResponse(true)
+//
+// Resty determines the save filename in the following order -
+//   - [Request.SetOutputFileName]
+//   - Content-Disposition header
+//   - Request URL using [path.Base]
+//
+// It can be overridden at request level, see [Request.SetSaveResponse]
+func (c *Client) SetSaveResponse(save bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.isSaveResponse = save
 	return c
 }
 
@@ -1875,7 +1902,7 @@ func (c *Client) ResponseBodyLimit() int64 {
 // in the uncompressed response is larger than the limit.
 // Body size limit will not be enforced in the following cases:
 //   - ResponseBodyLimit <= 0, which is the default behavior.
-//   - [Request.SetOutputFile] is called to save response data to the file.
+//   - [Request.SetOutputFileName] is called to save response data to the file.
 //   - "DoNotParseResponse" is set for client or request.
 //
 // It can be overridden at the request level; see [Request.SetResponseBodyLimit]

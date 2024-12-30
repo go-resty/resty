@@ -9,10 +9,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -547,19 +549,34 @@ func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
 }
 
 // SaveToFileResponseMiddleware method used to write HTTP response body into
-// given file details via [Request.SetOutputFile]
+// file. The filename is determined in the following order -
+//   - [Request.SetOutputFileName]
+//   - Content-Disposition header
+//   - Request URL using [path.Base]
 func SaveToFileResponseMiddleware(c *Client, res *Response) error {
-	if res.Err != nil || !res.Request.isSaveResponse {
+	if res.Err != nil || !res.Request.IsSaveResponse {
 		return nil
 	}
 
-	file := ""
-
-	if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(res.Request.OutputFile) {
-		file += c.OutputDirectory() + string(filepath.Separator)
+	file := res.Request.OutputFileName
+	if isStringEmpty(file) {
+		cntDispositionValue := res.Header().Get(hdrContentDisposition)
+		if len(cntDispositionValue) > 0 {
+			if _, params, err := mime.ParseMediaType(cntDispositionValue); err == nil {
+				file = params["filename"]
+			}
+		}
+		if isStringEmpty(file) {
+			urlPath, _ := url.Parse(res.Request.URL)
+			file = path.Base(urlPath.Path)
+		}
 	}
 
-	file = filepath.Clean(file + res.Request.OutputFile)
+	if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(file) {
+		file = filepath.Join(c.OutputDirectory(), string(filepath.Separator), file)
+	}
+
+	file = filepath.Clean(file)
 	if err := createDirectory(filepath.Dir(file)); err != nil {
 		return err
 	}
