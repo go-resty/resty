@@ -27,6 +27,12 @@ type (
 	// functions as [RedirectPolicy]. If `f` is a function with the appropriate
 	// signature, RedirectPolicyFunc(f) is a RedirectPolicy object that calls `f`.
 	RedirectPolicyFunc func(*http.Request, []*http.Request) error
+
+	// RedirectInfo struct is used to capture the URL and status code for the redirect history
+	RedirectInfo struct {
+		URL        string
+		StatusCode int
+	}
 )
 
 // Apply calls f(req, via).

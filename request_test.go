@@ -911,7 +911,13 @@ func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
 
-	_, err := dcnl().R().Get(ts.URL + "/redirect-1")
+	res, err := dcnl().R().Get(ts.URL + "/redirect-1")
+	redirects := res.RedirectHistory()
+	assertEqual(t, 10, len(redirects))
+
+	finalReq := redirects[0]
+	assertEqual(t, 307, finalReq.StatusCode)
+	assertEqual(t, ts.URL+"/redirect-10", finalReq.URL)
 
 	assertEqual(t, true, (err.Error() == "Get /redirect-11: stopped after 10 redirects" ||
 		err.Error() == "Get \"/redirect-11\": stopped after 10 redirects"))
@@ -2337,6 +2343,9 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	invalidJsonBytes := []byte(`{\" \": "value here"}`)
 	result := jsonIndent(invalidJsonBytes)
 	assertEqual(t, string(invalidJsonBytes), string(result))
+
+	res := &Response{}
+	assertNil(t, res.RedirectHistory())
 
 	defer func() {
 		if rec := recover(); rec != nil {

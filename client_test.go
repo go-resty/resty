@@ -116,7 +116,7 @@ func TestClientRedirectPolicy(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl().SetRedirectPolicy(FlexibleRedirectPolicy(20), DomainCheckRedirectPolicy("127.0.0.1"))
-	_, err := c.R().
+	res, err := c.R().
 		SetHeader("Name1", "Value1").
 		SetHeader("Name2", "Value2").
 		SetHeader("Name3", "Value3").
@@ -124,8 +124,15 @@ func TestClientRedirectPolicy(t *testing.T) {
 
 	assertEqual(t, true, err.Error() == "Get \"/redirect-21\": resty: stopped after 20 redirects")
 
+	redirects := res.RedirectHistory()
+	assertEqual(t, 20, len(redirects))
+
+	finalReq := redirects[0]
+	assertEqual(t, 307, finalReq.StatusCode)
+	assertEqual(t, ts.URL+"/redirect-20", finalReq.URL)
+
 	c.SetRedirectPolicy(NoRedirectPolicy())
-	res, err := c.R().Get(ts.URL + "/redirect-1")
+	res, err = c.R().Get(ts.URL + "/redirect-1")
 	assertNil(t, err)
 	assertEqual(t, http.StatusTemporaryRedirect, res.StatusCode())
 	assertEqual(t, `<a href="/redirect-2">Temporary Redirect</a>.`, res.String())
