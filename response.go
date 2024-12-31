@@ -153,6 +153,26 @@ func (r *Response) IsError() bool {
 	return r.StatusCode() > 399
 }
 
+// RedirectHistory method returns a redirect history slice with the URL and status code
+func (r *Response) RedirectHistory() []*RedirectInfo {
+	if r.RawResponse == nil {
+		return nil
+	}
+
+	redirects := make([]*RedirectInfo, 0)
+	res := r.RawResponse
+	for res != nil {
+		req := res.Request
+		redirects = append(redirects, &RedirectInfo{
+			StatusCode: res.StatusCode,
+			URL:        req.URL.String(),
+		})
+		res = req.Response
+	}
+
+	return redirects
+}
+
 func (r *Response) setReceivedAt() {
 	r.receivedAt = time.Now()
 	if r.Request.trace != nil {
