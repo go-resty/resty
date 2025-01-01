@@ -209,7 +209,8 @@ type Client struct {
 	proxyURL                 *url.URL
 	requestDebugLog          DebugLogCallback
 	responseDebugLog         DebugLogCallback
-	generateCurlOnDebug      bool
+	generateCurlCmd          bool
+	debugLogCurlCmd          bool
 	unescapeQueryParams      bool
 	loadBalancer             LoadBalancer
 	beforeRequest            []RequestMiddleware
@@ -641,7 +642,8 @@ func (c *Client) R() *Request {
 		jsonEscapeHTML:      c.jsonEscapeHTML,
 		log:                 c.log,
 		setContentLength:    c.setContentLength,
-		generateCurlOnDebug: c.generateCurlOnDebug,
+		generateCurlCmd:     c.generateCurlCmd,
+		debugLogCurlCmd:     c.debugLogCurlCmd,
 		unescapeQueryParams: c.unescapeQueryParams,
 		credentials:         c.credentials,
 	}
@@ -731,7 +733,7 @@ func (c *Client) requestMiddlewares() []RequestMiddleware {
 func (c *Client) AddRequestMiddleware(m RequestMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	idx := len(c.beforeRequest) - 2
+	idx := len(c.beforeRequest) - 1
 	c.beforeRequest = slices.Insert(c.beforeRequest, idx, m)
 	return c
 }
@@ -1965,35 +1967,56 @@ func (c *Client) SetTrace(t bool) *Client {
 	return c
 }
 
-// EnableGenerateCurlOnDebug method enables the generation of CURL commands in the debug log.
-// It works in conjunction with debug mode.
+// EnableGenerateCurlCmd method enables the generation of curl command at the
+// client instance level.
+//
+// By default, Resty does not log the curl command in the debug log since it has the potential
+// to leak sensitive data unless explicitly enabled via [Client.SetDebugLogCurlCmd].
 //
 // NOTE: Use with care.
-//   - Potential to leak sensitive data from [Request] and [Response] in the debug log.
-//   - Beware of memory usage since the request body is reread.
-func (c *Client) EnableGenerateCurlOnDebug() *Client {
-	c.SetGenerateCurlOnDebug(true)
+//   - Potential to leak sensitive data from [Request] and [Response] in the debug log
+//     when the debug log option is enabled.
+//   - Additional memory usage since the request body was reread.
+//   - curl body is not generated for [io.Reader] and multipart request flow.
+func (c *Client) EnableGenerateCurlCmd() *Client {
+	c.SetGenerateCurlCmd(true)
 	return c
 }
 
-// DisableGenerateCurlOnDebug method disables the option set by [Client.EnableGenerateCurlOnDebug].
-func (c *Client) DisableGenerateCurlOnDebug() *Client {
-	c.SetGenerateCurlOnDebug(false)
+// DisableGenerateCurlCmd method disables the option set by [Client.EnableGenerateCurlCmd] or
+// [Client.SetGenerateCurlCmd].
+func (c *Client) DisableGenerateCurlCmd() *Client {
+	c.SetGenerateCurlCmd(false)
 	return c
 }
 
-// SetGenerateCurlOnDebug method is used to turn on/off the generate CURL command in debug mode
-// at the client instance level. It works in conjunction with debug mode.
+// SetGenerateCurlCmd method is used to turn on/off the generate curl command at the
+// client instance level.
+//
+// By default, Resty does not log the curl command in the debug log since it has the potential
+// to leak sensitive data unless explicitly enabled via [Client.SetDebugLogCurlCmd].
 //
 // NOTE: Use with care.
-//   - Potential to leak sensitive data from [Request] and [Response] in the debug log.
-//   - Beware of memory usage since the request body is reread.
+//   - Potential to leak sensitive data from [Request] and [Response] in the debug log
+//     when the debug log option is enabled.
+//   - Additional memory usage since the request body was reread.
+//   - curl body is not generated for [io.Reader] and multipart request flow.
 //
-// It can be overridden at the request level; see [Request.SetGenerateCurlOnDebug]
-func (c *Client) SetGenerateCurlOnDebug(b bool) *Client {
+// It can be overridden at the request level; see [Request.SetGenerateCurlCmd]
+func (c *Client) SetGenerateCurlCmd(b bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.generateCurlOnDebug = b
+	c.generateCurlCmd = b
+	return c
+}
+
+// SetDebugLogCurlCmd method enables the curl command to be logged in the debug log.
+//
+// It can be overridden at the request level; see [Request.SetDebugLogCurlCmd]
+func (c *Client) SetDebugLogCurlCmd(b bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.debugLogCurlCmd = b
 	return c
 }
 

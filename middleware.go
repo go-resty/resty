@@ -45,20 +45,10 @@ func PrepareRequestMiddleware(c *Client, r *Request) (err error) {
 	// is URL-related, and those get caught up in the `parseRequestURL`
 	createRawRequest(c, r)
 
-	// last one doesn't need if condition
-	return addCredentials(c, r)
-}
+	addCredentials(c, r)
 
-// GenerateCurlRequestMiddleware method is used to perform CURL command
-// generation during a request preparation
-//
-// See, [Client.SetGenerateCurlOnDebug], [Request.SetGenerateCurlOnDebug]
-func GenerateCurlRequestMiddleware(c *Client, r *Request) (err error) {
-	if r.Debug && r.generateCurlOnDebug {
-		if isStringEmpty(r.resultCurlCmd) {
-			r.resultCurlCmd = buildCurlCmd(r)
-		}
-	}
+	_ = r.generateCurlCommand()
+
 	return nil
 }
 

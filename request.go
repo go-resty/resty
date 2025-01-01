@@ -95,27 +95,10 @@ type Request struct {
 	multipartFields     []*MultipartField
 	retryConditions     []RetryConditionFunc
 	resultCurlCmd       string
-	generateCurlOnDebug bool
+	generateCurlCmd     bool
+	debugLogCurlCmd     bool
 	unescapeQueryParams bool
 	multipartErrChan    chan error
-}
-
-// GenerateCurlCommand method generates the CURL command for the request.
-func (r *Request) GenerateCurlCommand() string {
-	if !(r.Debug && r.generateCurlOnDebug) {
-		return ""
-	}
-	if len(r.resultCurlCmd) > 0 {
-		return r.resultCurlCmd
-	}
-	if r.RawRequest == nil {
-		if err := r.client.executeRequestMiddlewares(r); err != nil {
-			r.log.Errorf("%v", err)
-			return ""
-		}
-	}
-	r.resultCurlCmd = buildCurlCmd(r)
-	return r.resultCurlCmd
 }
 
 // SetMethod method used to set the HTTP verb for the request
@@ -1086,35 +1069,77 @@ func (r *Request) SetTrace(t bool) *Request {
 	return r
 }
 
-// EnableGenerateCurlOnDebug method enables the generation of CURL commands in the debug log.
-// It works in conjunction with debug mode. It overrides the options set by the [Client].
+// EnableGenerateCurlCmd method enables the generation of curl commands for the current request.
+// It overrides the options set in the [Client].
+//
+// By default, Resty does not log the curl command in the debug log since it has the potential
+// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd].
 //
 // NOTE: Use with care.
-//   - Potential to leak sensitive data from [Request] and [Response] in the debug log.
-//   - Beware of memory usage since the request body is reread.
-func (r *Request) EnableGenerateCurlOnDebug() *Request {
-	r.SetGenerateCurlOnDebug(true)
+//   - Potential to leak sensitive data from [Request] and [Response] in the debug log
+//     when the debug log option is enabled.
+//   - Additional memory usage since the request body was reread.
+//   - curl body is not generated for [io.Reader] and multipart request flow.
+func (r *Request) EnableGenerateCurlCmd() *Request {
+	r.SetGenerateCurlCmd(true)
 	return r
 }
 
-// DisableGenerateCurlOnDebug method disables the option set by [Request.EnableGenerateCurlOnDebug].
-// It overrides the options set by the [Client].
-func (r *Request) DisableGenerateCurlOnDebug() *Request {
-	r.SetGenerateCurlOnDebug(false)
+// DisableGenerateCurlCmd method disables the option set by [Request.EnableGenerateCurlCmd] or
+// [Request.SetGenerateCurlCmd].
+//
+// It overrides the options set in the [Client].
+func (r *Request) DisableGenerateCurlCmd() *Request {
+	r.SetGenerateCurlCmd(false)
 	return r
 }
 
-// SetGenerateCurlOnDebug method is used to turn on/off the generate CURL command in debug mode.
-// It works in conjunction with debug mode.
+// SetGenerateCurlCmd method is used to turn on/off the generate curl command for the current request.
+//
+// By default, Resty does not log the curl command in the debug log since it has the potential
+// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd].
 //
 // NOTE: Use with care.
-//   - Potential to leak sensitive data from [Request] and [Response] in the debug log.
-//   - Beware of memory usage since the request body is reread.
+//   - Potential to leak sensitive data from [Request] and [Response] in the debug log
+//     when the debug log option is enabled.
+//   - Additional memory usage since the request body was reread.
+//   - curl body is not generated for [io.Reader] and multipart request flow.
 //
-// It overrides the options set by the [Client.SetGenerateCurlOnDebug]
-func (r *Request) SetGenerateCurlOnDebug(b bool) *Request {
-	r.generateCurlOnDebug = b
+// It overrides the options set by the [Client.SetGenerateCurlCmd]
+func (r *Request) SetGenerateCurlCmd(b bool) *Request {
+	r.generateCurlCmd = b
 	return r
+}
+
+// SetDebugLogCurlCmd method enables the curl command to be logged in the debug log
+// for the current request.
+//
+// It can be overridden at the request level; see [Client.SetDebugLogCurlCmd]
+func (r *Request) SetDebugLogCurlCmd(b bool) *Request {
+	r.debugLogCurlCmd = b
+	return r
+}
+
+// CurlCmd method generates the curl command for the request.
+func (r *Request) CurlCmd() string {
+	return r.generateCurlCommand()
+}
+
+func (r *Request) generateCurlCommand() string {
+	if !r.generateCurlCmd {
+		return ""
+	}
+	if len(r.resultCurlCmd) > 0 {
+		return r.resultCurlCmd
+	}
+	if r.RawRequest == nil {
+		if err := r.client.executeRequestMiddlewares(r); err != nil {
+			r.log.Errorf("%v", err)
+			return ""
+		}
+	}
+	r.resultCurlCmd = buildCurlCmd(r)
+	return r.resultCurlCmd
 }
 
 // SetUnescapeQueryParams method sets the choice of unescape query parameters for the request URL.

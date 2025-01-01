@@ -196,7 +196,6 @@ func createClient(hc *http.Client) *Client {
 	// request middlewares
 	c.SetRequestMiddlewares(
 		PrepareRequestMiddleware,
-		GenerateCurlRequestMiddleware,
 	)
 
 	// response middlewares

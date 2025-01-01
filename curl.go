@@ -16,21 +16,21 @@ import (
 )
 
 func buildCurlCmd(req *Request) string {
-	// 1. Generate curl raw headers
+	// generate curl raw headers
 	var curl = "curl -X " + req.Method + " "
 	headers := dumpCurlHeaders(req.RawRequest)
 	for _, kv := range *headers {
 		curl += "-H " + cmdQuote(kv[0]+": "+kv[1]) + " "
 	}
 
-	// 2. Generate curl cookies
+	// generate curl cookies
 	if cookieJar := req.client.CookieJar(); cookieJar != nil {
 		if cookies := cookieJar.Cookies(req.RawRequest.URL); len(cookies) > 0 {
 			curl += "-H " + cmdQuote(dumpCurlCookies(cookies)) + " "
 		}
 	}
 
-	// 3. Generate curl body except for io.Reader and multipart request
+	// generate curl body except for io.Reader and multipart request flow
 	if req.RawRequest.GetBody != nil {
 		body, err := req.RawRequest.GetBody()
 		if err == nil {
