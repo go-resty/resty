@@ -363,7 +363,7 @@ func requestDebugLogger(c *Client, r *Request) {
 
 	reqLog := "\n==============================================================================\n"
 
-	if r.Debug && r.generateCurlOnDebug {
+	if r.generateCurlCmd && r.debugLogCurlCmd {
 		reqLog += "~~~ REQUEST(CURL) ~~~\n" +
 			fmt.Sprintf("	%v\n", r.resultCurlCmd)
 	}
