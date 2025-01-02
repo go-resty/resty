@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
+// resty source code and usage is governed by a MIT style
+// license that can be found in the LICENSE file.
+// SPDX-License-Identifier: MIT
+
 package resty
 
 import (
@@ -7,73 +12,92 @@ import (
 	"time"
 )
 
-// CircuitBreaker can be in one of three states: Closed, Open, or Half-Open.
-//   - When the CircuitBreaker is Closed, requests are allowed to pass through.
-//   - If a failure count threshold is reached within a specified time-frame,
-//     the CircuitBreaker transitions to the Open state.
-//   - When the CircuitBreaker is Open, requests are blocked.
-//   - After a specified timeout, the CircuitBreaker transitions to the Half-Open state.
-//   - When the CircuitBreaker is Half-Open, a single request is allowed to pass through.
-//   - If that request fails, the CircuitBreaker returns to the Open state.
-//   - If the number of successes reaches a specified threshold,
-//     the CircuitBreaker transitions to the Closed state.
+// CircuitBreaker struct implements a state machine to monitor and manage the
+// states of circuit breakers. The three states are:
+//   - Closed: requests are allowed
+//   - Open: requests are blocked
+//   - Half-Open: a single request is allowed to determine
+//
+// Transitions
+//   - To Closed State: when the success count reaches the success threshold.
+//   - To Open State: when the failure count reaches the failure threshold.
+//   - Half-Open Check: when the specified timeout reaches, a single request is allowed
+//     to determine the transition state; if failed, it goes back to the open state.
 type CircuitBreaker struct {
-	policies                        []CircuitBreakerPolicy
-	timeout                         time.Duration
-	failThreshold, successThreshold uint32
-
-	state                   atomic.Value // circuitBreakerState
-	failCount, successCount atomic.Uint32
-	lastFail                time.Time
+	policies         []CircuitBreakerPolicy
+	timeout          time.Duration
+	failureThreshold uint32
+	successThreshold uint32
+	state            atomic.Value // circuitBreakerState
+	failureCount     atomic.Uint32
+	successCount     atomic.Uint32
+	lastFailureAt    time.Time
 }
 
-// NewCircuitBreaker creates a new [CircuitBreaker] with default settings.
+// NewCircuitBreaker method creates a new [CircuitBreaker] with default settings.
+//
 // The default settings are:
-// - Timeout: 10 seconds
-// - FailThreshold: 3
-// - SuccessThreshold: 1
-// - Policies: CircuitBreaker5xxPolicy
+//   - Timeout: 10 seconds
+//   - FailThreshold: 3
+//   - SuccessThreshold: 1
+//   - Policies: CircuitBreaker5xxPolicy
 func NewCircuitBreaker() *CircuitBreaker {
 	cb := &CircuitBreaker{
 		policies:         []CircuitBreakerPolicy{CircuitBreaker5xxPolicy},
 		timeout:          10 * time.Second,
-		failThreshold:    3,
+		failureThreshold: 3,
 		successThreshold: 1,
 	}
 	cb.state.Store(circuitBreakerStateClosed)
 	return cb
 }
 
-// SetPolicies sets the CircuitBreakerPolicy's that the [CircuitBreaker] will use to determine whether a response is a failure.
-func (cb *CircuitBreaker) SetPolicies(policies []CircuitBreakerPolicy) *CircuitBreaker {
+// SetPolicies method sets the one or more given CircuitBreakerPolicy(s) into
+// [CircuitBreaker], which will be used to determine whether a request is failed
+// or successful by evaluating the response instance.
+//
+//	// set one policy
+//	cb.SetPolicies(CircuitBreaker5xxPolicy)
+//
+//	// set multiple polices
+//	cb.SetPolicies(policy1, policy2, policy3)
+//
+//	// if you have slice, do
+//	cb.SetPolicies(policies...)
+//
+// NOTE: This method overwrites the policies with the given new ones. See [CircuitBreaker.AddPolicies]
+func (cb *CircuitBreaker) SetPolicies(policies ...CircuitBreakerPolicy) *CircuitBreaker {
 	cb.policies = policies
 	return cb
 }
 
-// SetTimeout sets the timeout duration for the [CircuitBreaker].
+// SetTimeout method sets the timeout duration for the [CircuitBreaker]. When the
+// timeout reaches, a single request is allowed to determine the state.
 func (cb *CircuitBreaker) SetTimeout(timeout time.Duration) *CircuitBreaker {
 	cb.timeout = timeout
 	return cb
 }
 
-// SetFailThreshold sets the number of failures that must occur within the timeout duration for the [CircuitBreaker] to
-// transition to the Open state.
-func (cb *CircuitBreaker) SetFailThreshold(threshold uint32) *CircuitBreaker {
-	cb.failThreshold = threshold
+// SetFailureThreshold method sets the number of failures that must occur within the
+// timeout duration for the [CircuitBreaker] to transition to the Open state.
+func (cb *CircuitBreaker) SetFailureThreshold(threshold uint32) *CircuitBreaker {
+	cb.failureThreshold = threshold
 	return cb
 }
 
-// SetSuccessThreshold sets the number of successes that must occur to transition the [CircuitBreaker] from the Half-Open state
-// to the Closed state.
+// SetSuccessThreshold method sets the number of successes that must occur to transition
+// the [CircuitBreaker] from the Half-Open state to the Closed state.
 func (cb *CircuitBreaker) SetSuccessThreshold(threshold uint32) *CircuitBreaker {
 	cb.successThreshold = threshold
 	return cb
 }
 
-// CircuitBreakerPolicy is a function that determines whether a response should trip the [CircuitBreaker].
+// CircuitBreakerPolicy is a function type that determines whether a response should
+// trip the [CircuitBreaker].
 type CircuitBreakerPolicy func(resp *http.Response) bool
 
-// CircuitBreaker5xxPolicy is a [CircuitBreakerPolicy] that trips the [CircuitBreaker] if the response status code is 500 or greater.
+// CircuitBreaker5xxPolicy is a [CircuitBreakerPolicy] that trips the [CircuitBreaker] if
+// the response status code is 500 or greater.
 func CircuitBreaker5xxPolicy(resp *http.Response) bool {
 	return resp.StatusCode > 499
 }
@@ -118,17 +142,17 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 	}
 
 	if failed {
-		if cb.failCount.Load() > 0 && time.Since(cb.lastFail) > cb.timeout {
-			cb.failCount.Store(0)
+		if cb.failureCount.Load() > 0 && time.Since(cb.lastFailureAt) > cb.timeout {
+			cb.failureCount.Store(0)
 		}
 
 		switch cb.getState() {
 		case circuitBreakerStateClosed:
-			failCount := cb.failCount.Add(1)
-			if failCount >= cb.failThreshold {
+			failCount := cb.failureCount.Add(1)
+			if failCount >= cb.failureThreshold {
 				cb.open()
 			} else {
-				cb.lastFail = time.Now()
+				cb.lastFailureAt = time.Now()
 			}
 		case circuitBreakerStateHalfOpen:
 			cb.open()
@@ -144,8 +168,6 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 			}
 		}
 	}
-
-	return
 }
 
 func (cb *CircuitBreaker) open() {
@@ -157,7 +179,7 @@ func (cb *CircuitBreaker) open() {
 }
 
 func (cb *CircuitBreaker) changeState(state circuitBreakerState) {
-	cb.failCount.Store(0)
+	cb.failureCount.Store(0)
 	cb.successCount.Store(0)
 	cb.state.Store(state)
 }
