@@ -1442,14 +1442,15 @@ func TestClientCircuitBreaker(t *testing.T) {
 
 	failThreshold := uint32(2)
 	successThreshold := uint32(1)
-	timeout := 1 * time.Second
+	timeout := 500 * time.Millisecond
 
-	c := dcnl().SetCircuitBreaker(
-		NewCircuitBreaker().
-			SetTimeout(timeout).
-			SetFailThreshold(failThreshold).
-			SetSuccessThreshold(successThreshold).
-			SetPolicies([]CircuitBreakerPolicy{CircuitBreaker5xxPolicy}))
+	cb := NewCircuitBreaker().
+		SetTimeout(timeout).
+		SetFailureThreshold(failThreshold).
+		SetSuccessThreshold(successThreshold).
+		SetPolicies(CircuitBreaker5xxPolicy)
+
+	c := dcnl().SetCircuitBreaker(cb)
 
 	for i := uint32(0); i < failThreshold; i++ {
 		_, err := c.R().Get(ts.URL + "/500")
@@ -1463,7 +1464,7 @@ func TestClientCircuitBreaker(t *testing.T) {
 	time.Sleep(timeout + 1*time.Millisecond)
 	assertEqual(t, circuitBreakerStateHalfOpen, c.circuitBreaker.getState())
 
-	resp, err = c.R().Get(ts.URL + "/500")
+	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
 	assertEqual(t, circuitBreakerStateOpen, c.circuitBreaker.getState())
 
@@ -1480,13 +1481,13 @@ func TestClientCircuitBreaker(t *testing.T) {
 	assertNil(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	resp, err = c.R().Get(ts.URL + "/500")
+	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
-	assertEqual(t, uint32(1), c.circuitBreaker.failCount.Load())
+	assertEqual(t, uint32(1), c.circuitBreaker.failureCount.Load())
 
 	time.Sleep(timeout)
 
-	resp, err = c.R().Get(ts.URL + "/500")
+	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
-	assertEqual(t, uint32(1), c.circuitBreaker.failCount.Load())
+	assertEqual(t, uint32(1), c.circuitBreaker.failureCount.Load())
 }
