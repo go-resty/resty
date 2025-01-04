@@ -193,19 +193,40 @@ func TestClientProxy(t *testing.T) {
 }
 
 func TestClientSetCertificates(t *testing.T) {
-	client := dcnl()
-	client.SetCertificates(tls.Certificate{})
+	certFile := filepath.Join(getTestDataPath(), "cert.pem")
+	keyFile := filepath.Join(getTestDataPath(), "key.pem")
 
-	transport, err := client.HTTPTransport()
+	t.Run("client cert from file", func(t *testing.T) {
+		c := dcnl()
+		c.SetCertificateFromFile(certFile, keyFile)
+		assertEqual(t, 1, len(c.TLSClientConfig().Certificates))
+	})
 
-	assertNil(t, err)
-	assertEqual(t, 1, len(transport.TLSClientConfig.Certificates))
+	t.Run("error-client cert from file", func(t *testing.T) {
+		c := dcnl()
+		c.SetCertificateFromFile(certFile+"no", keyFile+"no")
+		assertEqual(t, 0, len(c.TLSClientConfig().Certificates))
+	})
+
+	t.Run("client cert from string", func(t *testing.T) {
+		certPemData, _ := os.ReadFile(certFile)
+		keyPemData, _ := os.ReadFile(keyFile)
+		c := dcnl()
+		c.SetCertificateFromString(string(certPemData), string(keyPemData))
+		assertEqual(t, 1, len(c.TLSClientConfig().Certificates))
+	})
+
+	t.Run("error-client cert from string", func(t *testing.T) {
+		c := dcnl()
+		c.SetCertificateFromString(string("empty"), string("empty"))
+		assertEqual(t, 0, len(c.TLSClientConfig().Certificates))
+	})
 }
 
 func TestClientSetRootCertificate(t *testing.T) {
 	t.Run("root cert", func(t *testing.T) {
 		client := dcnl()
-		client.SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
+		client.SetRootCertificates(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
 		transport, err := client.HTTPTransport()
 
@@ -215,7 +236,7 @@ func TestClientSetRootCertificate(t *testing.T) {
 
 	t.Run("root cert not exists", func(t *testing.T) {
 		client := dcnl()
-		client.SetRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
+		client.SetRootCertificates(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
 		transport, err := client.HTTPTransport()
 
@@ -354,7 +375,7 @@ func TestClientTLSConfigerInterface(t *testing.T) {
 
 func TestClientSetClientRootCertificate(t *testing.T) {
 	client := dcnl()
-	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	client.SetClientRootCertificates(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
 	transport, err := client.HTTPTransport()
 
@@ -364,7 +385,7 @@ func TestClientSetClientRootCertificate(t *testing.T) {
 
 func TestClientSetClientRootCertificateNotExists(t *testing.T) {
 	client := dcnl()
-	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
+	client.SetClientRootCertificates(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
 	transport, err := client.HTTPTransport()
 
@@ -375,9 +396,10 @@ func TestClientSetClientRootCertificateNotExists(t *testing.T) {
 func TestClientSetClientRootCertificateWatcher(t *testing.T) {
 	t.Run("Cert exists", func(t *testing.T) {
 		client := dcnl()
-		client.SetClientRootCertificateWatcher(filepath.Join(getTestDataPath(), "sample-root.pem"), &CertWatcherOptions{
-			PoolInterval: time.Second * 1,
-		})
+		client.SetClientRootCertificatesWatcher(
+			&CertWatcherOptions{PoolInterval: time.Second * 1},
+			filepath.Join(getTestDataPath(), "sample-root.pem"),
+		)
 
 		transport, err := client.HTTPTransport()
 
@@ -387,7 +409,7 @@ func TestClientSetClientRootCertificateWatcher(t *testing.T) {
 
 	t.Run("Cert does not exist", func(t *testing.T) {
 		client := dcnl()
-		client.SetClientRootCertificateWatcher(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"), nil)
+		client.SetClientRootCertificatesWatcher(nil, filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
 		transport, err := client.HTTPTransport()
 

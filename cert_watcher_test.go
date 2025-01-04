@@ -57,11 +57,13 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 		// Make sure that TLS handshake happens for all request
 		// (otherwise, test may succeed because 1st TLS session is re-used)
 		DisableKeepAlives: true,
-	}).SetRootCertificateWatcher(paths.RootCACert, &CertWatcherOptions{
-		PoolInterval: poolingInterval,
-	}).SetClientRootCertificateWatcher(paths.RootCACert, &CertWatcherOptions{
-		PoolInterval: poolingInterval,
-	}).SetDebug(false)
+	}).SetRootCertificatesWatcher(
+		&CertWatcherOptions{PoolInterval: poolingInterval},
+		paths.RootCACert,
+	).SetClientRootCertificatesWatcher(
+		&CertWatcherOptions{PoolInterval: poolingInterval},
+		paths.RootCACert,
+	).SetDebug(false)
 
 	url := strings.Replace(ts.URL, "127.0.0.1", "localhost", 1)
 	t.Log("Test URL:", url)
