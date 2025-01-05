@@ -2137,7 +2137,7 @@ func TestRequestNoRetryOnNonIdempotentMethod(t *testing.T) {
 
 	c := dcnl().
 		SetTimeout(time.Second * 3).
-		AddRetryHook(
+		AddRetryHooks(
 			func(response *Response, _ error) {
 				read, err := bufReader.Read(bufCpy)
 
