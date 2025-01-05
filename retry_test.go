@@ -906,6 +906,35 @@ func TestRetryRequestPostIoReadSeeker(t *testing.T) {
 	assertEqual(t, "", resp.String())
 }
 
+func TestRetryQueryParamsGH938(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	expectedQueryParams := "foo=baz&foo=bar&foo=bar"
+
+	c := dcnl().
+		SetBaseURL(ts.URL).
+		SetRetryCount(5).
+		SetRetryWaitTime(10 * time.Millisecond).
+		SetRetryMaxWaitTime(20 * time.Millisecond).
+		AddRetryCondition(
+			func(r *Response, _ error) bool {
+				assertEqual(t, expectedQueryParams, r.Request.RawRequest.URL.RawQuery)
+				return true // always retry
+			},
+		)
+
+	_, _ = c.R().
+		SetQueryParamsFromValues(map[string][]string{
+			"foo": {
+				"baz",
+				"bar",
+				"bar",
+			},
+		}).
+		Get("/set-retrycount-test")
+}
+
 func TestRetryCoverage(t *testing.T) {
 	t.Run("apply retry default min and max value", func(t *testing.T) {
 		backoff := newBackoffWithJitter(0, 0)
