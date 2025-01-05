@@ -1300,7 +1300,6 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	}()
 
 	r.Method = method
-	r.URL = url
 
 	if r.RetryCount < 0 {
 		r.RetryCount = 0 // default behavior is no retry
@@ -1318,6 +1317,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	for i := 0; i <= r.RetryCount; i++ {
 		r.Attempt++
 		err = nil
+		r.URL = url
 		res, err = r.client.execute(r)
 		if err != nil {
 			if irErr, ok := err.(*invalidRequestError); ok {
