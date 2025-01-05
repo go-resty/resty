@@ -518,6 +518,7 @@ func TestClientSettingsCoverage(t *testing.T) {
 	assertEqual(t, time.Millisecond*100, c.RetryWaitTime())
 	assertEqual(t, time.Second*2, c.RetryMaxWaitTime())
 	assertEqual(t, false, c.IsTrace())
+	assertEqual(t, 0, len(c.RetryConditions()))
 
 	authToken := "sample auth token value"
 	c.SetAuthToken(authToken)
@@ -1144,7 +1145,7 @@ func TestClientOnResponseError(t *testing.T) {
 				SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
 				SetRetryCount(0).
 				SetRetryMaxWaitTime(time.Microsecond).
-				AddRetryCondition(func(response *Response, err error) bool {
+				AddRetryConditions(func(response *Response, err error) bool {
 					if err != nil {
 						return true
 					}

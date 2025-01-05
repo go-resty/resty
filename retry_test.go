@@ -37,7 +37,7 @@ func TestRetryConditionalGet(t *testing.T) {
 
 	client := dcnl()
 	resp, err := client.R().
-		AddRetryCondition(check).
+		AddRetryConditions(check).
 		SetRetryCount(2).
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 		Get(ts.URL + "/")
@@ -51,7 +51,7 @@ func TestRetryConditionalGet(t *testing.T) {
 	logResponse(t, resp)
 }
 
-func TestConditionalGetRequestLevel(t *testing.T) {
+func TestRequestConditionalGet(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -67,7 +67,7 @@ func TestConditionalGetRequestLevel(t *testing.T) {
 
 	resp, err := c.R().
 		EnableDebug().
-		AddRetryCondition(check).
+		AddRetryConditions(check).
 		SetRetryCount(1).
 		SetRetryWaitTime(50*time.Millisecond).
 		SetRetryMaxWaitTime(1*time.Second).
@@ -118,7 +118,7 @@ func TestClientRetryWithMinAndMaxWaitTime(t *testing.T) {
 	c.SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
 				return true
@@ -164,7 +164,7 @@ func TestClientRetryWaitMaxInfinite(t *testing.T) {
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
 				return true
@@ -199,7 +199,7 @@ func TestClientRetryWaitMaxMinimum(t *testing.T) {
 	c := dcnl().
 		SetRetryCount(1).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
-		AddRetryCondition(func(*Response, error) bool { return true })
+		AddRetryConditions(func(*Response, error) bool { return true })
 	_, err := c.R().Get(ts.URL + "/set-retrywaittime-test")
 	assertError(t, err)
 }
@@ -225,7 +225,7 @@ func TestClientRetryStrategyFuncError(t *testing.T) {
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		SetRetryStrategy(retryStrategyFunc).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[attempt] = parseTimeSleptFromResponse(r.String())
 				attempt++
@@ -263,7 +263,7 @@ func TestClientRetryStrategyFunc(t *testing.T) {
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		SetRetryStrategy(retryStrategyFunc).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
 				return true
@@ -315,7 +315,7 @@ func TestRequestRetryStrategyFunc(t *testing.T) {
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		SetRetryStrategy(retryStrategyFunc).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
 				return true
@@ -364,7 +364,7 @@ func TestClientRetryStrategyWaitTooShort(t *testing.T) {
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		SetRetryStrategy(retryStrategyFunc).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
 				return true
@@ -413,7 +413,7 @@ func TestClientRetryStrategyWaitTooLong(t *testing.T) {
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
 		SetRetryStrategy(retryStrategyFunc).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
 				return true
@@ -457,7 +457,7 @@ func TestClientRetryCancel(t *testing.T) {
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
 				return true
@@ -496,7 +496,7 @@ func TestClientRetryPost(t *testing.T) {
 
 	c := dcnl()
 	c.SetRetryCount(3)
-	c.AddRetryCondition(RetryConditionFunc(func(r *Response, _ error) bool {
+	c.AddRetryConditions(RetryConditionFunc(func(r *Response, _ error) bool {
 		return r.StatusCode() >= http.StatusInternalServerError
 	}))
 
@@ -528,7 +528,7 @@ func TestClientRetryErrorRecover(t *testing.T) {
 	c := dcnl().
 		SetRetryCount(2).
 		SetError(AuthError{}).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				err, ok := r.Error().(*AuthError)
 				retry := ok && r.StatusCode() == 429 && err.Message == "too many"
@@ -561,7 +561,7 @@ func TestClientRetryCountWithTimeout(t *testing.T) {
 	c := dcnl().
 		SetTimeout(50 * time.Millisecond).
 		SetRetryCount(1).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				attempt++
 				return true
@@ -618,7 +618,7 @@ func TestClientRetryHookWithTimeout(t *testing.T) {
 	c := dcnl().
 		SetRetryCount(retryCount).
 		SetTimeout(50 * time.Millisecond).
-		AddRetryHook(retryHook)
+		AddRetryHooks(retryHook)
 
 	// Since reflect.DeepEqual can not compare two functions
 	// just compare pointers of the two hooks
@@ -690,7 +690,7 @@ func TestClientResetMultipartReaders(t *testing.T) {
 	c := dcnl().
 		SetRetryCount(2).
 		SetTimeout(time.Second * 3).
-		AddRetryHook(
+		AddRetryHooks(
 			func(response *Response, _ error) {
 				read, err := bufReader.Read(bufCpy)
 
@@ -720,7 +720,7 @@ func TestRequestResetMultipartReaders(t *testing.T) {
 
 	c := dcnl().
 		SetTimeout(time.Second * 3).
-		AddRetryHook(
+		AddRetryHooks(
 			func(response *Response, _ error) {
 				read, err := bufReader.Read(bufCpy)
 
@@ -770,7 +770,7 @@ func TestParseRetryAfterHeader(t *testing.T) {
 	}
 }
 
-func TestRetryTooManyRequestsHeaderRetryAfter(t *testing.T) {
+func TestRequestRetryTooManyRequestsHeaderRetryAfter(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -843,7 +843,7 @@ func TestRetryDefaultConditions(t *testing.T) {
 	})
 }
 
-func TestRetryRequestPutIoReadSeekerForBuffer(t *testing.T) {
+func TestRequestRetryPutIoReadSeekerForBuffer(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
 		assertError(t, err)
@@ -853,7 +853,7 @@ func TestRetryRequestPutIoReadSeekerForBuffer(t *testing.T) {
 	}))
 
 	c := dcnl().
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, err error) bool {
 				return err != nil || r.StatusCode() > 499
 			},
@@ -875,7 +875,7 @@ func TestRetryRequestPutIoReadSeekerForBuffer(t *testing.T) {
 	assertEqual(t, "", resp.String())
 }
 
-func TestRetryRequestPostIoReadSeeker(t *testing.T) {
+func TestRequestRetryPostIoReadSeeker(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
 		assertError(t, err)
@@ -885,7 +885,7 @@ func TestRetryRequestPostIoReadSeeker(t *testing.T) {
 	}))
 
 	c := dcnl().
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, err error) bool {
 				return err != nil || r.StatusCode() > 499
 			},
@@ -906,7 +906,63 @@ func TestRetryRequestPostIoReadSeeker(t *testing.T) {
 	assertEqual(t, "", resp.String())
 }
 
-func TestRetryQueryParamsGH938(t *testing.T) {
+func TestRequestRetryHooks(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	hookFunc := func(msg string) RetryHookFunc {
+		return func(res *Response, err error) {
+			res.Request.log.Debugf(msg)
+		}
+	}
+
+	c, lb := dcldb()
+	c.AddRetryConditions(func(r *Response, err error) bool {
+		return true
+	}).
+		AddRetryHooks(
+			hookFunc("This is client hook1"),
+			hookFunc("This is client hook2"),
+		)
+
+	_, _ = c.R().
+		SetRetryCount(1).
+		AddRetryHooks(hookFunc("This is request hook1")).
+		SetRetryHooks(hookFunc("This is request overwrite hook1")).
+		Get("/set-retrycount-test")
+
+	debugLog := lb.String()
+	assertEqual(t, false, strings.Contains(debugLog, "This is client hook1"))
+	assertEqual(t, false, strings.Contains(debugLog, "This is client hook2"))
+	assertEqual(t, false, strings.Contains(debugLog, "This is request hook1"))
+	assertEqual(t, true, strings.Contains(debugLog, "This is request overwrite hook1"))
+}
+
+func TestRequestSetRetryConditions(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	condFunc := func(fn func() bool) RetryConditionFunc {
+		return func(r *Response, err error) bool {
+			return fn()
+		}
+	}
+
+	c := dcnl().
+		AddRetryConditions(
+			condFunc(func() bool { return true }),
+			condFunc(func() bool { return true }),
+		)
+
+	res, _ := c.R().
+		SetRetryCount(2).
+		SetRetryConditions(condFunc(func() bool { return false })). // disable retry with overwrite condition
+		Get("/set-retrycount-test")
+
+	assertEqual(t, 1, res.Request.Attempt)
+}
+
+func TestRequestRetryQueryParamsGH938(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -917,7 +973,7 @@ func TestRetryQueryParamsGH938(t *testing.T) {
 		SetRetryCount(5).
 		SetRetryWaitTime(10 * time.Millisecond).
 		SetRetryMaxWaitTime(20 * time.Millisecond).
-		AddRetryCondition(
+		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				assertEqual(t, expectedQueryParams, r.Request.RawRequest.URL.RawQuery)
 				return true // always retry
