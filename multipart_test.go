@@ -421,6 +421,11 @@ func TestMultipartFieldProgressCallback(t *testing.T) {
 
 	fields := []*MultipartField{
 		{
+			Name:             "test-image",
+			FilePath:         filepath.Join(getTestDataPath(), "test-img.png"),
+			ProgressCallback: progressCallback,
+		},
+		{
 			Name:             "test-image-1",
 			FileName:         "test-image-1.png",
 			ContentType:      "image/png",
@@ -456,6 +461,7 @@ func TestMultipartFieldProgressCallback(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, true, strings.Contains(responseStr, "test-image-1.png"))
+	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
 	assertEqual(t, true, strings.Contains(responseStr, "50mbfile.bin"))
 	assertEqual(t, true, strings.Contains(responseStr, "100mbfile.bin"))
 }
