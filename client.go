@@ -475,9 +475,9 @@ func (c *Client) FormData() url.Values {
 }
 
 // SetFormData method sets Form parameters and their values in the client instance.
-// It applies only to HTTP methods `POST` and `PUT`, and the request content type would be set as
-// `application/x-www-form-urlencoded`. These form data will be added to all the requests raised from
-// this client instance. Also, it can be overridden at the request level.
+// The request content type would be set as `application/x-www-form-urlencoded`.
+// The client-level form data gets added to all the requests. Also, it can be
+// overridden at the request level.
 //
 // See [Request.SetFormData].
 //

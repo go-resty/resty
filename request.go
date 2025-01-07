@@ -297,9 +297,8 @@ func (r *Request) SetQueryString(query string) *Request {
 	return r
 }
 
-// SetFormData method sets Form parameters and their values for the current request.
-// It applies only to HTTP methods `POST` and `PUT`, and by default requests
-// content type would be set as `application/x-www-form-urlencoded`.
+// SetFormData method sets form parameters and their values in the current request.
+// The request content type would be set as `application/x-www-form-urlencoded`.
 //
 //	client.R().
 //		SetFormData(map[string]string{
