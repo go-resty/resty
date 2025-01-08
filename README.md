@@ -6,7 +6,6 @@
 <p align="center" style="margin-top:3rem"><a href="https://github.com/go-resty/resty/actions/workflows/ci.yml?query=branch%3Av3" target="_blank"><img src="https://github.com/go-resty/resty/actions/workflows/ci.yml/badge.svg?branch=v3" alt="Resty Build Status">
 </a><a href="https://app.codecov.io/gh/go-resty/resty/tree/v3" target="_blank"><img src="https://codecov.io/gh/go-resty/resty/branch/v3/graph/badge.svg" alt="Resty Code Coverage">
 </a><a href="https://goreportcard.com/report/resty.dev/v3" target="_blank"><img src="https://goreportcard.com/badge/resty.dev/v3" alt="Go Report Card">
-</a><a href="https://github.com/go-resty/resty/releases/latest" target="_blank"><img src="https://img.shields.io/badge/version-v3.0.0--alpha.5-blue.svg" alt="Resty Release Version">
 </a><a href="https://pkg.go.dev/resty.dev/v3" target="_blank"><img src="https://pkg.go.dev/badge/resty.dev/v3" alt="Resty GoDoc">
 </a><a href="LICENSE"><img src="https://img.shields.io/github/license/go-resty/resty.svg" alt="License"></a> <a href="https://github.com/avelino/awesome-go" target="_blank"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a></p>
 <p align="center" style="margin-bottom:1rem"><a href="https://app.fossa.com/projects/git%2Bgithub.com%2Fgo-resty%2Fresty?ref=badge_shield&amp;issueType=license" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2Fgo-resty%2Fresty.svg?type=shield&amp;issueType=license"></a>

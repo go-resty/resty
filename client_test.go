@@ -1465,7 +1465,7 @@ func TestClientCircuitBreaker(t *testing.T) {
 
 	failThreshold := uint32(2)
 	successThreshold := uint32(1)
-	timeout := 500 * time.Millisecond
+	timeout := 100 * time.Millisecond
 
 	cb := NewCircuitBreaker().
 		SetTimeout(timeout).
@@ -1484,14 +1484,14 @@ func TestClientCircuitBreaker(t *testing.T) {
 	assertNil(t, resp)
 	assertEqual(t, circuitBreakerStateOpen, c.circuitBreaker.getState())
 
-	time.Sleep(timeout + 1*time.Millisecond)
+	time.Sleep(timeout + 50*time.Millisecond)
 	assertEqual(t, circuitBreakerStateHalfOpen, c.circuitBreaker.getState())
 
 	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
 	assertEqual(t, circuitBreakerStateOpen, c.circuitBreaker.getState())
 
-	time.Sleep(timeout + 1*time.Millisecond)
+	time.Sleep(timeout + 50*time.Millisecond)
 	assertEqual(t, circuitBreakerStateHalfOpen, c.circuitBreaker.getState())
 
 	for i := uint32(0); i < successThreshold; i++ {
