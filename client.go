@@ -527,6 +527,16 @@ func (c *Client) HeaderAuthorizationKey() string {
 	return c.headerAuthorizationKey
 }
 
+// SetHeaderAuthorizationKey method sets the given HTTP header name for Authorization in the client instance.
+//
+//	client.SetHeaderAuthorizationKey("X-Custom-Authorization")
+func (c *Client) SetHeaderAuthorizationKey(k string) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.headerAuthorizationKey = k
+	return c
+}
+
 // SetAuthToken method sets the auth token of the `Authorization` header for all HTTP requests.
 // The default auth scheme is `Bearer`; it can be customized with the method [Client.SetAuthScheme]. For Example:
 //
@@ -635,6 +645,7 @@ func (c *Client) R() *Request {
 		AllowMethodGetPayload:      c.allowMethodGetPayload,
 		AllowMethodDeletePayload:   c.allowMethodDeletePayload,
 		AllowNonIdempotentRetry:    c.allowNonIdempotentRetry,
+		HeaderAuthorizationKey:     c.headerAuthorizationKey,
 
 		client:              c,
 		baseURL:             c.baseURL,

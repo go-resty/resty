@@ -524,6 +524,10 @@ func TestClientSettingsCoverage(t *testing.T) {
 	c.SetAuthToken(authToken)
 	assertEqual(t, authToken, c.AuthToken())
 
+	customAuthHeader := "X-Custom-Authorization"
+	c.SetHeaderAuthorizationKey(customAuthHeader)
+	assertEqual(t, customAuthHeader, c.HeaderAuthorizationKey())
+
 	c.SetCloseConnection(true)
 
 	c.DisableDebug()
