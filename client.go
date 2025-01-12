@@ -1791,6 +1791,7 @@ func (c *Client) IsSaveResponse() bool {
 //   - [Request.SetOutputFileName]
 //   - Content-Disposition header
 //   - Request URL using [path.Base]
+//   - Request URL hostname if path is empty or "/"
 //
 // It can be overridden at request level, see [Request.SetSaveResponse]
 func (c *Client) SetSaveResponse(save bool) *Client {
