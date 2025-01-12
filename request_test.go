@@ -1406,6 +1406,13 @@ func TestRequestSaveResponse(t *testing.T) {
 		assertNil(t, err)
 	})
 
+	t.Run("empty path", func(t *testing.T) {
+		_, err := c.R().
+			SetSaveResponse(true).
+			Get(ts.URL)
+		assertError(t, err)
+	})
+
 }
 
 func TestContextInternal(t *testing.T) {
