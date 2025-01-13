@@ -538,6 +538,14 @@ func TestClientSettingsCoverage(t *testing.T) {
 	c.EnableRetryDefaultConditions()
 	assertEqual(t, true, c.IsRetryDefaultConditions())
 
+	nr := nopReader{}
+	n, err1 := nr.Read(nil)
+	assertEqual(t, 0, n)
+	assertEqual(t, io.EOF, err1)
+	b, err1 := nr.ReadByte()
+	assertEqual(t, byte(0), b)
+	assertEqual(t, io.EOF, err1)
+
 	// [Start] Custom Transport scenario
 	ct := dcnl()
 	ct.SetTransport(&CustomRoundTripper1{})
