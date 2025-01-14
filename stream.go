@@ -81,15 +81,12 @@ func decodeXML(r io.Reader, v any) error {
 	return nil
 }
 
+var gzipPool = sync.Pool{New: func() any { return new(gzip.Reader) }}
+
 func decompressGzip(r io.ReadCloser) (io.ReadCloser, error) {
-	nr, err := gzip.NewReader(r)
-	if err != nil {
-		return nil, err
-	}
-
-	gz := &gzipReader{s: r, r: nr}
-
-	return gz, nil
+	gr := gzipPool.Get().(*gzip.Reader)
+	err := gr.Reset(r)
+	return &gzipReader{s: r, r: gr}, err
 }
 
 type gzipReader struct {
@@ -102,7 +99,9 @@ func (gz *gzipReader) Read(p []byte) (n int, err error) {
 }
 
 func (gz *gzipReader) Close() error {
-	closeq(gz.r)
+	if err := gz.r.Reset(&nopReader{}); err == nil {
+		gzipPool.Put(gz.r)
+	}
 	closeq(gz.s)
 	return nil
 }
@@ -125,7 +124,7 @@ func (d *deflateReader) Read(p []byte) (n int, err error) {
 }
 
 func (d *deflateReader) Close() error {
-	if err := d.r.(flate.Resetter).Reset(nopReader{}, nil); err == nil {
+	if err := d.r.(flate.Resetter).Reset(&nopReader{}, nil); err == nil {
 		flatePool.Put(d.r)
 	}
 	closeq(d.s)
