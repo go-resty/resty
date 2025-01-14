@@ -158,6 +158,14 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 	return rr
 }
 
+// SetContentType method is a convenient way to set the header Content-Type in the request
+//
+//	client.R().SetContentType("application/json")
+func (r *Request) SetContentType(ct string) *Request {
+	r.SetHeader(hdrContentTypeKey, ct)
+	return r
+}
+
 // SetHeader method sets a single header field and its value in the current request.
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`.
