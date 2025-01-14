@@ -99,9 +99,8 @@ func (gz *gzipReader) Read(p []byte) (n int, err error) {
 }
 
 func (gz *gzipReader) Close() error {
-	if err := gz.r.Reset(&nopReader{}); err == nil {
-		gzipPool.Put(gz.r)
-	}
+	gz.r.Reset(nopReader{})
+	gzipPool.Put(gz.r)
 	closeq(gz.s)
 	return nil
 }
@@ -124,9 +123,8 @@ func (d *deflateReader) Read(p []byte) (n int, err error) {
 }
 
 func (d *deflateReader) Close() error {
-	if err := d.r.(flate.Resetter).Reset(&nopReader{}, nil); err == nil {
-		flatePool.Put(d.r)
-	}
+	d.r.(flate.Resetter).Reset(nopReader{}, nil)
+	flatePool.Put(d.r)
 	closeq(d.s)
 	return nil
 }
