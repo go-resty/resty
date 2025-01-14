@@ -1594,7 +1594,7 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 
 	resp, err := dcnldr().
 		SetBody(file).
-		SetHeader("Content-Type", "image/png").
+		SetContentType("image/png").
 		Post(ts.URL + "/upload")
 
 	assertError(t, err)
@@ -1606,7 +1606,7 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 
 	resp, err = dcnldr().
 		SetBody(file).
-		SetHeader("Content-Type", "image/png").
+		SetContentType("image/png").
 		SetContentLength(true).
 		Post(ts.URL + "/upload")
 

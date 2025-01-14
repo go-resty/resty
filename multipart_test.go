@@ -353,8 +353,8 @@ func TestMultipartLargeFile(t *testing.T) {
 		c := dcnl()
 		resp, err := c.R().
 			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetMultipartBoundary("custom-boundary-"+strconv.FormatInt(time.Now().Unix(), 10)).
-			SetHeader("Content-Type", "image/png").
+			SetMultipartBoundary("custom-boundary-" + strconv.FormatInt(time.Now().Unix(), 10)).
+			SetContentType("image/png").
 			Post(ts.URL + "/upload")
 		assertNil(t, err)
 		assertNotNil(t, resp)
@@ -365,8 +365,8 @@ func TestMultipartLargeFile(t *testing.T) {
 		c := dcnl()
 		_, err := c.R().
 			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetMultipartBoundary(`"custom-boundary-"`+strconv.FormatInt(time.Now().Unix(), 10)).
-			SetHeader("Content-Type", "image/png").
+			SetMultipartBoundary(`"custom-boundary-"` + strconv.FormatInt(time.Now().Unix(), 10)).
+			SetContentType("image/png").
 			Post(ts.URL + "/upload")
 		assertNotNil(t, err)
 		assertEqual(t, "mime: invalid boundary character", err.Error())
@@ -616,8 +616,8 @@ func TestMultipartRequest_createMultipart(t *testing.T) {
 
 		req1 := c.R().
 			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetMultipartBoundary("custom-boundary-"+strconv.FormatInt(time.Now().Unix(), 10)).
-			SetHeader("Content-Type", "image/png")
+			SetMultipartBoundary("custom-boundary-" + strconv.FormatInt(time.Now().Unix(), 10)).
+			SetContentType("image/png")
 
 		mw := multipart.NewWriter(new(bytes.Buffer))
 		err := createMultipart(mw, req1)
@@ -638,7 +638,7 @@ func TestMultipartRequest_createMultipart(t *testing.T) {
 
 		req1 := c.R().
 			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetHeader("Content-Type", "image/png")
+			SetContentType("image/png")
 
 		mw := multipart.NewWriter(new(bytes.Buffer))
 		err := createMultipart(mw, req1)
