@@ -139,6 +139,9 @@ func Backoff(operation func() (*Response, error), options ...Option) error {
 			if err := resetFileReaders(resp.Request.multipartFiles); err != nil {
 				return err
 			}
+			if err := resetFieldReaders(resp.Request.multipartFields); err != nil {
+				return err
+			}
 		}
 
 		for _, hook := range opts.retryHooks {
@@ -241,6 +244,18 @@ func newRnd() *rand.Rand {
 
 func resetFileReaders(files []*File) error {
 	for _, f := range files {
+		if rs, ok := f.Reader.(io.ReadSeeker); ok {
+			if _, err := rs.Seek(0, io.SeekStart); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func resetFieldReaders(fields []*MultipartField) error {
+	for _, f := range fields {
 		if rs, ok := f.Reader.(io.ReadSeeker); ok {
 			if _, err := rs.Seek(0, io.SeekStart); err != nil {
 				return err
