@@ -681,13 +681,31 @@ func TestRequestAuthScheme(t *testing.T) {
 		SetAuthScheme("OAuth").
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF")
 
-	resp, err := c.R().
-		SetAuthScheme("Bearer").
-		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
-		Get(ts.URL + "/profile")
+	t.Run("override auth scheme", func(t *testing.T) {
+		resp, err := c.R().
+			SetAuthScheme("Bearer").
+			SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
+			Get(ts.URL + "/profile")
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+	})
+
+	t.Run("empty auth scheme GH954", func(t *testing.T) {
+		tokenValue := "004DDB79-6801-4587-B976-F093E6AC44FF"
+
+		// set client level
+		c.SetAuthScheme("").
+			SetAuthToken(tokenValue)
+
+		resp, err := c.R().
+			Get(ts.URL + "/profile")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
+	})
+
 }
 
 func TestRequestDigestAuth(t *testing.T) {

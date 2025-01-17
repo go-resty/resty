@@ -501,11 +501,11 @@ func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 			if r.URL.Path == "/profile" {
 				// 004DDB79-6801-4587-B976-F093E6AC44FF
 				auth := r.Header.Get("Authorization")
-				t.Logf("Bearer Auth: %v", auth)
+				t.Logf("Auth Header: %v", auth)
 
 				w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
-				if !strings.HasPrefix(auth, "Bearer ") {
+				if strings.HasPrefix(auth, "Basic ") {
 					w.Header().Set("Www-Authenticate", "Protected Realm")
 					w.WriteHeader(http.StatusUnauthorized)
 					_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
@@ -513,7 +513,7 @@ func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 					return
 				}
 
-				if auth[7:] == "004DDB79-6801-4587-B976-F093E6AC44FF" || auth[7:] == "004DDB79-6801-4587-B976-F093E6AC44FF-Request" {
+				if strings.Contains(auth, "004DDB79-6801-4587-B976-F093E6AC44FF") {
 					_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
 				}
 			}
