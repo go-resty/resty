@@ -823,3 +823,58 @@ func TestResetMultipartReaders(t *testing.T) {
 	assertEqual(t, 500, resp.StatusCode())
 	assertNil(t, err)
 }
+
+func TestResetMultipartFieldReaderSeekStartError(t *testing.T) {
+	ts := createFilePostServer(t)
+	defer ts.Close()
+
+	testSeeker := &failingSeeker{
+		bytes.NewReader([]byte("test")),
+	}
+
+	c := dc().
+		SetRetryCount(2).
+		SetTimeout(time.Second * 3).
+		SetRetryResetReaders(true).
+		AddRetryAfterErrorCondition()
+
+	resp, err := c.R().
+		SetMultipartField("file", "audio.wav", "audio/wav", testSeeker).
+		Post(ts.URL + "/set-reset-multipart-readers-test")
+
+	assertEqual(t, 500, resp.StatusCode())
+	assertEqual(t, err.Error(), errSeekFailure.Error())
+}
+
+func TestResetMultipartFieldReaders(t *testing.T) {
+	ts := createFilePostServer(t)
+	defer ts.Close()
+
+	str := "test"
+	buf := []byte(str)
+
+	bufReader := bytes.NewReader(buf)
+	bufCpy := make([]byte, len(buf))
+
+	c := dc().
+		SetRetryCount(2).
+		SetTimeout(time.Second * 3).
+		SetRetryResetReaders(true).
+		AddRetryAfterErrorCondition().
+		AddRetryHook(
+			func(response *Response, _ error) {
+				read, err := bufReader.Read(bufCpy)
+
+				assertNil(t, err)
+				assertEqual(t, len(buf), read)
+				assertEqual(t, str, string(bufCpy))
+			},
+		)
+
+	resp, err := c.R().
+		SetMultipartField("file", "audio.wav", "audio/wav", bufReader).
+		Post(ts.URL + "/set-reset-multipart-readers-test")
+
+	assertEqual(t, 500, resp.StatusCode())
+	assertNil(t, err)
+}
