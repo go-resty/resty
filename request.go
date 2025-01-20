@@ -668,7 +668,7 @@ func (r *Request) SetAuthScheme(scheme string) *Request {
 //
 // NOTE: In this scenario
 //   - [Response.BodyBytes] might be nil.
-//   - [Response].Body might be already read.
+//   - [Response].Body might have been already read.
 func (r *Request) SetOutputFileName(file string) *Request {
 	r.OutputFileName = file
 	r.SetSaveResponse(true)
@@ -701,12 +701,13 @@ func (r *Request) SetCloseConnection(close bool) *Request {
 }
 
 // SetDoNotParseResponse method instructs Resty not to parse the response body automatically.
+//
 // Resty exposes the raw response body as [io.ReadCloser]. If you use it, do not
 // forget to close the body, otherwise, you might get into connection leaks, and connection
 // reuse may not happen.
 //
-// NOTE: [Response] middlewares are not executed using this option. You have
-// taken over the control of response parsing from Resty.
+// NOTE: The default [Response] middlewares are not executed when using this option. User
+// takes over the control of handling response body from Resty.
 func (r *Request) SetDoNotParseResponse(notParse bool) *Request {
 	r.DoNotParseResponse = notParse
 	return r
@@ -728,7 +729,7 @@ func (r *Request) SetResponseBodyLimit(v int64) *Request {
 	return r
 }
 
-// SetResponseBodyUnlimitedReads method is to turn on/off the response body copy
+// SetResponseBodyUnlimitedReads method is to turn on/off the response body in memory
 // that provides an ability to do unlimited reads.
 //
 // It overrides the value set at the client level; see [Client.SetResponseBodyUnlimitedReads]
@@ -737,7 +738,7 @@ func (r *Request) SetResponseBodyLimit(v int64) *Request {
 //   - When debug mode is enabled
 //
 // NOTE: Use with care
-//   - Turning on this feature uses additional memory to store a copy of the response body buffer.
+//   - Turning on this feature keeps the response body in memory, which might cause additional memory usage.
 func (r *Request) SetResponseBodyUnlimitedReads(b bool) *Request {
 	r.ResponseBodyUnlimitedReads = b
 	return r
@@ -960,8 +961,9 @@ func (r *Request) SetDebug(d bool) *Request {
 // The request will retry if any functions return `true`, otherwise return `false`.
 //
 // NOTE:
+//   - The default retry conditions are applied first.
 //   - The client-level retry conditions are applied to all requests.
-//   - The request-level retry conditions are executed first before client-level
+//   - The request-level retry conditions are executed first before the client-level
 //     retry conditions. See [Request.SetRetryConditions]
 func (r *Request) AddRetryConditions(conditions ...RetryConditionFunc) *Request {
 	r.retryConditions = append(r.retryConditions, conditions...)
@@ -980,7 +982,7 @@ func (r *Request) SetRetryConditions(conditions ...RetryConditionFunc) *Request 
 //
 // NOTE:
 //   - All the retry hooks are executed on each request retry.
-//   - The request-level retry hooks are executed first before client-level hooks.
+//   - The request-level retry hooks are executed first before the client-level hooks.
 func (r *Request) AddRetryHooks(hooks ...RetryHookFunc) *Request {
 	r.retryHooks = append(r.retryHooks, hooks...)
 	return r
@@ -1003,7 +1005,7 @@ func (r *Request) SetRetryHooks(hooks ...RetryHookFunc) *Request {
 // See [Request.SetRetryStrategy]
 //
 // NOTE:
-//   - By default, Resty only does retry on idempotent HTTP methods, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
+//   - By default, Resty only does retry on idempotent HTTP verb, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
 //
 // [RFC 9110 Section 9.2.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
 // [RFC 9110 Section 18.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
@@ -1109,10 +1111,12 @@ func (r *Request) SetTrace(t bool) *Request {
 }
 
 // EnableGenerateCurlCmd method enables the generation of curl commands for the current request.
-// It overrides the options set in the [Client].
 //
 // By default, Resty does not log the curl command in the debug log since it has the potential
-// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd].
+// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd] or
+// [Client.SetDebugLogCurlCmd].
+//
+// It overrides the options set in the [Client].
 //
 // NOTE: Use with care.
 //   - Potential to leak sensitive data from [Request] and [Response] in the debug log
@@ -1136,15 +1140,16 @@ func (r *Request) DisableGenerateCurlCmd() *Request {
 // SetGenerateCurlCmd method is used to turn on/off the generate curl command for the current request.
 //
 // By default, Resty does not log the curl command in the debug log since it has the potential
-// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd].
+// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd] or
+// [Client.SetDebugLogCurlCmd].
+//
+// It overrides the options set by the [Client.SetGenerateCurlCmd]
 //
 // NOTE: Use with care.
 //   - Potential to leak sensitive data from [Request] and [Response] in the debug log
 //     when the debug log option is enabled.
 //   - Additional memory usage since the request body was reread.
 //   - curl body is not generated for [io.Reader] and multipart request flow.
-//
-// It overrides the options set by the [Client.SetGenerateCurlCmd]
 func (r *Request) SetGenerateCurlCmd(b bool) *Request {
 	r.generateCurlCmd = b
 	return r
@@ -1271,42 +1276,58 @@ func (r *Request) TraceInfo() TraceInfo {
 // HTTP verb method starts here
 //_______________________________________________________________________
 
-// Get method does GET HTTP request. It's defined in section 4.3.1 of RFC7231.
+// Get method does GET HTTP request. It's defined in section 9.3.1 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.1
 func (r *Request) Get(url string) (*Response, error) {
 	return r.Execute(MethodGet, url)
 }
 
-// Head method does HEAD HTTP request. It's defined in section 4.3.2 of RFC7231.
+// Head method does HEAD HTTP request. It's defined in section 9.3.2 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.2
 func (r *Request) Head(url string) (*Response, error) {
 	return r.Execute(MethodHead, url)
 }
 
-// Post method does POST HTTP request. It's defined in section 4.3.3 of RFC7231.
+// Post method does POST HTTP request. It's defined in section 9.3.3 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.3
 func (r *Request) Post(url string) (*Response, error) {
 	return r.Execute(MethodPost, url)
 }
 
-// Put method does PUT HTTP request. It's defined in section 4.3.4 of RFC7231.
+// Put method does PUT HTTP request. It's defined in section 9.3.4 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.4
 func (r *Request) Put(url string) (*Response, error) {
 	return r.Execute(MethodPut, url)
 }
 
-// Patch method does PATCH HTTP request. It's defined in section 2 of RFC5789.
+// Patch method does PATCH HTTP request. It's defined in section 2 of [RFC 5789].
+//
+// [RFC 5789]: https://datatracker.ietf.org/doc/html/rfc5789.html#section-2
 func (r *Request) Patch(url string) (*Response, error) {
 	return r.Execute(MethodPatch, url)
 }
 
-// Delete method does DELETE HTTP request. It's defined in section 4.3.5 of RFC7231.
+// Delete method does DELETE HTTP request. It's defined in section 9.3.5 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.5
 func (r *Request) Delete(url string) (*Response, error) {
 	return r.Execute(MethodDelete, url)
 }
 
-// Options method does OPTIONS HTTP request. It's defined in section 4.3.7 of RFC7231.
+// Options method does OPTIONS HTTP request. It's defined in section 9.3.7 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.7
 func (r *Request) Options(url string) (*Response, error) {
 	return r.Execute(MethodOptions, url)
 }
 
-// Trace method does TRACE HTTP request. It's defined in section 4.3.8 of RFC7231.
+// Trace method does TRACE HTTP request. It's defined in section 9.3.8 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.8
 func (r *Request) Trace(url string) (*Response, error) {
 	return r.Execute(MethodTrace, url)
 }

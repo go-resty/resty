@@ -49,8 +49,8 @@ type MultipartField struct {
 	// ProgressCallback function is used to provide live progress details
 	// during a multipart upload (Optional)
 	//
-	// NOTE: It is recommended to set the FileSize value when using
-	// ProgressCallback feature so that Resty sends the FileSize
+	// NOTE: It is recommended to set the FileSize value when using `MultipartField.Reader`
+	// with `ProgressCallback` feature so that Resty sends the FileSize
 	// value via [MultipartFieldProgress]
 	ProgressCallback MultipartFieldCallbackFunc
 
