@@ -602,8 +602,8 @@ func (c *Client) SetAuthScheme(scheme string) *Client {
 //
 // NOTE:
 //   - On the QOP `auth-int` scenario, the request body is read into memory to
-//     compute the body hash that consumes additional memory usage.
-//   - It is recommended to create a dedicated client instance for digest auth,
+//     compute the body hash that increases memory usage.
+//   - Create a dedicated client instance to use digest auth,
 //     as it does digest auth for all the requests raised by the client.
 //
 // [RFC 7616]: https://datatracker.ietf.org/doc/html/rfc7616
@@ -676,16 +676,12 @@ func (c *Client) NewRequest() *Request {
 // SetRequestMiddlewares method allows Resty users to override the default request
 // middlewares sequence
 //
-//	client := New()
-//	defer client.Close()
-//
 //	client.SetRequestMiddlewares(
-//		CustomRequest1Middleware,
-//		CustomRequest2Middleware,
-//		resty.PrepareRequestMiddleware, // after this, Request.RawRequest is available
-//		resty.GenerateCurlRequestMiddleware,
-//		CustomRequest3Middleware,
-//		CustomRequest4Middleware,
+//		Custom1RequestMiddleware,
+//		Custom2RequestMiddleware,
+//		resty.PrepareRequestMiddleware, // after this, `Request.RawRequest` instance is available
+//		Custom3RequestMiddleware,
+//		Custom4RequestMiddleware,
 //	)
 //
 // See, [Client.AddRequestMiddleware]
@@ -703,23 +699,20 @@ func (c *Client) SetRequestMiddlewares(middlewares ...RequestMiddleware) *Client
 // SetResponseMiddlewares method allows Resty users to override the default response
 // middlewares sequence
 //
-//	client := New()
-//	defer client.Close()
-//
 //	client.SetResponseMiddlewares(
-//		CustomResponse1Middleware,
-//		CustomResponse2Middleware,
-//		resty.AutoParseResponseMiddleware, // before this, body is not read except on debug flow
-//		CustomResponse3Middleware,
-//		resty.SaveToFileResponseMiddleware, // See, Request.SetOutputFile
-//		CustomResponse4Middleware,
-//		CustomResponse5Middleware,
+//		Custom1ResponseMiddleware,
+//		Custom2ResponseMiddleware,
+//		resty.AutoParseResponseMiddleware, // before this, the body is not read except on the debug flow
+//		Custom3ResponseMiddleware,
+//		resty.SaveToFileResponseMiddleware, // See, Request.SetOutputFileName, Request.SetSaveResponse
+//		Custom4ResponseMiddleware,
+//		Custom5ResponseMiddleware,
 //	)
 //
 // See, [Client.AddResponseMiddleware]
 //
 // NOTE:
-//   - It overwrites the existing request middleware list.
+//   - It overwrites the existing response middleware list.
 //   - Be sure to include Resty response middlewares in the response chain at the appropriate spot.
 func (c *Client) SetResponseMiddlewares(middlewares ...ResponseMiddleware) *Client {
 	c.lock.Lock()
@@ -1167,7 +1160,7 @@ func (c *Client) Timeout() time.Duration {
 //
 // It can be overridden at the request level. See [Request.SetTimeout]
 //
-// NOTE: Resty uses [context.WithTimeout] on the request, it does not use [http.Client.Timeout]
+// NOTE: Resty uses [context.WithTimeout] on the request, it does not use [http.Client].Timeout
 func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -1242,7 +1235,7 @@ func (c *Client) RetryCount() int {
 // See [Request.SetRetryStrategy]
 //
 // NOTE:
-//   - By default, Resty only does retry on idempotent HTTP methods, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
+//   - By default, Resty only does retry on idempotent HTTP verb, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
 //
 // [RFC 9110 Section 9.2.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
 // [RFC 9110 Section 18.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
@@ -1380,8 +1373,9 @@ func (c *Client) RetryConditions() []RetryConditionFunc {
 // The request will retry if any functions return `true`, otherwise return `false`.
 //
 // NOTE:
+//   - The default retry conditions are applied first.
 //   - The client-level retry conditions are applied to all requests.
-//   - The request-level retry conditions are executed first before client-level
+//   - The request-level retry conditions are executed first before the client-level
 //     retry conditions. See [Request.AddRetryConditions], [Request.SetRetryConditions]
 func (c *Client) AddRetryConditions(conditions ...RetryConditionFunc) *Client {
 	c.lock.Lock()
@@ -1422,13 +1416,12 @@ func (c *Client) TLSClientConfig() *tls.Config {
 
 // SetTLSClientConfig method sets TLSClientConfig for underlying client Transport.
 //
-// For Example:
+// Values supported by https://pkg.go.dev/crypto/tls#Config can be configured.
 //
-//	// One can set a custom root certificate. Refer: http://golang.org/pkg/crypto/tls/#example_Dial
-//	client.SetTLSClientConfig(&tls.Config{ RootCAs: roots })
-//
-//	// or One can disable security check (https)
-//	client.SetTLSClientConfig(&tls.Config{ InsecureSkipVerify: true })
+//	// Disable SSL cert verification for local development
+//	client.SetTLSClientConfig(&tls.Config{
+//		InsecureSkipVerify: true
+//	})
 //
 // NOTE: This method overwrites existing [http.Transport.TLSClientConfig]
 func (c *Client) SetTLSClientConfig(tlsConfig *tls.Config) *Client {
@@ -1507,7 +1500,7 @@ func (c *Client) RemoveProxy() *Client {
 	return c
 }
 
-// SetCertificateFromString method helps to set client certificates into Resty
+// SetCertificateFromFile method helps to set client certificates into Resty
 // from cert and key files to perform SSL client authentication
 //
 //	client.SetCertificateFromFile("certs/client.pem", "certs/client.key")
@@ -1543,8 +1536,8 @@ func (c *Client) SetCertificateFromString(certStr, certKeyStr string) *Client {
 	return c
 }
 
-// SetCertificates method helps to conveniently set client certificates into Resty
-// to perform SSL client authentication
+// SetCertificates method helps to conveniently set a slice of client certificates
+// into Resty to perform SSL client authentication
 //
 //	cert, err := tls.LoadX509KeyPair("certs/client.pem", "certs/client.key")
 //	if err != nil {
@@ -1566,7 +1559,8 @@ func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 	return c
 }
 
-// SetRootCertificates method helps to add one or more root certificates into the Resty client
+// SetRootCertificates method helps to add one or more root certificate files
+// into the Resty client
 //
 //	// one pem file path
 //	client.SetRootCertificates("/path/to/root/pemFile.pem")
@@ -1592,14 +1586,14 @@ func (c *Client) SetRootCertificates(pemFilePaths ...string) *Client {
 	return c
 }
 
-// SetRootCertificatesWatcher method enables dynamic reloading of one or more root certificates.
+// SetRootCertificatesWatcher method enables dynamic reloading of one or more root certificate files.
 // It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
 //
 //	client.SetRootCertificatesWatcher(
 //		&resty.CertWatcherOptions{
 //			PoolInterval: 24 * time.Hour,
 //		},
-//		"root-ca.crt",
+//		"root-ca.pem",
 //	)
 func (c *Client) SetRootCertificatesWatcher(options *CertWatcherOptions, pemFilePaths ...string) *Client {
 	c.SetRootCertificates(pemFilePaths...)
@@ -1609,7 +1603,7 @@ func (c *Client) SetRootCertificatesWatcher(options *CertWatcherOptions, pemFile
 	return c
 }
 
-// SetRootCertificateFromString method helps to add one or more root certificates
+// SetRootCertificateFromString method helps to add root certificate from the string
 // into the Resty client
 //
 //	myRootCertStr := `-----BEGIN CERTIFICATE-----
@@ -1622,21 +1616,21 @@ func (c *Client) SetRootCertificateFromString(pemCerts string) *Client {
 	return c
 }
 
-// SetClientRootCertificates method helps to add one or more client's root
-// certificates into the Resty client
+// SetClientRootCertificates method helps to add one or more client root
+// certificate files into the Resty client
 //
 //	// one pem file path
-//	client.SetClientCertificates("/path/to/client/pemFile.pem")
+//	client.SetClientRootCertificates("/path/to/client-root/pemFile.pem")
 //
 //	// one or more pem file path(s)
-//	client.SetClientCertificates(
-//	    "/path/to/client/pemFile1.pem",
-//	    "/path/to/client/pemFile2.pem"
-//	    "/path/to/client/pemFile3.pem"
+//	client.SetClientRootCertificates(
+//	    "/path/to/client-root/pemFile1.pem",
+//	    "/path/to/client-root/pemFile2.pem"
+//	    "/path/to/client-root/pemFile3.pem"
 //	)
 //
 //	// if you happen to have string slices
-//	client.SetClientCertificates(certs...)
+//	client.SetClientRootCertificates(certs...)
 func (c *Client) SetClientRootCertificates(pemFilePaths ...string) *Client {
 	for _, fp := range pemFilePaths {
 		pemData, err := os.ReadFile(fp)
@@ -1649,14 +1643,14 @@ func (c *Client) SetClientRootCertificates(pemFilePaths ...string) *Client {
 	return c
 }
 
-// SetClientRootCertificatesWatcher method enables dynamic reloading of one or more client root certificates.
+// SetClientRootCertificatesWatcher method enables dynamic reloading of one or more client root certificate files.
 // It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
 //
 //	client.SetClientRootCertificatesWatcher(
 //		&resty.CertWatcherOptions{
 //			PoolInterval: 24 * time.Hour,
 //		},
-//		"root-ca.crt",
+//		"client-root-ca.pem",
 //	)
 func (c *Client) SetClientRootCertificatesWatcher(options *CertWatcherOptions, pemFilePaths ...string) *Client {
 	c.SetClientRootCertificates(pemFilePaths...)
@@ -1666,8 +1660,8 @@ func (c *Client) SetClientRootCertificatesWatcher(options *CertWatcherOptions, p
 	return c
 }
 
-// SetClientRootCertificateFromString method helps to add one or more clients
-// root certificates into the Resty client
+// SetClientRootCertificateFromString method helps to add a client root certificate
+// from the string into the Resty client
 //
 //	myClientRootCertStr := `-----BEGIN CERTIFICATE-----
 //	... cert content ...
@@ -1878,12 +1872,13 @@ func (c *Client) SetCloseConnection(close bool) *Client {
 }
 
 // SetDoNotParseResponse method instructs Resty not to parse the response body automatically.
+//
 // Resty exposes the raw response body as [io.ReadCloser]. If you use it, do not
 // forget to close the body, otherwise, you might get into connection leaks, and connection
 // reuse may not happen.
 //
-// NOTE: [Response] middlewares are not executed using this option. You have
-// taken over the control of response parsing from Resty.
+// NOTE: The default [Response] middlewares are not executed when using this option. User
+// takes over the control of handling response body from Resty.
 func (c *Client) SetDoNotParseResponse(notParse bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -2074,7 +2069,8 @@ func (c *Client) SetTrace(t bool) *Client {
 // client instance level.
 //
 // By default, Resty does not log the curl command in the debug log since it has the potential
-// to leak sensitive data unless explicitly enabled via [Client.SetDebugLogCurlCmd].
+// to leak sensitive data unless explicitly enabled via [Client.SetDebugLogCurlCmd] or
+// [Request.SetDebugLogCurlCmd].
 //
 // NOTE: Use with care.
 //   - Potential to leak sensitive data from [Request] and [Response] in the debug log
@@ -2097,7 +2093,8 @@ func (c *Client) DisableGenerateCurlCmd() *Client {
 // client instance level.
 //
 // By default, Resty does not log the curl command in the debug log since it has the potential
-// to leak sensitive data unless explicitly enabled via [Client.SetDebugLogCurlCmd].
+// to leak sensitive data unless explicitly enabled via [Client.SetDebugLogCurlCmd] or
+// [Request.SetDebugLogCurlCmd].
 //
 // NOTE: Use with care.
 //   - Potential to leak sensitive data from [Request] and [Response] in the debug log
@@ -2143,7 +2140,7 @@ func (c *Client) ResponseBodyUnlimitedReads() bool {
 	return c.resBodyUnlimitedReads
 }
 
-// SetResponseBodyUnlimitedReads method is to turn on/off the response body copy
+// SetResponseBodyUnlimitedReads method is to turn on/off the response body in memory
 // that provides an ability to do unlimited reads.
 //
 // It can be overridden at the request level; see [Request.SetResponseBodyUnlimitedReads]
@@ -2152,7 +2149,7 @@ func (c *Client) ResponseBodyUnlimitedReads() bool {
 //   - When debug mode is enabled
 //
 // NOTE: Use with care
-//   - Turning on this feature uses additional memory to store a copy of the response body buffer.
+//   - Turning on this feature keeps the response body in memory, which might cause additional memory usage.
 func (c *Client) SetResponseBodyUnlimitedReads(b bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -2179,7 +2176,8 @@ func (c *Client) Client() *http.Client {
 //   - Interface values are not deeply cloned. Thus, both the original and the
 //     clone will use the same value.
 //   - It is not safe for concurrent use. You should only use this method
-//     when you are sure that any other concurrent process is not using the client.
+//     when you are sure that any other concurrent process is not using the client
+//     or client instance is protected by a mutex.
 func (c *Client) Clone(ctx context.Context) *Client {
 	cc := new(Client)
 	// dereference the pointer and copy the value

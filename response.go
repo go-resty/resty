@@ -99,7 +99,7 @@ func (r *Response) Cookies() []*http.Cookie {
 // NOTE:
 //   - Returns an empty string on auto-unmarshal scenarios, unless
 //     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
-//   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set
+//   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set.
 func (r *Response) String() string {
 	r.readIfRequired()
 	return strings.TrimSpace(string(r.bodyBytes))
@@ -111,7 +111,7 @@ func (r *Response) String() string {
 // NOTE:
 //   - Returns an empty byte slice on auto-unmarshal scenarios, unless
 //     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
-//   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set
+//   - Returns an empty byte slice when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set.
 func (r *Response) Bytes() []byte {
 	r.readIfRequired()
 	return r.bodyBytes

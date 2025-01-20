@@ -172,7 +172,7 @@ func (es *EventSource) SetRetryCount(count int) *EventSource {
 //
 // Default is 100 milliseconds.
 //
-// NOTE: The server-sent retry value takes precedence if available.
+// NOTE: The server-sent retry value takes precedence if present.
 //
 //	es.SetRetryWaitTime(1 * time.Second)
 func (es *EventSource) SetRetryWaitTime(waitTime time.Duration) *EventSource {
@@ -187,7 +187,7 @@ func (es *EventSource) SetRetryWaitTime(waitTime time.Duration) *EventSource {
 //
 // Default is 2 seconds.
 //
-// NOTE: The server-sent retry value takes precedence if available.
+// NOTE: The server-sent retry value takes precedence if present.
 //
 //	es.SetRetryMaxWaitTime(3 * time.Second)
 func (es *EventSource) SetRetryMaxWaitTime(maxWaitTime time.Duration) *EventSource {
