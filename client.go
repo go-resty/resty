@@ -451,7 +451,6 @@ func (c *Client) R() *Request {
 		RawPathParams: map[string]string{},
 		Debug:         c.Debug,
 		AuthScheme:    c.AuthScheme,
-		Token:         c.Token,
 
 		client:              c,
 		multipartFiles:      []*File{},
