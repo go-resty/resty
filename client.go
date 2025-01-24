@@ -529,6 +529,8 @@ func (c *Client) HeaderAuthorizationKey() string {
 
 // SetHeaderAuthorizationKey method sets the given HTTP header name for Authorization in the client instance.
 //
+// It can be overridden at the request level; see [Request.SetHeaderAuthorizationKey].
+//
 //	client.SetHeaderAuthorizationKey("X-Custom-Authorization")
 func (c *Client) SetHeaderAuthorizationKey(k string) *Client {
 	c.lock.Lock()

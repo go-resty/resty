@@ -654,6 +654,16 @@ func (r *Request) SetAuthScheme(scheme string) *Request {
 	return r
 }
 
+// SetHeaderAuthorizationKey method sets the given HTTP header name for Authorization in the request.
+//
+// It overrides the `Authorization` header name set by method [Client.SetHeaderAuthorizationKey].
+//
+//	client.R().SetHeaderAuthorizationKey("X-Custom-Authorization")
+func (r *Request) SetHeaderAuthorizationKey(k string) *Request {
+	r.HeaderAuthorizationKey = k
+	return r
+}
+
 // SetOutputFileName method sets the output file for the current HTTP request. The current
 // HTTP response will be saved in the given file. It is similar to the `curl -o` flag.
 //
