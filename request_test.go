@@ -681,7 +681,7 @@ func TestRequestAuthScheme(t *testing.T) {
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 	})
 
-	t.Run("empty auth scheme GH954", func(t *testing.T) {
+	t.Run("empty auth scheme at client level GH954", func(t *testing.T) {
 		tokenValue := "004DDB79-6801-4587-B976-F093E6AC44FF"
 
 		// set client level
@@ -694,6 +694,38 @@ func TestRequestAuthScheme(t *testing.T) {
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
 		assertEqual(t, tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
+	})
+
+	t.Run("empty auth scheme at request level GH954", func(t *testing.T) {
+		tokenValue := "004DDB79-6801-4587-B976-F093E6AC44FF"
+
+		// set client level
+		c := dcnl().
+			SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+			SetAuthToken(tokenValue)
+
+		resp, err := c.R().
+			SetAuthScheme("").
+			Get(ts.URL + "/profile")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
+	})
+
+	t.Run("only client level auth token GH959", func(t *testing.T) {
+		tokenValue := "004DDB79-6801-4587-B976-F093E6AC44FF"
+
+		c := dcnl().
+			SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+			SetAuthToken(tokenValue)
+
+		resp, err := c.R().
+			Get(ts.URL + "/profile")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "Bearer "+tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
 	})
 }
 
@@ -2364,6 +2396,11 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	r5.EnableRetryDefaultConditions()
 	assertEqual(t, true, r5.IsRetryDefaultConditions)
 
+	r6 := c.R()
+	customAuthHeader := "X-Custom-Authorization"
+	r6.SetHeaderAuthorizationKey(customAuthHeader)
+	assertEqual(t, customAuthHeader, r6.HeaderAuthorizationKey)
+
 	invalidJsonBytes := []byte(`{\" \": "value here"}`)
 	result := jsonIndent(invalidJsonBytes)
 	assertEqual(t, string(invalidJsonBytes), string(result))
@@ -2378,10 +2415,10 @@ func TestRequestSettingsCoverage(t *testing.T) {
 			}
 		}
 	}()
-	r6 := c.R()
+	rc := c.R()
 	//lint:ignore SA1012 test case nil check
-	r62 := r6.Clone(nil)
-	assertEqual(t, nil, r62.ctx)
+	rc2 := rc.Clone(nil)
+	assertEqual(t, nil, rc2.ctx)
 }
 
 func TestRequestDataRace(t *testing.T) {
