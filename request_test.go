@@ -1850,6 +1850,24 @@ func TestTraceInfo(t *testing.T) {
 		assertEqual(t, len(requestURLs), len(matches))
 	})
 
+	t.Run("enable trace and debug on request json formatter", func(t *testing.T) {
+		c, logBuf := dcldb()
+		c.SetBaseURL(ts.URL)
+		c.SetDebugLogFormatter(DebugLogJSONFormatter)
+
+		requestURLs := []string{"/", "/json", "/long-text", "/long-json"}
+		for _, u := range requestURLs {
+			resp, err := c.R().EnableTrace().EnableDebug().Get(u)
+			assertNil(t, err)
+			assertNotNil(t, resp)
+		}
+
+		logContent := logBuf.String()
+		regexTraceInfoHeader := regexp.MustCompile(`"trace_info":{"`)
+		matches := regexTraceInfoHeader.FindAllStringIndex(logContent, -1)
+		assertEqual(t, len(requestURLs), len(matches))
+	})
+
 	// for sake of hook funcs
 	_, _ = client.R().SetTrace(true).Get("https://httpbin.org/get")
 }

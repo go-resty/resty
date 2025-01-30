@@ -132,13 +132,6 @@ func inferContentTypeMapKey(v string) string {
 	return ""
 }
 
-// DebugLog struct is used to collect details from Resty request and response
-// for debug logging callback purposes.
-type DebugLog struct {
-	Header http.Header
-	Body   string
-}
-
 func firstNonEmpty(v ...string) string {
 	for _, s := range v {
 		if !isStringEmpty(s) {
@@ -337,88 +330,11 @@ func drainBody(res *Response) {
 	}
 }
 
-func requestDebugLogger(c *Client, r *Request) {
-	if !r.Debug {
-		return
-	}
-
-	rr := r.RawRequest
-	rh := rr.Header.Clone()
-	if c.Client().Jar != nil {
-		for _, cookie := range c.Client().Jar.Cookies(r.RawRequest.URL) {
-			s := fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
-			if c := rh.Get(hdrCookieKey); isStringEmpty(c) {
-				rh.Set(hdrCookieKey, s)
-			} else {
-				rh.Set(hdrCookieKey, c+"; "+s)
-			}
-		}
-	}
-	rl := &DebugLog{Header: sanitizeHeaders(rh), Body: r.fmtBodyString(r.DebugBodyLimit)}
-	c.lock.RLock()
-	if c.requestDebugLog != nil {
-		c.requestDebugLog(rl)
-	}
-	c.lock.RUnlock()
-
-	reqLog := "\n==============================================================================\n"
-
-	if r.generateCurlCmd && r.debugLogCurlCmd {
-		reqLog += "~~~ REQUEST(CURL) ~~~\n" +
-			fmt.Sprintf("	%v\n", r.resultCurlCmd)
-	}
-
-	reqLog += "~~~ REQUEST ~~~\n" +
-		fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
-		fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
-		fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(rl.Header)) +
-		fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
-		"------------------------------------------------------------------------------\n"
-
-	if len(r.RetryTraceID) > 0 {
-		reqLog += fmt.Sprintf("RETRY TRACE ID: %s\n", r.RetryTraceID) +
-			fmt.Sprintf("ATTEMPT       : %d\n", r.Attempt) +
-			"------------------------------------------------------------------------------\n"
-	}
-
-	r.initValuesMap()
-	r.values[debugRequestLogKey] = reqLog
-}
-
-func responseDebugLogger(c *Client, res *Response) {
-	if !res.Request.Debug {
-		return
-	}
-
-	bodyStr := res.fmtBodyString(res.Request.DebugBodyLimit)
-
-	rl := &DebugLog{Header: sanitizeHeaders(res.Header().Clone()), Body: bodyStr}
-	c.lock.RLock()
-	if c.responseDebugLog != nil {
-		c.responseDebugLog(rl)
-	}
-	c.lock.RUnlock()
-
-	debugLog := res.Request.values[debugRequestLogKey].(string)
-	debugLog += "~~~ RESPONSE ~~~\n" +
-		fmt.Sprintf("STATUS       : %s\n", res.Status()) +
-		fmt.Sprintf("PROTO        : %s\n", res.Proto()) +
-		fmt.Sprintf("RECEIVED AT  : %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
-		fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
-		"HEADERS      :\n" +
-		composeHeaders(rl.Header) + "\n"
-	if res.Request.IsSaveResponse {
-		debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
-	} else {
-		debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)
-	}
-	if res.Request.IsTrace {
-		debugLog += "------------------------------------------------------------------------------\n"
-		debugLog += fmt.Sprintf("%v\n", res.Request.TraceInfo())
-	}
-	debugLog += "==============================================================================\n"
-
-	res.Request.log.Debugf("%s", debugLog)
+func toJSON(v any) string {
+	buf := acquireBuffer()
+	defer releaseBuffer(buf)
+	_ = encodeJSON(buf, v)
+	return buf.String()
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
