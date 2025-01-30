@@ -898,13 +898,14 @@ func TestClientLogCallbacks(t *testing.T) {
 
 	c, lb := dcldb()
 
-	c.OnRequestDebugLog(func(r *DebugLog) {
+	c.OnDebugLog(func(dl *DebugLog) {
+		// request
 		// masking authorization header
-		r.Header.Set("Authorization", "Bearer *******************************")
-	})
-	c.OnResponseDebugLog(func(r *DebugLog) {
-		r.Header.Add("X-Debug-Response-Log", "Modified :)")
-		r.Body += "\nModified the response body content"
+		dl.Request.Header.Set("Authorization", "Bearer *******************************")
+
+		// response
+		dl.Response.Header.Add("X-Debug-Response-Log", "Modified :)")
+		dl.Response.Body += "\nModified the response body content"
 	})
 
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
@@ -924,8 +925,8 @@ func TestClientLogCallbacks(t *testing.T) {
 	assertEqual(t, true, strings.Contains(logInfo, "Modified the response body content"))
 
 	// overwrite scenario
-	c.OnRequestDebugLog(func(r *DebugLog) {
-		// overwrite request debug log
+	c.OnDebugLog(func(dl *DebugLog) {
+		// overwrite debug log
 	})
 	resp, err = c.R().
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
@@ -933,19 +934,7 @@ func TestClientLogCallbacks(t *testing.T) {
 	assertNil(t, err)
 	assertNotNil(t, resp)
 	assertEqual(t, int64(50), resp.Size())
-	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-request-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func1 to=resty.dev/v3.TestClientLogCallbacks.func3"))
-
-	c.OnRequestDebugLog(nil)
-	c.OnResponseDebugLog(func(r *DebugLog) {
-		// overwrite response debug log
-	})
-	resp, err = c.R().
-		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
-		Get(ts.URL + "/profile")
-	assertNil(t, err)
-	assertNotNil(t, resp)
-	assertEqual(t, int64(50), resp.Size())
-	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-response-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func2 to=resty.dev/v3.TestClientLogCallbacks.func4"))
+	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func1 to=resty.dev/v3.TestClientLogCallbacks.func2"))
 }
 
 func TestDebugLogSimultaneously(t *testing.T) {

@@ -185,6 +185,10 @@ func (r *Response) fmtBodyString(sl int) string {
 		return "***** DO NOT PARSE RESPONSE - Enabled *****"
 	}
 
+	if r.Request.IsSaveResponse {
+		return "***** RESPONSE WRITTEN INTO FILE *****"
+	}
+
 	bl := len(r.bodyBytes)
 	if r.IsRead && bl == 0 {
 		return "***** RESPONSE BODY IS ALREADY READ - see Response.{Result()/Error()} *****"
