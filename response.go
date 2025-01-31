@@ -117,12 +117,12 @@ func (r *Response) Bytes() []byte {
 	return r.bodyBytes
 }
 
-// Time method returns the duration of HTTP response time from the request we sent
+// Duration method returns the duration of HTTP response time from the request we sent
 // and received a request.
 //
 // See [Response.ReceivedAt] to know when the client received a response and see
 // `Response.Request.Time` to know when the client sent a request.
-func (r *Response) Time() time.Duration {
+func (r *Response) Duration() time.Duration {
 	if r.Request.trace != nil {
 		return r.Request.TraceInfo().TotalTime
 	}

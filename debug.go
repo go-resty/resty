@@ -112,7 +112,7 @@ func debugLogger(c *Client, res *Response) {
 		Status:     res.Status(),
 		Proto:      res.Proto(),
 		ReceivedAt: res.ReceivedAt(),
-		Duration:   res.Time(),
+		Duration:   res.Duration(),
 		Size:       res.Size(),
 		Header:     sanitizeHeaders(res.Header().Clone()),
 		Body:       res.fmtBodyString(res.Request.DebugBodyLimit),

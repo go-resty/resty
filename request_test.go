@@ -1362,7 +1362,7 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, true, resp.Size() != 0)
-	assertEqual(t, true, resp.Time() > 0)
+	assertEqual(t, true, resp.Duration() > 0)
 
 	f, err1 := os.Open(filepath.Join(baseOutputDir, outputFilePath))
 	defer closeq(f)
@@ -1391,7 +1391,7 @@ func TestOutputPathDirNotExists(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, true, resp.Size() != 0)
-	assertEqual(t, true, resp.Time() > 0)
+	assertEqual(t, true, resp.Duration() > 0)
 }
 
 func TestOutputFileAbsPath(t *testing.T) {
@@ -1802,7 +1802,7 @@ func TestTraceInfo(t *testing.T) {
 			assertEqual(t, true, tr.ResponseTime >= 0)
 			assertEqual(t, true, tr.TotalTime >= 0)
 			assertEqual(t, true, tr.TotalTime < time.Hour)
-			assertEqual(t, true, tr.TotalTime == resp.Time())
+			assertEqual(t, true, tr.TotalTime == resp.Duration())
 			assertEqual(t, tr.RemoteAddr, serverAddr)
 
 			assertNotNil(t, tr.Clone())
@@ -1824,7 +1824,7 @@ func TestTraceInfo(t *testing.T) {
 			assertEqual(t, true, tr.ServerTime >= 0)
 			assertEqual(t, true, tr.ResponseTime >= 0)
 			assertEqual(t, true, tr.TotalTime >= 0)
-			assertEqual(t, true, tr.TotalTime == resp.Time())
+			assertEqual(t, true, tr.TotalTime == resp.Duration())
 			assertEqual(t, tr.RemoteAddr, serverAddr)
 		}
 
@@ -1912,7 +1912,7 @@ func TestTraceInfoOnTimeout(t *testing.T) {
 	assertEqual(t, true, tr.ServerTime == 0)
 	assertEqual(t, true, tr.ResponseTime == 0)
 	assertEqual(t, true, tr.TotalTime > 0)
-	assertEqual(t, true, tr.TotalTime == resp.Time())
+	assertEqual(t, true, tr.TotalTime == resp.Duration())
 }
 
 func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {

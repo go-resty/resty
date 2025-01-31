@@ -1010,7 +1010,7 @@ func isNil(v any) bool {
 func logResponse(t *testing.T, resp *Response) {
 	t.Helper()
 	t.Logf("Response Status: %v", resp.Status())
-	t.Logf("Response Time: %v", resp.Time())
+	t.Logf("Response Duration: %v", resp.Duration())
 	t.Logf("Response Headers: %v", resp.Header())
 	t.Logf("Response Cookies: %v", resp.Cookies())
 	t.Logf("Response Body: %v", resp)

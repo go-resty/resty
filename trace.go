@@ -81,10 +81,7 @@ func (ti TraceInfo) String() string {
 
 // JSON method returns the JSON string of request trace information
 func (ti TraceInfo) JSON() string {
-	buf := acquireBuffer()
-	defer releaseBuffer(buf)
-	_ = encodeJSON(buf, ti)
-	return buf.String()
+	return toJSON(ti)
 }
 
 // Clone method returns the clone copy of [TraceInfo]
