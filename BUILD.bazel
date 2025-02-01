@@ -11,6 +11,7 @@ go_library(
         "circuit_breaker.go",
         "client.go",
         "curl.go",
+        "debug.go",
         "digest.go",
         "load_balancer.go",
         "middleware.go",
