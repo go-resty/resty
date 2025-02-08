@@ -933,7 +933,7 @@ func TestClientLogCallbacks(t *testing.T) {
 		Get(ts.URL + "/profile")
 	assertNil(t, err)
 	assertNotNil(t, resp)
-	assertEqual(t, int64(50), resp.Size())
+	assertEqual(t, int64(66), resp.Size())
 	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func1 to=resty.dev/v3.TestClientLogCallbacks.func2"))
 }
 

@@ -2381,6 +2381,43 @@ func TestRequestFuncs(t *testing.T) {
 	assertEqual(t, "TestGet: text response", resp.String())
 }
 
+func TestHTTPWarnGH970(t *testing.T) {
+	lookupText := "Using sensitive credentials in HTTP mode is not secure. Use HTTPS"
+
+	t.Run("SSL used", func(t *testing.T) {
+		ts := createAuthServerTLSOptional(t, true)
+		defer ts.Close()
+
+		c, lb := dcldb()
+		c.SetBaseURL(ts.URL).
+			SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+
+		res, err := c.R().
+			SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
+			Get("/profile")
+
+		assertNil(t, err)
+		assertEqual(t, true, strings.Contains(res.String(), "profile fetch successful"))
+		assertEqual(t, false, strings.Contains(lb.String(), lookupText))
+	})
+
+	t.Run("non-SSL used", func(t *testing.T) {
+		ts := createAuthServerTLSOptional(t, false)
+		defer ts.Close()
+
+		c, lb := dcldb()
+		c.SetBaseURL(ts.URL)
+
+		res, err := c.R().
+			SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
+			Get("/profile")
+
+		assertNil(t, err)
+		assertEqual(t, true, strings.Contains(res.String(), "profile fetch successful"))
+		assertEqual(t, true, strings.Contains(lb.String(), lookupText))
+	})
+}
+
 // This test methods exist for test coverage purpose
 // to validate the getter and setter
 func TestRequestSettingsCoverage(t *testing.T) {
