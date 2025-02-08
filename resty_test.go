@@ -546,7 +546,7 @@ func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 				}
 
 				if strings.Contains(auth, "004DDB79-6801-4587-B976-F093E6AC44FF") {
-					_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
+					_, _ = w.Write([]byte(`{ "username": "auth_test", "message": "profile fetch successful" }`))
 				}
 			}
 

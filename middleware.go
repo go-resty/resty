@@ -286,7 +286,7 @@ func addCredentials(c *Client, r *Request) error {
 	}
 
 	if !c.IsDisableWarn() && credentialsAdded {
-		if strings.HasPrefix(r.URL, "http") {
+		if r.RawRequest.URL.Scheme == "http" {
 			r.log.Warnf("Using sensitive credentials in HTTP mode is not secure. Use HTTPS")
 		}
 	}
