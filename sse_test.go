@@ -480,7 +480,7 @@ func TestEventSourceWithDifferentMethods(t *testing.T) {
 			es.SetURL(ts.URL)
 			es.SetMethod(tc.method)
 
-			// 设置请求体（如果有）
+			// set body
 			if tc.body != nil {
 				es.SetBody(bytes.NewBuffer(tc.body))
 			}
@@ -488,7 +488,7 @@ func TestEventSourceWithDifferentMethods(t *testing.T) {
 			err := es.Get()
 			assertNil(t, err)
 
-			// 验证接收到的消息数量
+			// check the message count
 			assertEqual(t, counter, messageCounter)
 
 			// check if server receive correct method and body
@@ -500,7 +500,7 @@ func TestEventSourceWithDifferentMethods(t *testing.T) {
 	}
 }
 
-// 创建一个验证请求方法和请求体的SSE测试服务器
+// almost like create server before but add verifying method and body
 func createMethodVerifyingSSETestServer(
 	t *testing.T,
 	ticker time.Duration,
