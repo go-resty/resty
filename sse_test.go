@@ -339,7 +339,7 @@ func TestEventSourceCoverage(t *testing.T) {
 
 	es.SetURL("https://sse.dev/test")
 	err2 := es.Get()
-	assertEqual(t, "resty:sse: OnMessage function is required", err2.Error())
+	assertEqual(t, "resty:sse: At least one OnMessage/AddEventListener func is required", err2.Error())
 
 	es.OnMessage(func(a any) {}, nil)
 	es.SetURL("//res%20ty.dev")
