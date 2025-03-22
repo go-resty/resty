@@ -24,6 +24,7 @@ import (
 var (
 	defaultSseMaxBufSize = 1 << 15 // 32kb
 	defaultEventName     = "message"
+	defaultHTTPMethod    = MethodGet
 
 	headerID    = []byte("id:")
 	headerData  = []byte("data:")
@@ -63,7 +64,9 @@ type (
 	EventSource struct {
 		lock             *sync.RWMutex
 		url              string
+		method           string
 		header           http.Header
+		body             io.Reader
 		lastEventID      string
 		retryCount       int
 		retryWaitTime    time.Duration
@@ -126,6 +129,14 @@ func (es *EventSource) SetURL(url string) *EventSource {
 	return es
 }
 
+// SetMethod method sets a [EventSource] connection HTTP method in the instance
+//
+//	es.SetMethod("POST"), or es.SetMethod(resty.MethodPost)
+func (es *EventSource) SetMethod(method string) *EventSource {
+	es.method = method
+	return es
+}
+
 // SetHeader method sets a header and its value to the [EventSource] instance.
 // It overwrites the header value if the key already exists. These headers will be sent in
 // the request while establishing a connection to the event source
@@ -136,6 +147,15 @@ func (es *EventSource) SetHeader(header, value string) *EventSource {
 	es.lock.Lock()
 	defer es.lock.Unlock()
 	es.header.Set(header, value)
+	return es
+}
+
+// SetBody method sets body value to the [EventSource] instance
+//
+// Example:
+// es.SetBody(bytes.NewReader([]byte(`{"test":"put_data"}`)))
+func (es *EventSource) SetBody(body io.Reader) *EventSource {
+	es.body = body
 	return es
 }
 
@@ -344,6 +364,12 @@ func (es *EventSource) Get() error {
 		return fmt.Errorf("resty:sse: event source URL is required")
 	}
 
+	if isStringEmpty(es.method) {
+		// It is up to the user to choose which http method to use, depending on the specific code implementation. No restrictions are imposed here.
+		// Ensure compatibility, use GET as default http method
+		es.method = defaultHTTPMethod
+	}
+
 	if len(es.onEvent) == 0 {
 		return fmt.Errorf("resty:sse: At least one OnMessage/AddEventListener func is required")
 	}
@@ -402,7 +428,7 @@ func (es *EventSource) triggerOnError(err error) {
 }
 
 func (es *EventSource) createRequest() (*http.Request, error) {
-	req, err := http.NewRequest(MethodGet, es.url, nil)
+	req, err := http.NewRequest(es.method, es.url, es.body)
 	if err != nil {
 		return nil, err
 	}
