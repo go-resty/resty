@@ -152,7 +152,8 @@ func (es *EventSource) SetHeader(header, value string) *EventSource {
 
 // SetBody method sets body value to the [EventSource] instance
 //
-//	es.SetBody([]byte(`{"test":"put_data"}`),)
+// Example:
+// es.SetBody(bytes.NewReader([]byte(`{"test":"put_data"}`)))
 func (es *EventSource) SetBody(body io.Reader) *EventSource {
 	es.body = body
 	return es
