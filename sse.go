@@ -363,14 +363,15 @@ func (es *EventSource) Get() error {
 	if isStringEmpty(es.url) {
 		return fmt.Errorf("resty:sse: event source URL is required")
 	}
+
 	if isStringEmpty(es.method) {
 		// It is up to the user to choose which http method to use, depending on the specific code implementation. No restrictions are imposed here.
 		// Ensure compatibility, use GET as default http method
 		es.method = defaultHTTPMethod
 	}
 
-	if _, found := es.onEvent[defaultEventName]; !found {
-		return fmt.Errorf("resty:sse: OnMessage function is required")
+	if len(es.onEvent) == 0 {
+		return fmt.Errorf("resty:sse: At least one OnMessage/AddEventListener func is required")
 	}
 
 	// reset to begin
