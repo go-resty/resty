@@ -1952,7 +1952,7 @@ func (c *Client) SetPathParams(params map[string]string) *Client {
 //	client.SetRawPathParam("path", "groups/developers")
 //
 //	Result:
-//		URL - /v1/users/{userId}/details
+//		URL - /v1/users/{path}/details
 //		Composed URL - /v1/users/groups/developers/details
 //
 // It replaces the value of the key while composing the request URL.

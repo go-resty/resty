@@ -766,7 +766,7 @@ func (r *Request) SetResponseBodyUnlimitedReads(b bool) *Request {
 //	client.R().SetPathParam("path", "groups/developers")
 //
 //	Result:
-//	   URL - /v1/users/{userId}/details
+//	   URL - /v1/users/{path}/details
 //	   Composed URL - /v1/users/groups%2Fdevelopers/details
 //
 // It replaces the value of the key while composing the request URL.
@@ -805,16 +805,16 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 // SetRawPathParam method sets a single URL path key-value pair in the
 // Resty current request instance without path escape.
 //
-//	client.R().SetPathParam("userId", "sample@sample.com")
+//	client.R().SetRawPathParam("userId", "sample@sample.com")
 //
 //	Result:
 //	   URL - /v1/users/{userId}/details
 //	   Composed URL - /v1/users/sample@sample.com/details
 //
-//	client.R().SetPathParam("path", "groups/developers")
+//	client.R().SetRawPathParam("path", "groups/developers")
 //
 //	Result:
-//	   URL - /v1/users/{userId}/details
+//	   URL - /v1/users/{path}/details
 //	   Composed URL - /v1/users/groups/developers/details
 //
 // It replaces the value of the key while composing the request URL.
