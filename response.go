@@ -237,7 +237,7 @@ func (r *Response) readAll() (err error) {
 	} else {
 		r.bodyBytes, err = ioReadAll(r.Body)
 		closeq(r.Body)
-		r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes)}
+		r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes), resetOnEOF: true}
 	}
 	if err == io.ErrUnexpectedEOF {
 		// content-encoding scenario's - empty/no response body from server
@@ -265,7 +265,7 @@ func (r *Response) wrapCopyReadCloser() {
 		f: func(b *bytes.Buffer) {
 			r.bodyBytes = append([]byte{}, b.Bytes()...)
 			closeq(r.Body)
-			r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes)}
+			r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes), resetOnEOF: true}
 			releaseBuffer(b)
 		},
 	}

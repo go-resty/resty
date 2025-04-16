@@ -55,6 +55,30 @@ func encodeJSONEscapeHTMLIndent(w io.Writer, v any, esc bool, indent string) err
 
 func decodeJSON(r io.Reader, v any) error {
 	dec := json.NewDecoder(r)
+
+	// Handle nopReadCloser specially to support multiple JSON objects
+	// while preventing infinite loops
+	if nrc, ok := r.(*nopReadCloser); ok {
+		// Temporarily disable auto-reset to prevent infinite loops
+		originalReset := nrc.resetOnEOF
+		nrc.resetOnEOF = false
+		defer func() { nrc.resetOnEOF = originalReset }()
+
+		// Decode all JSON objects in the data
+		for {
+			if err := dec.Decode(v); err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+		}
+
+		// After decoding, reset for future reads
+		nrc.Reset()
+		return nil
+	}
+
+	// For other readers, decode multiple JSON objects as intended
 	for {
 		if err := dec.Decode(v); err == io.EOF {
 			break
@@ -196,18 +220,24 @@ func (r *copyReadCloser) Close() error {
 var _ io.ReadCloser = (*nopReadCloser)(nil)
 
 type nopReadCloser struct {
-	r *bytes.Reader
+	r          *bytes.Reader
+	resetOnEOF bool // Whether to reset on EOF
 }
 
 func (r *nopReadCloser) Read(p []byte) (int, error) {
 	n, err := r.r.Read(p)
-	if err == io.EOF {
+	if err == io.EOF && r.resetOnEOF {
 		r.r.Seek(0, io.SeekStart)
 	}
 	return n, err
 }
 
 func (r *nopReadCloser) Close() error { return nil }
+
+// Reset allows manual reset of the reader position
+func (r *nopReadCloser) Reset() {
+	r.r.Seek(0, io.SeekStart)
+}
 
 var _ flate.Reader = (*nopReader)(nil)
 
