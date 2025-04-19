@@ -326,6 +326,10 @@ func createPostServer(t *testing.T) *httptest.Server {
 				}
 				http.SetCookie(w, &cookie)
 				w.WriteHeader(http.StatusOK)
+			case "/check-request-content-length":
+				// test endpoint for checking the server receives the correct Content-Length Header from a request
+				w.Header().Add("Request-Content-Length", r.Header.Get("Content-Length"))
+				w.WriteHeader(http.StatusOK)
 			}
 		}
 	})

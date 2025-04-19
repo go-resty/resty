@@ -2282,3 +2282,27 @@ func TestRequestGH917(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestSetContentLengthTrueWithNilBody(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dc()
+
+	c.OnBeforeRequest(func(client *Client, request *Request) error {
+		request.
+			SetBody(nil).
+			SetContentLength(true)
+
+		return nil
+	})
+
+	c = c.SetBaseURL(ts.URL)
+
+	resp, err := c.R().Execute("POST", "/check-request-content-length")
+
+	assertNil(t, err)
+
+	// when body is nil and SetContentLength is true expect Content-Length == "0"
+	assertEqual(t, "0", resp.Header().Get("Request-Content-Length"))
+}
