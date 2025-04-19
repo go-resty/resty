@@ -513,6 +513,7 @@ func Test_parseRequestBody(t *testing.T) {
 				r.SetContentLength(true)
 			},
 			expectedContentLength: "0",
+			expectedBodyBuf:       []byte{},
 		},
 		{
 			name: "empty body with SetContentLength by client",
@@ -520,6 +521,7 @@ func Test_parseRequestBody(t *testing.T) {
 				c.SetContentLength(true)
 			},
 			expectedContentLength: "0",
+			expectedBodyBuf:       []byte{},
 		},
 		{
 			name: "string body",
