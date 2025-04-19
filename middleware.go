@@ -188,6 +188,11 @@ func parseRequestHeader(c *Client, r *Request) error {
 }
 
 func parseRequestBody(c *Client, r *Request) error {
+	// Go http library omits Content-Length if body is nil; use http.NoBody to force it when SetContentLength is true
+	if r.Body == nil && (c.setContentLength || r.setContentLength) {
+		r.Body = http.NoBody
+	}
+
 	if isPayloadSupported(r.Method, c.AllowGetMethodPayload) {
 		switch {
 		case r.isMultiPart: // Handling Multipart
@@ -315,6 +320,7 @@ func createCurlCmd(c *Client, r *Request) (err error) {
 		}
 		*r.resultCurlCmd = buildCurlRequest(r.RawRequest, c.httpClient.Jar)
 	}
+
 	return nil
 }
 
