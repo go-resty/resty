@@ -558,7 +558,7 @@ func (es *EventSource) listenStream(res *http.Response) error {
 		if len(ed.Retry) > 0 {
 			if retry, err := strconv.Atoi(string(ed.Retry)); err == nil {
 				es.lock.Lock()
-				es.serverSentRetry = time.Second * time.Duration(retry)
+				es.serverSentRetry = time.Millisecond * time.Duration(retry)
 				es.lock.Unlock()
 			} else {
 				es.triggerOnError(err)
