@@ -1827,10 +1827,11 @@ func TestGetPathParamAndPathParams(t *testing.T) {
 
 	c := dc().
 		SetBaseURL(ts.URL).
-		SetPathParam("userId", "sample@sample.com")
+		SetPathParam("userId", "sample@sample.com").
+		SetRawPathParam("details", "/details")
 
 	resp, err := c.R().SetPathParam("subAccountId", "100002").
-		Get("/v1/users/{userId}/{subAccountId}/details")
+		Get("/v1/users/{userId}/{subAccountId}{details}")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
