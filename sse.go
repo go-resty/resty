@@ -551,11 +551,11 @@ func (es *EventSource) processEvent(scanner *bufio.Scanner) error {
 	}
 
 	ed, err := parseEvent(e)
-	defer putRawEvent(ed)
 	if err != nil {
 		es.triggerOnError(err)
 		return nil // parsing errors, will not return error.
 	}
+	defer putRawEvent(ed)
 
 	if len(ed.ID) > 0 {
 		es.lock.Lock()
