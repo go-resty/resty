@@ -1251,18 +1251,14 @@ func (r *Request) TraceInfo() TraceInfo {
 		RequestAttempt: r.Attempt,
 	}
 
-	// Calculate the total time accordingly,
-	// when connection is reused
-	var requestStartTime time.Time
-	if ct.gotConnInfo.Reused {
-		requestStartTime = ct.getConn
-	} else {
-		requestStartTime = ct.dnsStart
-	}
-	// DNS start and get conn time may be zero if the request is invalid.
+	// Calculate the total time accordingly when connection is reused,
+	// and DNS start and get conn time may be zero if the request is invalid.
 	// See issue #1016.
-	if requestStartTime.IsZero() {
-		requestStartTime = r.Time
+	requestStartTime := r.Time
+	if ct.gotConnInfo.Reused && !ct.getConn.IsZero() {
+		requestStartTime = ct.getConn
+	} else if !ct.dnsStart.IsZero() {
+		requestStartTime = ct.dnsStart
 	}
 	ti.TotalTime = ct.endTime.Sub(requestStartTime)
 
