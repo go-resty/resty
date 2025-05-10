@@ -1830,6 +1830,18 @@ func TestTraceInfo(t *testing.T) {
 
 	})
 
+	t.Run("enable trace on invalid request, issue #1016", func(t *testing.T) {
+		resp, err := client.R().EnableTrace().Get("unknown://url.com")
+		assertNotNil(t, err)
+		tr := resp.Request.TraceInfo()
+		assertEqual(t, true, tr.DNSLookup == 0)
+		assertEqual(t, true, tr.ConnTime == 0)
+		assertEqual(t, true, tr.TLSHandshake == 0)
+		assertEqual(t, true, tr.ServerTime == 0)
+		assertEqual(t, true, tr.ResponseTime == 0)
+		assertEqual(t, true, tr.TotalTime > 0 && tr.TotalTime < time.Second)
+	})
+
 	t.Run("enable trace and debug on request", func(t *testing.T) {
 		c, logBuf := dcldb()
 		c.SetBaseURL(ts.URL)
