@@ -2240,8 +2240,10 @@ func (c *Client) executeRequestMiddlewares(req *Request) (err error) {
 // Executes method executes the given `Request` object and returns
 // response or error.
 func (c *Client) execute(req *Request) (*Response, error) {
-	if err := c.circuitBreaker.allow(); err != nil {
-		return nil, err
+	if c.circuitBreaker != nil {
+		if err := c.circuitBreaker.allow(); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := c.executeRequestMiddlewares(req); err != nil {
@@ -2268,7 +2270,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 	if resp != nil {
-		c.circuitBreaker.applyPolicies(resp)
+		if c.circuitBreaker != nil {
+			c.circuitBreaker.applyPolicies(resp)
+		}
 
 		response.Body = resp.Body
 		if err = response.wrapContentDecompresser(); err != nil {
