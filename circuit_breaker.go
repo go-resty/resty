@@ -150,33 +150,24 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 
 	if failed {
 		cb.sw.Add(totalAndFailures{total: 1, failures: 1})
-		switch cb.getState() {
-		case circuitBreakerStateClosed:
-			if cb.sw.Get().failures >= int(cb.failureThreshold) {
-				cb.open()
-			}
-		case circuitBreakerStateHalfOpen:
-			cb.open()
-		case circuitBreakerStateOpen:
-			if time.Since(cb.openStartAt.Load().(time.Time)) >= cb.timeout {
-				cb.changeState(circuitBreakerStateHalfOpen)
-			}
-		}
-
 	} else {
 		cb.sw.Add(totalAndFailures{total: 1, failures: 0})
-		switch cb.getState() {
-		case circuitBreakerStateClosed:
-			return
-		case circuitBreakerStateHalfOpen:
-			totalAndFailure := cb.sw.Get()
-			if totalAndFailure.total-totalAndFailure.failures >= int(cb.successThreshold) {
-				cb.changeState(circuitBreakerStateClosed)
-			}
-		case circuitBreakerStateOpen:
-			if time.Since(cb.openStartAt.Load().(time.Time)) >= cb.timeout {
-				cb.changeState(circuitBreakerStateHalfOpen)
-			}
+	}
+	switch cb.getState() {
+	case circuitBreakerStateClosed:
+		if cb.sw.Get().failures >= int(cb.failureThreshold) {
+			cb.open()
+		}
+	case circuitBreakerStateHalfOpen:
+		totalAndFailure := cb.sw.Get()
+		if totalAndFailure.total-totalAndFailure.failures >= int(cb.successThreshold) {
+			cb.changeState(circuitBreakerStateClosed)
+		} else {
+			cb.open()
+		}
+	case circuitBreakerStateOpen:
+		if time.Since(cb.openStartAt.Load().(time.Time)) >= cb.timeout {
+			cb.changeState(circuitBreakerStateHalfOpen)
 		}
 	}
 }
