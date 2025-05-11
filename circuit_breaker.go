@@ -31,7 +31,7 @@ type CircuitBreaker struct {
 	state            atomic.Value // circuitBreakerState
 	failureCount     atomic.Uint32
 	successCount     atomic.Uint32
-	openStartAt      atomic.Value // time.Time
+	lastFailureAt    atomic.Value // time.Time
 }
 
 // NewCircuitBreaker method creates a new [CircuitBreaker] with default settings.
@@ -134,7 +134,7 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 	}
 
 	if failed {
-		if cb.failureCount.Load() > 0 && time.Since(cb.openStartAt.Load().(time.Time)) > cb.timeout {
+		if cb.failureCount.Load() > 0 && time.Since(cb.lastFailureAt.Load().(time.Time)) > cb.timeout {
 			cb.failureCount.Store(0)
 		}
 
@@ -144,14 +144,10 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 			if failCount >= cb.failureThreshold {
 				cb.open()
 			} else {
-				cb.openStartAt.Store(time.Now())
+				cb.lastFailureAt.Store(time.Now())
 			}
 		case circuitBreakerStateHalfOpen:
 			cb.open()
-		case circuitBreakerStateOpen:
-			if time.Since(cb.openStartAt.Load().(time.Time)) >= cb.timeout {
-				cb.changeState(circuitBreakerStateHalfOpen)
-			}
 		}
 	} else {
 		switch cb.getState() {
@@ -162,17 +158,16 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 			if successCount >= cb.successThreshold {
 				cb.changeState(circuitBreakerStateClosed)
 			}
-		case circuitBreakerStateOpen:
-			if time.Since(cb.openStartAt.Load().(time.Time)) >= cb.timeout {
-				cb.changeState(circuitBreakerStateHalfOpen)
-			}
 		}
 	}
 }
 
 func (cb *CircuitBreaker) open() {
 	cb.changeState(circuitBreakerStateOpen)
-	cb.openStartAt.Store(time.Now())
+	go func() {
+		time.Sleep(cb.timeout)
+		cb.changeState(circuitBreakerStateHalfOpen)
+	}()
 }
 
 func (cb *CircuitBreaker) changeState(state circuitBreakerState) {
