@@ -2103,6 +2103,19 @@ func TestTraceInfoWithoutEnableTrace(t *testing.T) {
 	}
 }
 
+func TestTraceInfoWithInvalidRequest(t *testing.T) {
+	client := dc()
+	resp, err := client.R().EnableTrace().Get("unknown://url.com")
+	assertNotNil(t, err)
+	tr := resp.Request.TraceInfo()
+	assertEqual(t, true, tr.DNSLookup == 0)
+	assertEqual(t, true, tr.ConnTime == 0)
+	assertEqual(t, true, tr.TLSHandshake == 0)
+	assertEqual(t, true, tr.ServerTime == 0)
+	assertEqual(t, true, tr.ResponseTime == 0)
+	assertEqual(t, true, tr.TotalTime > 0 && tr.TotalTime < time.Second)
+}
+
 func TestTraceInfoOnTimeout(t *testing.T) {
 	client := dc()
 	client.SetHostURL("http://resty-nowhere.local").EnableTrace()
