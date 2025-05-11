@@ -1507,11 +1507,11 @@ func TestClientCircuitBreaker(t *testing.T) {
 
 	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
-	assertEqual(t, uint32(1), c.circuitBreaker.failureCount.Load())
+	assertEqual(t, 1, c.circuitBreaker.sw.Get().failures)
 
 	time.Sleep(timeout)
 
 	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
-	assertEqual(t, uint32(1), c.circuitBreaker.failureCount.Load())
+	assertEqual(t, 1, c.circuitBreaker.sw.Get().failures)
 }
