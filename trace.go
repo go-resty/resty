@@ -9,6 +9,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"net/http/httptrace"
 	"time"
 )
@@ -107,42 +110,133 @@ type clientTrace struct {
 	gotConnInfo          httptrace.GotConnInfo
 }
 
+type tracer struct {
+	ctx  context.Context
+	span trace.Span
+}
+
+type HttpJaegerTracers struct {
+	RootTracer         tracer
+	DNSTracer          tracer
+	ConnectTracer      tracer
+	GetConnectTracer   tracer
+	TLSHandshakeTracer tracer
+	WriteRequestTracer tracer
+	WriteHeaderTracer  tracer
+}
+
 func (t *clientTrace) createContext(ctx context.Context) context.Context {
+
+	trace := otel.Tracer("trace")
+	tracers := HttpJaegerTracers{}
 	return httptrace.WithClientTrace(
 		ctx,
 		&httptrace.ClientTrace{
-			DNSStart: func(_ httptrace.DNSStartInfo) {
+			DNSStart: func(info httptrace.DNSStartInfo) {
+				c, span := trace.Start(tracers.GetConnectTracer.ctx, "DNSTrace")
+				tracers.DNSTracer = tracer{
+					ctx:  c,
+					span: span,
+				}
+				span.SetAttributes(
+					attribute.String("host", info.Host),
+				)
 				t.dnsStart = time.Now()
 			},
-			DNSDone: func(_ httptrace.DNSDoneInfo) {
+			DNSDone: func(info httptrace.DNSDoneInfo) {
+				tracers.DNSTracer.span.SetAttributes(
+					attribute.String("address", info.Addrs[0].String()),
+				)
+				if info.Err != nil {
+					attribute.String("error", info.Err.Error())
+				}
 				t.dnsDone = time.Now()
+				tracers.DNSTracer.span.End()
 			},
-			ConnectStart: func(_, _ string) {
+			ConnectStart: func(network, address string) {
+				c, span := trace.Start(tracers.GetConnectTracer.ctx, "ConnectTrace")
+				tracers.ConnectTracer = tracer{
+					ctx:  c,
+					span: span,
+				}
 				if t.dnsDone.IsZero() {
 					t.dnsDone = time.Now()
 				}
 				if t.dnsStart.IsZero() {
 					t.dnsStart = t.dnsDone
 				}
+				span.SetAttributes(
+					attribute.String("address", address),
+					attribute.String("network", network),
+				)
 			},
 			ConnectDone: func(net, addr string, err error) {
 				t.connectDone = time.Now()
+				if err != nil {
+					tracers.ConnectTracer.span.SetAttributes(
+						attribute.String("error", err.Error()),
+					)
+				}
+				tracers.ConnectTracer.span.End()
 			},
-			GetConn: func(_ string) {
+			GetConn: func(hostPort string) {
+				c, span := trace.Start(ctx, "GetConnectTrace")
+				tracers.GetConnectTracer = tracer{
+					ctx:  c,
+					span: span,
+				}
+				tracers.GetConnectTracer.span.SetAttributes(
+					attribute.String(
+						"hostPort", hostPort,
+					),
+				)
 				t.getConn = time.Now()
 			},
 			GotConn: func(ci httptrace.GotConnInfo) {
 				t.gotConn = time.Now()
 				t.gotConnInfo = ci
+				tracers.GetConnectTracer.span.End()
 			},
 			GotFirstResponseByte: func() {
+				tracers.WriteRequestTracer.span.End()
+				_, span := trace.Start(ctx, "GotResponse")
+				defer span.End()
 				t.gotFirstResponseByte = time.Now()
 			},
 			TLSHandshakeStart: func() {
+				c, span := trace.Start(tracers.GetConnectTracer.ctx, "TLSHandshakeTrace")
+				tracers.TLSHandshakeTracer = tracer{
+					ctx:  c,
+					span: span,
+				}
 				t.tlsHandshakeStart = time.Now()
 			},
 			TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
 				t.tlsHandshakeDone = time.Now()
+				tracers.TLSHandshakeTracer.span.End()
+			},
+			WroteRequest: func(info httptrace.WroteRequestInfo) {
+				c, span := trace.Start(ctx, "WroteRequest")
+				tracers.WriteRequestTracer = tracer{
+					ctx:  c,
+					span: span,
+				}
+			},
+			WroteHeaderField: func(key string, value []string) {
+				if tracers.WriteHeaderTracer.span == nil {
+					c, span := trace.Start(ctx, "WriteHeader")
+					tracers.WriteHeaderTracer = tracer{
+						ctx:  c,
+						span: span,
+					}
+				}
+				tracers.WriteHeaderTracer.span.SetAttributes(
+					attribute.StringSlice(fmt.Sprintf("headers.%s", key), value),
+				)
+
+			},
+			WroteHeaders: func() {
+				tracers.WriteHeaderTracer.span.End()
 			},
 		},
 	)

@@ -11,6 +11,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"go.opentelemetry.io/otel"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"io"
 	"maps"
 	"net/http"
@@ -221,6 +223,7 @@ type Client struct {
 	contentDecompressers     map[string]ContentDecompresser
 	certWatcherStopChan      chan bool
 	circuitBreaker           *CircuitBreaker
+	tracerProvider           *tracesdk.TracerProvider
 }
 
 // CertWatcherOptions allows configuring a watcher that reloads dynamically TLS certs.
@@ -2381,4 +2384,14 @@ func (c *Client) debugf(format string, v ...any) {
 	if c.IsDebug() {
 		c.Logger().Debugf(format, v...)
 	}
+}
+
+func (c *Client) SetJaeger(tp *tracesdk.TracerProvider) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	if !c.IsTrace() {
+		panic("SetJaeger must depend with SetTrace enabled")
+	}
+	c.tracerProvider = tp
+	otel.SetTracerProvider(tp)
 }

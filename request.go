@@ -12,6 +12,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
 	"io"
 	"maps"
 	"mime/multipart"
@@ -1372,6 +1373,18 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		}
 	}()
 
+	if r.client.tracerProvider != nil {
+		tr := r.client.tracerProvider.Tracer("execute")
+		c, span := tr.Start(r.ctx, fmt.Sprintf("%s %s", method, url))
+		r.ctx = c
+		defer span.End()
+
+		span.SetAttributes(
+			attribute.String("http.method", method),
+			attribute.String("http.url", url),
+		)
+	}
+
 	r.Method = method
 
 	if r.RetryCount < 0 {
@@ -1474,6 +1487,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 				break
 			}
 		}
+		//childSpan.End()
 	}
 
 	if r.isMultiPart {

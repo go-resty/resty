@@ -14,6 +14,10 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/sdk/resource"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.32.0"
 	"io"
 	"log"
 	"math"
@@ -1514,4 +1518,26 @@ func TestClientCircuitBreaker(t *testing.T) {
 	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
 	assertEqual(t, uint32(1), c.circuitBreaker.failureCount.Load())
+}
+
+func TestRequestWithJaeger(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	jaegerURL := "http://localhost:14268/api/traces"
+	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(jaegerURL)))
+	assertNil(t, err)
+	tp := tracesdk.NewTracerProvider(
+		tracesdk.WithBatcher(exp),
+		tracesdk.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceName("resty"),
+		)),
+	)
+	c := dcnl()
+	c.SetTrace(true)
+	c.SetJaeger(tp)
+
+	fmt.Println(c.R().Get(ts.URL + "/"))
+	tp.Shutdown(context.Background())
 }
