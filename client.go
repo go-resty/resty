@@ -2208,7 +2208,7 @@ func (c *Client) Clone(ctx context.Context) *Client {
 	}
 	// clone cookies
 	if l := len(c.cookies); l > 0 {
-		cc.cookies = make([]*http.Cookie, l)
+		cc.cookies = make([]*http.Cookie, 0, l)
 		for _, cookie := range c.cookies {
 			cc.cookies = append(cc.cookies, cloneCookie(cookie))
 		}
