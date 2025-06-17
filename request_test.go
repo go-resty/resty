@@ -1927,6 +1927,28 @@ func TestTraceInfoOnTimeout(t *testing.T) {
 	assertEqual(t, true, tr.TotalTime == resp.Duration())
 }
 
+func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
+	client := New().
+		SetTimeout(1 * time.Millisecond).
+		SetBaseURL("http://resty-nowhere.local").
+		EnableTrace()
+
+	resp, err := client.R().Get("/")
+	assertNotNil(t, err)
+	assertNotNil(t, resp)
+
+	tr := resp.Request.TraceInfo()
+
+	assertEqual(t, true, tr.DNSLookup == 0)
+	assertEqual(t, true, tr.ConnTime == 0)
+	assertEqual(t, true, tr.TLSHandshake == 0)
+	assertEqual(t, true, tr.TCPConnTime == 0)
+	assertEqual(t, true, tr.ServerTime == 0)
+	assertEqual(t, true, tr.ResponseTime == 0)
+	assertEqual(t, true, tr.TotalTime > 0)
+	assertEqual(t, true, tr.TotalTime == resp.Duration())
+}
+
 func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 	formTs := createFormPostServer(t)
 	defer formTs.Close()
