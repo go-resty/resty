@@ -7,8 +7,8 @@ package resty
 
 import (
 	"bytes"
-	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -407,13 +407,13 @@ func readMachineID() []byte {
 	id := sum[:]
 
 	if hostname, err := osHostname(); err == nil {
-		hw := md5.New()
+		hw := sha256.New()
 		_, _ = hw.Write([]byte(hostname))
 		copy(id, hw.Sum(nil))
 		return id
 	}
 
-	if _, err := ioReadFull(rand.Reader, id); err == nil {
+	if _, err := io.ReadFull(rand.Reader, id); err == nil {
 		return id
 	}
 
