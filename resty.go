@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MIT
 
 // Package resty provides Simple HTTP, REST, and SSE client library for Go.
-package resty // import "resty.dev/v3"
+package resty
 
 import (
 	"math"

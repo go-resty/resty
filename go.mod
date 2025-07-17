@@ -1,5 +1,7 @@
-module resty.dev/v3
+module github.com/digitalmint/resty/v4
 
-go 1.21
+go 1.23.0
 
-require golang.org/x/net v0.33.0
+toolchain go1.24.5
+
+require golang.org/x/net v0.42.0
