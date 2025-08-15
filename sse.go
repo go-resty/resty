@@ -94,8 +94,8 @@ type (
 //		SetURL("https://sse.dev/test").
 //		OnMessage(
 //			func(e any) {
-//				e = e.(*Event)
-//				fmt.Println(e)
+//				event := e.(*Event)
+//				fmt.Println(event)
 //			},
 //			nil, // see method godoc
 //		)
@@ -287,8 +287,8 @@ func (es *EventSource) OnError(ef EventErrorFunc) *EventSource {
 //
 //	es.OnMessage(
 //		func(e any) {
-//			e = e.(*Event)
-//			fmt.Println("Event message", e)
+//			event := e.(*Event)
+//			fmt.Println("Event message", event)
 //		},
 //		nil,
 //	)
@@ -297,8 +297,8 @@ func (es *EventSource) OnError(ef EventErrorFunc) *EventSource {
 //	// to do auto-unmarshal
 //	es.OnMessage(
 //		func(e any) {
-//			e = e.(*MyData)
-//			fmt.Println(e)
+//			event := e.(*MyData)
+//			fmt.Println(event)
 //		},
 //		MyData{},
 //	)
@@ -313,8 +313,8 @@ func (es *EventSource) OnMessage(ef EventMessageFunc, result any) *EventSource {
 //	es.AddEventListener(
 //		"friend_logged_in",
 //		func(e any) {
-//			e = e.(*Event)
-//			fmt.Println(e)
+//			event := e.(*Event)
+//			fmt.Println(event)
 //		},
 //		nil,
 //	)
@@ -324,8 +324,8 @@ func (es *EventSource) OnMessage(ef EventMessageFunc, result any) *EventSource {
 //	es.AddEventListener(
 //		"friend_logged_in",
 //		func(e any) {
-//			e = e.(*UserLoggedIn)
-//			fmt.Println(e)
+//			event := e.(*UserLoggedIn)
+//			fmt.Println(event)
 //		},
 //		UserLoggedIn{},
 //	)
@@ -350,8 +350,8 @@ func (es *EventSource) AddEventListener(eventName string, ef EventMessageFunc, r
 //		SetURL("https://sse.dev/test").
 //		OnMessage(
 //			func(e any) {
-//				e = e.(*Event)
-//				fmt.Println(e)
+//				event := e.(*Event)
+//				fmt.Println(event)
 //			},
 //			nil, // see method godoc
 //		)
