@@ -7,8 +7,8 @@ package resty
 
 import (
 	"bytes"
-	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -403,13 +403,12 @@ var osHostname = os.Hostname
 // readMachineID generates and returns a machine id.
 // If this function fails to get the hostname it will cause a runtime error.
 func readMachineID() []byte {
-	var sum [3]byte
-	id := sum[:]
+	const idSize = 3
+	id := make([]byte, idSize)
 
 	if hostname, err := osHostname(); err == nil {
-		hw := md5.New()
-		_, _ = hw.Write([]byte(hostname))
-		copy(id, hw.Sum(nil))
+		hash := sha256.Sum256([]byte(hostname))
+		copy(id, hash[:idSize])
 		return id
 	}
 
