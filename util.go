@@ -371,7 +371,7 @@ func newGUID() string {
 	// Timestamp, 4 bytes, big endian
 	binary.BigEndian.PutUint32(b[:], uint32(time.Now().Unix()))
 
-	// Machine, first 3 bytes of md5(hostname)
+	// Machine, first 3 bytes of sha256.Sum256([]byte(hostname))
 	b[4], b[5], b[6] = machineID[0], machineID[1], machineID[2]
 
 	// Pid, 2 bytes, specs don't specify endianness, but we use big endian.
