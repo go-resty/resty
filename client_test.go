@@ -1348,6 +1348,15 @@ func TestClientClone(t *testing.T) {
 
 	// assert interface/pointer type
 	assertEqual(t, parent.Client(), clone.Client())
+
+	// assert cookies
+	parentCookies := parent.Cookies()
+	cloneCookies := clone.Cookies()
+	assertEqual(t, len(parentCookies), len(cloneCookies))
+	for i := range parentCookies {
+		assertEqual(t, parentCookies[i].Name, cloneCookies[i].Name)
+		assertEqual(t, parentCookies[i].Value, cloneCookies[i].Value)
+	}
 }
 
 func TestResponseBodyLimit(t *testing.T) {
