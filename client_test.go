@@ -1524,3 +1524,35 @@ func TestClientCircuitBreaker(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, uint32(1), c.circuitBreaker.failureCount.Load())
 }
+
+func TestClientOnClose(t *testing.T) {
+	var hookExecuted bool
+
+	c := dcnl()
+	c.OnClose(func() {
+		hookExecuted = true
+	})
+
+	err := c.Close()
+	assertNil(t, err)
+	assertEqual(t, true, hookExecuted)
+}
+
+func TestClientOnCloseMultipleHooks(t *testing.T) {
+	var executionOrder []string
+
+	c := dcnl()
+	c.OnClose(func() {
+		executionOrder = append(executionOrder, "first")
+	})
+	c.OnClose(func() {
+		executionOrder = append(executionOrder, "second")
+	})
+	c.OnClose(func() {
+		executionOrder = append(executionOrder, "third")
+	})
+
+	err := c.Close()
+	assertNil(t, err)
+	assertEqual(t, []string{"first", "second", "third"}, executionOrder)
+}
