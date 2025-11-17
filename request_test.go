@@ -1928,25 +1928,52 @@ func TestTraceInfoOnTimeout(t *testing.T) {
 }
 
 func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
-	client := New().
-		SetTimeout(1 * time.Millisecond).
-		SetBaseURL("http://resty-nowhere.local").
-		EnableTrace()
+	t.Run("timeout with very short timeout", func(t *testing.T) {
+		client := New().
+			SetTimeout(1 * time.Millisecond).
+			SetBaseURL("http://resty-nowhere.local").
+			EnableTrace()
 
-	resp, err := client.R().Get("/")
-	assertNotNil(t, err)
-	assertNotNil(t, resp)
+		resp, err := client.R().Get("/")
+		assertNotNil(t, err)
+		assertNotNil(t, resp)
 
-	tr := resp.Request.TraceInfo()
+		tr := resp.Request.TraceInfo()
 
-	assertEqual(t, true, tr.DNSLookup == 0)
-	assertEqual(t, true, tr.ConnTime == 0)
-	assertEqual(t, true, tr.TLSHandshake == 0)
-	assertEqual(t, true, tr.TCPConnTime == 0)
-	assertEqual(t, true, tr.ServerTime == 0)
-	assertEqual(t, true, tr.ResponseTime == 0)
-	assertEqual(t, true, tr.TotalTime > 0)
-	assertEqual(t, true, tr.TotalTime == resp.Duration())
+		assertEqual(t, true, tr.DNSLookup == 0)
+		assertEqual(t, true, tr.ConnTime == 0)
+		assertEqual(t, true, tr.TLSHandshake == 0)
+		assertEqual(t, true, tr.TCPConnTime == 0)
+		assertEqual(t, true, tr.ServerTime == 0)
+		assertEqual(t, true, tr.ResponseTime == 0)
+		assertEqual(t, true, tr.TotalTime > 0)
+		assertEqual(t, true, tr.TotalTime == resp.Duration())
+	})
+
+	t.Run("successful request with SetTimeout", func(t *testing.T) {
+		ts := createGetServer(t)
+		defer ts.Close()
+
+		client := New().
+			SetTimeout(5 * time.Second).
+			SetBaseURL(ts.URL).
+			EnableTrace()
+
+		resp, err := client.R().Get("/")
+		assertNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+
+		assertEqual(t, true, tr.DNSLookup >= 0)
+		assertEqual(t, true, tr.ConnTime >= 0)
+		assertEqual(t, true, tr.TLSHandshake >= 0)
+		assertEqual(t, true, tr.TCPConnTime >= 0)
+		assertEqual(t, true, tr.ServerTime >= 0)
+		assertEqual(t, true, tr.ResponseTime >= 0)
+		assertEqual(t, true, tr.TotalTime > 0)
+		assertEqual(t, true, tr.TotalTime == resp.Duration())
+	})
 }
 
 func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
