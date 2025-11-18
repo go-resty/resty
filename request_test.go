@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1968,6 +1969,34 @@ func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
 		assertEqual(t, true, tr.DNSLookup >= 0)
 		assertEqual(t, true, tr.ConnTime >= 0)
 		assertEqual(t, true, tr.TLSHandshake >= 0)
+		assertEqual(t, true, tr.TCPConnTime >= 0)
+		assertEqual(t, true, tr.ServerTime >= 0)
+		assertEqual(t, true, tr.ResponseTime >= 0)
+		assertEqual(t, true, tr.TotalTime > 0)
+		assertEqual(t, true, tr.TotalTime == resp.Duration())
+	})
+
+	t.Run("HTTPS request with TLS handshake", func(t *testing.T) {
+		ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("OK"))
+		}))
+		defer ts.Close()
+
+		client := New().
+			SetTimeout(5 * time.Second).
+			SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+			EnableTrace()
+
+		resp, err := client.R().Get(ts.URL)
+		assertNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+
+		assertEqual(t, true, tr.TLSHandshake > 0)
+		assertEqual(t, true, tr.DNSLookup >= 0)
+		assertEqual(t, true, tr.ConnTime >= 0)
 		assertEqual(t, true, tr.TCPConnTime >= 0)
 		assertEqual(t, true, tr.ServerTime >= 0)
 		assertEqual(t, true, tr.ResponseTime >= 0)
