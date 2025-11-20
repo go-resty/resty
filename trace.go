@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http/httptrace"
+	"sync"
 	"time"
 )
 
@@ -70,6 +71,7 @@ type TraceInfo struct {
 // with the same naming for easy understanding. Plus additional insights
 // [Request].
 type clientTrace struct {
+	lock                 sync.RWMutex
 	getConn              time.Time
 	dnsStart             time.Time
 	dnsDone              time.Time
@@ -87,37 +89,55 @@ func (t *clientTrace) createContext(ctx context.Context) context.Context {
 		ctx,
 		&httptrace.ClientTrace{
 			DNSStart: func(_ httptrace.DNSStartInfo) {
+				t.lock.Lock()
 				t.dnsStart = time.Now()
+				t.lock.Unlock()
 			},
 			DNSDone: func(_ httptrace.DNSDoneInfo) {
+				t.lock.Lock()
 				t.dnsDone = time.Now()
+				t.lock.Unlock()
 			},
 			ConnectStart: func(_, _ string) {
+				t.lock.Lock()
 				if t.dnsDone.IsZero() {
 					t.dnsDone = time.Now()
 				}
 				if t.dnsStart.IsZero() {
 					t.dnsStart = t.dnsDone
 				}
+				t.lock.Unlock()
 			},
 			ConnectDone: func(net, addr string, err error) {
+				t.lock.Lock()
 				t.connectDone = time.Now()
+				t.lock.Unlock()
 			},
 			GetConn: func(_ string) {
+				t.lock.Lock()
 				t.getConn = time.Now()
+				t.lock.Unlock()
 			},
 			GotConn: func(ci httptrace.GotConnInfo) {
+				t.lock.Lock()
 				t.gotConn = time.Now()
 				t.gotConnInfo = ci
+				t.lock.Unlock()
 			},
 			GotFirstResponseByte: func() {
+				t.lock.Lock()
 				t.gotFirstResponseByte = time.Now()
+				t.lock.Unlock()
 			},
 			TLSHandshakeStart: func() {
+				t.lock.Lock()
 				t.tlsHandshakeStart = time.Now()
+				t.lock.Unlock()
 			},
 			TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
+				t.lock.Lock()
 				t.tlsHandshakeDone = time.Now()
+				t.lock.Unlock()
 			},
 		},
 	)
