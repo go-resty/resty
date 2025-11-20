@@ -2083,7 +2083,7 @@ func TestPostMapTemporaryRedirect(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
-func TestPostWith204Responset(t *testing.T) {
+func TestPostWith204Response(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
