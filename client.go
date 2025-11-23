@@ -2298,11 +2298,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 		response.wrapLimitReadCloser()
 	}
-	if req.ResponseBodyUnlimitedReads || req.Debug {
-		response.wrapCopyReadCloser()
 
-		if err = response.readAll(); err != nil {
-			return response, err
+	if !req.DoNotParseResponse {
+		if req.ResponseBodyUnlimitedReads || req.Debug {
+			response.wrapCopyReadCloser()
+
+			if err = response.readAll(); err != nil {
+				return response, err
+			}
 		}
 	}
 
