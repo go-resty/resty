@@ -127,6 +127,10 @@ func createTransport(dialer *net.Dialer, transportSettings *TransportSettings) *
 		t.MaxIdleConnsPerHost = runtime.GOMAXPROCS(0) + 1
 	}
 
+	if transportSettings.MaxConnsPerHost > 0 {
+		t.MaxConnsPerHost = transportSettings.MaxConnsPerHost
+	}
+
 	//
 	// No default value in Resty for following settings, added to
 	// provide ability to set value otherwise the Go HTTP client

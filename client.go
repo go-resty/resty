@@ -141,6 +141,9 @@ type TransportSettings struct {
 	// MaxIdleConnsPerHost, default value is `runtime.GOMAXPROCS(0) + 1`.
 	MaxIdleConnsPerHost int
 
+	// MaxConnsPerHost, default value is no limit.
+	MaxConnsPerHost int
+
 	// DisableKeepAlives, default value is `false`.
 	DisableKeepAlives bool
 
