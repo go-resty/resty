@@ -8,6 +8,7 @@ package resty
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -159,6 +160,66 @@ func (es *EventSource) SetBody(body io.Reader) *EventSource {
 	return es
 }
 
+// TLSClientConfig method returns the [tls.Config] from underlying client transport
+// otherwise returns nil
+func (es *EventSource) TLSClientConfig() *tls.Config {
+	cfg, err := es.tlsConfig()
+	if err != nil {
+		es.Logger().Errorf("%v", err)
+	}
+	return cfg
+}
+
+// SetTLSClientConfig method sets TLSClientConfig for underlying client Transport.
+//
+// Values supported by https://pkg.go.dev/crypto/tls#Config can be configured.
+//
+//	// Disable SSL cert verification for local development
+//	es.SetTLSClientConfig(&tls.Config{
+//		InsecureSkipVerify: true
+//	})
+//
+// NOTE: This method overwrites existing [http.Transport.TLSClientConfig]
+func (es *EventSource) SetTLSClientConfig(tlsConfig *tls.Config) *EventSource {
+	es.lock.Lock()
+	defer es.lock.Unlock()
+
+	// TLSClientConfiger interface handling
+	if tc, ok := es.httpClient.Transport.(TLSClientConfiger); ok {
+		if err := tc.SetTLSClientConfig(tlsConfig); err != nil {
+			es.log.Errorf("%v", err)
+		}
+		return es
+	}
+
+	// default standard transport handling
+	if transport, ok := es.httpClient.Transport.(*http.Transport); ok {
+		transport.TLSClientConfig = tlsConfig
+	}
+
+	return es
+}
+
+// getting TLS client config if not exists then create one
+func (es *EventSource) tlsConfig() (*tls.Config, error) {
+	es.lock.Lock()
+	defer es.lock.Unlock()
+
+	if tc, ok := es.httpClient.Transport.(TLSClientConfiger); ok {
+		return tc.TLSClientConfig(), nil
+	}
+
+	transport, ok := es.httpClient.Transport.(*http.Transport)
+	if !ok {
+		return nil, ErrNotHttpTransportType
+	}
+
+	if transport.TLSClientConfig == nil {
+		transport.TLSClientConfig = &tls.Config{}
+	}
+	return transport.TLSClientConfig, nil
+}
+
 // AddHeader method adds a header and its value to the [EventSource] instance.
 // If the header key already exists, it appends. These headers will be sent in
 // the request while establishing a connection to the event source
@@ -227,6 +288,13 @@ func (es *EventSource) SetMaxBufSize(bufSize int) *EventSource {
 	defer es.lock.Unlock()
 	es.maxBufSize = bufSize
 	return es
+}
+
+// Logger method returns the logger instance used by the event source instance.
+func (es *EventSource) Logger() Logger {
+	es.lock.RLock()
+	defer es.lock.RUnlock()
+	return es.log
 }
 
 // SetLogger method sets given writer for logging

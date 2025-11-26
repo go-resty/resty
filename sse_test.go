@@ -8,6 +8,7 @@ package resty
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -262,6 +263,51 @@ func TestEventSourceRetry(t *testing.T) {
 		SetURL(ts.URL + "?reconnect=1")
 	err2 := es.Get()
 	assertNotNil(t, err2)
+}
+
+func TestEventSourceTLSConfigerInterface(t *testing.T) {
+
+	t.Run("set and get tls config", func(t *testing.T) {
+		es := createEventSource(t, "", func(any) {}, nil)
+
+		tc, err := es.tlsConfig()
+		assertNil(t, err)
+		assertNotNil(t, tc)
+
+		tlsConfig := &tls.Config{InsecureSkipVerify: true}
+		es.SetTLSClientConfig(tlsConfig)
+		assertEqual(t, tlsConfig, es.TLSClientConfig())
+	})
+
+	t.Run("get tls config error", func(t *testing.T) {
+		es := createEventSource(t, "", func(any) {}, nil)
+
+		ct := &CustomRoundTripper1{}
+		es.httpClient.Transport = ct
+		assertNil(t, es.TLSClientConfig())
+	})
+
+	t.Run("set tls config", func(t *testing.T) {
+		es := createEventSource(t, "", func(any) {}, nil)
+
+		ct := &CustomRoundTripper2{}
+		es.httpClient.Transport = ct
+
+		tlsConfig := &tls.Config{InsecureSkipVerify: true}
+		es.SetTLSClientConfig(tlsConfig)
+		assertNotNil(t, es.TLSClientConfig())
+	})
+
+	t.Run("set tls config error", func(t *testing.T) {
+		es := createEventSource(t, "", func(any) {}, nil)
+
+		ct := &CustomRoundTripper2{returnErr: true}
+		es.httpClient.Transport = ct
+
+		tlsConfig := &tls.Config{InsecureSkipVerify: true}
+		es.SetTLSClientConfig(tlsConfig)
+		assertNil(t, es.TLSClientConfig())
+	})
 }
 
 func TestEventSourceNoRetryRequired(t *testing.T) {
