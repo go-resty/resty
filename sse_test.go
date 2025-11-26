@@ -167,8 +167,8 @@ func TestEventSourceOverwriteFuncs(t *testing.T) {
 
 	es.SetURL(ts.URL).
 		OnMessage(messageFunc2, nil).
-		OnOpen(func(url string) {
-			t.Log("from overwrite func", url)
+		OnOpen(func(url string, respHdr http.Header) {
+			t.Log("from overwrite func", url, respHdr)
 		}).
 		OnError(func(err error) {
 			t.Log("from overwrite func", err)
@@ -422,8 +422,8 @@ func createEventSource(t *testing.T, url string, fn EventMessageFunc, rt any) *E
 		SetRetryMaxWaitTime(1000 * time.Millisecond).
 		SetMaxBufSize(1 << 14). // 16kb
 		SetLogger(createLogger()).
-		OnOpen(func(url string) {
-			t.Log("I'm connected:", url)
+		OnOpen(func(url string, respHdr http.Header) {
+			t.Log("I'm connected:", url, respHdr)
 		}).
 		OnError(func(err error) {
 			t.Log("Error occurred:", err)

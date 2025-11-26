@@ -41,7 +41,7 @@ type (
 	// EventOpenFunc is a callback function type used to receive notification
 	// when Resty establishes a connection with the server for the
 	// Server-Sent Events(SSE)
-	EventOpenFunc func(url string)
+	EventOpenFunc func(url string, respHdr http.Header)
 
 	// EventMessageFunc is a callback function type used to receive event details
 	// from the Server-Sent Events(SSE) stream
@@ -453,7 +453,7 @@ func (es *EventSource) Get() error {
 		if err != nil {
 			return err
 		}
-		es.triggerOnOpen()
+		es.triggerOnOpen(res.Header.Clone())
 		if err := es.listenStream(res); err != nil {
 			return err
 		}
@@ -479,11 +479,11 @@ func (es *EventSource) isClosed() bool {
 	return es.closed
 }
 
-func (es *EventSource) triggerOnOpen() {
+func (es *EventSource) triggerOnOpen(hdr http.Header) {
 	es.lock.RLock()
 	defer es.lock.RUnlock()
 	if es.onOpen != nil {
-		es.onOpen(strings.Clone(es.url))
+		es.onOpen(strings.Clone(es.url), hdr)
 	}
 }
 
