@@ -323,6 +323,25 @@ func TestEventSourceNoRetryRequired(t *testing.T) {
 	assertEqual(t, true, strings.Contains(err.Error(), "400 Bad Request"))
 }
 
+func TestGH1044TrimHeader(t *testing.T) {
+	t.Run("data is nil", func(t *testing.T) {
+		result := trimHeader(0, nil)
+		assertNil(t, result)
+	})
+
+	t.Run("data has double whitespace", func(t *testing.T) {
+		data := []byte("data:  double whitespace message")
+		result := trimHeader(5, data)
+		assertEqual(t, true, result[0] == ' ')
+	})
+
+	t.Run("data has newline", func(t *testing.T) {
+		data := []byte("data: newline message\n")
+		result := trimHeader(5, data)
+		assertEqual(t, true, result[len(result)-1] != '\n')
+	})
+}
+
 func TestEventSourceHTTPError(t *testing.T) {
 	es := createEventSource(t, "", func(any) {}, nil)
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
