@@ -745,8 +745,12 @@ func trimHeader(size int, data []byte) []byte {
 		return data
 	}
 	data = data[size:]
-	data = bytes.TrimSpace(data)
-	data = bytes.TrimSuffix(data, []byte("\n"))
+	if len(data) > 0 && data[0] == ' ' {
+		data = data[1:]
+	}
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		data = data[:len(data)-1]
+	}
 	return data
 }
 
