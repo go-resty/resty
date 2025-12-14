@@ -342,6 +342,31 @@ func TestGH1044TrimHeader(t *testing.T) {
 	})
 }
 
+func TestGH1041RequestFailureWithResponseBody(t *testing.T) {
+	es := createEventSource(t, "", func(any) {}, nil)
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(hdrContentTypeKey, jsonContentType)
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{ "id": "bad_request", "message": "Unable to establish connection" }`))
+	})
+	defer ts.Close()
+
+	rfFunc := func(err error, res *http.Response) {
+		defer res.Body.Close()
+		resBytes, _ := io.ReadAll(res.Body)
+
+		assertNotNil(t, err)
+		assertEqual(t, "resty:sse: 400 Bad Request", err.Error())
+		assertEqual(t, `{ "id": "bad_request", "message": "Unable to establish connection" }`, string(resBytes))
+	}
+
+	es.SetURL(ts.URL).OnRequestFailure(rfFunc)
+	es.OnRequestFailure(rfFunc)
+	err := es.Get()
+	assertNotNil(t, err)
+	assertEqual(t, "resty:sse: 400 Bad Request", err.Error())
+}
+
 func TestEventSourceHTTPError(t *testing.T) {
 	es := createEventSource(t, "", func(any) {}, nil)
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {

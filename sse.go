@@ -51,6 +51,10 @@ type (
 	// when an error occurs with [EventSource] processing
 	EventErrorFunc func(error)
 
+	// EventRequestFailureFunc is a callback function type used to receive event
+	// details from the Server-Sent Events(SSE) request failure
+	EventRequestFailureFunc func(err error, res *http.Response)
+
 	// Event struct represents the event details from the Server-Sent Events(SSE) stream
 	Event struct {
 		ID   string
@@ -76,6 +80,7 @@ type (
 		maxBufSize       int
 		onOpen           EventOpenFunc
 		onError          EventErrorFunc
+		onRequestFailure EventRequestFailureFunc
 		onEvent          map[string]*callback
 		log              Logger
 		closed           bool
@@ -343,9 +348,30 @@ func (es *EventSource) OnError(ef EventErrorFunc) *EventSource {
 	defer es.lock.Unlock()
 	if es.onError != nil {
 		es.log.Warnf("Overwriting an existing OnError callback from=%s to=%s",
-			functionName(es.OnError), functionName(ef))
+			functionName(es.onError), functionName(ef))
 	}
 	es.onError = ef
+	return es
+}
+
+// OnRequestFailure registered callback gets triggered when the HTTP request
+// failure while establishing a SSE connection.
+//
+//	es.OnRequestFailure(func(err error, res *http.Response) {
+//		fmt.Println("Error and response:", err, res)
+//	})
+//
+// Note:
+//   - Do not forget to close the HTTP response body.
+//   - HTTP response may be nil.
+func (es *EventSource) OnRequestFailure(ef EventRequestFailureFunc) *EventSource {
+	es.lock.Lock()
+	defer es.lock.Unlock()
+	if es.onRequestFailure != nil {
+		es.log.Warnf("Overwriting an existing OnRequestFailure callback from=%s to=%s",
+			functionName(es.onRequestFailure), functionName(ef))
+	}
+	es.onRequestFailure = ef
 	return es
 }
 
@@ -495,6 +521,14 @@ func (es *EventSource) triggerOnError(err error) {
 	}
 }
 
+func (es *EventSource) triggerOnRequestFailure(err error, res *http.Response) {
+	es.lock.RLock()
+	defer es.lock.RUnlock()
+	if es.onRequestFailure != nil {
+		es.onRequestFailure(err, res)
+	}
+}
+
 func (es *EventSource) createRequest() (*http.Request, error) {
 	req, err := http.NewRequest(es.method, es.url, es.body)
 	if err != nil {
@@ -556,6 +590,9 @@ func (es *EventSource) connect() (*http.Response, error) {
 				err = wrapErrors(fmt.Errorf("resty:sse: %v", rRes.Status()), doErr)
 			} else {
 				err = doErr
+			}
+			if err != nil {
+				es.triggerOnRequestFailure(err, resp)
 			}
 			break
 		}
