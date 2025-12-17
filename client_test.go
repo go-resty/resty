@@ -1557,3 +1557,113 @@ func TestClientOnCloseMultipleHooks(t *testing.T) {
 	assertNil(t, err)
 	assertEqual(t, []string{"first", "second", "third"}, executionOrder)
 }
+
+func TestClientHedgingBasic(t *testing.T) {
+	ts := createHedgingTestServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	err := c.EnableHedging(20*time.Millisecond, 3, 0)
+	assertError(t, err)
+
+	resp, err := c.R().Get(ts.URL + "/hedging-slow-first")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertNotEqual(t, "", resp.String())
+}
+
+func TestClientHedgingDisable(t *testing.T) {
+	ts := createHedgingTestServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	err := c.EnableHedging(20*time.Millisecond, 3, 0)
+	assertError(t, err)
+	assertEqual(t, true, c.IsHedgingEnabled())
+
+	c.DisableHedging()
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	resp, err := c.R().Get(ts.URL + "/hedging-slow-first")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
+	c := dcnl()
+
+	err := c.EnableHedging(50*time.Millisecond, 3, 0)
+	assertError(t, err)
+
+	c.SetRetryCount(2)
+	if c.RetryCount() != 0 {
+		t.Error("Should not be able to enable retry when hedging is enabled")
+	}
+
+	c.DisableHedging()
+	c.SetRetryCount(2)
+	assertEqual(t, 2, c.RetryCount())
+
+	err = c.EnableHedging(50*time.Millisecond, 3, 0)
+	if err == nil {
+		t.Error("Should not be able to enable hedging when retry is enabled")
+	}
+	assertEqual(t, ErrHedgingRetryMutualExclusion, err)
+}
+
+func TestClientHedgingConfiguration(t *testing.T) {
+	c := dcnl()
+
+	c.SetHedgingDelay(100 * time.Millisecond)
+	assertEqual(t, 100*time.Millisecond, c.HedgingDelay())
+
+	c.SetHedgingUpTo(5)
+	assertEqual(t, 5, c.HedgingUpTo())
+
+	c.SetHedgingMaxPerSecond(20.0)
+	assertEqual(t, 20.0, c.HedgingMaxPerSecond())
+
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	err := c.EnableHedging(50*time.Millisecond, 3, 10.0)
+	assertError(t, err)
+
+	assertEqual(t, true, c.IsHedgingEnabled())
+	assertEqual(t, 50*time.Millisecond, c.HedgingDelay())
+	assertEqual(t, 3, c.HedgingUpTo())
+	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
+}
+
+func TestClientHedgingWithRateLimit(t *testing.T) {
+	ts := createHedgingTestServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	err := c.EnableHedging(10*time.Millisecond, 10, 5.0)
+	assertError(t, err)
+
+	resp, err := c.R().Get(ts.URL + "/hedging-slow-all")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+func TestClientHedgingSafeMethodsOnly(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	err := c.EnableHedging(20*time.Millisecond, 3, 0)
+	assertError(t, err)
+
+	resp, err := c.R().Get(ts.URL + "/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	resp2, err2 := c.R().Head(ts.URL + "/")
+	assertError(t, err2)
+	assertEqual(t, http.StatusOK, resp2.StatusCode())
+
+	resp3, err3 := c.R().Options(ts.URL + "/")
+	assertError(t, err3)
+	assertEqual(t, http.StatusOK, resp3.StatusCode())
+}
