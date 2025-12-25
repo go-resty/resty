@@ -26,7 +26,8 @@ import (
 )
 
 type AuthSuccess struct {
-	ID, Message string
+	ID      string `xml:"Id"`
+	Message string `xml:"Message"`
 }
 
 type AuthError struct {
