@@ -11,6 +11,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -69,9 +71,74 @@ func (l *logger) output(format string, v ...any) {
 	l.l.Printf(format, v...)
 }
 
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// In Memory JSON & XML Marshal and Unmarshal using Go package
+//_____________________________________________________________
+
+var (
+	// InMemoryJSONMarshal function performs the JSON marshalling completely in memory.
+	//
+	//	c := resty.New()
+	//	defer c.Close()
+	//
+	//	c.AddContentTypeEncoder("application/json", resty.InMemoryJSONMarshal)
+	InMemoryJSONMarshal = func(w io.Writer, v any) error {
+		jsonData, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(jsonData)
+		return err
+	}
+
+	// InMemoryJSONUnmarshal function performs the JSON unmarshalling completely in memory.
+	//
+	//	c := resty.New()
+	//	defer c.Close()
+	//
+	//	c.AddContentTypeDecoder("application/json", resty.InMemoryJSONUnmarshal)
+	InMemoryJSONUnmarshal = func(r io.Reader, v any) error {
+		byteData, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(byteData, v)
+	}
+
+	// InMemoryXMLMarshal function performs the XML marshalling completely in memory.
+	//
+	//	c := resty.New()
+	//	defer c.Close()
+	//
+	//	c.AddContentTypeEncoder("application/xml", resty.InMemoryXMLMarshal)
+	InMemoryXMLMarshal = func(w io.Writer, v any) error {
+		xmlData, err := xml.Marshal(v)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(xmlData)
+		return err
+	}
+
+	// InMemoryJSONUnmarshal function performs the XML unmarshalling completely in memory.
+	//
+	//	c := resty.New()
+	//	defer c.Close()
+	//
+	//	c.AddContentTypeDecoder("application/xml", resty.InMemoryXMLUnmarshal)
+	InMemoryXMLUnmarshal = func(r io.Reader, v any) error {
+		byteData, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		return xml.Unmarshal(byteData, v)
+	}
+)
+
 // credentials type is to hold an username and password information
 type credentials struct {
-	Username, Password string
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // Clone method returns clone of c.

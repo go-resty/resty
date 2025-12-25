@@ -8,7 +8,9 @@ package resty
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -178,6 +180,145 @@ func TestUtil_readMachineID(t *testing.T) {
 
 		readMachineID()
 	})
+}
+
+func TestInMemoryJSONMarshalUnmarshal(t *testing.T) {
+	t.Run("json encoder", func(t *testing.T) {
+		user := &credentials{Username: "testuser", Password: "testpass"}
+		buf := acquireBuffer()
+		defer releaseBuffer(buf)
+		err := InMemoryJSONMarshal(buf, user)
+		assertNil(t, err)
+		assertEqual(t, `{"username":"testuser","password":"testpass"}`, buf.String())
+	})
+
+	t.Run("json encoder error", func(t *testing.T) {
+		obj := &brokenMarshalJSON{}
+		buf := acquireBuffer()
+		defer releaseBuffer(buf)
+		err := InMemoryJSONMarshal(buf, obj)
+		assertNotNil(t, err)
+		assertEqual(t, true, strings.Contains(err.Error(), "b0rk3d"))
+	})
+
+	t.Run("json decoder", func(t *testing.T) {
+		byteData := []byte(`{"username":"testuser","password":"testpass"}`)
+		cred := &credentials{}
+		err := InMemoryJSONUnmarshal(bytes.NewReader(byteData), cred)
+		assertNil(t, err)
+		assertEqual(t, "testuser", cred.Username)
+		assertEqual(t, "testpass", cred.Password)
+	})
+
+	t.Run("json decoder read error", func(t *testing.T) {
+		cred := &credentials{}
+		err := InMemoryJSONUnmarshal(&brokenReadCloser{}, cred)
+		assertNotNil(t, err)
+		assertEqual(t, err.Error(), "read error")
+	})
+
+	t.Run("json decoder error", func(t *testing.T) {
+		byteData := []byte(`"username":"testuser","password":"testpass"}`)
+		cred := &credentials{}
+		err := InMemoryJSONUnmarshal(bytes.NewReader(byteData), cred)
+		assertNotNil(t, err)
+		assertEqual(t, true, strings.Contains(err.Error(), "invalid character ':' after top-level value"))
+	})
+}
+
+func TestInMemoryXMLMarshalUnmarshal(t *testing.T) {
+	t.Run("xml encoder", func(t *testing.T) {
+		user := &credentials{Username: "testuser", Password: "testpass"}
+		buf := acquireBuffer()
+		defer releaseBuffer(buf)
+		err := InMemoryXMLMarshal(buf, user)
+		assertNil(t, err)
+		assertEqual(t, `<credentials><Username>testuser</Username><Password>testpass</Password></credentials>`, buf.String())
+	})
+
+	t.Run("xml encoder error", func(t *testing.T) {
+		obj := &brokenMarshalXML{}
+		buf := acquireBuffer()
+		defer releaseBuffer(buf)
+		err := InMemoryXMLMarshal(buf, obj)
+		assertNotNil(t, err)
+		assertEqual(t, err.Error(), "b0rk3d")
+	})
+
+	t.Run("xml decoder", func(t *testing.T) {
+		byteData := []byte(`<?xml version="1.0" encoding="UTF-8"?><credentials><Username>testuser</Username><Password>testpass</Password></credentials>`)
+		cred := &credentials{}
+		err := InMemoryXMLUnmarshal(bytes.NewReader(byteData), cred)
+		assertNil(t, err)
+		assertEqual(t, "testuser", cred.Username)
+		assertEqual(t, "testpass", cred.Password)
+	})
+
+	t.Run("xml decoder read error", func(t *testing.T) {
+		cred := &credentials{}
+		err := InMemoryXMLUnmarshal(&brokenReadCloser{}, cred)
+		assertNotNil(t, err)
+		assertEqual(t, err.Error(), "read error")
+	})
+
+	t.Run("xml decoder error", func(t *testing.T) {
+		byteData := []byte(`<?xml version="1.0" encoding="UTF-8"?><Username>testuser</Username><Password>testpass</Password></credentials>`)
+		cred := &credentials{}
+		err := InMemoryJSONUnmarshal(bytes.NewReader(byteData), cred)
+		fmt.Println(err)
+		assertNotNil(t, err)
+		assertEqual(t, err.Error(), "invalid character '<' looking for beginning of value")
+	})
+}
+
+func TestInMemoryJSONPost(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	user := &credentials{Username: "testuser", Password: "testpass"}
+	assertEqual(t, "Username: **********, Password: **********", user.String())
+
+	c := dcnl().
+		AddContentTypeEncoder(jsonContentType, InMemoryJSONMarshal).
+		AddContentTypeDecoder(jsonContentType, InMemoryJSONUnmarshal)
+
+	r := c.R().
+		SetHeader(hdrContentTypeKey, jsonContentType).
+		SetBody(user).
+		SetResult(&AuthSuccess{})
+
+	resp, err := r.Post(ts.URL + "/login")
+	authResp := resp.Result().(*AuthSuccess)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, int64(50), resp.Size())
+	assertEqual(t, authResp.ID, "success")
+	assertEqual(t, authResp.Message, "login successful")
+}
+
+func TestInMemoryXMLPost(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	xmlContentType := "application/xml"
+	c := dcnl().
+		AddContentTypeEncoder(xmlContentType, InMemoryXMLMarshal).
+		AddContentTypeDecoder(xmlContentType, InMemoryXMLUnmarshal)
+
+	resp, err := c.R().
+		SetHeader(hdrContentTypeKey, xmlContentType).
+		SetBody(credentials{Username: "testuser", Password: "testpass"}).
+		SetResult(&AuthSuccess{}).
+		Post(ts.URL + "/login")
+
+	authResp := resp.Result().(*AuthSuccess)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, int64(116), resp.Size())
+	assertEqual(t, authResp.ID, "success")
+	assertEqual(t, authResp.Message, "login successful")
 }
 
 // This test methods exist for test coverage purpose
