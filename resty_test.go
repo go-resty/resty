@@ -803,6 +803,11 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 		w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
 		if authorizationHeaderValid(t, r, conf) {
+			if r.URL.Path == "/dir/index.html" && r.Method == MethodPost {
+				body, _ := io.ReadAll(r.Body)
+				assertEqual(t, `{"city":"Los Angeles","zip_code":"00000"}`, strings.TrimSpace(string(body)))
+			}
+
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
 		} else {
