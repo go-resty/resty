@@ -122,6 +122,30 @@ func TestMultipartUploadFiles(t *testing.T) {
 	assertEqual(t, true, strings.Contains(responseStr, "text-file.txt"))
 }
 
+func TestMultipartFilesAndFormDataEmptyGH1046(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
+
+	basePath := getTestDataPath()
+
+	c := dcnld()
+
+	resp, err := c.R().
+		SetFiles(map[string]string{
+			"profile_img": filepath.Join(basePath, "test-img.png"),
+			"notes":       filepath.Join(basePath, "text-file.txt"),
+		}).
+		Post(ts.URL + "/upload")
+
+	responseStr := resp.String()
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
+	assertEqual(t, true, strings.Contains(responseStr, "text-file.txt"))
+}
+
 func TestMultipartIoReaderFiles(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
