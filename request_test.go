@@ -482,7 +482,6 @@ func TestPostXMLBytesSuccess(t *testing.T) {
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody([]byte(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username><Password>testpass</Password></User>`)).
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
-		SetContentLength(true).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
@@ -498,7 +497,6 @@ func TestPostXMLStructSuccess(t *testing.T) {
 	resp, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(credentials{Username: "testuser", Password: "testpass"}).
-		SetContentLength(true).
 		SetResult(&AuthSuccess{}).
 		Post(ts.URL + "/login")
 
@@ -737,7 +735,6 @@ func TestFormData(t *testing.T) {
 
 	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
-		SetContentLength(true).
 		SetDebug(true)
 	c.outputLogTo(io.Discard)
 
@@ -760,7 +757,7 @@ func TestMultiValueFormData(t *testing.T) {
 	}
 
 	c := dcnl()
-	c.SetContentLength(true).SetDebug(true)
+	c.SetDebug(true)
 	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
@@ -778,7 +775,6 @@ func TestFormDataDisableWarn(t *testing.T) {
 
 	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
-		SetContentLength(true).
 		SetDisableWarn(true)
 	c.outputLogTo(io.Discard)
 
@@ -897,7 +893,6 @@ func TestPutJSONString(t *testing.T) {
 	client := dcnl()
 
 	client.AddRequestMiddleware(func(c *Client, r *Request) error {
-		c.SetContentLength(true)
 		r.SetHeader("X-Custom-Request-Middleware", "Request middleware")
 		return nil
 	})
@@ -938,7 +933,6 @@ func TestRequestMiddleware(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl()
-	c.SetContentLength(true)
 
 	c.AddRequestMiddleware(func(c *Client, r *Request) error {
 		r.SetHeader("X-Custom-Request-Middleware", "Request middleware")
@@ -1104,7 +1098,6 @@ func TestRawFileUploadByBody(t *testing.T) {
 
 	resp, err := dcnldr().
 		SetBody(fileBytes).
-		SetContentLength(true).
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
 		Put(ts.URL + "/raw-upload")
 
@@ -1642,10 +1635,25 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 
 	file, _ := os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
 	defer file.Close()
+	fi, _ := file.Stat()
 
-	resp, err := dcnldr().
+	c := dcnl()
+	c.SetRequestMiddlewares(
+		PrepareRequestMiddleware,
+		func(c *Client, r *Request) error {
+			// validate content length values
+			assertEqual(t, true, r.isContentLengthSet)
+			assertEqual(t, true, r.contentLength == fi.Size())
+			assertEqual(t, true, r.RawRequest.ContentLength == fi.Size())
+			assertEqual(t, r.contentLength, r.RawRequest.ContentLength)
+			return nil
+		},
+	)
+
+	resp, err := c.R().
 		SetBody(file).
 		SetContentType("image/png").
+		SetContentLength(fi.Size()).
 		Post(ts.URL + "/upload")
 
 	assertError(t, err)
@@ -1658,7 +1666,6 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 	resp, err = dcnldr().
 		SetBody(file).
 		SetContentType("image/png").
-		SetContentLength(true).
 		Post(ts.URL + "/upload")
 
 	assertError(t, err)
@@ -2410,7 +2417,7 @@ func TestRequestSetResultAndSetOutputFile(t *testing.T) {
 	assertEqual(t, `{ "id": "success", "message": "login successful" }`, string(fileContent))
 }
 
-func TestRequestBodyContentLength(t *testing.T) {
+func TestRequestBodyContentLengthValidation(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
@@ -2419,8 +2426,10 @@ func TestRequestBodyContentLength(t *testing.T) {
 	c.SetRequestMiddlewares(
 		PrepareRequestMiddleware,
 		func(c *Client, r *Request) error {
-			_, found := r.Header[hdrContentLengthKey]
-			assertEqual(t, true, found)
+			// validate content length
+			assertEqual(t, true, r.contentLength > 0)
+			assertEqual(t, true, r.RawRequest.ContentLength > 0)
+			assertEqual(t, r.contentLength, r.RawRequest.ContentLength)
 			return nil
 		},
 	)
@@ -2428,7 +2437,6 @@ func TestRequestBodyContentLength(t *testing.T) {
 	buf := bytes.NewBuffer([]byte(`{"content":"json content sending to server"}`))
 	res, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json").
-		SetContentLength(true).
 		SetBody(buf).
 		Put("/json")
 

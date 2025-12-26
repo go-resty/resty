@@ -455,7 +455,7 @@ func TestParseRequestBody(t *testing.T) {
 		initClient            func(c *Client)
 		initRequest           func(r *Request)
 		expectedBodyBuf       []byte
-		expectedContentLength string
+		expectedContentLength int64
 		expectedContentType   string
 		wantErr               bool
 	}{
@@ -463,18 +463,8 @@ func TestParseRequestBody(t *testing.T) {
 			name: "empty body",
 		},
 		{
-			name: "empty body with SetContentLength by request",
-			initRequest: func(r *Request) {
-				r.SetContentLength(true)
-			},
-			expectedContentLength: "0",
-		},
-		{
-			name: "empty body with SetContentLength by client",
-			initClient: func(c *Client) {
-				c.SetContentLength(true)
-			},
-			expectedContentLength: "0",
+			name:                  "empty body with SetContentLength by request",
+			expectedContentLength: 0,
 		},
 		{
 			name: "string body",
@@ -482,8 +472,9 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetMethod(MethodPost).
 					SetBody("foo")
 			},
-			expectedBodyBuf:     []byte("foo"),
-			expectedContentType: plainTextType,
+			expectedBodyBuf:       []byte("foo"),
+			expectedContentType:   plainTextType,
+			expectedContentLength: 3,
 		},
 		{
 			name: "string body with GET method",
@@ -501,8 +492,9 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodGet
 			},
-			expectedBodyBuf:     []byte("foo"),
-			expectedContentType: plainTextType,
+			expectedBodyBuf:       []byte("foo"),
+			expectedContentType:   plainTextType,
+			expectedContentLength: 3,
 		},
 		{
 			name: "string body with GET method and AllowMethodGetPayload by request",
@@ -511,8 +503,9 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodGet
 			},
-			expectedBodyBuf:     []byte("foo"),
-			expectedContentType: plainTextType,
+			expectedBodyBuf:       []byte("foo"),
+			expectedContentType:   plainTextType,
+			expectedContentLength: 3,
 		},
 		{
 			name: "string body with HEAD method",
@@ -534,8 +527,9 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodPost
 			},
-			expectedBodyBuf:     []byte("foo"),
-			expectedContentType: plainTextType,
+			expectedBodyBuf:       []byte("foo"),
+			expectedContentType:   plainTextType,
+			expectedContentLength: 3,
 		},
 		{
 			name: "string body with PATCH method",
@@ -543,8 +537,9 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodPatch
 			},
-			expectedBodyBuf:     []byte("foo"),
-			expectedContentType: plainTextType,
+			expectedBodyBuf:       []byte("foo"),
+			expectedContentType:   plainTextType,
+			expectedContentLength: 3,
 		},
 		{
 			name: "string body with PUT method",
@@ -552,8 +547,9 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodPut
 			},
-			expectedBodyBuf:     []byte("foo"),
-			expectedContentType: plainTextType,
+			expectedBodyBuf:       []byte("foo"),
+			expectedContentType:   plainTextType,
+			expectedContentLength: 3,
 		},
 		{
 			name: "string body with DELETE method",
@@ -571,8 +567,9 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodDelete
 			},
-			expectedBodyBuf:     []byte("foo"),
-			expectedContentType: plainTextType,
+			expectedBodyBuf:       []byte("foo"),
+			expectedContentType:   plainTextType,
+			expectedContentLength: 3,
 		},
 		{
 			name: "string body with CONNECT method",
@@ -598,8 +595,9 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetMethod(MethodPost).
 					SetBody([]byte("foo"))
 			},
-			expectedBodyBuf:     []byte("foo"),
-			expectedContentType: plainTextType,
+			expectedBodyBuf:       []byte("foo"),
+			expectedContentType:   plainTextType,
+			expectedContentLength: 3,
 		},
 		{
 			name: "io.Reader body, no bodyBuf with method put",
@@ -618,8 +616,9 @@ func TestParseRequestBody(t *testing.T) {
 						"bar": "2",
 					})
 			},
-			expectedBodyBuf:     []byte("foo=1&bar=2"),
-			expectedContentType: formContentType,
+			expectedBodyBuf:       []byte("foo=1&bar=2"),
+			expectedContentType:   formContentType,
+			expectedContentLength: 11,
 		},
 		{
 			name: "form data by client with method patch",
@@ -632,8 +631,9 @@ func TestParseRequestBody(t *testing.T) {
 			initRequest: func(r *Request) {
 				r.SetMethod(MethodPatch)
 			},
-			expectedBodyBuf:     []byte("foo=1&bar=2"),
-			expectedContentType: formContentType,
+			expectedBodyBuf:       []byte("foo=1&bar=2"),
+			expectedContentType:   formContentType,
+			expectedContentLength: 11,
 		},
 		{
 			name: "form data by client and request",
@@ -650,8 +650,9 @@ func TestParseRequestBody(t *testing.T) {
 						"baz": "4",
 					})
 			},
-			expectedBodyBuf:     []byte("foo=3&bar=2&baz=4"),
-			expectedContentType: formContentType,
+			expectedBodyBuf:       []byte("foo=3&bar=2&baz=4"),
+			expectedContentType:   formContentType,
+			expectedContentLength: 17,
 		},
 		{
 			name: "json from struct",
@@ -663,22 +664,21 @@ func TestParseRequestBody(t *testing.T) {
 				}{
 					Foo: "1",
 					Bar: "2",
-				}).SetContentLength(true)
+				})
 			},
 			expectedBodyBuf:       append([]byte(`{"foo":"1","bar":"2"}`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "22",
+			expectedContentLength: 22,
 		},
 		{
 			name: "json from slice",
 			initRequest: func(r *Request) {
 				r.SetMethod(MethodPost).
-					SetBody([]string{"foo", "bar"}).
-					SetContentLength(true)
+					SetBody([]string{"foo", "bar"})
 			},
 			expectedBodyBuf:       append([]byte(`["foo","bar"]`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "14",
+			expectedContentLength: 14,
 		},
 		{
 			name: "json from map",
@@ -691,12 +691,11 @@ func TestParseRequestBody(t *testing.T) {
 							"qux": "4",
 						},
 						"xyz": nil,
-					}).
-					SetContentLength(true)
+					})
 			},
 			expectedBodyBuf:       append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "55",
+			expectedContentLength: 55,
 		},
 		{
 			name: "json from map",
@@ -709,12 +708,11 @@ func TestParseRequestBody(t *testing.T) {
 							"qux": "4",
 						},
 						"xyz": nil,
-					}).
-					SetContentLength(true)
+					})
 			},
 			expectedBodyBuf:       append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "55",
+			expectedContentLength: 55,
 		},
 		{
 			name: "json from map",
@@ -727,12 +725,11 @@ func TestParseRequestBody(t *testing.T) {
 							"qux": "4",
 						},
 						"xyz": nil,
-					}).
-					SetContentLength(true)
+					})
 			},
 			expectedBodyBuf:       append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
 			expectedContentType:   jsonContentType,
-			expectedContentLength: "55",
+			expectedContentLength: 55,
 		},
 		{
 			name: "xml from struct",
@@ -746,12 +743,11 @@ func TestParseRequestBody(t *testing.T) {
 						Foo: "1",
 						Bar: "2",
 					}).
-					SetContentLength(true).
 					SetHeader(hdrContentTypeKey, "text/xml")
 			},
 			expectedBodyBuf:       []byte(`<FooBar><foo>1</foo><bar>2</bar></FooBar>`),
 			expectedContentType:   "text/xml",
-			expectedContentLength: "41",
+			expectedContentLength: 41,
 		},
 		{
 			name: "unsupported type",
@@ -795,6 +791,10 @@ func TestParseRequestBody(t *testing.T) {
 				t.Errorf("parseRequestBody() error = %v", err)
 			} else if tt.wantErr {
 				t.Errorf("wanted error, but got nil")
+			}
+			// obtain value, since this is only parse request body method test
+			if r.bodyBuf != nil {
+				r.contentLength = int64(r.bodyBuf.Len())
 			}
 			switch {
 			case r.bodyBuf == nil && tt.expectedBodyBuf != nil:
@@ -849,8 +849,8 @@ func TestParseRequestBody(t *testing.T) {
 					t.Errorf("bodyBuf = %q does not match expected %q", r.bodyBuf.String(), string(tt.expectedBodyBuf))
 				}
 			}
-			if tt.expectedContentLength != r.Header.Get(hdrContentLengthKey) {
-				t.Errorf("Content-Length header = %q does not match expected %q", r.Header.Get(hdrContentLengthKey), tt.expectedContentLength)
+			if tt.expectedContentLength != r.contentLength {
+				t.Errorf("Content length value = %v does not match expected %v", r.contentLength, tt.expectedContentLength)
 			}
 			if ct := r.Header.Get(hdrContentTypeKey); !((tt.expectedContentType == "" && ct != "") || strings.Contains(ct, tt.expectedContentType)) {
 				t.Errorf("Content-Type header = %q does not match expected %q", r.Header.Get(hdrContentTypeKey), tt.expectedContentType)

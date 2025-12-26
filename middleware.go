@@ -17,7 +17,6 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 )
 
@@ -217,17 +216,6 @@ func parseRequestBody(c *Client, r *Request) error {
 		r.Body = nil // if the payload is not supported by HTTP verb, set explicit nil
 	}
 
-	// by default resty won't set content length, but user can opt-in
-	if r.setContentLength {
-		cntLen := 0
-		if r.bodyBuf != nil {
-			cntLen = r.bodyBuf.Len()
-		} else if b, ok := r.Body.(*bytes.Reader); ok {
-			cntLen = b.Len()
-		}
-		r.Header.Set(hdrContentLengthKey, strconv.Itoa(cntLen))
-	}
-
 	return nil
 }
 
@@ -266,6 +254,13 @@ func createRawRequest(c *Client, r *Request) (err error) {
 	// Add cookies from request instance into http request
 	for _, cookie := range r.Cookies {
 		r.RawRequest.AddCookie(cookie)
+	}
+
+	// Set given content length value into the request
+	if r.isContentLengthSet {
+		r.RawRequest.ContentLength = r.contentLength
+	} else {
+		r.contentLength = r.RawRequest.ContentLength
 	}
 
 	return
