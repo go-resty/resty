@@ -111,8 +111,12 @@ func TestClientDigestAuthWithBody(t *testing.T) {
 		SetBody(map[string]any{"zip_code": "00000", "city": "Los Angeles"}).
 		Post(ts.URL + conf.uri)
 
+	resObj := resp.Result().(*AuthSuccess)
+
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, resObj.ID, "success")
+	assertEqual(t, resObj.Message, "login successful")
 }
 
 func TestClientDigestAuthWithBodyQopAuthInt(t *testing.T) {

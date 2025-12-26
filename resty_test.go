@@ -803,6 +803,12 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 		w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
 		if authorizationHeaderValid(t, r, conf) {
+			if r.URL.Path == "/dir/index.html" && r.Method == MethodPost {
+				body, err := io.ReadAll(r.Body)
+				assertNil(t, err)
+				assertEqual(t, `{"city":"Los Angeles","zip_code":"00000"}`, strings.TrimSpace(string(body)))
+			}
+
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
 		} else {
@@ -873,6 +879,7 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 	// auth-int scenario
 	body, err := io.ReadAll(r.Body)
 	r.Body.Close()
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	assertError(t, err)
 	bodyHash := ""
 	if len(body) > 0 {
