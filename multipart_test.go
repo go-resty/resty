@@ -34,7 +34,6 @@ func TestMultipartFormDataAndUpload(t *testing.T) {
 	t.Run("form data and upload", func(t *testing.T) {
 		resp, err := c.R().
 			SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetContentLength(true).
 			Post(ts.URL + "/upload")
 
 		assertError(t, err)
@@ -50,7 +49,6 @@ func TestMultipartFormDataAndUpload(t *testing.T) {
 				"welcome3": "welcome value 3",
 			}).
 			SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetContentLength(true).
 			Post(ts.URL + "/upload")
 
 		assertError(t, err)
@@ -70,7 +68,6 @@ func TestMultipartFormDataAndUploadMethodPatch(t *testing.T) {
 	resp, err := c.R().
 		SetFormData(map[string]string{"zip_code": "00002", "city": "Los Angeles"}).
 		SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
-		SetContentLength(true).
 		Patch(ts.URL + "/upload")
 
 	assertError(t, err)

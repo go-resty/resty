@@ -75,7 +75,7 @@ func Benchmark_parseRequestHeader(b *testing.B) {
 func Benchmark_parseRequestBody_string(b *testing.B) {
 	c := New()
 	r := c.R()
-	r.SetBody("foo").SetContentLength(true)
+	r.SetBody("foo")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := parseRequestBody(c, r); err != nil {
@@ -87,7 +87,7 @@ func Benchmark_parseRequestBody_string(b *testing.B) {
 func Benchmark_parseRequestBody_byte(b *testing.B) {
 	c := New()
 	r := c.R()
-	r.SetBody([]byte("foo")).SetContentLength(true)
+	r.SetBody([]byte("foo"))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := parseRequestBody(c, r); err != nil {
@@ -115,7 +115,7 @@ func Benchmark_parseRequestBody_struct(b *testing.B) {
 	}
 	c := New()
 	r := c.R()
-	r.SetBody(FooBar{Foo: "1", Bar: "2"}).SetContentLength(true).SetHeader(hdrContentTypeKey, jsonContentType)
+	r.SetBody(FooBar{Foo: "1", Bar: "2"}).SetHeader(hdrContentTypeKey, jsonContentType)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := parseRequestBody(c, r); err != nil {
@@ -131,7 +131,7 @@ func Benchmark_parseRequestBody_struct_xml(b *testing.B) {
 	}
 	c := New()
 	r := c.R()
-	r.SetBody(FooBar{Foo: "1", Bar: "2"}).SetContentLength(true).SetHeader(hdrContentTypeKey, "text/xml")
+	r.SetBody(FooBar{Foo: "1", Bar: "2"}).SetHeader(hdrContentTypeKey, "text/xml")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := parseRequestBody(c, r); err != nil {
@@ -146,7 +146,7 @@ func Benchmark_parseRequestBody_map(b *testing.B) {
 	r.SetBody(map[string]string{
 		"foo": "1",
 		"bar": "2",
-	}).SetContentLength(true).SetHeader(hdrContentTypeKey, jsonContentType)
+	}).SetHeader(hdrContentTypeKey, jsonContentType)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := parseRequestBody(c, r); err != nil {
@@ -158,7 +158,7 @@ func Benchmark_parseRequestBody_map(b *testing.B) {
 func Benchmark_parseRequestBody_slice(b *testing.B) {
 	c := New()
 	r := c.R()
-	r.SetBody([]string{"1", "2"}).SetContentLength(true).SetHeader(hdrContentTypeKey, jsonContentType)
+	r.SetBody([]string{"1", "2"}).SetHeader(hdrContentTypeKey, jsonContentType)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := parseRequestBody(c, r); err != nil {
@@ -171,7 +171,7 @@ func Benchmark_parseRequestBody_FormData(b *testing.B) {
 	c := New()
 	r := c.R()
 	c.SetFormData(map[string]string{"foo": "1", "bar": "2"})
-	r.SetFormData(map[string]string{"foo": "3", "baz": "4"}).SetContentLength(true)
+	r.SetFormData(map[string]string{"foo": "3", "baz": "4"})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := parseRequestBody(c, r); err != nil {
@@ -194,7 +194,6 @@ func Benchmark_parseRequestBody_MultiPart(b *testing.B) {
 				Reader:      strings.NewReader("8"),
 			},
 		).
-		SetContentLength(true).
 		SetMethod(MethodPost)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

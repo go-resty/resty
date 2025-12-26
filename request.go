@@ -82,7 +82,8 @@ type Request struct {
 	credentials         *credentials
 	isMultiPart         bool
 	isFormData          bool
-	setContentLength    bool
+	isContentLengthSet  bool
+	contentLength       int64
 	jsonEscapeHTML      bool
 	ctx                 context.Context
 	ctxCancelFunc       context.CancelFunc
@@ -587,16 +588,13 @@ func (r *Request) SetMultipartBoundary(boundary string) *Request {
 	return r
 }
 
-// SetContentLength method sets the current request's HTTP header `Content-Length` value.
+// SetContentLength method sets the given content length value in the HTTP request.
 // By default, Resty won't set `Content-Length`.
 //
-// See [Client.SetContentLength]
-//
-//	client.R().SetContentLength(true)
-//
-// It overrides the value set at the client instance level.
-func (r *Request) SetContentLength(l bool) *Request {
-	r.setContentLength = l
+//	client.R().SetContentLength(3486547657)
+func (r *Request) SetContentLength(v int64) *Request {
+	r.contentLength = v
+	r.isContentLengthSet = true
 	return r
 }
 
@@ -1538,6 +1536,11 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.FormData = cloneURLValues(r.FormData)
 	rr.QueryParams = cloneURLValues(r.QueryParams)
 	rr.PathParams = maps.Clone(r.PathParams)
+
+	// reset content length if not set by user
+	if !r.isContentLengthSet {
+		rr.contentLength = 0
+	}
 
 	// clone basic auth
 	if r.credentials != nil {
