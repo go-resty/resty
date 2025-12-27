@@ -2,6 +2,7 @@ package resty
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"io"
 	"net/http"
@@ -90,6 +91,33 @@ func TestPanicOnConcurrentCorruptedGzip(t *testing.T) {
 		default:
 			// If we get here, no panic occurred.
 		}
+	}
+
+	// at the end the client should still be functional
+	// and can make valid requests
+	goodServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		gz.Write([]byte(`{"status": "ok"}`))
+	}))
+	defer goodServer.Close()
+
+	var result map[string]string
+	resp, err := client.R().
+		SetResult(&result).
+		Post(goodServer.URL)
+	if err != nil {
+		t.Fatalf("Final health check failed: %v", err)
+	}
+	if resp.IsError() {
+		t.Fatalf("Final health check returned error status: %d", resp.StatusCode())
+	}
+	if result["status"] != "ok" {
+		t.Fatalf("Final health check returned unexpected body: %v", result)
 	}
 }
 
