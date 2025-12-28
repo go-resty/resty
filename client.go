@@ -2240,6 +2240,7 @@ func (c *Client) executeRequestMiddlewares(req *Request) (err error) {
 func (c *Client) execute(req *Request) (*Response, error) {
 	if c.circuitBreaker != nil {
 		if err := c.circuitBreaker.allow(); err != nil {
+			c.circuitBreaker.onTriggerHooks(req, err)
 			return nil, err
 		}
 	}
