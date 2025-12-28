@@ -2,11 +2,124 @@ package resty
 
 import (
 	"bytes"
+	"compress/gzip"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 )
+
+func TestPanicOnConcurrentCorruptedGzip(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		// We want the Client to think it's reading Gzip, but fail immediately
+		// upon processing these bytes.
+		w.Write([]byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x01})
+	}))
+	defer server.Close()
+
+	transport := &http.Transport{
+		MaxIdleConns:        1000,
+		MaxIdleConnsPerHost: 1000,
+	}
+
+	client := NewWithClient(&http.Client{Transport: transport}).
+		SetContext(context.Background()).
+		SetRetryCount(2).
+		SetRetryWaitTime(0).
+		SetTrace(true).
+		AddRetryConditions(func(r *Response, err error) bool {
+			return err != nil
+		})
+
+	totalRequests := 100
+	concurrencyLimit := 100
+	sem := make(chan struct{}, concurrencyLimit)
+
+	panicChan := make(chan any, 1)
+	doneChan := make(chan struct{})
+
+	go func() {
+		var wg sync.WaitGroup
+		defer close(doneChan)
+
+		for range totalRequests {
+			select {
+			case <-panicChan:
+				return
+			default:
+			}
+
+			wg.Add(1)
+			sem <- struct{}{}
+
+			go func() {
+				defer wg.Done()
+				defer func() { <-sem }()
+
+				defer func() {
+					if r := recover(); r != nil {
+						select {
+						case panicChan <- r:
+						default:
+						}
+					}
+				}()
+
+				var out map[string]any
+				client.R().
+					SetAllowNonIdempotentRetry(true).
+					SetResult(&out).
+					Post(server.URL)
+			}()
+		}
+		wg.Wait()
+	}()
+
+	select {
+	case r := <-panicChan:
+		t.Fatalf("Test Failed Immediately: Panic detected: %v", r)
+	case <-doneChan:
+		select {
+		case r := <-panicChan:
+			t.Fatalf("Test Failed: Panic detected at end of run: %v", r)
+		default:
+			// If we get here, no panic occurred.
+		}
+	}
+
+	// at the end the client should still be functional
+	// and can make valid requests
+	goodServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		gz.Write([]byte(`{"status": "ok"}`))
+	}))
+	defer goodServer.Close()
+
+	var result map[string]string
+	resp, err := client.R().
+		SetResult(&result).
+		Post(goodServer.URL)
+	if err != nil {
+		t.Fatalf("Final health check failed: %v", err)
+	}
+	if resp.IsError() {
+		t.Fatalf("Final health check returned error status: %d", resp.StatusCode())
+	}
+	if result["status"] != "ok" {
+		t.Fatalf("Final health check returned unexpected body: %v", result)
+	}
+}
 
 func TestDecodeJSONWhenResponseBodyIsNull(t *testing.T) {
 	r := &Response{
