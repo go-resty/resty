@@ -309,3 +309,16 @@ func TestCircuitBreakerConcurrentOnStateChangeRegistration(t *testing.T) {
 	got := atomic.LoadInt32(&cnt)
 	assertEqual(t, int32(n), got) // expected N state change hooks executed
 }
+
+func TestCircuitBreakerSlidingWindowSetInterval(t *testing.T) {
+	cb := NewCircuitBreakerWithCount(2, 1, 100*time.Millisecond)
+
+	// Verify initial interval
+	assertEqual(t, 100*time.Millisecond, cb.sw.interval)
+
+	// Change interval to a longer duration
+	cb.sw.SetInterval(200 * time.Millisecond)
+
+	// Verify interval was changed
+	assertEqual(t, 200*time.Millisecond, cb.sw.interval)
+}
