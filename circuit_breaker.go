@@ -27,6 +27,101 @@ type (
 	CircuitBreakerState uint32
 )
 
+// group is an interface for types that can be combined and inverted
+type group[T any] interface {
+	op(T) T
+	empty() T
+	inverse() T
+}
+
+// totalAndFailures tracks total requests and failures
+type totalAndFailures struct {
+	total    int
+	failures int
+}
+
+func (tf totalAndFailures) op(g totalAndFailures) totalAndFailures {
+	tf.total += g.total
+	tf.failures += g.failures
+	return tf
+}
+
+func (tf totalAndFailures) empty() totalAndFailures {
+	return totalAndFailures{}
+}
+
+func (tf totalAndFailures) inverse() totalAndFailures {
+	tf.total = -tf.total
+	tf.failures = -tf.failures
+	return tf
+}
+
+// slidingWindow implements a time-based sliding window for tracking values
+type slidingWindow[G group[G]] struct {
+	mutex     sync.RWMutex
+	total     G
+	values    []G
+	idx       int
+	lastStart time.Time
+	interval  time.Duration
+}
+
+func newSlidingWindow[G group[G]](empty func() G, interval time.Duration, buckets int) *slidingWindow[G] {
+	return &slidingWindow[G]{
+		total:     empty(),
+		values:    make([]G, buckets),
+		idx:       0,
+		lastStart: time.Now(),
+		interval:  interval,
+	}
+}
+
+func (sw *slidingWindow[G]) Add(val G) {
+	sw.mutex.Lock()
+	defer sw.mutex.Unlock()
+
+	now := time.Now()
+	elapsed := now.Sub(sw.lastStart)
+	bucketDuration := sw.interval / time.Duration(len(sw.values))
+
+	// Advance window if needed
+	if elapsed >= bucketDuration {
+		bucketsToAdvance := int(elapsed / bucketDuration)
+		if bucketsToAdvance >= len(sw.values) {
+			// Reset all buckets
+			for i := range sw.values {
+				sw.values[i] = sw.total.empty()
+			}
+			sw.total = sw.total.empty()
+			sw.idx = 0
+		} else {
+			// Remove old buckets
+			for i := 0; i < bucketsToAdvance; i++ {
+				sw.idx = (sw.idx + 1) % len(sw.values)
+				sw.total = sw.total.op(sw.values[sw.idx].inverse())
+				sw.values[sw.idx] = sw.total.empty()
+			}
+		}
+		sw.lastStart = now
+	}
+
+	// Add to current bucket
+	sw.values[sw.idx] = sw.values[sw.idx].op(val)
+	sw.total = sw.total.op(val)
+}
+
+func (sw *slidingWindow[G]) Get() G {
+	sw.mutex.RLock()
+	defer sw.mutex.RUnlock()
+	return sw.total
+}
+
+func (sw *slidingWindow[G]) SetInterval(interval time.Duration) {
+	sw.mutex.Lock()
+	defer sw.mutex.Unlock()
+	sw.interval = interval
+}
+
 const (
 	// CircuitBreakerStateClosed represents the closed state of the circuit breaker.
 	CircuitBreakerStateClosed CircuitBreakerState = iota
@@ -53,13 +148,11 @@ const (
 // Use [NewCircuitBreakerWithCount] or [NewCircuitBreakerWithRatio] to create a new [CircuitBreaker]
 // instance accordingly.
 type CircuitBreaker struct {
-	lock          *sync.RWMutex
-	policies      []CircuitBreakerPolicy
-	resetTimeout  time.Duration
-	state         atomic.Value // circuitBreakerState
-	failureCount  atomic.Uint64
-	successCount  atomic.Uint64
-	lastFailureAt atomic.Value // time.Time
+	lock         *sync.RWMutex
+	policies     []CircuitBreakerPolicy
+	resetTimeout time.Duration
+	state        atomic.Value // CircuitBreakerState
+	sw           *slidingWindow[totalAndFailures]
 
 	// Hooks
 	triggerHooks     []CircuitBreakerTriggerHook
@@ -73,7 +166,6 @@ type CircuitBreaker struct {
 	isRatioBased bool
 	failureRatio float64 // Threshold, e.g., 0.5 for 50% failure
 	minRequests  uint64  // Minimum number of requests to consider failure ratio
-	totalCount   atomic.Uint64
 }
 
 // NewCircuitBreakerWithCount method creates a new [CircuitBreaker] instance with Count settings.
@@ -108,6 +200,11 @@ func newCircuitBreaker(resetTimeout time.Duration, policies ...CircuitBreakerPol
 		policies:     []CircuitBreakerPolicy{CircuitBreaker5xxPolicy},
 	}
 	cb.state.Store(CircuitBreakerStateClosed)
+	cb.sw = newSlidingWindow(
+		func() totalAndFailures { return totalAndFailures{} },
+		resetTimeout,
+		10,
+	)
 	if len(policies) > 0 {
 		cb.policies = policies
 	}
@@ -179,30 +276,22 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 		}
 	}
 
-	if cb.isRatioBased {
-		cb.totalCount.Add(1)
-	}
-
 	if failed {
-		if cb.failureCount.Load() > 0 && time.Since(cb.lastFailureAt.Load().(time.Time)) > cb.resetTimeout {
-			cb.failureCount.Store(0)
-		}
+		cb.sw.Add(totalAndFailures{total: 1, failures: 1})
 
 		switch cb.getState() {
 		case CircuitBreakerStateClosed:
-			failureCount := cb.failureCount.Add(1)
-			cb.lastFailureAt.Store(time.Now())
+			tf := cb.sw.Get()
 
 			if cb.isRatioBased {
-				totalCount := cb.totalCount.Load()
-				if totalCount >= cb.minRequests {
-					currentFailureRatio := float64(failureCount) / float64(totalCount)
+				if tf.total >= int(cb.minRequests) {
+					currentFailureRatio := float64(tf.failures) / float64(tf.total)
 					if currentFailureRatio >= cb.failureRatio {
 						cb.open()
 					}
 				}
 			} else {
-				if failureCount >= cb.failureThreshold {
+				if tf.failures >= int(cb.failureThreshold) {
 					cb.open()
 				}
 			}
@@ -213,12 +302,14 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 		return
 	}
 
+	cb.sw.Add(totalAndFailures{total: 1, failures: 0})
+
 	switch cb.getState() {
 	case CircuitBreakerStateClosed:
 		return
 	case CircuitBreakerStateHalfOpen:
-		successCount := cb.successCount.Add(1)
-		if successCount >= cb.successThreshold {
+		tf := cb.sw.Get()
+		if tf.total-tf.failures >= int(cb.successThreshold) {
 			cb.changeState(CircuitBreakerStateClosed)
 		}
 	}
@@ -226,9 +317,6 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 
 func (cb *CircuitBreaker) open() {
 	cb.changeState(CircuitBreakerStateOpen)
-	if cb.isRatioBased {
-		cb.totalCount.Store(0)
-	}
 	go func() {
 		time.Sleep(cb.resetTimeout)
 		cb.changeState(CircuitBreakerStateHalfOpen)
@@ -236,10 +324,12 @@ func (cb *CircuitBreaker) open() {
 }
 
 func (cb *CircuitBreaker) changeState(state CircuitBreakerState) {
-	cb.failureCount.Store(0)
-	cb.successCount.Store(0)
-
 	oldState := cb.getState()
+	cb.sw = newSlidingWindow(
+		func() totalAndFailures { return totalAndFailures{} },
+		cb.resetTimeout,
+		10,
+	)
 	cb.state.Store(state)
 	if oldState != state {
 		cb.onStateChangeHooks(oldState, state)

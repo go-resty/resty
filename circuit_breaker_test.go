@@ -70,13 +70,13 @@ func TestCircuitBreakerCountBased(t *testing.T) {
 
 	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
-	assertEqual(t, uint64(1), c.circuitBreaker.failureCount.Load())
+	assertEqual(t, 1, c.circuitBreaker.sw.Get().failures)
 
 	time.Sleep(resetTimeout)
 
 	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
-	assertEqual(t, uint64(1), c.circuitBreaker.failureCount.Load())
+	assertEqual(t, 1, c.circuitBreaker.sw.Get().failures)
 }
 
 func TestCircuitBreaker5xxPolicy(t *testing.T) {
@@ -94,13 +94,13 @@ func TestCircuitBreakerCountBasedOpensAndAllow(t *testing.T) {
 	// expected allow when state is closed
 	err1 := cb.allow()
 	assertNil(t, err1)
-	assertEqual(t, uint64(0), cb.failureCount.Load())
+	assertEqual(t, 0, cb.sw.Get().failures)
 
 	// expected still closed after 1 failure
 	cb.applyPolicies(fail)
 	err2 := cb.allow()
 	assertNil(t, err2)
-	assertEqual(t, uint64(1), cb.failureCount.Load())
+	assertEqual(t, 1, cb.sw.Get().failures)
 
 	// expected open after reaching failure threshold
 	cb.applyPolicies(fail)
@@ -194,12 +194,12 @@ func TestCircuitBreakerChangeStateClearsCounts(t *testing.T) {
 	fail := &http.Response{StatusCode: 500}
 
 	cb.applyPolicies(fail)
-	assertEqual(t, uint64(1), cb.failureCount.Load())
+	assertEqual(t, 1, cb.sw.Get().failures)
 
 	cb.changeState(CircuitBreakerStateHalfOpen)
 	assertEqual(t, CircuitBreakerStateHalfOpen, cb.getState())
-	assertEqual(t, uint64(0), cb.failureCount.Load())
-	assertEqual(t, uint64(0), cb.successCount.Load())
+	assertEqual(t, 0, cb.sw.Get().failures)
+	assertEqual(t, 0, cb.sw.Get().total)
 }
 
 func TestCircuitBreakerAllowDuringHalfOpen(t *testing.T) {
@@ -308,4 +308,17 @@ func TestCircuitBreakerConcurrentOnStateChangeRegistration(t *testing.T) {
 	cb.onStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateOpen)
 	got := atomic.LoadInt32(&cnt)
 	assertEqual(t, int32(n), got) // expected N state change hooks executed
+}
+
+func TestCircuitBreakerSlidingWindowSetInterval(t *testing.T) {
+	cb := NewCircuitBreakerWithCount(2, 1, 100*time.Millisecond)
+
+	// Verify initial interval
+	assertEqual(t, 100*time.Millisecond, cb.sw.interval)
+
+	// Change interval to a longer duration
+	cb.sw.SetInterval(200 * time.Millisecond)
+
+	// Verify interval was changed
+	assertEqual(t, 200*time.Millisecond, cb.sw.interval)
 }
