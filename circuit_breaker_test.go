@@ -7,6 +7,8 @@ package resty
 
 import (
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -44,23 +46,23 @@ func TestCircuitBreakerCountBased(t *testing.T) {
 	resp, err := c.R().Get(ts.URL + "/500")
 	assertErrorIs(t, ErrCircuitBreakerOpen, err)
 	assertNil(t, resp)
-	assertEqual(t, circuitBreakerStateOpen, c.circuitBreaker.getState())
+	assertEqual(t, CircuitBreakerStateOpen, c.circuitBreaker.getState())
 
 	time.Sleep(resetTimeout + 50*time.Millisecond)
-	assertEqual(t, circuitBreakerStateHalfOpen, c.circuitBreaker.getState())
+	assertEqual(t, CircuitBreakerStateHalfOpen, c.circuitBreaker.getState())
 
 	_, err = c.R().Get(ts.URL + "/500")
 	assertError(t, err)
-	assertEqual(t, circuitBreakerStateOpen, c.circuitBreaker.getState())
+	assertEqual(t, CircuitBreakerStateOpen, c.circuitBreaker.getState())
 
 	time.Sleep(resetTimeout + 50*time.Millisecond)
-	assertEqual(t, circuitBreakerStateHalfOpen, c.circuitBreaker.getState())
+	assertEqual(t, CircuitBreakerStateHalfOpen, c.circuitBreaker.getState())
 
 	for i := uint64(0); i < successThreshold; i++ {
 		_, err := c.R().Get(ts.URL + "/200")
 		assertNil(t, err)
 	}
-	assertEqual(t, circuitBreakerStateClosed, c.circuitBreaker.getState())
+	assertEqual(t, CircuitBreakerStateClosed, c.circuitBreaker.getState())
 
 	resp, err = c.R().Get(ts.URL + "/200")
 	assertNil(t, err)
@@ -107,11 +109,11 @@ func TestCircuitBreakerCountBasedOpensAndAllow(t *testing.T) {
 
 	// time.Sleep to half-open state
 	time.Sleep(25 * time.Millisecond)
-	assertEqual(t, circuitBreakerStateHalfOpen, cb.getState())
+	assertEqual(t, CircuitBreakerStateHalfOpen, cb.getState())
 
 	// expected still half-open after a failure
 	cb.applyPolicies(fail)
-	assertEqual(t, circuitBreakerStateOpen, cb.getState())
+	assertEqual(t, CircuitBreakerStateOpen, cb.getState())
 
 	// expected open state on allow
 	err4 := cb.allow()
@@ -131,17 +133,17 @@ func TestCircuitBreakerCountBasedHalfOpenToClosedOnSuccess(t *testing.T) {
 	// wait for resetTimeout to transition to half-open
 	deadline := time.Now().Add(200 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		if cb.getState() == circuitBreakerStateHalfOpen {
+		if cb.getState() == CircuitBreakerStateHalfOpen {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	// expected half-open state after reset timeout
-	assertEqual(t, circuitBreakerStateHalfOpen, cb.getState())
+	assertEqual(t, CircuitBreakerStateHalfOpen, cb.getState())
 
 	// on success in half-open, should move to closed
 	cb.applyPolicies(ok)
-	assertEqual(t, circuitBreakerStateClosed, cb.getState())
+	assertEqual(t, CircuitBreakerStateClosed, cb.getState())
 
 	// expected allow when closed
 	err := cb.allow()
@@ -171,16 +173,16 @@ func TestCircuitBreakerRatioBasedOpenToClosed(t *testing.T) {
 	time.Sleep(25 * time.Millisecond)
 
 	// expected half-open state after reset timeout
-	assertEqual(t, circuitBreakerStateHalfOpen, cb.getState())
+	assertEqual(t, CircuitBreakerStateHalfOpen, cb.getState())
 
 	// on success in half-open, should move to closed
 	cb.applyPolicies(ok)
-	assertEqual(t, circuitBreakerStateClosed, cb.getState())
+	assertEqual(t, CircuitBreakerStateClosed, cb.getState())
 }
 
 func TestCircuitBreakerNewStateAndPolicies(t *testing.T) {
 	cb := NewCircuitBreakerWithCount(3, 2, 10*time.Millisecond, CircuitBreaker5xxPolicy)
-	assertEqual(t, circuitBreakerStateClosed, cb.getState())
+	assertEqual(t, CircuitBreakerStateClosed, cb.getState())
 	assertEqual(t, uint64(3), cb.failureThreshold)
 	assertEqual(t, uint64(2), cb.successThreshold)
 	assertEqual(t, 10*time.Millisecond, cb.resetTimeout)
@@ -194,8 +196,8 @@ func TestCircuitBreakerChangeStateClearsCounts(t *testing.T) {
 	cb.applyPolicies(fail)
 	assertEqual(t, uint64(1), cb.failureCount.Load())
 
-	cb.changeState(circuitBreakerStateHalfOpen)
-	assertEqual(t, circuitBreakerStateHalfOpen, cb.getState())
+	cb.changeState(CircuitBreakerStateHalfOpen)
+	assertEqual(t, CircuitBreakerStateHalfOpen, cb.getState())
 	assertEqual(t, uint64(0), cb.failureCount.Load())
 	assertEqual(t, uint64(0), cb.successCount.Load())
 }
@@ -208,6 +210,102 @@ func TestCircuitBreakerAllowDuringHalfOpen(t *testing.T) {
 	assertErrorIs(t, ErrCircuitBreakerOpen, cb.allow())
 
 	time.Sleep(25 * time.Millisecond) // wait to transition to half-open
-	assertEqual(t, circuitBreakerStateHalfOpen, cb.getState())
+	assertEqual(t, CircuitBreakerStateHalfOpen, cb.getState())
 	assertNil(t, cb.allow())
+}
+
+func TestCircuitBreakerOnTriggerHooks(t *testing.T) {
+	cb := NewCircuitBreakerWithCount(1, 1, 10*time.Millisecond)
+
+	called := false
+	var gotErr error
+	cb.OnTrigger(func(r *Request, e error) {
+		called = true
+		gotErr = e
+	})
+
+	cb.onTriggerHooks(nil, ErrCircuitBreakerOpen)
+
+	assertEqual(t, true, called)
+	assertEqual(t, ErrCircuitBreakerOpen, gotErr)
+}
+
+func TestCircuitBreakerOnStateChangeHooks(t *testing.T) {
+	cb := NewCircuitBreakerWithCount(1, 1, 10*time.Millisecond)
+
+	called := false
+	var oldState, newState CircuitBreakerState
+	cb.OnStateChange(func(o, n CircuitBreakerState) {
+		called = true
+		oldState = o
+		newState = n
+	})
+
+	cb.onStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateOpen)
+
+	assertEqual(t, true, called)
+	assertEqual(t, CircuitBreakerStateClosed, oldState)
+	assertEqual(t, CircuitBreakerStateOpen, newState)
+}
+
+func TestCircuitBreakerMultipleHooksAreCalled(t *testing.T) {
+	cb := NewCircuitBreakerWithCount(1, 1, 10*time.Millisecond)
+
+	triggerCount := 0
+	cb.OnTrigger(func(_ *Request, _ error) { triggerCount++ })
+	cb.OnTrigger(func(_ *Request, _ error) { triggerCount++ })
+
+	cb.onTriggerHooks(nil, ErrCircuitBreakerOpen)
+	assertEqual(t, 2, triggerCount)
+
+	stateCount := 0
+	cb.OnStateChange(func(_, _ CircuitBreakerState) { stateCount++ })
+	cb.OnStateChange(func(_, _ CircuitBreakerState) { stateCount++ })
+
+	cb.onStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateHalfOpen)
+	assertEqual(t, 2, stateCount)
+}
+
+func TestCircuitBreakerConcurrentOnTriggerRegistration(t *testing.T) {
+	cb := NewCircuitBreakerWithCount(1, 1, 10*time.Millisecond)
+	var wg sync.WaitGroup
+	var cnt int32
+	n := 100
+
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			cb.OnTrigger(func(_ *Request, _ error) {
+				atomic.AddInt32(&cnt, 1)
+			})
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	cb.onTriggerHooks(nil, ErrCircuitBreakerOpen)
+	got := atomic.LoadInt32(&cnt)
+	assertEqual(t, int32(n), got) // expected N hooks executed
+}
+
+func TestCircuitBreakerConcurrentOnStateChangeRegistration(t *testing.T) {
+	cb := NewCircuitBreakerWithCount(1, 1, 10*time.Millisecond)
+	var wg sync.WaitGroup
+	var cnt int32
+	n := 100
+
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			cb.OnStateChange(func(_, _ CircuitBreakerState) {
+				atomic.AddInt32(&cnt, 1)
+			})
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	cb.onStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateOpen)
+	got := atomic.LoadInt32(&cnt)
+	assertEqual(t, int32(n), got) // expected N state change hooks executed
 }
