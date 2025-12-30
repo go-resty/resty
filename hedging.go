@@ -1,10 +1,12 @@
 // Copyright (c) 2015-present Jeevanandam M (jeeva@myjeeva.com), All rights reserved.
-// Portions Copyright (c) MIT License cristalhq (https://github.com/cristalhq/hedgedhttp)
 // 2025 Ahmet Demir (https://github.com/ahmet2mir)
 // resty source code and usage is governed by a MIT style
 // license that can be found in the LICENSE file.
 // SPDX-License-Identifier: MIT
+
 package resty
+
+// This hedging implementation draws inspiration from the reference provided here: https://github.com/cristalhq/hedgedhttp.
 
 import (
 	"context"
@@ -12,24 +14,39 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
 var (
-	ErrHedgingRetryMutualExclusion = errors.New("resty: hedging and retry are mutually exclusive")
-	ErrHedgingUnsafeMethod         = errors.New("resty: hedging is only supported for safe HTTP methods (GET, HEAD, OPTIONS, TRACE)")
+	ErrHedgingDisabled = errors.New("resty: hedging not enabled, ignoring this option, please enable with EnableHedging() first")
 )
 
+const (
+	hedgingDefaultEnabled          = true
+	hedgingDefaultDelay            = 0
+	hedgingDefaultUpTo             = 0
+	hedgingDefaultMaxPerSecond     = 0
+	hedgingDefaultAllowNonReadOnly = false
+)
+
+// hedgingConfig holds configuration for hedging requests
+type hedgingConfig struct {
+	enabled          bool
+	delay            time.Duration
+	upTo             int
+	maxPerSecond     float64
+	allowNonReadOnly bool
+}
+
 type hedgingTransport struct {
-	transport   http.RoundTripper
-	delay       time.Duration
-	upTo        int
-	rateLimiter *rate.Limiter
+	transport        http.RoundTripper
+	delay            time.Duration
+	upTo             int
+	rateDelay        time.Duration // delay between requests based on maxPerSecond
+	allowNonReadOnly bool
 }
 
 func (ht *hedgingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if !isSafeMethod(req.Method) {
+	if !ht.allowNonReadOnly && !isReadOnlyMethod(req.Method) {
 		return ht.transport.RoundTrip(req)
 	}
 
@@ -59,8 +76,12 @@ func (ht *hedgingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 				}
 			}
 
-			if ht.rateLimiter != nil {
-				if err := ht.rateLimiter.Wait(hedgeCtx); err != nil {
+			// Rate limiting: add delay between requests based on maxPerSecond
+			// to prevent overwhelming the server.
+			if ht.rateDelay > 0 {
+				select {
+				case <-time.After(ht.rateDelay):
+				case <-hedgeCtx.Done():
 					break
 				}
 			}
@@ -87,8 +108,8 @@ func (ht *hedgingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	return res.resp, res.err
 }
 
-// Verify if we do READ or WRITE
-func isSafeMethod(method string) bool {
+// isReadOnlyMethod verifies if the HTTP method is read-only (safe for hedging)
+func isReadOnlyMethod(method string) bool {
 	switch method {
 	case MethodGet, MethodHead, MethodOptions, MethodTrace:
 		return true

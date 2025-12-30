@@ -8,64 +8,83 @@ package resty
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestHedgingBasic(t *testing.T) {
-	attemptCount := atomic.Int32{}
+func createHedgingTestServer(t *testing.T, attemptCount *int32, r1, r2 int32) *httptest.Server {
+	return createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		attempt := atomic.AddInt32(attemptCount, 1)
+		t.Logf("Method: %v", r.Method)
+		t.Logf("Path: %v", r.URL.Path)
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempt := attemptCount.Add(1)
-		if attempt == 1 {
-			time.Sleep(100 * time.Millisecond)
+		if r1 == 0 {
+			r1 = 200
 		}
-		w.Header().Set("X-Attempt", strconv.Itoa(int(attempt)))
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Attempt %d", attempt)
-	}))
+
+		if r2 == 0 {
+			r2 = 50
+		}
+
+		switch r.URL.Path {
+		case "/", "/hedging-slow-first":
+			w.Header().Set("X-Attempt", fmt.Sprintf("%d", attempt))
+			if attempt == 1 {
+				time.Sleep(time.Duration(rand.Int31n(r1)) * time.Millisecond)
+			} else {
+				time.Sleep(time.Duration(rand.Int31n(r2)) * time.Millisecond)
+			}
+			_, _ = fmt.Fprintf(w, "Attempt %d", attempt)
+		case "/hedging-slow-all":
+			w.Header().Set("X-Attempt", fmt.Sprintf("%d", attempt))
+			time.Sleep(time.Duration(rand.Int31n(r1)) * time.Millisecond)
+			_, _ = fmt.Fprintf(w, "Attempt %d", attempt)
+		}
+	})
+}
+
+func TestHedgingBasic(t *testing.T) {
+	var attemptCount int32
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(20*time.Millisecond, 3, 0)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	finalCount := attemptCount.Load()
-	if finalCount < 2 {
-		t.Errorf("Expected at least 2 requests, got %d", finalCount)
+	if attemptCount < 2 {
+		t.Errorf("Expected at least 2 requests, got %d", attemptCount)
 	}
 }
 
 func TestHedgingFirstWins(t *testing.T) {
-	attemptCount := atomic.Int32{}
+	var attemptCount int32
 	firstAttempt := atomic.Int32{}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempt := attemptCount.Add(1)
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		attempt := atomic.AddInt32(&attemptCount, 1)
 		if attempt == 1 {
 			time.Sleep(200 * time.Millisecond)
-		} else if attempt == 2 {
+		} else {
 			time.Sleep(50 * time.Millisecond)
 		}
 		firstAttempt.CompareAndSwap(0, attempt)
 
-		w.Header().Set("X-Attempt", strconv.Itoa(int(attempt)))
+		w.Header().Set("X-Attempt", fmt.Sprintf("%d", attempt))
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "Attempt %d", attempt)
-	}))
+	})
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(30*time.Millisecond, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(30*time.Millisecond, 2, 0)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
@@ -75,23 +94,23 @@ func TestHedgingFirstWins(t *testing.T) {
 
 	winner := firstAttempt.Load()
 	if winner != 2 {
-		t.Logf("Expected second request to win, got attempt %d", winner)
+		t.Errorf("Expected second request to win, got attempt %d", winner)
 	}
 
-	totalAttempts := attemptCount.Load()
+	totalAttempts := attemptCount
 	if totalAttempts < 2 {
 		t.Errorf("Expected at least 2 hedged requests, got %d", totalAttempts)
 	}
 }
 
 func TestHedgingTimeout(t *testing.T) {
-	attemptCount := atomic.Int32{}
+	var attemptCount int32
 	requestTimes := make([]time.Time, 0, 3)
 	var timesLock atomic.Value
 	timesLock.Store(requestTimes)
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempt := attemptCount.Add(1)
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		attempt := atomic.AddInt32(&attemptCount, 1)
 		now := time.Now()
 
 		times := timesLock.Load().([]time.Time)
@@ -104,13 +123,12 @@ func TestHedgingTimeout(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "Attempt %d", attempt)
-	}))
+	})
 	defer ts.Close()
 
 	c := dcnl()
 	delay := 50 * time.Millisecond
-	err := c.EnableHedging(delay, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(delay, 3, 0)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
@@ -127,23 +145,19 @@ func TestHedgingTimeout(t *testing.T) {
 	}
 }
 
-func TestHedgingSafeMethodsOnly(t *testing.T) {
-	attemptCount := atomic.Int32{}
+func TestHedgingReadOnlyMethodsOnly(t *testing.T) {
+	var attemptCount int32
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attemptCount.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(20*time.Millisecond, 3, 0)
 
 	testCases := []struct {
-		method         string
-		expectHedging  bool
-		requestFunc    func(*Client, string) (*Response, error)
+		method        string
+		expectHedging bool
+		requestFunc   func(*Client, string) (*Response, error)
 	}{
 		{MethodGet, true, func(c *Client, url string) (*Response, error) { return c.R().Get(url) }},
 		{MethodHead, true, func(c *Client, url string) (*Response, error) { return c.R().Head(url) }},
@@ -156,7 +170,7 @@ func TestHedgingSafeMethodsOnly(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.method, func(t *testing.T) {
-			attemptCount.Store(0)
+			attemptCount = 0
 
 			resp, err := tc.requestFunc(c, ts.URL+"/")
 			assertError(t, err)
@@ -164,14 +178,13 @@ func TestHedgingSafeMethodsOnly(t *testing.T) {
 
 			time.Sleep(100 * time.Millisecond)
 
-			count := attemptCount.Load()
 			if tc.expectHedging {
-				if count < 2 {
-					t.Logf("%s: Expected hedging (multiple requests), got %d request(s)", tc.method, count)
+				if attemptCount < 2 {
+					t.Logf("%s: Expected hedging (multiple requests), got %d request(s)", tc.method, attemptCount)
 				}
 			} else {
-				if count != 1 {
-					t.Errorf("%s: Expected no hedging (1 request), got %d request(s)", tc.method, count)
+				if attemptCount != 1 {
+					t.Errorf("%s: Expected no hedging (1 request), got %d request(s)", tc.method, attemptCount)
 				}
 			}
 		})
@@ -179,20 +192,13 @@ func TestHedgingSafeMethodsOnly(t *testing.T) {
 }
 
 func TestHedgingRateLimit(t *testing.T) {
-	attemptCount := atomic.Int32{}
+	var attemptCount int32
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempt := attemptCount.Add(1)
-		if attempt == 1 {
-			time.Sleep(500 * time.Millisecond)
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
+	ts := createHedgingTestServer(t, &attemptCount, 500, 0)
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(10*time.Millisecond, 10, 5.0)
-	assertError(t, err)
+	c.EnableHedging(10*time.Millisecond, 10, 5.0)
 
 	start := time.Now()
 	resp, err := c.R().Get(ts.URL + "/")
@@ -200,62 +206,55 @@ func TestHedgingRateLimit(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
 	duration := time.Since(start)
-	count := attemptCount.Load()
 
 	if duration < 200*time.Millisecond {
-		t.Logf("Rate limiting may have limited hedged requests. Duration: %v, Attempts: %d", duration, count)
+		t.Logf("Rate limiting may have limited hedged requests. Duration: %v, Attempts: %d", duration, attemptCount)
 	}
 }
 
-func TestHedgingMutualExclusionWithRetry(t *testing.T) {
+func TestHedgingWithRetryFallback(t *testing.T) {
 	c := dcnl()
 
-	err := c.EnableHedging(50*time.Millisecond, 3, 0)
-	assertError(t, err)
-
-	c.SetRetryCount(2)
-	if c.RetryCount() != 0 {
-		t.Error("Should not be able to enable retry when hedging is enabled")
-	}
-
-	c.DisableHedging()
-
+	// Set retry first
 	c.SetRetryCount(2)
 	assertEqual(t, 2, c.RetryCount())
 
-	err = c.EnableHedging(50*time.Millisecond, 3, 0)
-	if err == nil {
-		t.Error("Should not be able to enable hedging when retry is enabled")
-	}
-	assertEqual(t, ErrHedgingRetryMutualExclusion, err)
+	// Enable hedging should disable retry by default
+	c.EnableHedging(50*time.Millisecond, 3, 0)
+	assertEqual(t, 0, c.RetryCount())
+
+	// But user can re-enable retry as fallback
+	c.SetRetryCount(1)
+	assertEqual(t, 1, c.RetryCount())
+	assertEqual(t, true, c.IsHedgingEnabled())
+
+	// Disable hedging
+	c.DisableHedging()
+	assertEqual(t, false, c.IsHedgingEnabled())
+	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
 }
 
 func TestHedgingDisable(t *testing.T) {
-	attemptCount := atomic.Int32{}
+	var attemptCount int32
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attemptCount.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(20*time.Millisecond, 3, 0)
 	assertEqual(t, true, c.IsHedgingEnabled())
 
 	c.DisableHedging()
 	assertEqual(t, false, c.IsHedgingEnabled())
 
-	attemptCount.Store(0)
+	attemptCount = 0
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
 	time.Sleep(100 * time.Millisecond)
 
-	count := attemptCount.Load()
-	assertEqual(t, int32(1), count)
+	assertEqual(t, int32(1), attemptCount)
 }
 
 func TestHedgingContextCancellation(t *testing.T) {
@@ -271,13 +270,12 @@ func TestHedgingContextCancellation(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(20*time.Millisecond, 3, 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	_, err = c.R().SetContext(ctx).Get(ts.URL + "/")
+	_, err := c.R().SetContext(ctx).Get(ts.URL + "/")
 	if err == nil {
 		t.Error("Expected context cancellation error")
 	}
@@ -299,6 +297,17 @@ func TestHedgingContextCancellation(t *testing.T) {
 func TestHedgingConfiguration(t *testing.T) {
 	c := dcnl()
 
+	// Setters require hedging to be enabled first
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	c.EnableHedging(50*time.Millisecond, 3, 10.0)
+
+	assertEqual(t, true, c.IsHedgingEnabled())
+	assertEqual(t, 50*time.Millisecond, c.HedgingDelay())
+	assertEqual(t, 3, c.HedgingUpTo())
+	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
+
+	// Now we can update individual settings
 	c.SetHedgingDelay(100 * time.Millisecond)
 	assertEqual(t, 100*time.Millisecond, c.HedgingDelay())
 
@@ -307,35 +316,18 @@ func TestHedgingConfiguration(t *testing.T) {
 
 	c.SetHedgingMaxPerSecond(20.0)
 	assertEqual(t, 20.0, c.HedgingMaxPerSecond())
-
-	assertEqual(t, false, c.IsHedgingEnabled())
-
-	err := c.EnableHedging(50*time.Millisecond, 3, 10.0)
-	assertError(t, err)
-
-	assertEqual(t, true, c.IsHedgingEnabled())
-	assertEqual(t, 50*time.Millisecond, c.HedgingDelay())
-	assertEqual(t, 3, c.HedgingUpTo())
-	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
 }
 
 func TestHedgingWithCustomTransport(t *testing.T) {
-	attemptCount := atomic.Int32{}
+	var attemptCount int32
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempt := attemptCount.Add(1)
-		if attempt == 1 {
-			time.Sleep(100 * time.Millisecond)
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
 	customTransport := &http.Transport{}
 	c := NewWithClient(&http.Client{Transport: customTransport})
 
-	err := c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(20*time.Millisecond, 3, 0)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
@@ -343,9 +335,8 @@ func TestHedgingWithCustomTransport(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	count := attemptCount.Load()
-	if count < 2 {
-		t.Errorf("Expected hedging with custom transport, got %d request(s)", count)
+	if attemptCount < 2 {
+		t.Errorf("Expected hedging with custom transport, got %d request(s)", attemptCount)
 	}
 
 	c.DisableHedging()
@@ -358,17 +349,13 @@ func TestHedgingWithCustomTransport(t *testing.T) {
 }
 
 func TestHedgingSingleRequest(t *testing.T) {
-	attemptCount := atomic.Int32{}
+	var attemptCount int32
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attemptCount.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(20*time.Millisecond, 1, 0)
-	assertError(t, err)
+	c.EnableHedging(20*time.Millisecond, 1, 0)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
@@ -376,6 +363,5 @@ func TestHedgingSingleRequest(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	count := attemptCount.Load()
-	assertEqual(t, int32(1), count)
+	assertEqual(t, int32(1), attemptCount)
 }

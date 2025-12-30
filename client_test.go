@@ -1559,12 +1559,12 @@ func TestClientOnCloseMultipleHooks(t *testing.T) {
 }
 
 func TestClientHedgingBasic(t *testing.T) {
-	ts := createHedgingTestServer(t)
+	var attemptCount int32
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(20*time.Millisecond, 3, 0)
 
 	resp, err := c.R().Get(ts.URL + "/hedging-slow-first")
 	assertError(t, err)
@@ -1573,12 +1573,12 @@ func TestClientHedgingBasic(t *testing.T) {
 }
 
 func TestClientHedgingDisable(t *testing.T) {
-	ts := createHedgingTestServer(t)
+	var attemptCount int32
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(20*time.Millisecond, 3, 0)
 	assertEqual(t, true, c.IsHedgingEnabled())
 
 	c.DisableHedging()
@@ -1592,28 +1592,39 @@ func TestClientHedgingDisable(t *testing.T) {
 func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	c := dcnl()
 
-	err := c.EnableHedging(50*time.Millisecond, 3, 0)
-	assertError(t, err)
-
-	c.SetRetryCount(2)
-	if c.RetryCount() != 0 {
-		t.Error("Should not be able to enable retry when hedging is enabled")
-	}
-
-	c.DisableHedging()
+	// Set retry first
 	c.SetRetryCount(2)
 	assertEqual(t, 2, c.RetryCount())
 
-	err = c.EnableHedging(50*time.Millisecond, 3, 0)
-	if err == nil {
-		t.Error("Should not be able to enable hedging when retry is enabled")
-	}
-	assertEqual(t, ErrHedgingRetryMutualExclusion, err)
+	// Enable hedging should disable retry by default
+	c.EnableHedging(50*time.Millisecond, 3, 0)
+	assertEqual(t, 0, c.RetryCount())
+
+	// But user can re-enable retry as fallback
+	c.SetRetryCount(1)
+	assertEqual(t, 1, c.RetryCount())
+	assertEqual(t, true, c.IsHedgingEnabled())
+
+	// Disable hedging
+	c.DisableHedging()
+	assertEqual(t, false, c.IsHedgingEnabled())
+	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
 }
 
 func TestClientHedgingConfiguration(t *testing.T) {
 	c := dcnl()
 
+	// Setters require hedging to be enabled first
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	c.EnableHedging(50*time.Millisecond, 3, 10.0)
+
+	assertEqual(t, true, c.IsHedgingEnabled())
+	assertEqual(t, 50*time.Millisecond, c.HedgingDelay())
+	assertEqual(t, 3, c.HedgingUpTo())
+	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
+
+	// Now we can update individual settings
 	c.SetHedgingDelay(100 * time.Millisecond)
 	assertEqual(t, 100*time.Millisecond, c.HedgingDelay())
 
@@ -1622,25 +1633,15 @@ func TestClientHedgingConfiguration(t *testing.T) {
 
 	c.SetHedgingMaxPerSecond(20.0)
 	assertEqual(t, 20.0, c.HedgingMaxPerSecond())
-
-	assertEqual(t, false, c.IsHedgingEnabled())
-
-	err := c.EnableHedging(50*time.Millisecond, 3, 10.0)
-	assertError(t, err)
-
-	assertEqual(t, true, c.IsHedgingEnabled())
-	assertEqual(t, 50*time.Millisecond, c.HedgingDelay())
-	assertEqual(t, 3, c.HedgingUpTo())
-	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
 }
 
 func TestClientHedgingWithRateLimit(t *testing.T) {
-	ts := createHedgingTestServer(t)
+	var attemptCount int32
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(10*time.Millisecond, 10, 5.0)
-	assertError(t, err)
+	c.EnableHedging(10*time.Millisecond, 10, 5.0)
 
 	resp, err := c.R().Get(ts.URL + "/hedging-slow-all")
 	assertError(t, err)
@@ -1652,8 +1653,7 @@ func TestClientHedgingSafeMethodsOnly(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl()
-	err := c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertError(t, err)
+	c.EnableHedging(20*time.Millisecond, 3, 0)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)

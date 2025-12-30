@@ -904,29 +904,6 @@ func createTestTLSServer(fn func(w http.ResponseWriter, r *http.Request), certPa
 	return ts
 }
 
-func createHedgingTestServer(t *testing.T) *httptest.Server {
-	var attempt int32
-	return createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("Method: %v", r.Method)
-		t.Logf("Path: %v", r.URL.Path)
-
-		switch r.URL.Path {
-		case "/hedging-slow-first":
-			attp := atomic.AddInt32(&attempt, 1)
-			w.Header().Set("X-Attempt", fmt.Sprintf("%d", attp))
-			if attp == 1 {
-				time.Sleep(200 * time.Millisecond)
-			}
-			_, _ = fmt.Fprintf(w, "Attempt %d", attp)
-		case "/hedging-slow-all":
-			attp := atomic.AddInt32(&attempt, 1)
-			w.Header().Set("X-Attempt", fmt.Sprintf("%d", attp))
-			time.Sleep(100 * time.Millisecond)
-			_, _ = fmt.Fprintf(w, "Attempt %d", attp)
-		}
-	})
-}
-
 func dcnl() *Client {
 	c := New().
 		outputLogTo(io.Discard)
