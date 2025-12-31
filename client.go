@@ -788,10 +788,10 @@ func (c *Client) AddResponseMiddleware(m ResponseMiddleware) *Client {
 //
 // NOTE:
 //   - Do not use [Client] setter methods within OnError hooks; deadlock will happen.
-func (c *Client) OnError(h ErrorHook) *Client {
+func (c *Client) OnError(hooks ...ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.errorHooks = append(c.errorHooks, h)
+	c.errorHooks = append(c.errorHooks, hooks...)
 	return c
 }
 
@@ -803,10 +803,10 @@ func (c *Client) OnError(h ErrorHook) *Client {
 //
 // NOTE:
 //   - Do not use [Client] setter methods within OnSuccess hooks; deadlock will happen.
-func (c *Client) OnSuccess(h SuccessHook) *Client {
+func (c *Client) OnSuccess(hooks ...SuccessHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.successHooks = append(c.successHooks, h)
+	c.successHooks = append(c.successHooks, hooks...)
 	return c
 }
 
@@ -818,10 +818,10 @@ func (c *Client) OnSuccess(h SuccessHook) *Client {
 //
 // NOTE:
 //   - Do not use [Client] setter methods within OnInvalid hooks; deadlock will happen.
-func (c *Client) OnInvalid(h ErrorHook) *Client {
+func (c *Client) OnInvalid(hooks ...ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.invalidHooks = append(c.invalidHooks, h)
+	c.invalidHooks = append(c.invalidHooks, hooks...)
 	return c
 }
 
@@ -836,19 +836,19 @@ func (c *Client) OnInvalid(h ErrorHook) *Client {
 //
 // NOTE:
 //   - Do not use [Client] setter methods within OnPanic hooks; deadlock will happen.
-func (c *Client) OnPanic(h ErrorHook) *Client {
+func (c *Client) OnPanic(hooks ...ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.panicHooks = append(c.panicHooks, h)
+	c.panicHooks = append(c.panicHooks, hooks...)
 	return c
 }
 
 // OnClose method adds a callback that will be run whenever the client is closed.
 // The hooks are executed in the order they were registered.
-func (c *Client) OnClose(h CloseHook) *Client {
+func (c *Client) OnClose(hooks ...CloseHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.closeHooks = append(c.closeHooks, h)
+	c.closeHooks = append(c.closeHooks, hooks...)
 	return c
 }
 
