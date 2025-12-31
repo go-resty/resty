@@ -64,13 +64,8 @@ func decodeJSON(r io.Reader, v any) error {
 		nrc.resetOnEOF = false
 		defer func() { nrc.resetOnEOF = originalReset }()
 
-		// Decode all JSON objects in the data
-		for {
-			if err := dec.Decode(v); err == io.EOF {
-				break
-			} else if err != nil {
-				return err
-			}
+		if err := doDecodeJSON(dec, v); err != nil {
+			return err
 		}
 
 		// After decoding, reset for future reads
@@ -79,6 +74,11 @@ func decodeJSON(r io.Reader, v any) error {
 	}
 
 	// For other readers, decode multiple JSON objects as intended
+	return doDecodeJSON(dec, v)
+}
+
+func doDecodeJSON(dec *json.Decoder, v any) error {
+	// Decode all JSON objects in the data
 	for {
 		if err := dec.Decode(v); err == io.EOF {
 			break
