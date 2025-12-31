@@ -30,9 +30,9 @@ type (
 	// RetryHookFunc is for side-effecting functions triggered on retry
 	RetryHookFunc func(*Response, error)
 
-	// RetryStrategyFunc type is for custom retry strategy implementation
-	// By default Resty uses the capped exponential backoff with a jitter strategy
-	RetryStrategyFunc func(*Response, error) (time.Duration, error)
+	// RetryDelayStrategyFunc is a type for implementing custom retry delay strategies.
+	// By default, Resty employs the capped exponential backoff with a jitter delay strategy.
+	RetryDelayStrategyFunc func(*Response, error) (time.Duration, error)
 )
 
 var (
@@ -115,15 +115,15 @@ func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error
 		b.max = maxInt
 	}
 
-	var retryStrategyFunc RetryStrategyFunc
+	var retryDelayStrategyFunc RetryDelayStrategyFunc
 	if c != nil {
-		retryStrategyFunc = c.RetryStrategy()
+		retryDelayStrategyFunc = c.RetryDelayStrategy()
 	}
-	if res == nil || retryStrategyFunc == nil {
-		return b.balanceMinMax(b.defaultStrategy(attempt)), nil
+	if res == nil || retryDelayStrategyFunc == nil {
+		return b.balanceMinMax(b.defaultDelayStrategy(attempt)), nil
 	}
 
-	delay, rsErr := retryStrategyFunc(res, err)
+	delay, rsErr := retryDelayStrategyFunc(res, err)
 	if rsErr != nil {
 		return 0, rsErr
 	}
@@ -132,7 +132,7 @@ func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error
 
 // Return capped exponential backoff with jitter
 // https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-func (b *backoffWithJitter) defaultStrategy(attempt int) time.Duration {
+func (b *backoffWithJitter) defaultDelayStrategy(attempt int) time.Duration {
 	temp := math.Min(float64(b.max), float64(b.min)*math.Exp2(float64(attempt)))
 	ri := time.Duration(temp / 2)
 	if ri <= 0 {

@@ -66,7 +66,7 @@ type Request struct {
 	RetryCount                 int
 	RetryWaitTime              time.Duration
 	RetryMaxWaitTime           time.Duration
-	RetryStrategy              RetryStrategyFunc
+	RetryDelayStrategy         RetryDelayStrategyFunc
 	IsRetryDefaultConditions   bool
 	AllowNonIdempotentRetry    bool
 
@@ -1010,7 +1010,7 @@ func (r *Request) SetRetryHooks(hooks ...RetryHookFunc) *Request {
 //
 //	first attempt + retry count = total attempts
 //
-// See [Request.SetRetryStrategy]
+// See [Request.SetRetryDelayStrategy]
 //
 // NOTE:
 //   - By default, Resty only does retry on idempotent HTTP verb, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
@@ -1038,13 +1038,13 @@ func (r *Request) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Request {
 	return r
 }
 
-// SetRetryStrategy method used to set the custom Retry strategy on request,
-// it is used to get wait time before each retry. It overrides the retry
-// strategy set at the client instance level, see [Client.SetRetryStrategy]
+// SetRetryDelayStrategy method used to set the custom Retry delay strategy on request,
+// it is used to get wait time before each retry. It overrides the retry delay
+// strategy set at the client instance level, see [Client.SetRetryDelayStrategy]
 //
-// Default (nil) implies capped exponential backoff with a jitter strategy
-func (r *Request) SetRetryStrategy(rs RetryStrategyFunc) *Request {
-	r.RetryStrategy = rs
+// By default, Resty employs the capped exponential backoff with a jitter delay strategy.
+func (r *Request) SetRetryDelayStrategy(rs RetryDelayStrategyFunc) *Request {
+	r.RetryDelayStrategy = rs
 	return r
 }
 
