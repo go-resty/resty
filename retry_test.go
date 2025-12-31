@@ -204,7 +204,7 @@ func TestClientRetryWaitMaxMinimum(t *testing.T) {
 	assertError(t, err)
 }
 
-func TestClientRetryStrategyFuncError(t *testing.T) {
+func TestClientRetryDelayStrategyFuncError(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -216,7 +216,7 @@ func TestClientRetryStrategyFuncError(t *testing.T) {
 	retryWaitTime := 50 * time.Millisecond
 	retryMaxWaitTime := 150 * time.Millisecond
 
-	retryStrategyFunc := func(res *Response, err error) (time.Duration, error) {
+	retryDelayStrategyFunc := func(res *Response, err error) (time.Duration, error) {
 		return 0, errors.New("quota exceeded")
 	}
 
@@ -224,7 +224,7 @@ func TestClientRetryStrategyFuncError(t *testing.T) {
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
-		SetRetryStrategy(retryStrategyFunc).
+		SetRetryDelayStrategy(retryDelayStrategyFunc).
 		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[attempt] = parseTimeSleptFromResponse(r.String())
@@ -242,7 +242,7 @@ func TestClientRetryStrategyFuncError(t *testing.T) {
 	assertNotNil(t, err)
 }
 
-func TestClientRetryStrategyFunc(t *testing.T) {
+func TestClientRetryDelayStrategyFunc(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -254,7 +254,7 @@ func TestClientRetryStrategyFunc(t *testing.T) {
 	retryMaxWaitTime := 50 * time.Millisecond
 
 	// custom strategy func with constant delay
-	retryStrategyFunc := func(res *Response, err error) (time.Duration, error) {
+	retryDelayStrategyFunc := func(res *Response, err error) (time.Duration, error) {
 		return 50 * time.Millisecond, nil
 	}
 
@@ -262,7 +262,7 @@ func TestClientRetryStrategyFunc(t *testing.T) {
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
-		SetRetryStrategy(retryStrategyFunc).
+		SetRetryDelayStrategy(retryDelayStrategyFunc).
 		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
@@ -292,7 +292,7 @@ func TestClientRetryStrategyFunc(t *testing.T) {
 	}
 }
 
-func TestRequestRetryStrategyFunc(t *testing.T) {
+func TestRequestRetryDelayStrategyFunc(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -304,7 +304,7 @@ func TestRequestRetryStrategyFunc(t *testing.T) {
 	retryMaxWaitTime := 50 * time.Millisecond
 
 	// custom strategy func with constant delay
-	retryStrategyFunc := func(res *Response, err error) (time.Duration, error) {
+	retryDelayStrategyFunc := func(res *Response, err error) (time.Duration, error) {
 		return 50 * time.Millisecond, nil
 	}
 
@@ -314,7 +314,7 @@ func TestRequestRetryStrategyFunc(t *testing.T) {
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
-		SetRetryStrategy(retryStrategyFunc).
+		SetRetryDelayStrategy(retryDelayStrategyFunc).
 		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
@@ -344,7 +344,7 @@ func TestRequestRetryStrategyFunc(t *testing.T) {
 	}
 }
 
-func TestClientRetryStrategyWaitTooShort(t *testing.T) {
+func TestClientRetryDelayStrategyWaitTooShort(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -355,7 +355,7 @@ func TestClientRetryStrategyWaitTooShort(t *testing.T) {
 	retryWaitTime := 50 * time.Millisecond
 	retryMaxWaitTime := 150 * time.Millisecond
 
-	retryStrategyFunc := func(res *Response, err error) (time.Duration, error) {
+	retryDelayStrategyFunc := func(res *Response, err error) (time.Duration, error) {
 		return 10 * time.Millisecond, nil
 	}
 
@@ -363,7 +363,7 @@ func TestClientRetryStrategyWaitTooShort(t *testing.T) {
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
-		SetRetryStrategy(retryStrategyFunc).
+		SetRetryDelayStrategy(retryDelayStrategyFunc).
 		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
@@ -393,7 +393,7 @@ func TestClientRetryStrategyWaitTooShort(t *testing.T) {
 	}
 }
 
-func TestClientRetryStrategyWaitTooLong(t *testing.T) {
+func TestClientRetryDelayStrategyWaitTooLong(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
@@ -404,7 +404,7 @@ func TestClientRetryStrategyWaitTooLong(t *testing.T) {
 	retryWaitTime := 10 * time.Millisecond
 	retryMaxWaitTime := 50 * time.Millisecond
 
-	retryStrategyFunc := func(res *Response, err error) (time.Duration, error) {
+	retryDelayStrategyFunc := func(res *Response, err error) (time.Duration, error) {
 		return 1 * time.Second, nil
 	}
 
@@ -412,7 +412,7 @@ func TestClientRetryStrategyWaitTooLong(t *testing.T) {
 		SetRetryCount(retryCount).
 		SetRetryWaitTime(retryWaitTime).
 		SetRetryMaxWaitTime(retryMaxWaitTime).
-		SetRetryStrategy(retryStrategyFunc).
+		SetRetryDelayStrategy(retryDelayStrategyFunc).
 		AddRetryConditions(
 			func(r *Response, _ error) bool {
 				retryIntervals[r.Request.Attempt-1] = parseTimeSleptFromResponse(r.String())
