@@ -509,10 +509,10 @@ func TestClientRetryErrorRecover(t *testing.T) {
 
 	c := dcnl().
 		SetRetryCount(2).
-		SetError(AuthError{}).
+		SetResultError(AuthError{}).
 		AddRetryConditions(
 			func(r *Response, _ error) bool {
-				err, ok := r.Error().(*AuthError)
+				err, ok := r.ResultError().(*AuthError)
 				retry := ok && r.StatusCode() == 429 && err.Message == "too many"
 				return retry
 			},
@@ -531,7 +531,7 @@ func TestClientRetryErrorRecover(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "hello", authSuccess.Message)
 
-	assertNil(t, resp.Error())
+	assertNil(t, resp.ResultError())
 }
 
 func TestClientRetryCountWithTimeout(t *testing.T) {
@@ -582,7 +582,7 @@ func TestClientRetryTooManyRequestsAndRecover(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "hello", authSuccess.Message)
 
-	assertNil(t, resp.Error())
+	assertNil(t, resp.ResultError())
 }
 
 func TestClientRetryHookWithTimeout(t *testing.T) {
@@ -771,7 +771,7 @@ func TestRequestRetryTooManyRequestsHeaderRetryAfter(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "hello", authSuccess.Message)
 
-	assertNil(t, resp.Error())
+	assertNil(t, resp.ResultError())
 }
 
 func TestRetryDefaultConditions(t *testing.T) {

@@ -1038,7 +1038,7 @@ func TestNewWithLocalAddr(t *testing.T) {
 	assertEqual(t, "TestGet: text response", resp.String())
 }
 
-func TestClientOnResponseError(t *testing.T) {
+func TestClientOnResponseFailure(t *testing.T) {
 	tests := []struct {
 		name        string
 		setup       func(*Client)
@@ -1050,13 +1050,13 @@ func TestClientOnResponseError(t *testing.T) {
 			name: "successful_request",
 		},
 		{
-			name: "http_status_error",
+			name: "http_status_failure",
 			setup: func(client *Client) {
 				client.SetAuthToken("BAD")
 			},
 		},
 		{
-			name: "before_request_error",
+			name: "before_request_failure",
 			setup: func(client *Client) {
 				client.AddRequestMiddleware(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
@@ -1065,7 +1065,7 @@ func TestClientOnResponseError(t *testing.T) {
 			isError: true,
 		},
 		{
-			name: "before_request_error_retry",
+			name: "before_request_failure_retry",
 			setup: func(client *Client) {
 				client.SetRetryCount(3).AddRequestMiddleware(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
@@ -1074,7 +1074,7 @@ func TestClientOnResponseError(t *testing.T) {
 			isError: true,
 		},
 		{
-			name: "after_response_error",
+			name: "after_response_failure",
 			setup: func(client *Client) {
 				client.AddResponseMiddleware(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
@@ -1084,7 +1084,7 @@ func TestClientOnResponseError(t *testing.T) {
 			hasResponse: true,
 		},
 		{
-			name: "after_response_error_retry",
+			name: "after_response_failure_retry",
 			setup: func(client *Client) {
 				client.SetRetryCount(3).AddResponseMiddleware(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
@@ -1152,7 +1152,7 @@ func TestClientOnResponseError(t *testing.T) {
 					if err != nil {
 						return true
 					}
-					return response.IsError()
+					return response.IsStatusFailure()
 				}).
 				OnError(func(r *Request, err error) {
 					assertErrorHook(r, err)

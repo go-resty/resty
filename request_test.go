@@ -281,17 +281,17 @@ func TestPostJSONStructInvalidLogin(t *testing.T) {
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(credentials{Username: "testuser", Password: "testpass1"}).
-		SetError(AuthError{}).
+		SetResultError(AuthError{}).
 		SetJSONEscapeHTML(false).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
 
-	authError := resp.Error().(*AuthError)
+	authError := resp.ResultError().(*AuthError)
 	assertEqual(t, "unauthorized", authError.ID)
 	assertEqual(t, "Invalid credentials", authError.Message)
-	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	t.Logf("Result Error: %q", resp.ResultError().(*AuthError))
 
 	logResponse(t, resp)
 }
@@ -304,16 +304,16 @@ func TestPostJSONErrorRFC7807(t *testing.T) {
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(credentials{Username: "testuser", Password: "testpass1"}).
-		SetError(AuthError{}).
+		SetResultError(AuthError{}).
 		Post(ts.URL + "/login?ct=problem")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
 
-	authError := resp.Error().(*AuthError)
+	authError := resp.ResultError().(*AuthError)
 	assertEqual(t, "unauthorized", authError.ID)
 	assertEqual(t, "Invalid credentials", authError.Message)
-	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	t.Logf("Result Error: %q", resp.ResultError().(*AuthError))
 
 	logResponse(t, resp)
 }
@@ -513,7 +513,7 @@ func TestPostXMLStructInvalidLogin(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl()
-	c.SetError(&AuthError{})
+	c.SetResultError(&AuthError{})
 
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/xml").
@@ -524,7 +524,7 @@ func TestPostXMLStructInvalidLogin(t *testing.T) {
 	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
 	assertEqual(t, resp.Header().Get("Www-Authenticate"), "Protected Realm")
 
-	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	t.Logf("Result Error: %q", resp.ResultError().(*AuthError))
 
 	logResponse(t, resp)
 }
@@ -633,7 +633,7 @@ func TestRequestBasicAuthFail(t *testing.T) {
 
 	c := dcnl()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
-		SetError(AuthError{})
+		SetResultError(AuthError{})
 
 	resp, err := c.R().
 		SetBasicAuth("myuser", "basicauth1").
@@ -642,7 +642,7 @@ func TestRequestBasicAuthFail(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
 
-	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	t.Logf("Result Error: %q", resp.ResultError().(*AuthError))
 	logResponse(t, resp)
 }
 
@@ -1700,7 +1700,7 @@ func TestNotFoundWithError(t *testing.T) {
 
 	resp, err := dcnl().R().
 		SetHeader(hdrContentTypeKey, "application/json").
-		SetError(&httpError).
+		SetResultError(&httpError).
 		Get(ts.URL + "/not-found-with-error")
 
 	assertError(t, err)
@@ -1720,7 +1720,7 @@ func TestNotFoundWithoutError(t *testing.T) {
 
 	c := dcnl().outputLogTo(os.Stdout)
 	resp, err := c.R().
-		SetError(&httpError).
+		SetResultError(&httpError).
 		SetHeader(hdrContentTypeKey, "application/json").
 		Get(ts.URL + "/not-found-no-error")
 
