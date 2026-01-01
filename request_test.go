@@ -619,7 +619,7 @@ func TestRequestInsecureBasicAuth(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(logBuf.String(),
+	assertTrue(t, strings.Contains(logBuf.String(),
 		"WARN RESTY Using sensitive credentials in HTTP mode is not secure. Use HTTPS"))
 
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
@@ -964,7 +964,7 @@ func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 	assertEqual(t, 307, finalReq.StatusCode)
 	assertEqual(t, ts.URL+"/redirect-10", finalReq.URL)
 
-	assertEqual(t, true, (err.Error() == "Get /redirect-11: stopped after 10 redirects" ||
+	assertTrue(t, (err.Error() == "Get /redirect-11: stopped after 10 redirects" ||
 		err.Error() == "Get \"/redirect-11\": stopped after 10 redirects"))
 }
 
@@ -978,7 +978,7 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 	_, err := c.R().Get(ts.URL + "/redirect-host-check-1")
 
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), "redirect is not allowed as per DomainCheckRedirectPolicy"))
+	assertTrue(t, strings.Contains(err.Error(), "redirect is not allowed as per DomainCheckRedirectPolicy"))
 }
 
 func TestHttpMethods(t *testing.T) {
@@ -1113,19 +1113,19 @@ func TestProxySetting(t *testing.T) {
 
 	assertNil(t, err)
 
-	assertEqual(t, false, c.IsProxySet())
+	assertFalse(t, c.IsProxySet())
 	assertNotNil(t, transport.Proxy)
 
 	c.SetProxy("http://sampleproxy:8888")
-	assertEqual(t, true, c.IsProxySet())
+	assertTrue(t, c.IsProxySet())
 	assertNotNil(t, transport.Proxy)
 
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
-	assertEqual(t, true, c.IsProxySet())
+	assertTrue(t, c.IsProxySet())
 	assertNotNil(t, transport.Proxy)
 
 	c.SetProxy("http://sampleproxy:8888")
-	assertEqual(t, true, c.IsProxySet())
+	assertTrue(t, c.IsProxySet())
 	c.RemoveProxy()
 	assertNil(t, c.ProxyURL())
 	assertNil(t, transport.Proxy)
@@ -1145,12 +1145,12 @@ func TestGetClient(t *testing.T) {
 func TestIncorrectURL(t *testing.T) {
 	c := dcnl()
 	_, err := c.R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
-	assertEqual(t, true, (strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
+	assertTrue(t, (strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
 		strings.Contains(err.Error(), "parse \"//not.a.user@%66%6f%6f.com/just/a/path/also\"")))
 
 	c.SetBaseURL("//not.a.user@%66%6f%6f.com")
 	_, err1 := c.R().Get("/just/a/path/also")
-	assertEqual(t, true, (strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
+	assertTrue(t, (strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
 		strings.Contains(err1.Error(), "parse \"//not.a.user@%66%6f%6f.com/just/a/path/also\"")))
 }
 
@@ -1260,16 +1260,16 @@ func TestMultiParamsQueryString(t *testing.T) {
 	_, _ = req1.SetQueryParam("status", "pending").
 		Get(ts1.URL)
 
-	assertEqual(t, true, strings.Contains(req1.URL, "status=pending"))
+	assertTrue(t, strings.Contains(req1.URL, "status=pending"))
 	// pending overrides open
-	assertEqual(t, false, strings.Contains(req1.URL, "status=open"))
+	assertFalse(t, strings.Contains(req1.URL, "status=open"))
 
 	_, _ = req1.SetQueryParam("status", "approved").
 		Get(ts1.URL)
 
-	assertEqual(t, true, strings.Contains(req1.URL, "status=approved"))
+	assertTrue(t, strings.Contains(req1.URL, "status=approved"))
 	// approved overrides pending
-	assertEqual(t, false, strings.Contains(req1.URL, "status=pending"))
+	assertFalse(t, strings.Contains(req1.URL, "status=pending"))
 
 	ts2 := createGetServer(t)
 	defer ts2.Close()
@@ -1282,12 +1282,12 @@ func TestMultiParamsQueryString(t *testing.T) {
 
 	_, _ = req2.SetQueryParamsFromValues(v).Get(ts2.URL)
 
-	assertEqual(t, true, strings.Contains(req2.URL, "status=pending"))
-	assertEqual(t, true, strings.Contains(req2.URL, "status=approved"))
-	assertEqual(t, true, strings.Contains(req2.URL, "status=reject"))
+	assertTrue(t, strings.Contains(req2.URL, "status=pending"))
+	assertTrue(t, strings.Contains(req2.URL, "status=approved"))
+	assertTrue(t, strings.Contains(req2.URL, "status=reject"))
 
 	// because it's removed by key
-	assertEqual(t, false, strings.Contains(req2.URL, "status=open"))
+	assertFalse(t, strings.Contains(req2.URL, "status=open"))
 }
 
 func TestSetQueryStringTypical(t *testing.T) {
@@ -1400,8 +1400,8 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
-	assertEqual(t, true, resp.Size() != 0)
-	assertEqual(t, true, resp.Duration() > 0)
+	assertTrue(t, resp.Size() != 0)
+	assertTrue(t, resp.Duration() > 0)
 
 	f, err1 := os.Open(filepath.Join(baseOutputDir, outputFilePath))
 	defer closeq(f)
@@ -1429,8 +1429,8 @@ func TestOutputPathDirNotExists(t *testing.T) {
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
-	assertEqual(t, true, resp.Size() != 0)
-	assertEqual(t, true, resp.Duration() > 0)
+	assertTrue(t, resp.Size() != 0)
+	assertTrue(t, resp.Duration() > 0)
 }
 
 func TestOutputFileAbsPath(t *testing.T) {
@@ -1460,12 +1460,12 @@ func TestRequestSaveResponse(t *testing.T) {
 		SetSaveResponse(true).
 		SetOutputDirectory(filepath.Join(getTestDataPath(), "go-resty"))
 
-	assertEqual(t, true, c.IsSaveResponse())
+	assertTrue(t, c.IsSaveResponse())
 
 	t.Run("content-disposition save response request", func(t *testing.T) {
 		outputFile := filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")
 		c.SetSaveResponse(false)
-		assertEqual(t, false, c.IsSaveResponse())
+		assertFalse(t, c.IsSaveResponse())
 
 		res, err := c.R().
 			SetSaveResponse(true).
@@ -1481,7 +1481,7 @@ func TestRequestSaveResponse(t *testing.T) {
 	t.Run("use filename from path", func(t *testing.T) {
 		outputFile := filepath.Join(getTestDataPath(), "go-resty", "my-image.png")
 		c.SetSaveResponse(false)
-		assertEqual(t, false, c.IsSaveResponse())
+		assertFalse(t, c.IsSaveResponse())
 
 		res, err := c.R().
 			SetSaveResponse(true).
@@ -1564,7 +1564,7 @@ func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
 			Get(ts.URL + "/")
 
 		assertError(t, err)
-		assertEqual(t, true, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
+		assertTrue(t, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
 	})
 
 	t.Run("do not parse response debug log request level", func(t *testing.T) {
@@ -1580,7 +1580,7 @@ func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
 			Get(ts.URL + "/")
 
 		assertError(t, err)
-		assertEqual(t, true, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
+		assertTrue(t, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
 	})
 }
 
@@ -1621,8 +1621,8 @@ func TestGetPathParamAndPathParams(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "TestGetPathParams: text response"))
-	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/details"))
+	assertTrue(t, strings.Contains(resp.String(), "TestGetPathParams: text response"))
+	assertTrue(t, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/details"))
 
 	logResponse(t, resp)
 }
@@ -1686,9 +1686,9 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 		PrepareRequestMiddleware,
 		func(c *Client, r *Request) error {
 			// validate content length values
-			assertEqual(t, true, r.isContentLengthSet)
-			assertEqual(t, true, r.contentLength == fi.Size())
-			assertEqual(t, true, r.RawRequest.ContentLength == fi.Size())
+			assertTrue(t, r.isContentLengthSet)
+			assertTrue(t, r.contentLength == fi.Size())
+			assertTrue(t, r.RawRequest.ContentLength == fi.Size())
 			assertEqual(t, r.contentLength, r.RawRequest.ContentLength)
 			return nil
 		},
@@ -1702,7 +1702,7 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully"))
+	assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully"))
 
 	file, _ = os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
 	defer file.Close()
@@ -1714,7 +1714,7 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully"))
+	assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully"))
 }
 
 func TestHostHeaderOverride(t *testing.T) {
@@ -1797,8 +1797,8 @@ func TestPathParamURLInput(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
-	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users%2Fdevelopers/https:%2F%2Fexample.com"))
+	assertTrue(t, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
+	assertTrue(t, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users%2Fdevelopers/https:%2F%2Fexample.com"))
 
 	logResponse(t, resp)
 }
@@ -1825,8 +1825,8 @@ func TestRawPathParamURLInput(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
-	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users/developers/https://example.com"))
+	assertTrue(t, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
+	assertTrue(t, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users/developers/https://example.com"))
 
 	logResponse(t, resp)
 }
@@ -1848,14 +1848,14 @@ func TestTraceInfo(t *testing.T) {
 			assertNotNil(t, resp)
 
 			tr := resp.Request.TraceInfo()
-			assertEqual(t, true, tr.DNSLookup >= 0)
-			assertEqual(t, true, tr.ConnTime >= 0)
-			assertEqual(t, true, tr.TLSHandshake >= 0)
-			assertEqual(t, true, tr.ServerTime >= 0)
-			assertEqual(t, true, tr.ResponseTime >= 0)
-			assertEqual(t, true, tr.TotalTime >= 0)
-			assertEqual(t, true, tr.TotalTime < time.Hour)
-			assertEqual(t, true, tr.TotalTime == resp.Duration())
+			assertTrue(t, tr.DNSLookup >= 0)
+			assertTrue(t, tr.ConnTime >= 0)
+			assertTrue(t, tr.TLSHandshake >= 0)
+			assertTrue(t, tr.ServerTime >= 0)
+			assertTrue(t, tr.ResponseTime >= 0)
+			assertTrue(t, tr.TotalTime >= 0)
+			assertTrue(t, tr.TotalTime < time.Hour)
+			assertTrue(t, tr.TotalTime == resp.Duration())
 			assertEqual(t, tr.RemoteAddr, serverAddr)
 
 			assertNotNil(t, tr.Clone())
@@ -1871,13 +1871,13 @@ func TestTraceInfo(t *testing.T) {
 			assertNotNil(t, resp)
 
 			tr := resp.Request.TraceInfo()
-			assertEqual(t, true, tr.DNSLookup >= 0)
-			assertEqual(t, true, tr.ConnTime >= 0)
-			assertEqual(t, true, tr.TLSHandshake >= 0)
-			assertEqual(t, true, tr.ServerTime >= 0)
-			assertEqual(t, true, tr.ResponseTime >= 0)
-			assertEqual(t, true, tr.TotalTime >= 0)
-			assertEqual(t, true, tr.TotalTime == resp.Duration())
+			assertTrue(t, tr.DNSLookup >= 0)
+			assertTrue(t, tr.ConnTime >= 0)
+			assertTrue(t, tr.TLSHandshake >= 0)
+			assertTrue(t, tr.ServerTime >= 0)
+			assertTrue(t, tr.ResponseTime >= 0)
+			assertTrue(t, tr.TotalTime >= 0)
+			assertTrue(t, tr.TotalTime == resp.Duration())
 			assertEqual(t, tr.RemoteAddr, serverAddr)
 		}
 
@@ -1887,12 +1887,12 @@ func TestTraceInfo(t *testing.T) {
 		resp, err := client.R().EnableTrace().Get("unknown://url.com")
 		assertNotNil(t, err)
 		tr := resp.Request.TraceInfo()
-		assertEqual(t, true, tr.DNSLookup == 0)
-		assertEqual(t, true, tr.ConnTime == 0)
-		assertEqual(t, true, tr.TLSHandshake == 0)
-		assertEqual(t, true, tr.ServerTime == 0)
-		assertEqual(t, true, tr.ResponseTime == 0)
-		assertEqual(t, true, tr.TotalTime > 0 && tr.TotalTime < time.Second)
+		assertTrue(t, tr.DNSLookup == 0)
+		assertTrue(t, tr.ConnTime == 0)
+		assertTrue(t, tr.TLSHandshake == 0)
+		assertTrue(t, tr.ServerTime == 0)
+		assertTrue(t, tr.ResponseTime == 0)
+		assertTrue(t, tr.TotalTime > 0 && tr.TotalTime < time.Second)
 	})
 
 	t.Run("enable trace and debug on request", func(t *testing.T) {
@@ -1906,7 +1906,7 @@ func TestTraceInfo(t *testing.T) {
 			assertNotNil(t, resp)
 
 			jsonStr := resp.Request.TraceInfo().JSON()
-			assertEqual(t, true, strings.Contains(jsonStr, serverAddr))
+			assertTrue(t, strings.Contains(jsonStr, serverAddr))
 		}
 
 		logContent := logBuf.String()
@@ -1949,12 +1949,12 @@ func TestTraceInfoWithoutEnableTrace(t *testing.T) {
 		assertNotNil(t, resp)
 
 		tr := resp.Request.TraceInfo()
-		assertEqual(t, true, tr.DNSLookup == 0)
-		assertEqual(t, true, tr.ConnTime == 0)
-		assertEqual(t, true, tr.TLSHandshake == 0)
-		assertEqual(t, true, tr.ServerTime == 0)
-		assertEqual(t, true, tr.ResponseTime == 0)
-		assertEqual(t, true, tr.TotalTime == 0)
+		assertTrue(t, tr.DNSLookup == 0)
+		assertTrue(t, tr.ConnTime == 0)
+		assertTrue(t, tr.TLSHandshake == 0)
+		assertTrue(t, tr.ServerTime == 0)
+		assertTrue(t, tr.ResponseTime == 0)
+		assertTrue(t, tr.TotalTime == 0)
 	}
 }
 
@@ -1970,14 +1970,14 @@ func TestTraceInfoOnTimeout(t *testing.T) {
 	assertNotNil(t, resp)
 
 	tr := resp.Request.TraceInfo()
-	assertEqual(t, true, tr.DNSLookup >= 0)
-	assertEqual(t, true, tr.ConnTime == 0)
-	assertEqual(t, true, tr.TLSHandshake == 0)
-	assertEqual(t, true, tr.TCPConnTime == 0)
-	assertEqual(t, true, tr.ServerTime == 0)
-	assertEqual(t, true, tr.ResponseTime == 0)
-	assertEqual(t, true, tr.TotalTime > 0)
-	assertEqual(t, true, tr.TotalTime == resp.Duration())
+	assertTrue(t, tr.DNSLookup >= 0)
+	assertTrue(t, tr.ConnTime == 0)
+	assertTrue(t, tr.TLSHandshake == 0)
+	assertTrue(t, tr.TCPConnTime == 0)
+	assertTrue(t, tr.ServerTime == 0)
+	assertTrue(t, tr.ResponseTime == 0)
+	assertTrue(t, tr.TotalTime > 0)
+	assertTrue(t, tr.TotalTime == resp.Duration())
 }
 
 func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
@@ -1993,14 +1993,14 @@ func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
 
 		tr := resp.Request.TraceInfo()
 
-		assertEqual(t, true, tr.DNSLookup == 0)
-		assertEqual(t, true, tr.ConnTime == 0)
-		assertEqual(t, true, tr.TLSHandshake == 0)
-		assertEqual(t, true, tr.TCPConnTime == 0)
-		assertEqual(t, true, tr.ServerTime == 0)
-		assertEqual(t, true, tr.ResponseTime == 0)
-		assertEqual(t, true, tr.TotalTime > 0)
-		assertEqual(t, true, tr.TotalTime == resp.Duration())
+		assertTrue(t, tr.DNSLookup == 0)
+		assertTrue(t, tr.ConnTime == 0)
+		assertTrue(t, tr.TLSHandshake == 0)
+		assertTrue(t, tr.TCPConnTime == 0)
+		assertTrue(t, tr.ServerTime == 0)
+		assertTrue(t, tr.ResponseTime == 0)
+		assertTrue(t, tr.TotalTime > 0)
+		assertTrue(t, tr.TotalTime == resp.Duration())
 	})
 
 	t.Run("successful request with SetTimeout", func(t *testing.T) {
@@ -2018,14 +2018,14 @@ func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
 
 		tr := resp.Request.TraceInfo()
 
-		assertEqual(t, true, tr.DNSLookup >= 0)
-		assertEqual(t, true, tr.ConnTime >= 0)
-		assertEqual(t, true, tr.TLSHandshake >= 0)
-		assertEqual(t, true, tr.TCPConnTime >= 0)
-		assertEqual(t, true, tr.ServerTime >= 0)
-		assertEqual(t, true, tr.ResponseTime >= 0)
-		assertEqual(t, true, tr.TotalTime > 0)
-		assertEqual(t, true, tr.TotalTime == resp.Duration())
+		assertTrue(t, tr.DNSLookup >= 0)
+		assertTrue(t, tr.ConnTime >= 0)
+		assertTrue(t, tr.TLSHandshake >= 0)
+		assertTrue(t, tr.TCPConnTime >= 0)
+		assertTrue(t, tr.ServerTime >= 0)
+		assertTrue(t, tr.ResponseTime >= 0)
+		assertTrue(t, tr.TotalTime > 0)
+		assertTrue(t, tr.TotalTime == resp.Duration())
 	})
 
 	t.Run("HTTPS request with TLS handshake", func(t *testing.T) {
@@ -2046,14 +2046,14 @@ func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
 
 		tr := resp.Request.TraceInfo()
 
-		assertEqual(t, true, tr.TLSHandshake > 0)
-		assertEqual(t, true, tr.DNSLookup >= 0)
-		assertEqual(t, true, tr.ConnTime >= 0)
-		assertEqual(t, true, tr.TCPConnTime >= 0)
-		assertEqual(t, true, tr.ServerTime >= 0)
-		assertEqual(t, true, tr.ResponseTime >= 0)
-		assertEqual(t, true, tr.TotalTime > 0)
-		assertEqual(t, true, tr.TotalTime == resp.Duration())
+		assertTrue(t, tr.TLSHandshake > 0)
+		assertTrue(t, tr.DNSLookup >= 0)
+		assertTrue(t, tr.ConnTime >= 0)
+		assertTrue(t, tr.TCPConnTime >= 0)
+		assertTrue(t, tr.ServerTime >= 0)
+		assertTrue(t, tr.ResponseTime >= 0)
+		assertTrue(t, tr.TotalTime > 0)
+		assertTrue(t, tr.TotalTime == resp.Duration())
 	})
 }
 
@@ -2075,7 +2075,7 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+		assertTrue(t, strings.Contains(output.String(), "REQUEST TOO LARGE"))
 	})
 
 	t.Run("post form with no more than 512 bytes data", func(t *testing.T) {
@@ -2091,7 +2091,7 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(output.String(), "Alex"))
+		assertTrue(t, strings.Contains(output.String(), "Alex"))
 	})
 
 	t.Run("post string with more than 512 bytes data", func(t *testing.T) {
@@ -2105,7 +2105,7 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+		assertTrue(t, strings.Contains(output.String(), "REQUEST TOO LARGE"))
 	})
 
 	t.Run("post string slice with more than 512 bytes data", func(t *testing.T) {
@@ -2117,7 +2117,7 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+		assertTrue(t, strings.Contains(output.String(), "REQUEST TOO LARGE"))
 	})
 
 }
@@ -2242,7 +2242,7 @@ func TestResponseBodyUnlimitedReads(t *testing.T) {
 		SetJSONEscapeHTML(false).
 		SetResponseBodyUnlimitedReads(true)
 
-	assertEqual(t, true, c.ResponseBodyUnlimitedReads())
+	assertTrue(t, c.ResponseBodyUnlimitedReads())
 
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
@@ -2271,11 +2271,11 @@ func TestRequestAllowPayload(t *testing.T) {
 	t.Run("default method is GET", func(t *testing.T) {
 		r := c.R()
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 
 		r.SetAllowMethodGetPayload(true)
 		result2 := r.isPayloadSupported()
-		assertEqual(t, true, result2)
+		assertTrue(t, result2)
 	})
 
 	t.Run("method GET", func(t *testing.T) {
@@ -2283,32 +2283,32 @@ func TestRequestAllowPayload(t *testing.T) {
 			SetMethod(MethodGet)
 
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 
 		r.SetAllowMethodGetPayload(true)
 		result2 := r.isPayloadSupported()
-		assertEqual(t, true, result2)
+		assertTrue(t, result2)
 	})
 
 	t.Run("method POST", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodPost)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, true, result1)
+		assertTrue(t, result1)
 	})
 
 	t.Run("method PUT", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodPut)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, true, result1)
+		assertTrue(t, result1)
 	})
 
 	t.Run("method PATCH", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodPatch)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, true, result1)
+		assertTrue(t, result1)
 	})
 
 	t.Run("method DELETE", func(t *testing.T) {
@@ -2316,32 +2316,32 @@ func TestRequestAllowPayload(t *testing.T) {
 			SetMethod(MethodDelete)
 
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 
 		r.SetAllowMethodDeletePayload(true)
 		result2 := r.isPayloadSupported()
-		assertEqual(t, true, result2)
+		assertTrue(t, result2)
 	})
 
 	t.Run("method HEAD", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodHead)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 	})
 
 	t.Run("method OPTIONS", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodOptions)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 	})
 
 	t.Run("method TRACE", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodTrace)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 	})
 
 }
@@ -2384,25 +2384,25 @@ func TestRequestContextTimeout(t *testing.T) {
 
 	t.Run("use client set timeout", func(t *testing.T) {
 		c := dcnl().SetTimeout(200 * time.Millisecond)
-		assertEqual(t, true, c.Timeout() > 0)
+		assertTrue(t, c.Timeout() > 0)
 
 		req := c.R()
-		assertEqual(t, true, req.Timeout > 0)
+		assertTrue(t, req.Timeout > 0)
 
 		_, err := req.Get(ts.URL + "/set-timeout-test")
 
-		assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+		assertTrue(t, errors.Is(err, context.DeadlineExceeded))
 	})
 
 	t.Run("use request set timeout", func(t *testing.T) {
 		c := dcnl()
-		assertEqual(t, true, c.Timeout() == 0)
+		assertTrue(t, c.Timeout() == 0)
 
 		_, err := c.R().
 			SetTimeout(200 * time.Millisecond).
 			Get(ts.URL + "/set-timeout-test")
 
-		assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+		assertTrue(t, errors.Is(err, context.DeadlineExceeded))
 	})
 
 	t.Run("use external context for timeout", func(t *testing.T) {
@@ -2414,7 +2414,7 @@ func TestRequestContextTimeout(t *testing.T) {
 			SetContext(ctx).
 			Get(ts.URL + "/set-timeout-test")
 
-		assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+		assertTrue(t, errors.Is(err, context.DeadlineExceeded))
 	})
 
 }
@@ -2471,8 +2471,8 @@ func TestRequestBodyContentLengthValidation(t *testing.T) {
 		PrepareRequestMiddleware,
 		func(c *Client, r *Request) error {
 			// validate content length
-			assertEqual(t, true, r.contentLength > 0)
-			assertEqual(t, true, r.RawRequest.ContentLength > 0)
+			assertTrue(t, r.contentLength > 0)
+			assertTrue(t, r.RawRequest.ContentLength > 0)
 			assertEqual(t, r.contentLength, r.RawRequest.ContentLength)
 			return nil
 		},
@@ -2540,8 +2540,8 @@ func TestHTTPWarnGH970(t *testing.T) {
 			Get("/profile")
 
 		assertNil(t, err)
-		assertEqual(t, true, strings.Contains(res.String(), "profile fetch successful"))
-		assertEqual(t, false, strings.Contains(lb.String(), lookupText))
+		assertTrue(t, strings.Contains(res.String(), "profile fetch successful"))
+		assertFalse(t, strings.Contains(lb.String(), lookupText))
 	})
 
 	t.Run("non-SSL used", func(t *testing.T) {
@@ -2556,8 +2556,8 @@ func TestHTTPWarnGH970(t *testing.T) {
 			Get("/profile")
 
 		assertNil(t, err)
-		assertEqual(t, true, strings.Contains(res.String(), "profile fetch successful"))
-		assertEqual(t, true, strings.Contains(lb.String(), lookupText))
+		assertTrue(t, strings.Contains(res.String(), "profile fetch successful"))
+		assertTrue(t, strings.Contains(lb.String(), lookupText))
 	})
 }
 
@@ -2567,37 +2567,37 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	c := dcnl()
 
 	r1 := c.R()
-	assertEqual(t, false, r1.CloseConnection)
+	assertFalse(t, r1.CloseConnection)
 	r1.SetCloseConnection(true)
-	assertEqual(t, true, r1.CloseConnection)
+	assertTrue(t, r1.CloseConnection)
 
 	r2 := c.R()
-	assertEqual(t, false, r2.IsTrace)
+	assertFalse(t, r2.IsTrace)
 	r2.EnableTrace()
-	assertEqual(t, true, r2.IsTrace)
+	assertTrue(t, r2.IsTrace)
 	r2.DisableTrace()
-	assertEqual(t, false, r2.IsTrace)
+	assertFalse(t, r2.IsTrace)
 
 	r3 := c.R()
-	assertEqual(t, false, r3.ResponseBodyUnlimitedReads)
+	assertFalse(t, r3.ResponseBodyUnlimitedReads)
 	r3.SetResponseBodyUnlimitedReads(true)
-	assertEqual(t, true, r3.ResponseBodyUnlimitedReads)
+	assertTrue(t, r3.ResponseBodyUnlimitedReads)
 	r3.SetResponseBodyUnlimitedReads(false)
-	assertEqual(t, false, r3.ResponseBodyUnlimitedReads)
+	assertFalse(t, r3.ResponseBodyUnlimitedReads)
 
 	r4 := c.R()
-	assertEqual(t, false, r4.Debug)
+	assertFalse(t, r4.Debug)
 	r4.EnableDebug()
-	assertEqual(t, true, r4.Debug)
+	assertTrue(t, r4.Debug)
 	r4.DisableDebug()
-	assertEqual(t, false, r4.Debug)
+	assertFalse(t, r4.Debug)
 
 	r5 := c.R()
-	assertEqual(t, true, r5.IsRetryDefaultConditions)
+	assertTrue(t, r5.IsRetryDefaultConditions)
 	r5.DisableRetryDefaultConditions()
-	assertEqual(t, false, r5.IsRetryDefaultConditions)
+	assertFalse(t, r5.IsRetryDefaultConditions)
 	r5.EnableRetryDefaultConditions()
-	assertEqual(t, true, r5.IsRetryDefaultConditions)
+	assertTrue(t, r5.IsRetryDefaultConditions)
 
 	r6 := c.R()
 	customAuthHeader := "X-Custom-Authorization"
@@ -2614,7 +2614,7 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			if err, ok := rec.(error); ok {
-				assertEqual(t, true, strings.Contains(err.Error(), "resty: Request.Clone nil context"))
+				assertTrue(t, strings.Contains(err.Error(), "resty: Request.Clone nil context"))
 			}
 		}
 	}()

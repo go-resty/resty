@@ -38,7 +38,7 @@ func TestMultipartFormDataAndUpload(t *testing.T) {
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, true, strings.Contains(resp.String(), "test-img.png"))
+		assertTrue(t, strings.Contains(resp.String(), "test-img.png"))
 	})
 
 	t.Run("request form data and upload", func(t *testing.T) {
@@ -53,7 +53,7 @@ func TestMultipartFormDataAndUpload(t *testing.T) {
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, true, strings.Contains(resp.String(), "test-img.png"))
+		assertTrue(t, strings.Contains(resp.String(), "test-img.png"))
 	})
 }
 
@@ -72,7 +72,7 @@ func TestMultipartFormDataAndUploadMethodPatch(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "test-img.png"))
+	assertTrue(t, strings.Contains(resp.String(), "test-img.png"))
 }
 
 func TestMultipartUploadError(t *testing.T) {
@@ -89,7 +89,7 @@ func TestMultipartUploadError(t *testing.T) {
 
 	assertNotNil(t, err)
 	assertNotNil(t, resp)
-	assertEqual(t, true, errors.Is(err, fs.ErrNotExist))
+	assertTrue(t, errors.Is(err, fs.ErrNotExist))
 }
 
 func TestMultipartUploadFiles(t *testing.T) {
@@ -118,8 +118,8 @@ func TestMultipartUploadFiles(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
-	assertEqual(t, true, strings.Contains(responseStr, "text-file.txt"))
+	assertTrue(t, strings.Contains(responseStr, "test-img.png"))
+	assertTrue(t, strings.Contains(responseStr, "text-file.txt"))
 }
 
 func TestMultipartFilesAndFormDataEmptyGH1046(t *testing.T) {
@@ -142,8 +142,8 @@ func TestMultipartFilesAndFormDataEmptyGH1046(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
-	assertEqual(t, true, strings.Contains(responseStr, "text-file.txt"))
+	assertTrue(t, strings.Contains(responseStr, "test-img.png"))
+	assertTrue(t, strings.Contains(responseStr, "text-file.txt"))
 }
 
 func TestMultipartIoReaderFiles(t *testing.T) {
@@ -177,8 +177,8 @@ func TestMultipartIoReaderFiles(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
-	assertEqual(t, true, strings.Contains(responseStr, "text-file.txt"))
+	assertTrue(t, strings.Contains(responseStr, "test-img.png"))
+	assertTrue(t, strings.Contains(responseStr, "text-file.txt"))
 }
 
 func TestMultipartUploadFileNotOnGetOrDelete(t *testing.T) {
@@ -291,7 +291,7 @@ func TestMultipartField(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file.json"))
 }
 
 func TestMultipartFields(t *testing.T) {
@@ -335,8 +335,8 @@ func TestMultipartFields(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file-1.json"))
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file-2.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file-1.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file-2.json"))
 }
 
 func TestMultipartCustomBoundary(t *testing.T) {
@@ -379,7 +379,7 @@ func TestMultipartLargeFile(t *testing.T) {
 			Post(ts.URL + "/upload")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully, file size: 2579629")) // 2579697
+		assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully, file size: 2579629")) // 2579697
 	})
 
 	t.Run("upload a 2+mb image file with content-type and incorrect custom boundary", func(t *testing.T) {
@@ -400,7 +400,7 @@ func TestMultipartLargeFile(t *testing.T) {
 			Post(ts.URL + "/upload")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully, file size: 2579697"))
+		assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully, file size: 2579697"))
 	})
 
 	t.Run("upload a 50+mb binary file", func(t *testing.T) {
@@ -412,7 +412,7 @@ func TestMultipartLargeFile(t *testing.T) {
 			Post(ts.URL + "/upload")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully, file size: 52429044"))
+		assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully, file size: 52429044"))
 	})
 }
 
@@ -481,10 +481,10 @@ func TestMultipartFieldProgressCallback(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "test-image-1.png"))
-	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
-	assertEqual(t, true, strings.Contains(responseStr, "50mbfile.bin"))
-	assertEqual(t, true, strings.Contains(responseStr, "100mbfile.bin"))
+	assertTrue(t, strings.Contains(responseStr, "test-image-1.png"))
+	assertTrue(t, strings.Contains(responseStr, "test-img.png"))
+	assertTrue(t, strings.Contains(responseStr, "50mbfile.bin"))
+	assertTrue(t, strings.Contains(responseStr, "100mbfile.bin"))
 }
 
 func TestMultipartOrderedFormData(t *testing.T) {
@@ -543,8 +543,8 @@ func TestMultipartOrderedFormData(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file-1.json"))
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file-2.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file-1.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file-2.json"))
 }
 
 var errTestErrorReader = errors.New("fake")
@@ -593,7 +593,7 @@ func TestMultipartReaderErrors(t *testing.T) {
 			Post("/upload")
 
 		assertNotNil(t, err)
-		assertEqual(t, true, errors.Is(err, fs.ErrNotExist))
+		assertTrue(t, errors.Is(err, fs.ErrNotExist))
 		assertNotNil(t, resp)
 		assertEqual(t, nil, resp.Body)
 	})

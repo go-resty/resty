@@ -21,7 +21,7 @@ func TestDecodeJSONWhenResponseBodyIsNull(t *testing.T) {
 	var result map[int]int
 	err = decodeJSON(r.Body, &result)
 	assertNil(t, err)
-	assertNil(t, result)
+	assertNil(t, result, "expected result to be nil map when JSON is null")
 }
 
 func TestGetMethodWhenResponseIsNull(t *testing.T) {
@@ -42,7 +42,7 @@ func TestGetMethodWhenResponseIsNull(t *testing.T) {
 
 	assertNil(t, err)
 	assertEqual(t, "null", resp.String())
-	assertEqual(t, nil, x)
+	assertNil(t, x, "expected result to be nil when response body is null")
 }
 
 func TestDecodeJSON(t *testing.T) {
@@ -92,7 +92,7 @@ func TestWrapCopyReadCloser(t *testing.T) {
 
 	// Should now be nopReadCloser for unlimited reads
 	_, ok := r.Body.(*nopReadCloser)
-	assertEqual(t, true, ok)
+	assertTrue(t, ok, "expected Body to be of type *nopReadCloser")
 
 	// Test unlimited reads
 	data2, err := io.ReadAll(r.Body)
@@ -205,11 +205,11 @@ func TestGzipReaderPanicOnConcurrentCorruptedBody(t *testing.T) {
 
 	select {
 	case r := <-panicChan:
-		t.Fatalf("Test Failed Immediately: Panic detected: %v", r)
+		t.Errorf("Test Failed Immediately: Panic detected: %v", r)
 	case <-doneChan:
 		select {
 		case r := <-panicChan:
-			t.Fatalf("Test Failed: Panic detected at end of run: %v", r)
+			t.Errorf("Test Failed: Panic detected at end of run: %v", r)
 		default:
 			// If we get here, no panic occurred.
 		}
@@ -233,5 +233,5 @@ func TestGzipReaderPanicOnConcurrentCorruptedBody(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, res.StatusCode())
-	assertEqual(t, "ok", result["status"])
+	assertEqual(t, "ok", result["status"], "expected to successfully decode valid gzip response")
 }

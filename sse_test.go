@@ -27,7 +27,7 @@ func TestEventSourceSimpleFlow(t *testing.T) {
 	messageFunc := func(e any) {
 		event := e.(*Event)
 		assertEqual(t, strconv.Itoa(messageCounter), event.ID)
-		assertEqual(t, true, strings.HasPrefix(event.Data, "The time is"))
+		assertTrue(t, strings.HasPrefix(event.Data, "The time is"))
 		messageCounter++
 		if messageCounter == 100 {
 			es.Close()
@@ -69,7 +69,7 @@ func TestEventSourceMultipleEventTypes(t *testing.T) {
 	userConnectFunc := func(e any) {
 		data := e.(*userEvent)
 		assertEqual(t, "username"+strconv.Itoa(userConnectCounter), data.UserName)
-		assertEqual(t, true, data.Time.After(tm))
+		assertTrue(t, data.Time.After(tm))
 		userConnectCounter++
 	}
 
@@ -78,7 +78,7 @@ func TestEventSourceMultipleEventTypes(t *testing.T) {
 		data := e.(*userEvent)
 		assertEqual(t, "username"+strconv.Itoa(userConnectCounter), data.UserName)
 		assertEqual(t, "Hello, how are you?", data.Message)
-		assertEqual(t, true, data.Time.After(tm))
+		assertTrue(t, data.Time.After(tm))
 		userMessageCounter++
 	}
 
@@ -140,7 +140,7 @@ func TestEventSourceOverwriteFuncs(t *testing.T) {
 	messageFunc2 := func(e any) {
 		event := e.(*Event)
 		assertEqual(t, strconv.Itoa(message2Counter), event.ID)
-		assertEqual(t, true, strings.HasPrefix(event.Data, "The time is"))
+		assertTrue(t, strings.HasPrefix(event.Data, "The time is"))
 		message2Counter++
 		if message2Counter == 50 {
 			es.Close()
@@ -179,9 +179,9 @@ func TestEventSourceOverwriteFuncs(t *testing.T) {
 	assertEqual(t, counter, message2Counter)
 
 	logLines := lb.String()
-	assertEqual(t, true, strings.Contains(logLines, "Overwriting an existing OnEvent callback"))
-	assertEqual(t, true, strings.Contains(logLines, "Overwriting an existing OnOpen callback"))
-	assertEqual(t, true, strings.Contains(logLines, "Overwriting an existing OnError callback"))
+	assertTrue(t, strings.Contains(logLines, "Overwriting an existing OnEvent callback"))
+	assertTrue(t, strings.Contains(logLines, "Overwriting an existing OnOpen callback"))
+	assertTrue(t, strings.Contains(logLines, "Overwriting an existing OnError callback"))
 }
 
 func TestEventSourceRetry(t *testing.T) {
@@ -191,7 +191,7 @@ func TestEventSourceRetry(t *testing.T) {
 	messageFunc := func(e any) {
 		event := e.(*Event)
 		assertEqual(t, strconv.Itoa(messageCounter), event.ID)
-		assertEqual(t, true, strings.HasPrefix(event.Data, "The time is"))
+		assertTrue(t, strings.HasPrefix(event.Data, "The time is"))
 		messageCounter++
 		if messageCounter == 15 {
 			es.Close()
@@ -320,7 +320,7 @@ func TestEventSourceNoRetryRequired(t *testing.T) {
 	es.SetURL(ts.URL)
 	err := es.Get()
 	fmt.Println(err)
-	assertEqual(t, true, strings.Contains(err.Error(), "400 Bad Request"))
+	assertTrue(t, strings.Contains(err.Error(), "400 Bad Request"))
 }
 
 func TestGH1044TrimHeader(t *testing.T) {
@@ -332,13 +332,13 @@ func TestGH1044TrimHeader(t *testing.T) {
 	t.Run("data has double whitespace", func(t *testing.T) {
 		data := []byte("data:  double whitespace message")
 		result := trimHeader(5, data)
-		assertEqual(t, true, result[0] == ' ')
+		assertTrue(t, result[0] == ' ')
 	})
 
 	t.Run("data has newline", func(t *testing.T) {
 		data := []byte("data: newline message\n")
 		result := trimHeader(5, data)
-		assertEqual(t, true, result[len(result)-1] != '\n')
+		assertTrue(t, result[len(result)-1] != '\n')
 	})
 }
 
@@ -376,7 +376,7 @@ func TestEventSourceHTTPError(t *testing.T) {
 
 	es.SetURL(ts.URL)
 	err := es.Get()
-	assertEqual(t, true, strings.Contains(err.Error(), `invalid character " " in host name`))
+	assertTrue(t, strings.Contains(err.Error(), `invalid character " " in host name`))
 }
 
 func TestEventSourceParseAndReadError(t *testing.T) {
@@ -433,7 +433,160 @@ func TestEventSourceReadError(t *testing.T) {
 	es.SetURL(ts.URL)
 	err := es.Get()
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), "read event test error"))
+	assertTrue(t, strings.Contains(err.Error(), "read event test error"))
+}
+
+func TestEventSourceWithDifferentMethods(t *testing.T) {
+	testCases := []struct {
+		name   string
+		method string
+		body   []byte
+	}{
+		{
+			name:   "GET Method",
+			method: MethodGet,
+			body:   nil,
+		},
+		{
+			name:   "POST Method",
+			method: MethodPost,
+			body:   []byte(`{"test":"post_data"}`),
+		},
+		{
+			name:   "PUT Method",
+			method: MethodPut,
+			body:   []byte(`{"test":"put_data"}`),
+		},
+		{
+			name:   "DELETE Method",
+			method: MethodDelete,
+			body:   nil,
+		},
+		{
+			name:   "PATCH Method",
+			method: MethodPatch,
+			body:   []byte(`{"test":"patch_data"}`),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			es := createEventSource(t, "", nil, nil)
+
+			messageCounter := 0
+			messageFunc := func(e any) {
+				event := e.(*Event)
+				assertEqual(t, strconv.Itoa(messageCounter), event.ID)
+				assertTrue(t, strings.HasPrefix(event.Data, fmt.Sprintf("%s method test:", tc.method)))
+				messageCounter++
+				if messageCounter == 20 {
+					es.Close()
+				}
+			}
+			es.OnMessage(messageFunc, nil)
+
+			counter := 0
+			methodVerified := false
+			bodyVerified := false
+
+			ts := createMethodVerifyingSSETestServer(
+				t,
+				10*time.Millisecond,
+				tc.method,
+				tc.body,
+				&methodVerified,
+				&bodyVerified,
+				func(w io.Writer) error {
+					if counter == 20 {
+						return fmt.Errorf("stop sending events")
+					}
+					_, err := fmt.Fprintf(w, "id: %v\ndata: %s method test: %s\n\n", counter, tc.method, time.Now().Format(time.RFC3339))
+					counter++
+					return err
+				},
+			)
+			defer ts.Close()
+
+			es.SetURL(ts.URL)
+			es.SetMethod(tc.method)
+
+			// set body
+			if tc.body != nil {
+				es.SetBody(bytes.NewBuffer(tc.body))
+			}
+
+			err := es.Get()
+			assertNil(t, err)
+
+			// check the message count
+			assertEqual(t, counter, messageCounter)
+
+			// check if server receive correct method and body
+			assertTrue(t, methodVerified)
+			if tc.body != nil {
+				assertTrue(t, bodyVerified)
+			}
+		})
+	}
+}
+
+func TestEventSource_readEventFunc(t *testing.T) {
+	t.Run("successful scan", func(t *testing.T) {
+		input := "event: test\ndata: test data\n\n"
+		scanner := bufio.NewScanner(strings.NewReader(input))
+
+		event, err := readEventFunc(scanner)
+
+		assertNil(t, err)
+		assertNotNil(t, event)
+		assertEqual(t, "event: test", string(event))
+	})
+
+	t.Run("scanner error", func(t *testing.T) {
+		// Create a custom reader that returns an error
+		scanner := bufio.NewScanner(&errorReader{})
+
+		event, err := readEventFunc(scanner)
+
+		assertNotNil(t, err)
+		assertNil(t, event)
+		assertEqual(t, "fake", err.Error())
+	})
+
+	t.Run("EOF error", func(t *testing.T) {
+		// Empty reader will immediately return EOF
+		scanner := bufio.NewScanner(strings.NewReader(""))
+
+		event, err := readEventFunc(scanner)
+
+		assertEqual(t, io.EOF, err)
+		assertNil(t, event)
+	})
+
+	t.Run("multiple lines", func(t *testing.T) {
+		input := "line1\nline2\nline3\n"
+		scanner := bufio.NewScanner(strings.NewReader(input))
+
+		// First call should return the first line
+		event1, err1 := readEventFunc(scanner)
+		assertNil(t, err1)
+		assertEqual(t, "line1", string(event1))
+
+		// Second call should return the second line
+		event2, err2 := readEventFunc(scanner)
+		assertNil(t, err2)
+		assertEqual(t, "line2", string(event2))
+
+		// Third call should return the third line
+		event3, err3 := readEventFunc(scanner)
+		assertNil(t, err3)
+		assertEqual(t, "line3", string(event3))
+
+		// Fourth call should return EOF
+		event4, err4 := readEventFunc(scanner)
+		assertEqual(t, io.EOF, err4)
+		assertNil(t, event4)
+	})
 }
 
 func TestEventSourceCoverage(t *testing.T) {
@@ -448,7 +601,7 @@ func TestEventSourceCoverage(t *testing.T) {
 	es.OnMessage(func(a any) {}, nil)
 	es.SetURL("//res%20ty.dev")
 	err3 := es.Get()
-	assertEqual(t, true, strings.Contains(err3.Error(), `invalid URL escape "%20"`))
+	assertTrue(t, strings.Contains(err3.Error(), `invalid URL escape "%20"`))
 
 	wrapResponse(nil, nil)
 	trimHeader(2, nil)
@@ -512,100 +665,6 @@ func createSSETestServer(t *testing.T, ticker time.Duration, fn func(io.Writer) 
 	})
 }
 
-func TestEventSourceWithDifferentMethods(t *testing.T) {
-	testCases := []struct {
-		name   string
-		method string
-		body   []byte
-	}{
-		{
-			name:   "GET Method",
-			method: MethodGet,
-			body:   nil,
-		},
-		{
-			name:   "POST Method",
-			method: MethodPost,
-			body:   []byte(`{"test":"post_data"}`),
-		},
-		{
-			name:   "PUT Method",
-			method: MethodPut,
-			body:   []byte(`{"test":"put_data"}`),
-		},
-		{
-			name:   "DELETE Method",
-			method: MethodDelete,
-			body:   nil,
-		},
-		{
-			name:   "PATCH Method",
-			method: MethodPatch,
-			body:   []byte(`{"test":"patch_data"}`),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			es := createEventSource(t, "", nil, nil)
-
-			messageCounter := 0
-			messageFunc := func(e any) {
-				event := e.(*Event)
-				assertEqual(t, strconv.Itoa(messageCounter), event.ID)
-				assertEqual(t, true, strings.HasPrefix(event.Data, fmt.Sprintf("%s method test:", tc.method)))
-				messageCounter++
-				if messageCounter == 20 {
-					es.Close()
-				}
-			}
-			es.OnMessage(messageFunc, nil)
-
-			counter := 0
-			methodVerified := false
-			bodyVerified := false
-
-			ts := createMethodVerifyingSSETestServer(
-				t,
-				10*time.Millisecond,
-				tc.method,
-				tc.body,
-				&methodVerified,
-				&bodyVerified,
-				func(w io.Writer) error {
-					if counter == 20 {
-						return fmt.Errorf("stop sending events")
-					}
-					_, err := fmt.Fprintf(w, "id: %v\ndata: %s method test: %s\n\n", counter, tc.method, time.Now().Format(time.RFC3339))
-					counter++
-					return err
-				},
-			)
-			defer ts.Close()
-
-			es.SetURL(ts.URL)
-			es.SetMethod(tc.method)
-
-			// set body
-			if tc.body != nil {
-				es.SetBody(bytes.NewBuffer(tc.body))
-			}
-
-			err := es.Get()
-			assertNil(t, err)
-
-			// check the message count
-			assertEqual(t, counter, messageCounter)
-
-			// check if server receive correct method and body
-			assertEqual(t, true, methodVerified)
-			if tc.body != nil {
-				assertEqual(t, true, bodyVerified)
-			}
-		})
-	}
-}
-
 // almost like create server before but add verifying method and body
 func createMethodVerifyingSSETestServer(
 	t *testing.T,
@@ -616,7 +675,7 @@ func createMethodVerifyingSSETestServer(
 	bodyVerified *bool,
 	fn func(io.Writer) error,
 ) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		// validate method
 		if r.Method == expectedMethod {
 			*methodVerified = true
@@ -664,5 +723,5 @@ func createMethodVerifyingSSETestServer(
 				}
 			}
 		}
-	}))
+	})
 }
