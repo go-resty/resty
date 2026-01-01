@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 )
 
 func Benchmark_parseRequestURL_PathParams(b *testing.B) {
@@ -200,5 +201,152 @@ func Benchmark_parseRequestBody_MultiPart(b *testing.B) {
 		if err := parseRequestBody(c, r); err != nil {
 			b.Errorf("parseRequestBody() error = %v", err)
 		}
+	}
+}
+
+// benchmarkStringer implements fmt.Stringer for benchmarking
+type benchmarkStringer struct {
+	value string
+}
+
+func (s benchmarkStringer) String() string {
+	return s.value
+}
+
+// Tier 1: most common URL types
+func Benchmark_formatAnyToString_string(b *testing.B) {
+	v := "hello world"
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_int(b *testing.B) {
+	v := 12345
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_bool(b *testing.B) {
+	v := true
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_int64(b *testing.B) {
+	v := int64(9223372036854775807)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_stringSlice(b *testing.B) {
+	v := []string{"a", "b", "c"}
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+// Tier 2: common stdlib types
+func Benchmark_formatAnyToString_time(b *testing.B) {
+	v := time.Date(2024, 6, 15, 10, 30, 0, 0, time.UTC)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_byteSlice(b *testing.B) {
+	v := []byte("binary data")
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_float64(b *testing.B) {
+	v := 3.14159265359
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+// Tier 3: less common integers (signed)
+func Benchmark_formatAnyToString_int32(b *testing.B) {
+	v := int32(2147483647)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_int16(b *testing.B) {
+	v := int16(32767)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_int8(b *testing.B) {
+	v := int8(127)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+// Tier 4: less common integers (unsigned)
+func Benchmark_formatAnyToString_uint64(b *testing.B) {
+	v := uint64(18446744073709551615)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_uint32(b *testing.B) {
+	v := uint32(4294967295)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_uint16(b *testing.B) {
+	v := uint16(65535)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_uint8(b *testing.B) {
+	v := uint8(255)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_uint(b *testing.B) {
+	v := uint(12345)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+// Tier 5: rare types and fallbacks
+func Benchmark_formatAnyToString_float32(b *testing.B) {
+	v := float32(3.14)
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_stringer(b *testing.B) {
+	v := benchmarkStringer{value: "custom value"}
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_formatAnyToString_default(b *testing.B) {
+	v := struct{ Name string }{Name: "test"}
+	for i := 0; i < b.N; i++ {
+		_ = formatAnyToString(v)
 	}
 }
