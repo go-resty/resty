@@ -1165,21 +1165,23 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 	return c
 }
 
-// Error method returns the global or client common `Error` object type registered in the Resty.
-func (c *Client) Error() reflect.Type {
+// ResultError method returns the global or client common `ResultError` object
+// type registered in the client instance.
+func (c *Client) ResultError() reflect.Type {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.errorType
 }
 
-// SetError method registers the global or client common `Error` object into Resty.
-// It is used for automatic unmarshalling if the response status code is greater than 399 and
-// content type is JSON or XML. It can be a pointer or a non-pointer.
+// SetResultError method registers the global or client common `ResultError`
+// object type into the client instance. It is used for automatic unmarshalling if
+// the response status code is greater than 399 and the content type is JSON or XML.
+// It can be a pointer or a non-pointer.
 //
-//	client.SetError(&Error{})
+//	client.SetResultError(&LoginErrorResponse{})
 //	// OR
-//	client.SetError(Error{})
-func (c *Client) SetError(v any) *Client {
+//	client.SetResultError(LoginErrorResponse{})
+func (c *Client) SetResultError(v any) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.errorType = inferType(v)
@@ -1187,7 +1189,7 @@ func (c *Client) SetError(v any) *Client {
 }
 
 func (c *Client) newErrorInterface() any {
-	e := c.Error()
+	e := c.ResultError()
 	if e == nil {
 		return e
 	}
@@ -2300,11 +2302,11 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	// Apply Response middleware
 	for _, f := range c.responseMiddlewares() {
 		if err = f(c, response); err != nil {
-			response.Err = wrapErrors(err, response.Err)
+			response.CascadeError = wrapErrors(err, response.CascadeError)
 		}
 	}
 
-	err = response.Err
+	err = response.CascadeError
 	return response, err
 }
 

@@ -480,9 +480,9 @@ func handleRequestBody(c *Client, r *Request) error {
 
 // AutoParseResponseMiddleware method is used to parse the response body automatically
 // based on registered HTTP response `Content-Type` decoder, see [Client.AddContentTypeDecoder];
-// if [Request.SetResult], [Request.SetError], or [Client.SetError] is used
+// if [Request.SetResult], [Request.SetResultError], or [Client.SetResultError] is used
 func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
-	if res.Err != nil || res.Request.DoNotParseResponse {
+	if res.CascadeError != nil || res.Request.DoNotParseResponse {
 		return // move on
 	}
 
@@ -505,7 +505,7 @@ func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
 	}
 
 	// HTTP status code > 199 and < 300, considered as Result
-	if res.IsSuccess() && res.Request.Result != nil {
+	if res.IsStatusSuccess() && res.Request.Result != nil {
 		res.Request.Error = nil
 		defer closeq(res.Body)
 		err = decFunc(res.Body, res.Request.Result)
@@ -514,7 +514,7 @@ func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
 	}
 
 	// HTTP status code > 399, considered as Error
-	if res.IsError() {
+	if res.IsStatusFailure() {
 		// global error type registered at client-instance
 		if res.Request.Error == nil {
 			res.Request.Error = c.newErrorInterface()
@@ -539,7 +539,7 @@ var hostnameReplacer = strings.NewReplacer(":", "_", ".", "_")
 //   - Content-Disposition header
 //   - Request URL using [path.Base]
 func SaveToFileResponseMiddleware(c *Client, res *Response) error {
-	if res.Err != nil || !res.Request.IsSaveResponse {
+	if res.CascadeError != nil || !res.Request.IsSaveResponse {
 		return nil
 	}
 
