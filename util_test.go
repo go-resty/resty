@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestIsJSONContentType(t *testing.T) {
@@ -339,4 +340,66 @@ func TestUtilMiscTestCoverage(t *testing.T) {
 
 	ireErr := &invalidRequestError{Err: errors.New("test coverage")}
 	assertEqual(t, "test coverage", ireErr.Error())
+}
+
+// customStringer implements fmt.Stringer for testing
+type customStringer struct {
+	value string
+}
+
+func (c customStringer) String() string {
+	return c.value
+}
+
+func TestFormatAnyToString(t *testing.T) {
+	fixedTime := time.Date(2024, 6, 15, 10, 30, 0, 0, time.UTC)
+
+	for _, test := range []struct {
+		name   string
+		input  any
+		expect string
+	}{
+		// Tier 1: most common URL types
+		{"string", "hello", "hello"},
+		{"empty string", "", ""},
+		{"int", 42, "42"},
+		{"int negative", -123, "-123"},
+		{"bool true", true, "true"},
+		{"bool false", false, "false"},
+		{"int64", int64(9223372036854775807), "9223372036854775807"},
+		{"int64 negative", int64(-9223372036854775808), "-9223372036854775808"},
+		{"[]string", []string{"a", "b", "c"}, "a,b,c"},
+		{"[]string single", []string{"only"}, "only"},
+		{"[]string empty", []string{}, ""},
+
+		// Tier 2: common stdlib types
+		{"time.Time", fixedTime, "2024-06-15T10:30:00Z"},
+		{"[]byte", []byte("binary data"), "binary data"},
+		{"float64", 3.14159, "3.14159"},
+		{"float64 whole", float64(42), "42"},
+		{"float64 negative", -2.5, "-2.5"},
+
+		// Tier 3: less common integers (signed)
+		{"int32", int32(2147483647), "2147483647"},
+		{"int16", int16(32767), "32767"},
+		{"int8", int8(127), "127"},
+
+		// Tier 4: less common integers (unsigned)
+		{"uint64", uint64(18446744073709551615), "18446744073709551615"},
+		{"uint32", uint32(4294967295), "4294967295"},
+		{"uint16", uint16(65535), "65535"},
+		{"uint8", uint8(255), "255"},
+		{"uint", uint(12345), "12345"},
+
+		// Tier 5: rare types and fallbacks
+		{"float32", float32(3.14), "3.14"},
+		{"fmt.Stringer", customStringer{value: "custom value"}, "custom value"},
+		{"default struct", struct{ Name string }{Name: "test"}, "{test}"},
+		{"nil", nil, "<nil>"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result := formatAnyToString(test.input)
+			assertEqual(t, test.expect, result)
+		})
+	}
 }

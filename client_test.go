@@ -465,6 +465,51 @@ func TestClientSetHeaderVerbatim(t *testing.T) {
 	assertEqual(t, "value_standard", c.Header().Get("Header-Lowercase"))
 }
 
+func TestClientSetHeaderAny(t *testing.T) {
+	c := dcnl().
+		SetHeaderAny("X-Int-Value", 42).
+		SetHeaderAny("X-String-Value", "hello")
+
+	assertEqual(t, "42", c.Header().Get("X-Int-Value"))
+	assertEqual(t, "hello", c.Header().Get("X-String-Value"))
+}
+
+func TestClientSetHeaderVerbatimAny(t *testing.T) {
+	c := dcnl().
+		SetHeaderVerbatimAny("header-lowercase", 123)
+
+	//lint:ignore SA1008 valid one, so ignore this!
+	unConventionHdrValue := strings.Join(c.Header()["header-lowercase"], "")
+	assertEqual(t, "123", unConventionHdrValue)
+}
+
+func TestClientSetQueryParamAny(t *testing.T) {
+	c := dcnl().
+		SetQueryParamAny("page", 5).
+		SetQueryParamAny("active", true)
+
+	assertEqual(t, "5", c.QueryParams().Get("page"))
+	assertEqual(t, "true", c.QueryParams().Get("active"))
+}
+
+func TestClientSetPathParamAny(t *testing.T) {
+	c := dcnl().
+		SetPathParamAny("userId", 42).
+		SetPathParamAny("name", "john doe")
+
+	assertEqual(t, "42", c.PathParams()["userId"])
+	assertEqual(t, "john%20doe", c.PathParams()["name"])
+}
+
+func TestClientSetRawPathParamAny(t *testing.T) {
+	c := dcnl().
+		SetRawPathParamAny("userId", 42).
+		SetRawPathParamAny("name", "john doe")
+
+	assertEqual(t, "42", c.PathParams()["userId"])
+	assertEqual(t, "john doe", c.PathParams()["name"])
+}
+
 func TestClientSetTransport(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()

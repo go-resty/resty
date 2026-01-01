@@ -303,6 +303,25 @@ func (c *Client) SetHeader(header, value string) *Client {
 	return c
 }
 
+// SetHeaderAny method sets a single header field and its value in the client instance
+// for all requests raised from the client.
+//
+// It is similar to [Client.SetHeader] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+// For Example: To set `X-Request-Id` with an integer value
+//
+//	client.SetHeaderAny("X-Request-Id", 12345)
+//
+// See [Request.SetHeaderAny] or [Client.SetHeader].
+func (c *Client) SetHeaderAny(header string, value any) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	strVal := formatAnyToString(value)
+	c.header.Set(header, strVal)
+	return c
+}
+
 // SetHeaders method sets multiple headers and their values at one go, and
 // these headers will be applied to all requests raised from the client instance.
 // Also, it can be overridden at request-level headers options.
@@ -339,6 +358,25 @@ func (c *Client) SetHeaderVerbatim(header, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.header[header] = []string{value}
+	return c
+}
+
+// SetHeaderVerbatimAny method sets the HTTP header key and value verbatim in the client instance
+// for all requests raised from the client.
+//
+// It is similar to [Client.SetHeaderVerbatim] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+// For Example: To set header key as `x-trace-id` with an integer value
+//
+//	client.SetHeaderVerbatimAny("x-trace-id", 798940)
+//
+// See [Request.SetHeaderVerbatimAny] or [Client.SetHeaderVerbatim].
+func (c *Client) SetHeaderVerbatimAny(header string, value any) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	strVal := formatAnyToString(value)
+	c.header[header] = []string{strVal}
 	return c
 }
 
@@ -444,6 +482,27 @@ func (c *Client) SetQueryParam(param, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.queryParams.Set(param, value)
+	return c
+}
+
+// SetQueryParamAny method sets a single query parameter and its value in the client instance.
+// It will be formed as a query string for the request.
+//
+// It is similar to [Client.SetQueryParam] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+// For Example: To set `page` and `active` query parameters
+//
+//	client.
+//		SetQueryParamAny("page", 5).
+//		SetQueryParamAny("active", true)
+//
+// See [Request.SetQueryParamAny] or [Client.SetQueryParam].
+func (c *Client) SetQueryParamAny(param string, value any) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	strVal := formatAnyToString(value)
+	c.queryParams.Set(param, strVal)
 	return c
 }
 
@@ -1921,6 +1980,31 @@ func (c *Client) SetPathParam(param, value string) *Client {
 	return c
 }
 
+// SetPathParamAny method sets a single URL path key-value pair in the
+// Resty client instance.
+//
+// It is similar to [Client.SetPathParam] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+//	client.SetPathParamAny("userId", 12345)
+//
+//	Result:
+//	   URL - /v1/users/{userId}/details
+//	   Composed URL - /v1/users/12345/details
+//
+// It replaces the value of the key while composing the request URL.
+// The value will be escaped using [url.PathEscape] function.
+//
+// It can be overridden at the request level,
+// see [Request.SetPathParamAny] or [Request.SetPathParams]
+func (c *Client) SetPathParamAny(param string, value any) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	strVal := formatAnyToString(value)
+	c.pathParams[param] = url.PathEscape(strVal)
+	return c
+}
+
 // SetPathParams method sets multiple URL path key-value pairs at one go in the
 // Resty client instance.
 //
@@ -1964,6 +2048,31 @@ func (c *Client) SetRawPathParam(param, value string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.pathParams[param] = value
+	return c
+}
+
+// SetRawPathParamAny method sets a single URL path key-value pair in the
+// Resty client instance without path escape.
+//
+// It is similar to [Client.SetRawPathParam] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+//	client.SetRawPathParamAny("userId", 12345)
+//
+//	Result:
+//	   URL - /v1/users/{userId}/details
+//	   Composed URL - /v1/users/12345/details
+//
+// It replaces the value of the key while composing the request URL.
+// The value will be used as-is, no path escape applied.
+//
+// It can be overridden at the request level,
+// see [Request.SetRawPathParamAny] or [Request.SetRawPathParams]
+func (c *Client) SetRawPathParamAny(param string, value any) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	strVal := formatAnyToString(value)
+	c.pathParams[param] = strVal
 	return c
 }
 

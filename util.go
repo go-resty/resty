@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -402,6 +403,61 @@ func toJSON(v any) string {
 	defer releaseBuffer(buf)
 	_ = encodeJSON(buf, v)
 	return buf.String()
+}
+
+// formatAnyToString converts various types of values to their string representation
+// based on predefined formatting rules.
+func formatAnyToString(value any) string {
+	switch v := value.(type) {
+
+	// Tier 1: most common URL types
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	case bool:
+		return strconv.FormatBool(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case []string:
+		return strings.Join(v, ",")
+
+	// Tier 2: common stdlib types
+	case time.Time:
+		return v.Format(time.RFC3339)
+	case []byte:
+		return string(v)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+
+	// Tier 3: less common integers (signed)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int16:
+		return strconv.FormatInt(int64(v), 10)
+	case int8:
+		return strconv.FormatInt(int64(v), 10)
+
+	// Tier 4: less common integers (unsigned)
+	case uint64:
+		return strconv.FormatUint(v, 10)
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint:
+		return strconv.FormatUint(uint64(v), 10)
+
+	// Tier 5: rare types and fallbacks
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case fmt.Stringer:
+		return v.String()
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
