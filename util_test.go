@@ -199,7 +199,7 @@ func TestInMemoryJSONMarshalUnmarshal(t *testing.T) {
 		defer releaseBuffer(buf)
 		err := InMemoryJSONMarshal(buf, obj)
 		assertNotNil(t, err)
-		assertEqual(t, true, strings.Contains(err.Error(), "b0rk3d"))
+		assertTrue(t, strings.Contains(err.Error(), "b0rk3d"), "broken marshal json error")
 	})
 
 	t.Run("json decoder", func(t *testing.T) {
@@ -223,7 +223,8 @@ func TestInMemoryJSONMarshalUnmarshal(t *testing.T) {
 		cred := &credentials{}
 		err := InMemoryJSONUnmarshal(bytes.NewReader(byteData), cred)
 		assertNotNil(t, err)
-		assertEqual(t, true, strings.Contains(err.Error(), "invalid character ':' after top-level value"))
+		assertTrue(t, strings.Contains(err.Error(), "invalid character ':' after top-level value"),
+			"invalid json unmarshal error")
 	})
 }
 

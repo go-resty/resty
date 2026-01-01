@@ -934,5 +934,5 @@ func TestMiddlewareCoverage(t *testing.T) {
 	req1 := c.R()
 	req1.URL = "//invalid-url  .local"
 	err1 := createRawRequest(c, req1)
-	assertEqual(t, true, strings.Contains(err1.Error(), "invalid character"))
+	assertTrue(t, strings.Contains(err1.Error(), "invalid character"), "invalid URL error expected")
 }

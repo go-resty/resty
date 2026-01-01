@@ -160,8 +160,8 @@ func TestClientDigestAuthWithBodyQopAuthIntIoCopyError(t *testing.T) {
 		Post(ts.URL + conf.uri)
 
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), errCopyMsg))
-	assertEqual(t, 0, resp.StatusCode())
+	assertTrue(t, strings.Contains(err.Error(), errCopyMsg), "expected io copy error")
+	assertEqual(t, 0, resp.StatusCode(), "expected response status code to be zero on error")
 }
 
 func TestClientDigestAuthRoundTripError(t *testing.T) {
@@ -179,7 +179,7 @@ func TestClientDigestAuthRoundTripError(t *testing.T) {
 		Post(ts.URL + conf.uri)
 
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), "test req mock error"))
+	assertTrue(t, strings.Contains(err.Error(), "test req mock error"), "expected round trip error")
 }
 
 func TestClientDigestAuthWithBodyQopAuthIntGetBodyNil(t *testing.T) {
@@ -231,8 +231,9 @@ func TestClientDigestAuthWithGetBodyError(t *testing.T) {
 		Post(ts.URL + conf.uri)
 
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), "resty: digest: failed to get body for auth-int: get body test error"))
-	assertEqual(t, 0, resp.StatusCode())
+	assertTrue(t, strings.Contains(err.Error(), "resty: digest: failed to get body for auth-int: get body test error"),
+		"expected get body error")
+	assertEqual(t, 0, resp.StatusCode(), "expected response status code to be zero on error")
 }
 
 func TestClientDigestAuthWithGetBodyNilReadError(t *testing.T) {
@@ -257,8 +258,9 @@ func TestClientDigestAuthWithGetBodyNilReadError(t *testing.T) {
 		Post(ts.URL + conf.uri)
 
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), "resty: digest: failed to prepare body for auth-int: read error"))
-	assertEqual(t, 0, resp.StatusCode())
+	assertTrue(t, strings.Contains(err.Error(), "resty: digest: failed to prepare body for auth-int: read error"),
+		"expected read error")
+	assertEqual(t, 0, resp.StatusCode(), "expected response status code to be zero on error")
 }
 
 func TestClientDigestAuthWithNoBodyQopAuthInt(t *testing.T) {
@@ -310,6 +312,7 @@ func TestClientDigestAuthWithIncorrectNcValue(t *testing.T) {
 		Post(ts.URL + conf.uri)
 
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), `parsing "1234567890": value out of range`))
-	assertEqual(t, "", resp.Status())
+	assertTrue(t, strings.Contains(err.Error(), `parsing "1234567890": value out of range`),
+		"expected nc value out of range error")
+	assertEqual(t, "", resp.Status(), "expected empty response status on error")
 }

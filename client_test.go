@@ -122,7 +122,7 @@ func TestClientRedirectPolicy(t *testing.T) {
 		SetHeader("Name3", "Value3").
 		Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, true, err.Error() == "Get \"/redirect-21\": resty: stopped after 20 redirects")
+	assertTrue(t, err.Error() == "Get \"/redirect-21\": resty: stopped after 20 redirects")
 
 	redirects := res.RedirectHistory()
 	assertEqual(t, 20, len(redirects))
@@ -144,7 +144,7 @@ func TestClientTimeout(t *testing.T) {
 
 	c := dcnl().SetTimeout(200 * time.Millisecond)
 	_, err := c.R().Get(ts.URL + "/set-timeout-test")
-	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+	assertErrorIs(t, context.DeadlineExceeded, err)
 }
 
 func TestClientTimeoutWithinThreshold(t *testing.T) {
@@ -525,7 +525,7 @@ func TestClientSetTransport(t *testing.T) {
 	transportInUse, err := client.HTTPTransport()
 
 	assertNil(t, err)
-	assertEqual(t, true, transport == transportInUse)
+	assertTrue(t, transport == transportInUse, "HTTP Transport should be of same type")
 }
 
 func TestClientSetScheme(t *testing.T) {
@@ -533,7 +533,7 @@ func TestClientSetScheme(t *testing.T) {
 
 	client.SetScheme("http")
 
-	assertEqual(t, true, client.scheme == "http")
+	assertEqual(t, "http", client.scheme, "Scheme should be 'http'")
 }
 
 func TestClientSetCookieJar(t *testing.T) {
@@ -541,10 +541,10 @@ func TestClientSetCookieJar(t *testing.T) {
 	backupJar := client.httpClient.Jar
 
 	client.SetCookieJar(nil)
-	assertNil(t, client.httpClient.Jar)
+	assertNil(t, client.httpClient.Jar, "CookieJar should be nil")
 
 	client.SetCookieJar(backupJar)
-	assertEqual(t, true, client.httpClient.Jar == backupJar)
+	assertTrue(t, client.httpClient.Jar == backupJar, "CookieJar should be set back to original jar")
 }
 
 // This test methods exist for test coverage purpose
@@ -555,13 +555,13 @@ func TestClientSettingsCoverage(t *testing.T) {
 	assertNotNil(t, c.CookieJar())
 	assertNotNil(t, c.ContentTypeEncoders())
 	assertNotNil(t, c.ContentTypeDecoders())
-	assertEqual(t, false, c.IsDebug())
+	assertFalse(t, c.IsDebug())
 	assertEqual(t, math.MaxInt32, c.DebugBodyLimit())
 	assertNotNil(t, c.Logger())
 	assertEqual(t, 0, c.RetryCount())
 	assertEqual(t, time.Millisecond*100, c.RetryWaitTime())
 	assertEqual(t, time.Second*2, c.RetryMaxWaitTime())
-	assertEqual(t, false, c.IsTrace())
+	assertFalse(t, c.IsTrace())
 	assertEqual(t, 0, len(c.RetryConditions()))
 
 	authToken := "sample auth token value"
@@ -576,11 +576,11 @@ func TestClientSettingsCoverage(t *testing.T) {
 
 	c.DisableDebug()
 
-	assertEqual(t, true, c.IsRetryDefaultConditions())
+	assertTrue(t, c.IsRetryDefaultConditions())
 	c.DisableRetryDefaultConditions()
-	assertEqual(t, false, c.IsRetryDefaultConditions())
+	assertFalse(t, c.IsRetryDefaultConditions())
 	c.EnableRetryDefaultConditions()
-	assertEqual(t, true, c.IsRetryDefaultConditions())
+	assertTrue(t, c.IsRetryDefaultConditions())
 
 	nr := nopReader{}
 	n, err1 := nr.Read(nil)
@@ -646,7 +646,7 @@ func TestClientPreRequestMiddlewares(t *testing.T) {
 			b, _ := r.RawRequest.GetBody()
 			rb, _ := io.ReadAll(b)
 			c.Logger().Debugf("%s %v", string(rb), len(rb))
-			assertEqual(t, true, len(rb) >= 45)
+			assertTrue(t, len(rb) >= 45)
 		}
 		return nil
 	}
@@ -702,20 +702,20 @@ func TestClientAllowMethodGetPayload(t *testing.T) {
 	t.Run("method GET allow string payload at client level", func(t *testing.T) {
 		c := dcnl()
 		c.SetAllowMethodGetPayload(true)
-		assertEqual(t, true, c.AllowMethodGetPayload())
+		assertTrue(t, c.AllowMethodGetPayload())
 
 		payload := "test-payload"
 		resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
 
 		assertError(t, err)
-		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, payload, resp.String())
+		assertEqual(t, http.StatusOK, resp.StatusCode(), "Status code should be 200 OK")
+		assertEqual(t, payload, resp.String(), "Response payload should be same as request payload")
 	})
 
 	t.Run("method GET allow io.Reader payload at client level", func(t *testing.T) {
 		c := dcnl()
 		c.SetAllowMethodGetPayload(true)
-		assertEqual(t, true, c.AllowMethodGetPayload())
+		assertTrue(t, c.AllowMethodGetPayload())
 
 		payload := "test-payload"
 		body := bytes.NewReader([]byte(payload))
@@ -723,13 +723,13 @@ func TestClientAllowMethodGetPayload(t *testing.T) {
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, payload, resp.String())
+		assertEqual(t, payload, resp.String(), "Response payload should be same as request payload")
 	})
 
 	t.Run("method GET disallow payload at client level", func(t *testing.T) {
 		c := dcnl()
 		c.SetAllowMethodGetPayload(false)
-		assertEqual(t, false, c.AllowMethodGetPayload())
+		assertFalse(t, c.AllowMethodGetPayload())
 
 		payload := bytes.NewReader([]byte("test-payload"))
 		resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
@@ -748,7 +748,7 @@ func TestClientAllowMethodDeletePayload(t *testing.T) {
 		c := dcnl().SetBaseURL(ts.URL)
 
 		c.SetAllowMethodDeletePayload(true)
-		assertEqual(t, true, c.AllowMethodDeletePayload())
+		assertTrue(t, c.AllowMethodDeletePayload())
 
 		payload := "test-payload"
 		resp, err := c.R().SetBody(payload).Delete("/delete")
@@ -762,7 +762,7 @@ func TestClientAllowMethodDeletePayload(t *testing.T) {
 		c := dcnl().SetBaseURL(ts.URL)
 
 		c.SetAllowMethodDeletePayload(true)
-		assertEqual(t, true, c.AllowMethodDeletePayload())
+		assertTrue(t, c.AllowMethodDeletePayload())
 
 		payload := "test-payload"
 		body := bytes.NewReader([]byte(payload))
@@ -777,14 +777,14 @@ func TestClientAllowMethodDeletePayload(t *testing.T) {
 		c := dcnl().SetBaseURL(ts.URL)
 
 		c.SetAllowMethodDeletePayload(false)
-		assertEqual(t, false, c.AllowMethodDeletePayload())
+		assertFalse(t, c.AllowMethodDeletePayload())
 
 		payload := bytes.NewReader([]byte("test-payload"))
 		resp, err := c.R().SetBody(payload).Delete("/delete")
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, "", resp.String())
+		assertEqual(t, "", resp.String(), "Response payload should be empty")
 	})
 }
 
@@ -966,9 +966,9 @@ func TestClientLogCallbacks(t *testing.T) {
 
 	// Validating debug log updates
 	logInfo := lb.String()
-	assertEqual(t, true, strings.Contains(logInfo, "Bearer *******************************"))
-	assertEqual(t, true, strings.Contains(logInfo, "X-Debug-Response-Log"))
-	assertEqual(t, true, strings.Contains(logInfo, "Modified the response body content"))
+	assertTrue(t, strings.Contains(logInfo, "Bearer *******************************"))
+	assertTrue(t, strings.Contains(logInfo, "X-Debug-Response-Log"))
+	assertTrue(t, strings.Contains(logInfo, "Modified the response body content"))
 
 	// overwrite scenario
 	c.OnDebugLog(func(dl *DebugLog) {
@@ -980,7 +980,7 @@ func TestClientLogCallbacks(t *testing.T) {
 	assertNil(t, err)
 	assertNotNil(t, resp)
 	assertEqual(t, int64(66), resp.Size())
-	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func1 to=resty.dev/v3.TestClientLogCallbacks.func2"))
+	assertTrue(t, strings.Contains(lb.String(), "Overwriting an existing on-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func1 to=resty.dev/v3.TestClientLogCallbacks.func2"))
 }
 
 func TestDebugLogSimultaneously(t *testing.T) {
@@ -1181,7 +1181,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 			var errorHook1, errorHook2, successHook1, successHook2, panicHook1, panicHook2 int
 			defer func() {
 				if rec := recover(); rec != nil {
-					assertEqual(t, true, test.panics)
+					assertTrue(t, test.panics, "expected to panic")
 					assertEqual(t, 0, errorHook1)
 					assertEqual(t, 0, successHook1)
 					assertEqual(t, 1, panicHook1)
@@ -1512,7 +1512,7 @@ func TestClientOnClose(t *testing.T) {
 
 	err := c.Close()
 	assertNil(t, err)
-	assertEqual(t, true, hookExecuted)
+	assertTrue(t, hookExecuted, "OnClose hook should be executed")
 }
 
 func TestClientOnCloseMultipleHooks(t *testing.T) {
