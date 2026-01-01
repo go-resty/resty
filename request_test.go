@@ -1339,6 +1339,50 @@ func TestSetHeaderMultipleValue(t *testing.T) {
 	assertEqual(t, "Bearer xyz", r.Header.Get("authorization"))
 }
 
+func TestRequestSetHeaderAny(t *testing.T) {
+	r := dcnldr().
+		SetHeaderAny("X-Int-Value", 42).
+		SetHeaderAny("X-String-Value", "hello")
+
+	assertEqual(t, "42", r.Header.Get("X-Int-Value"))
+	assertEqual(t, "hello", r.Header.Get("X-String-Value"))
+}
+
+func TestRequestSetHeaderVerbatimAny(t *testing.T) {
+	r := dcnldr().
+		SetHeaderVerbatimAny("header-lowercase", 123)
+
+	//lint:ignore SA1008 valid one ignore this!
+	assertEqual(t, "123", strings.Join(r.Header["header-lowercase"], ""))
+}
+
+func TestRequestSetQueryParamAny(t *testing.T) {
+	r := dcnldr().
+		SetQueryParamAny("page", 5).
+		SetQueryParamAny("active", true)
+
+	assertEqual(t, "5", r.QueryParams.Get("page"))
+	assertEqual(t, "true", r.QueryParams.Get("active"))
+}
+
+func TestRequestSetPathParamAny(t *testing.T) {
+	r := dcnldr().
+		SetPathParamAny("userId", 42).
+		SetPathParamAny("name", "john doe")
+
+	assertEqual(t, "42", r.PathParams["userId"])
+	assertEqual(t, "john%20doe", r.PathParams["name"])
+}
+
+func TestRequestSetRawPathParamAny(t *testing.T) {
+	r := dcnldr().
+		SetRawPathParamAny("userId", 42).
+		SetRawPathParamAny("name", "john doe")
+
+	assertEqual(t, "42", r.PathParams["userId"])
+	assertEqual(t, "john doe", r.PathParams["name"])
+}
+
 func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
