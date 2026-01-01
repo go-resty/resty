@@ -660,8 +660,6 @@ func (c *Client) R() *Request {
 		debugLogCurlCmd:     c.debugLogCurlCmd,
 		unescapeQueryParams: c.unescapeQueryParams,
 		credentials:         c.credentials,
-		retryConditions:     slices.Clone(c.retryConditions),
-		retryHooks:          slices.Clone(c.retryHooks),
 	}
 
 	if c.ctx != nil {
@@ -1373,10 +1371,13 @@ func (c *Client) RetryConditions() []RetryConditionFunc {
 // The request will retry if any functions return `true`, otherwise return `false`.
 //
 // NOTE:
-//   - The default retry conditions are applied first.
-//   - The client-level retry conditions are applied to all requests.
-//   - The request-level retry conditions are executed first before the client-level
-//     retry conditions. See [Request.AddRetryConditions], [Request.SetRetryConditions]
+//   - Retry conditions are executed on each retry attempt.
+//   - Default retry conditions are executed first.
+//   - Client-level retry conditions are applied to all requests.
+//   - Request-level retry conditions are executed before client-level retry conditions.
+//     See [Request.AddRetryConditions], [Request.SetRetryConditions]
+//   - Once a retry condition returns true, the remaining retry conditions are not executed.
+//   - Retry conditions are executed in the order in which they are added.
 func (c *Client) AddRetryConditions(conditions ...RetryConditionFunc) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -1395,8 +1396,10 @@ func (c *Client) RetryHooks() []RetryHookFunc {
 // of hooks that will be executed on each retry.
 //
 // NOTE:
-//   - All the retry hooks are executed on request retry.
+//   - Retry hooks are executed on each retry attempt.
 //   - The request-level retry hooks are executed first before client-level hooks.
+//     See [Request.AddRetryHooks], [Request.SetRetryHooks]
+//   - Retry hooks are executed in the order in which they are added.
 func (c *Client) AddRetryHooks(hooks ...RetryHookFunc) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()

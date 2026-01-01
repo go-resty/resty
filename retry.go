@@ -35,6 +35,13 @@ type (
 	RetryDelayStrategyFunc func(*Response, error) (time.Duration, error)
 )
 
+// RetryConstantDelayStrategy returns a RetryDelayStrategyFunc that always returns the specified delay duration.
+func RetryConstantDelayStrategy(delay time.Duration) RetryDelayStrategyFunc {
+	return func(*Response, error) (time.Duration, error) {
+		return delay, nil
+	}
+}
+
 var (
 	regexErrTooManyRedirects = regexp.MustCompile(`stopped after \d+ redirects\z`)
 	regexErrScheme           = regexp.MustCompile("unsupported protocol scheme")
@@ -115,19 +122,12 @@ func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error
 		b.max = maxInt
 	}
 
-	var retryDelayStrategyFunc RetryDelayStrategyFunc
-	if c != nil {
-		retryDelayStrategyFunc = c.RetryDelayStrategy()
-	}
-	if res == nil || retryDelayStrategyFunc == nil {
+	if res == nil || res.Request.RetryDelayStrategy == nil {
 		return b.balanceMinMax(b.defaultDelayStrategy(attempt)), nil
 	}
 
-	delay, rsErr := retryDelayStrategyFunc(res, err)
-	if rsErr != nil {
-		return 0, rsErr
-	}
-	return b.balanceMinMax(delay), nil
+	// invoke custom retry delay strategy
+	return res.Request.RetryDelayStrategy(res, err)
 }
 
 // Return capped exponential backoff with jitter

@@ -450,7 +450,7 @@ func TestEventSourceCoverage(t *testing.T) {
 	err3 := es.Get()
 	assertEqual(t, true, strings.Contains(err3.Error(), `invalid URL escape "%20"`))
 
-	wrapResponse(nil)
+	wrapResponse(nil, nil)
 	trimHeader(2, nil)
 	parseEvent([]byte{})
 }

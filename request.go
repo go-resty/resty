@@ -79,29 +79,31 @@ type Request struct {
 	//	first attempt + retry count = total attempts
 	Attempt int
 
-	credentials         *credentials
-	isMultiPart         bool
-	isFormData          bool
-	isContentLengthSet  bool
-	contentLength       int64
-	jsonEscapeHTML      bool
-	ctx                 context.Context
-	ctxCancelFunc       context.CancelFunc
-	values              map[string]any
-	client              *Client
-	bodyBuf             *bytes.Buffer
-	trace               *clientTrace
-	log                 Logger
-	baseURL             string
-	multipartBoundary   string
-	multipartFields     []*MultipartField
-	retryConditions     []RetryConditionFunc
-	retryHooks          []RetryHookFunc
-	resultCurlCmd       string
-	generateCurlCmd     bool
-	debugLogCurlCmd     bool
-	unescapeQueryParams bool
-	multipartErrChan    chan error
+	credentials          *credentials
+	isMultiPart          bool
+	isFormData           bool
+	isContentLengthSet   bool
+	contentLength        int64
+	jsonEscapeHTML       bool
+	ctx                  context.Context
+	ctxCancelFunc        context.CancelFunc
+	values               map[string]any
+	client               *Client
+	bodyBuf              *bytes.Buffer
+	trace                *clientTrace
+	log                  Logger
+	baseURL              string
+	multipartBoundary    string
+	multipartFields      []*MultipartField
+	retryConditions      []RetryConditionFunc
+	isSetRetryConditions bool
+	retryHooks           []RetryHookFunc
+	isSetRetryHooks      bool
+	resultCurlCmd        string
+	generateCurlCmd      bool
+	debugLogCurlCmd      bool
+	unescapeQueryParams  bool
+	multipartErrChan     chan error
 }
 
 // SetMethod method used to set the HTTP verb for the request
@@ -969,10 +971,13 @@ func (r *Request) SetDebug(d bool) *Request {
 // The request will retry if any functions return `true`, otherwise return `false`.
 //
 // NOTE:
-//   - The default retry conditions are applied first.
-//   - The client-level retry conditions are applied to all requests.
-//   - The request-level retry conditions are executed first before the client-level
-//     retry conditions. See [Request.SetRetryConditions]
+//   - Retry conditions are executed on each retry attempt.
+//   - Default retry conditions are executed first.
+//   - Client-level retry conditions are applied to all requests.
+//   - Request-level retry conditions are executed before client-level retry conditions.
+//     See [Client.AddRetryConditions], [Request.SetRetryConditions]
+//   - Once a retry condition returns true, the remaining retry conditions are not executed.
+//   - Retry conditions are executed in the order in which they are added.
 func (r *Request) AddRetryConditions(conditions ...RetryConditionFunc) *Request {
 	r.retryConditions = append(r.retryConditions, conditions...)
 	return r
@@ -981,16 +986,23 @@ func (r *Request) AddRetryConditions(conditions ...RetryConditionFunc) *Request 
 // SetRetryConditions method overwrites the retry conditions in the request.
 // These retry conditions are executed to determine if the request can be retried.
 // The request will retry if any function returns `true`, otherwise return `false`.
+//
+// NOTE:
+//   - It overwrites the existing retry conditions.
+//   - See [Request.AddRetryConditions] method for more details.
 func (r *Request) SetRetryConditions(conditions ...RetryConditionFunc) *Request {
 	r.retryConditions = conditions
+	r.isSetRetryConditions = true
 	return r
 }
 
 // AddRetryHooks method adds one or more side-effecting retry hooks in the request.
 //
 // NOTE:
-//   - All the retry hooks are executed on each request retry.
-//   - The request-level retry hooks are executed first before the client-level hooks.
+//   - Retry hooks are executed on each retry attempt.
+//   - The request-level retry hooks are executed first before client-level hooks.
+//     See [Client.AddRetryHooks]
+//   - Retry hooks are executed in the order in which they are added.
 func (r *Request) AddRetryHooks(hooks ...RetryHookFunc) *Request {
 	r.retryHooks = append(r.retryHooks, hooks...)
 	return r
@@ -999,9 +1011,11 @@ func (r *Request) AddRetryHooks(hooks ...RetryHookFunc) *Request {
 // SetRetryHooks method overwrites side-effecting retry hooks in the request.
 //
 // NOTE:
-//   - All the retry hooks are executed on each request retry.
+//   - It overwrites the existing retry hooks.
+//   - See [Request.AddRetryHooks] method for more details.
 func (r *Request) SetRetryHooks(hooks ...RetryHookFunc) *Request {
 	r.retryHooks = hooks
+	r.isSetRetryHooks = true
 	return r
 }
 
@@ -1398,6 +1412,16 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		r.RetryTraceID = newGUID()
 	}
 
+	retryConditions := append(r.retryConditions, r.client.retryConditions...)
+	if r.isSetRetryConditions {
+		retryConditions = r.retryConditions
+	}
+
+	retryHooks := append(r.retryHooks, r.client.retryHooks...)
+	if r.isSetRetryHooks {
+		retryHooks = r.retryHooks
+	}
+
 	isInvalidRequestErr := false
 	// first attempt + retry count = total attempts
 	for i := 0; i <= r.RetryCount; i++ {
@@ -1440,8 +1464,8 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			// apply user-defined retry conditions if default one
 			// is still false
 			if !needsRetry && res != nil {
-				// user defined retry conditions
-				for _, retryCondition := range r.retryConditions {
+				// run user-defined retry conditions
+				for _, retryCondition := range retryConditions {
 					if needsRetry = retryCondition(res, err); needsRetry {
 						break
 					}
@@ -1460,7 +1484,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			}
 
 			// run user-defined retry hooks
-			for _, retryHookFunc := range r.retryHooks {
+			for _, retryHookFunc := range retryHooks {
 				retryHookFunc(res, err)
 			}
 
