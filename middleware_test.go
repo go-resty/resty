@@ -13,11 +13,13 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -926,6 +928,135 @@ func TestRequestURL_GH797(t *testing.T) {
 		Get("/unescape-query-params")
 	assertError(t, err)
 	assertEqual(t, "query params looks good", resp.String())
+}
+
+func TestMiddleware_multipartWriteFormData(t *testing.T) {
+	c := dcnl()
+
+	oldFunc := multipartWriteFormData
+	errMsg := "test write form data error"
+	multipartWriteFormData = func(*multipart.Writer, *Request) error {
+		return errors.New(errMsg)
+	}
+	t.Cleanup(func() {
+		multipartWriteFormData = oldFunc
+	})
+
+	req := &Request{
+		Header:      http.Header{},
+		isMultiPart: true,
+		multipartFields: []*MultipartField{
+			{
+				Name:   "field1",
+				Values: []string{"field1value1", "field1value2"},
+			},
+		},
+	}
+	err := handleMultipart(c, req)
+	assertNil(t, err)
+
+	err = <-req.multipartErrChan
+	assertNotNil(t, err)
+	assertEqual(t, errMsg, err.Error())
+}
+
+func TestMiddleware_multipartWriteField(t *testing.T) {
+	c := dcnl()
+
+	oldFunc := multipartWriteField
+	errMsg := "test write field error"
+	multipartWriteField = func(w *multipart.Writer, name, value string) error {
+		return errors.New(errMsg)
+	}
+	t.Cleanup(func() {
+		multipartWriteField = oldFunc
+	})
+
+	req := &Request{
+		mu:          new(sync.Mutex),
+		Header:      http.Header{},
+		isMultiPart: true,
+		multipartFields: []*MultipartField{
+			{
+				Name:   "field1",
+				Values: []string{"field1value1", "field1value2"},
+			},
+		},
+	}
+	err := handleMultipart(c, req)
+	assertNil(t, err)
+
+	err = <-req.multipartErrChan
+	assertNotNil(t, err)
+	assertEqual(t, errMsg, err.Error())
+}
+
+func TestMiddleware_multipartCreatePart(t *testing.T) {
+	c := dcnl()
+
+	oldFunc := multipartCreatePart
+	errMsg := "test create part error"
+	multipartCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
+		return nil, errors.New(errMsg)
+	}
+	t.Cleanup(func() {
+		multipartCreatePart = oldFunc
+	})
+
+	jsonStr1 := `{"input": {"name": "Uploaded document 1", "_filename" : ["file1.txt"]}}`
+	req := &Request{
+		mu:          new(sync.Mutex),
+		Header:      http.Header{},
+		isMultiPart: true,
+		multipartFields: []*MultipartField{
+			{
+				Name:        "uploadManifest1",
+				FileName:    "upload-file-1.json",
+				ContentType: "application/json",
+				Reader:      bytes.NewBufferString(jsonStr1),
+			},
+		},
+	}
+	err := handleMultipart(c, req)
+	assertNil(t, err)
+
+	err = <-req.multipartErrChan
+	assertNotNil(t, err)
+	assertEqual(t, errMsg, err.Error())
+}
+
+func TestMiddleware_multipartCreatePart_WriteError(t *testing.T) {
+	c := dcnl()
+
+	oldFunc := multipartCreatePart
+	multipartCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
+		return &mpWriterError{}, nil
+	}
+	t.Cleanup(func() {
+		multipartCreatePart = oldFunc
+	})
+
+	jsonStr1 := `{"input": {"name": "Uploaded document 1", "_filename" : ["file1.txt"]}}`
+	req := &Request{
+		mu:          new(sync.Mutex),
+		Header:      http.Header{},
+		isMultiPart: true,
+		multipartFields: []*MultipartField{
+			{
+				Name:        "uploadManifest1",
+				FileName:    "upload-file-1.json",
+				ContentType: "application/json",
+				Reader:      bytes.NewBufferString(jsonStr1),
+				tempBuf:     []byte("test data"),
+			},
+		},
+	}
+	err := handleMultipart(c, req)
+	assertNil(t, err)
+
+	err = <-req.multipartErrChan
+	assertNotNil(t, err)
+	assertEqual(t, "multipart write error", err.Error())
 }
 
 func TestMiddlewareCoverage(t *testing.T) {

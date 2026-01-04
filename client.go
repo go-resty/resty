@@ -710,6 +710,7 @@ func (c *Client) R() *Request {
 		AllowNonIdempotentRetry:    c.allowNonIdempotentRetry,
 		HeaderAuthorizationKey:     c.headerAuthorizationKey,
 
+		mu:                  new(sync.Mutex),
 		client:              c,
 		baseURL:             c.baseURL,
 		multipartFields:     make([]*MultipartField, 0),
@@ -2372,17 +2373,23 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	req.Time = time.Now()
 	resp, err := c.Client().Do(req.withTimeout())
+	// Cancel multipart context for io.Copy to stop reading/writing further
+	if req.isMultiPart && req.multipartCancelFunc != nil {
+		req.multipartCancelFunc()
+	}
 
 	response := &Response{Request: req, RawResponse: resp}
 	response.setReceivedAt()
 	if err != nil {
 		return response, err
 	}
-	if req.multipartErrChan != nil {
-		if err = <-req.multipartErrChan; err != nil {
-			return response, err
+	if req.isMultiPart && req.multipartErrChan != nil {
+		// read all multipart errors from channel
+		for err = range req.multipartErrChan {
+			response.CascadeError = wrapErrors(err, response.CascadeError)
 		}
 	}
+
 	if resp != nil {
 		if c.circuitBreaker != nil {
 			c.circuitBreaker.applyPolicies(resp)
@@ -2390,18 +2397,18 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 		response.Body = resp.Body
 		if err = response.wrapContentDecompresser(); err != nil {
-			return response, err
+			return response, response.wrapError(err, false)
 		}
 
 		response.wrapLimitReadCloser()
-	}
 
-	if !req.DoNotParseResponse {
-		if req.ResponseBodyUnlimitedReads || req.Debug {
-			response.wrapCopyReadCloser()
+		if !req.DoNotParseResponse {
+			if req.ResponseBodyUnlimitedReads || req.Debug {
+				response.wrapCopyReadCloser()
 
-			if err = response.readAll(); err != nil {
-				return response, err
+				if err = response.readAll(); err != nil {
+					return response, response.wrapError(err, false)
+				}
 			}
 		}
 	}
@@ -2415,8 +2422,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	err = response.CascadeError
-	return response, err
+	return response, response.wrapError(nil, false)
 }
 
 // getting TLS client config if not exists then create one
