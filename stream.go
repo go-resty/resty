@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -246,3 +247,16 @@ type nopReader struct{}
 
 func (nopReader) Read([]byte) (int, error) { return 0, io.EOF }
 func (nopReader) ReadByte() (byte, error)  { return 0, io.EOF }
+
+type gracefulStopReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (gsr *gracefulStopReader) Read(p []byte) (n int, err error) {
+	if err := gsr.ctx.Err(); err != nil {
+		// Return io.EOF to stop io.Copy gracefully without an error.
+		return 0, io.EOF
+	}
+	return gsr.r.Read(p)
+}

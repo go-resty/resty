@@ -335,3 +335,13 @@ func (r *Response) wrapContentDecompresser() error {
 
 	return nil
 }
+
+func (r *Response) wrapError(err error, preserve bool) error {
+	r.CascadeError = wrapErrors(err, r.CascadeError)
+	if preserve {
+		return nil
+	}
+	e := r.CascadeError
+	r.CascadeError = nil
+	return e
+}

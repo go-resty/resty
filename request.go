@@ -14,13 +14,13 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -79,6 +79,7 @@ type Request struct {
 	//	first attempt + retry count = total attempts
 	Attempt int
 
+	mu                   *sync.Mutex
 	credentials          *credentials
 	isMultiPart          bool
 	isFormData           bool
@@ -104,6 +105,7 @@ type Request struct {
 	debugLogCurlCmd      bool
 	unescapeQueryParams  bool
 	multipartErrChan     chan error
+	multipartCancelFunc  context.CancelFunc
 }
 
 // SetMethod method used to set the HTTP verb for the request
@@ -124,6 +126,8 @@ func (r *Request) SetURL(url string) *Request {
 // The returned context is always non-nil; it defaults to the
 // background context.
 func (r *Request) Context() context.Context {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.ctx == nil {
 		return context.Background()
 	}
@@ -139,6 +143,8 @@ func (r *Request) Context() context.Context {
 //
 // See [Request.WithContext], [Request.Clone]
 func (r *Request) SetContext(ctx context.Context) *Request {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.ctx = ctx
 	return r
 }
@@ -1826,17 +1832,6 @@ func (r *Request) initTraceIfEnabled() {
 func (r *Request) isHeaderExists(k string) bool {
 	_, f := r.Header[k]
 	return f
-}
-
-func (r *Request) writeFormData(w *multipart.Writer) error {
-	for k, v := range r.FormData {
-		for _, iv := range v {
-			if err := w.WriteField(k, iv); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func (r *Request) isPayloadSupported() bool {

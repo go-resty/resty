@@ -7,6 +7,7 @@ package resty
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"mime"
@@ -238,7 +239,7 @@ func createRawRequest(c *Client, r *Request) (err error) {
 	}
 
 	// get the context reference back from underlying RawRequest
-	r.ctx = r.RawRequest.Context()
+	r.SetContext(r.RawRequest.Context())
 
 	// Assign close connection option
 	r.RawRequest.Close = r.CloseConnection
@@ -289,6 +290,47 @@ func addCredentials(c *Client, r *Request) error {
 	return nil
 }
 
+var multipartWriteField = func(w *multipart.Writer, name, value string) error {
+	return w.WriteField(name, value)
+}
+
+var multipartWriteFormData = func(w *multipart.Writer, r *Request) error {
+	for k, v := range r.FormData {
+		for _, iv := range v {
+			if err := multipartWriteField(w, k, iv); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+var multipartCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
+	return w.CreatePart(h)
+}
+
+var multipartSetBoundary = func(w *multipart.Writer, r *Request) error {
+	if isStringEmpty(r.multipartBoundary) {
+		return nil
+	}
+	return w.SetBoundary(r.multipartBoundary)
+}
+
+func handleMultipartFormData(r *Request) error {
+	r.bodyBuf = acquireBuffer()
+	mw := multipart.NewWriter(r.bodyBuf)
+	defer mw.Close()
+
+	// set custom multipart boundary if exists
+	if err := multipartSetBoundary(mw, r); err != nil {
+		return err
+	}
+
+	r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
+
+	return multipartWriteFormData(mw, r)
+}
+
 func handleMultipart(c *Client, r *Request) error {
 	for k, v := range c.FormData() {
 		if _, ok := r.FormData[k]; ok {
@@ -297,97 +339,89 @@ func handleMultipart(c *Client, r *Request) error {
 		r.FormData[k] = v[:]
 	}
 
-	mfLen := len(r.multipartFields)
-	if mfLen == 0 {
-		r.bodyBuf = acquireBuffer()
-		mw := multipart.NewWriter(r.bodyBuf)
-
-		// set boundary if it is provided by the user
-		if !isStringEmpty(r.multipartBoundary) {
-			if err := mw.SetBoundary(r.multipartBoundary); err != nil {
-				return err
-			}
-		}
-
-		if err := r.writeFormData(mw); err != nil {
-			return err
-		}
-
-		r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
-		closeq(mw)
-
-		return nil
+	if len(r.multipartFields) == 0 {
+		return handleMultipartFormData(r)
 	}
 
-	// multipart streaming
-	bodyReader, bodyWriter := io.Pipe()
-	mw := multipart.NewWriter(bodyWriter)
-	r.Body = bodyReader
-	r.multipartErrChan = make(chan error, 1)
-
-	// set boundary if it is provided by the user
-	if !isStringEmpty(r.multipartBoundary) {
-		if err := mw.SetBoundary(r.multipartBoundary); err != nil {
-			return err
-		}
-	}
-
-	go func() {
-		defer close(r.multipartErrChan)
-		if err := createMultipart(mw, r); err != nil {
-			r.multipartErrChan <- err
-		}
-		closeq(mw)
-		closeq(bodyWriter)
-	}()
-
-	r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
-	return nil
-}
-
-var mpCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
-	return w.CreatePart(h)
-}
-
-func createMultipart(w *multipart.Writer, r *Request) error {
-	if err := r.writeFormData(w); err != nil {
-		return err
-	}
-
+	// pre-process multipart fields to catch possible errors
 	for _, mf := range r.multipartFields {
-		if len(mf.Values) > 0 {
-			for _, v := range mf.Values {
-				w.WriteField(mf.Name, v)
-			}
+		if mf.isValues() {
 			continue
 		}
 
-		if err := mf.openFileIfRequired(); err != nil {
+		if err := mf.openFile(); err != nil {
 			return err
 		}
 
-		p := make([]byte, 512)
-		size, err := mf.Reader.Read(p)
-		if err != nil && err != io.EOF {
-			return err
-		}
-		// auto detect content type if empty
-		if isStringEmpty(mf.ContentType) {
-			mf.ContentType = http.DetectContentType(p[:size])
-		}
-
-		partWriter, err := mpCreatePart(w, mf.createHeader())
-		if err != nil {
-			return err
-		}
-
-		partWriter = mf.wrapProgressCallbackIfPresent(partWriter)
-		partWriter.Write(p[:size])
-
-		if _, err = ioCopy(partWriter, mf.Reader); err != nil {
+		if err := mf.detectContentType(); err != nil {
 			return err
 		}
 	}
+
+	// multipart streaming
+	br, bw := io.Pipe()
+	mw := multipart.NewWriter(bw)
+	r.Body = br
+
+	// set custom multipart boundary if exists
+	if err := multipartSetBoundary(mw, r); err != nil {
+		closeq(bw)
+		return err
+	}
+
+	r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
+
+	r.multipartErrChan = make(chan error, 1)
+	go func() {
+		defer close(r.multipartErrChan)
+		defer func() {
+			if err := mw.Close(); err != nil {
+				r.multipartErrChan <- err
+			}
+			if err := bw.Close(); err != nil {
+				r.multipartErrChan <- err
+			}
+		}()
+
+		if err := multipartWriteFormData(mw, r); err != nil {
+			r.multipartErrChan <- err
+			return
+		}
+
+		ctx, cancel := context.WithCancel(r.Context())
+		r.multipartCancelFunc = cancel
+		for _, mf := range r.multipartFields {
+			if mf.isValues() {
+				for _, v := range mf.Values {
+					if err := multipartWriteField(mw, mf.Name, v); err != nil {
+						r.multipartErrChan <- err
+						return
+					}
+				}
+				continue
+			}
+
+			partWriter, err := multipartCreatePart(mw, mf.createHeader())
+			if err != nil {
+				r.multipartErrChan <- err
+				return
+			}
+
+			partWriter = mf.wrapProgressCallbackIfPresent(partWriter)
+			if len(mf.tempBuf) > 0 {
+				if _, err = partWriter.Write(mf.tempBuf); err != nil {
+					r.multipartErrChan <- err
+					return
+				}
+			}
+
+			reader := &gracefulStopReader{ctx: ctx, r: mf.Reader}
+			if _, err = ioCopy(partWriter, reader); err != nil {
+				r.multipartErrChan <- err
+				return
+			}
+		}
+	}()
 
 	return nil
 }
@@ -482,7 +516,8 @@ func handleRequestBody(c *Client, r *Request) error {
 // based on registered HTTP response `Content-Type` decoder, see [Client.AddContentTypeDecoder];
 // if [Request.SetResult], [Request.SetResultError], or [Client.SetResultError] is used
 func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
-	if res.CascadeError != nil || res.Request.DoNotParseResponse {
+	if (res.CascadeError != nil && (res.Request.isMultiPart && res.StatusCode() == 0)) ||
+		res.Request.DoNotParseResponse {
 		return // move on
 	}
 
