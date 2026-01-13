@@ -99,12 +99,13 @@ func (ht *hedgingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 			})
 
 			if !won && resp != nil && resp.Body != nil {
-				closeq(resp.Body)
+				drainReadCloser(resp.Body)
 			}
 		}()
 	}
 
 	res := <-resultCh
+	close(resultCh)
 	return res.resp, res.err
 }
 

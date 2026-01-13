@@ -22,26 +22,28 @@ func createHedgingTestServer(t *testing.T, attemptCount *int32, r1, r2 int32) *h
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
 
-		if r1 == 0 {
-			r1 = 200
+		delay1 := r1
+		if delay1 == 0 {
+			delay1 = 200
 		}
 
-		if r2 == 0 {
-			r2 = 50
+		delay2 := r2
+		if delay2 == 0 {
+			delay2 = 50
 		}
 
 		switch r.URL.Path {
 		case "/", "/hedging-slow-first":
 			w.Header().Set("X-Attempt", fmt.Sprintf("%d", attempt))
 			if attempt == 1 {
-				time.Sleep(time.Duration(rand.Int31n(r1)) * time.Millisecond)
+				time.Sleep(time.Duration(rand.Int31n(delay1)) * time.Millisecond)
 			} else {
-				time.Sleep(time.Duration(rand.Int31n(r2)) * time.Millisecond)
+				time.Sleep(time.Duration(rand.Int31n(delay2)) * time.Millisecond)
 			}
 			_, _ = fmt.Fprintf(w, "Attempt %d", attempt)
 		case "/hedging-slow-all":
 			w.Header().Set("X-Attempt", fmt.Sprintf("%d", attempt))
-			time.Sleep(time.Duration(rand.Int31n(r1)) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Int31n(delay1)) * time.Millisecond)
 			_, _ = fmt.Fprintf(w, "Attempt %d", attempt)
 		}
 	})
@@ -59,8 +61,9 @@ func TestHedgingBasic(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	if attemptCount < 2 {
-		t.Errorf("Expected at least 2 requests, got %d", attemptCount)
+	count := atomic.LoadInt32(&attemptCount)
+	if count < 2 {
+		t.Errorf("Expected at least 2 requests, got %d", count)
 	}
 }
 
@@ -97,7 +100,7 @@ func TestHedgingFirstWins(t *testing.T) {
 		t.Errorf("Expected second request to win, got attempt %d", winner)
 	}
 
-	totalAttempts := attemptCount
+	totalAttempts := atomic.LoadInt32(&attemptCount)
 	if totalAttempts < 2 {
 		t.Errorf("Expected at least 2 hedged requests, got %d", totalAttempts)
 	}
@@ -170,7 +173,7 @@ func TestHedgingReadOnlyMethodsOnly(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.method, func(t *testing.T) {
-			attemptCount = 0
+			atomic.StoreInt32(&attemptCount, 0)
 
 			resp, err := tc.requestFunc(c, ts.URL+"/")
 			assertError(t, err)
@@ -178,13 +181,14 @@ func TestHedgingReadOnlyMethodsOnly(t *testing.T) {
 
 			time.Sleep(100 * time.Millisecond)
 
+			count := atomic.LoadInt32(&attemptCount)
 			if tc.expectHedging {
-				if attemptCount < 2 {
-					t.Logf("%s: Expected hedging (multiple requests), got %d request(s)", tc.method, attemptCount)
+				if count < 2 {
+					t.Logf("%s: Expected hedging (multiple requests), got %d request(s)", tc.method, count)
 				}
 			} else {
-				if attemptCount != 1 {
-					t.Errorf("%s: Expected no hedging (1 request), got %d request(s)", tc.method, attemptCount)
+				if count != 1 {
+					t.Errorf("%s: Expected no hedging (1 request), got %d request(s)", tc.method, count)
 				}
 			}
 		})
@@ -208,7 +212,7 @@ func TestHedgingRateLimit(t *testing.T) {
 	duration := time.Since(start)
 
 	if duration < 200*time.Millisecond {
-		t.Logf("Rate limiting may have limited hedged requests. Duration: %v, Attempts: %d", duration, attemptCount)
+		t.Logf("Rate limiting may have limited hedged requests. Duration: %v, Attempts: %d", duration, atomic.LoadInt32(&attemptCount))
 	}
 }
 
@@ -247,14 +251,14 @@ func TestHedgingDisable(t *testing.T) {
 	c.DisableHedging()
 	assertEqual(t, false, c.IsHedgingEnabled())
 
-	attemptCount = 0
+	atomic.StoreInt32(&attemptCount, 0)
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
 	time.Sleep(100 * time.Millisecond)
 
-	assertEqual(t, int32(1), attemptCount)
+	assertEqual(t, int32(1), atomic.LoadInt32(&attemptCount))
 }
 
 func TestHedgingContextCancellation(t *testing.T) {
@@ -335,8 +339,9 @@ func TestHedgingWithCustomTransport(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	if attemptCount < 2 {
-		t.Errorf("Expected hedging with custom transport, got %d request(s)", attemptCount)
+	count := atomic.LoadInt32(&attemptCount)
+	if count < 2 {
+		t.Errorf("Expected hedging with custom transport, got %d request(s)", count)
 	}
 
 	c.DisableHedging()
@@ -363,5 +368,185 @@ func TestHedgingSingleRequest(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	assertEqual(t, int32(1), attemptCount)
+	assertEqual(t, int32(1), atomic.LoadInt32(&attemptCount))
+}
+
+func TestHedgingSettersWhenDisabled(t *testing.T) {
+	c := dcnl()
+
+	// Verify hedging is not enabled
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	// Test setters when hedging is disabled - they should log errors but not panic
+	c.SetHedgingDelay(100 * time.Millisecond)
+	c.SetHedgingUpTo(5)
+	c.SetHedgingMaxPerSecond(20.0)
+	c.SetHedgingAllowNonReadOnly(true)
+
+	// Verify hedging is still not enabled
+	assertEqual(t, false, c.IsHedgingEnabled())
+}
+
+func TestHedgingGettersWhenDisabled(t *testing.T) {
+	c := dcnl()
+
+	// Verify hedging is not enabled
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	// Test getters when hedging is disabled - they should return defaults
+	assertEqual(t, time.Duration(0), c.HedgingDelay())
+	assertEqual(t, 0, c.HedgingUpTo())
+	assertEqual(t, 0.0, c.HedgingMaxPerSecond())
+	assertEqual(t, false, c.IsHedgingAllowNonReadOnly())
+}
+
+func TestHedgingAllowNonReadOnly(t *testing.T) {
+	var attemptCount int32
+
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
+	defer ts.Close()
+
+	c := dcnl()
+	c.EnableHedging(20*time.Millisecond, 3, 0)
+
+	// By default, non-read-only methods should not be hedged
+	assertEqual(t, false, c.IsHedgingAllowNonReadOnly())
+
+	// Test POST without allowing non-read-only
+	atomic.StoreInt32(&attemptCount, 0)
+	resp, err := c.R().Post(ts.URL + "/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	time.Sleep(100 * time.Millisecond)
+	count := atomic.LoadInt32(&attemptCount)
+	if count != 1 {
+		t.Errorf("Expected no hedging for POST without allow flag, got %d request(s)", count)
+	}
+
+	// Enable non-read-only methods
+	c.SetHedgingAllowNonReadOnly(true)
+	assertEqual(t, true, c.IsHedgingAllowNonReadOnly())
+
+	// Test POST with allowing non-read-only
+	atomic.StoreInt32(&attemptCount, 0)
+	resp, err = c.R().Post(ts.URL + "/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	time.Sleep(100 * time.Millisecond)
+	count = atomic.LoadInt32(&attemptCount)
+	if count < 2 {
+		t.Errorf("Expected hedging for POST with allow flag, got %d request(s)", count)
+	}
+}
+
+func TestHedgingWithNilTransport(t *testing.T) {
+	var attemptCount int32
+
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
+	defer ts.Close()
+
+	// Create client with nil transport
+	c := NewWithClient(&http.Client{Transport: nil})
+
+	c.EnableHedging(20*time.Millisecond, 3, 0)
+
+	resp, err := c.R().Get(ts.URL + "/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	time.Sleep(100 * time.Millisecond)
+
+	count := atomic.LoadInt32(&attemptCount)
+	if count < 2 {
+		t.Errorf("Expected hedging with nil transport, got %d request(s)", count)
+	}
+}
+
+func TestHedgingEnableMultipleTimes(t *testing.T) {
+	var attemptCount int32
+
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
+	defer ts.Close()
+
+	c := dcnl()
+
+	// Enable hedging first time
+	c.EnableHedging(20*time.Millisecond, 3, 0)
+	assertEqual(t, true, c.IsHedgingEnabled())
+
+	// Enable hedging again without disabling - should handle already wrapped transport
+	c.EnableHedging(30*time.Millisecond, 5, 10.0)
+	assertEqual(t, true, c.IsHedgingEnabled())
+	assertEqual(t, 30*time.Millisecond, c.HedgingDelay())
+	assertEqual(t, 5, c.HedgingUpTo())
+	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
+
+	// Verify hedging still works
+	resp, err := c.R().Get(ts.URL + "/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	time.Sleep(100 * time.Millisecond)
+
+	count := atomic.LoadInt32(&attemptCount)
+	if count < 2 {
+		t.Errorf("Expected hedging after re-enabling, got %d request(s)", count)
+	}
+}
+
+func TestHedgingWrapWithDisabledHedging(t *testing.T) {
+	c := dcnl()
+
+	// Enable and then disable hedging
+	c.EnableHedging(20*time.Millisecond, 3, 0)
+	c.DisableHedging()
+
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	// Verify transport is not a hedgingTransport
+	_, ok := c.httpClient.Transport.(*hedgingTransport)
+	if ok {
+		t.Error("Transport should not be hedgingTransport after DisableHedging")
+	}
+
+	// Now try SetHedgingAllowNonReadOnly when hedging is disabled
+	// This should trigger the error path and NOT call wrapTransportWithHedging
+	c.SetHedgingAllowNonReadOnly(true)
+	assertEqual(t, false, c.IsHedgingEnabled())
+}
+
+func TestHedgingWrapAlreadyWrapped(t *testing.T) {
+	var attemptCount int32
+
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
+	defer ts.Close()
+
+	c := dcnl()
+
+	// Enable hedging first time - wraps transport
+	c.EnableHedging(20*time.Millisecond, 3, 0)
+
+	// Get the current transport (should be hedgingTransport)
+	_, ok := c.httpClient.Transport.(*hedgingTransport)
+	if !ok {
+		t.Error("Transport should be hedgingTransport after EnableHedging")
+	}
+
+	// Manually re-enable hedging without disabling first
+	// This should detect transport is already hedgingTransport and return early (line 1604)
+	c.EnableHedging(30*time.Millisecond, 5, 10.0)
+
+	// Verify it still works
+	resp, err := c.R().Get(ts.URL + "/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	time.Sleep(100 * time.Millisecond)
+
+	count := atomic.LoadInt32(&attemptCount)
+	if count < 2 {
+		t.Errorf("Expected hedging to still work, got %d request(s)", count)
+	}
 }

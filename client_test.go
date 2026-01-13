@@ -1589,6 +1589,19 @@ func TestClientHedgingDisable(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
+func TestClientHedgingNil(t *testing.T) {
+	c := dcnl()
+	c.hedging = nil
+	c.wrapTransportWithHedging()
+
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	_, ok := c.httpClient.Transport.(*hedgingTransport)
+	if ok {
+		t.Error("Transport shouldn't be hedgingTransport when hedging is nil")
+	}
+}
+
 func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	c := dcnl()
 

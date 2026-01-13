@@ -1264,7 +1264,6 @@ func (c *Client) RetryCount() int {
 func (c *Client) SetRetryCount(count int) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-
 	c.retryCount = count
 	return c
 }
@@ -1443,13 +1442,11 @@ func (c *Client) isHedgingEnabled() bool {
 func (c *Client) SetHedgingDelay(delay time.Duration) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-
-	if !c.isHedgingEnabled() {
-		c.log.Errorf("SetHedgingDelay: %v", ErrHedgingDisabled)
+	if c.isHedgingEnabled() {
+		c.hedging.delay = delay
 		return c
 	}
-
-	c.hedging.delay = delay
+	c.log.Errorf("SetHedgingDelay: %v", ErrHedgingDisabled)
 	return c
 }
 
@@ -1457,23 +1454,21 @@ func (c *Client) SetHedgingDelay(delay time.Duration) *Client {
 func (c *Client) HedgingDelay() time.Duration {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if !c.isHedgingEnabled() {
-		return hedgingDefaultDelay
+	if c.isHedgingEnabled() {
+		return c.hedging.delay
 	}
-	return c.hedging.delay
+	return hedgingDefaultDelay
 }
 
 // SetHedgingUpTo method sets maximum concurrent hedged requests.
 func (c *Client) SetHedgingUpTo(upTo int) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-
-	if !c.isHedgingEnabled() {
-		c.log.Errorf("SetHedgingUpTo: %v", ErrHedgingDisabled)
+	if c.isHedgingEnabled() {
+		c.hedging.upTo = upTo
 		return c
 	}
-
-	c.hedging.upTo = upTo
+	c.log.Errorf("SetHedgingUpTo: %v", ErrHedgingDisabled)
 	return c
 }
 
@@ -1481,23 +1476,21 @@ func (c *Client) SetHedgingUpTo(upTo int) *Client {
 func (c *Client) HedgingUpTo() int {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if !c.isHedgingEnabled() {
-		return hedgingDefaultUpTo
+	if c.isHedgingEnabled() {
+		return c.hedging.upTo
 	}
-	return c.hedging.upTo
+	return hedgingDefaultUpTo
 }
 
 // SetHedgingMaxPerSecond method sets rate limit for hedged requests.
 func (c *Client) SetHedgingMaxPerSecond(maxPerSecond float64) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-
-	if !c.isHedgingEnabled() {
-		c.log.Errorf("SetHedgingMaxPerSecond: %v", ErrHedgingDisabled)
+	if c.isHedgingEnabled() {
+		c.hedging.maxPerSecond = maxPerSecond
 		return c
 	}
-
-	c.hedging.maxPerSecond = maxPerSecond
+	c.log.Errorf("SetHedgingMaxPerSecond: %v", ErrHedgingDisabled)
 	return c
 }
 
@@ -1505,30 +1498,28 @@ func (c *Client) SetHedgingMaxPerSecond(maxPerSecond float64) *Client {
 func (c *Client) HedgingMaxPerSecond() float64 {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if !c.isHedgingEnabled() {
-		return hedgingDefaultMaxPerSecond
+	if c.isHedgingEnabled() {
+		return c.hedging.maxPerSecond
 	}
-	return c.hedging.maxPerSecond
+	return hedgingDefaultMaxPerSecond
 }
 
 // SetHedgingAllowNonReadOnly method allows hedging for non-read-only HTTP methods.
 // By default, only read-only methods (GET, HEAD, OPTIONS, TRACE) are hedged.
-// Use this with caution as hedging write operations can lead to duplicates.
+// NOTE:
+//   - Use this with caution as hedging write operations can lead to duplicates.
 func (c *Client) SetHedgingAllowNonReadOnly(allow bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if !c.isHedgingEnabled() {
-		c.log.Errorf("SetHedgingAllowNonReadOnly: %v", ErrHedgingDisabled)
+	if c.isHedgingEnabled() {
+		c.hedging.allowNonReadOnly = allow
+		// Re-wrap to apply new settings
+		c.unwrapHedgingTransport()
+		c.wrapTransportWithHedging()
 		return c
 	}
-
-	c.hedging.allowNonReadOnly = allow
-
-	// Re-wrap to apply new settings
-	c.unwrapHedgingTransport()
-	c.wrapTransportWithHedging()
-
+	c.log.Errorf("SetHedgingAllowNonReadOnly: %v", ErrHedgingDisabled)
 	return c
 }
 
@@ -1536,16 +1527,16 @@ func (c *Client) SetHedgingAllowNonReadOnly(allow bool) *Client {
 func (c *Client) IsHedgingAllowNonReadOnly() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if !c.isHedgingEnabled() {
-		return hedgingDefaultAllowNonReadOnly
+	if c.isHedgingEnabled() {
+		return c.hedging.allowNonReadOnly
 	}
-	return c.hedging.allowNonReadOnly
+	return hedgingDefaultAllowNonReadOnly
 }
 
 // EnableHedging method enables hedging with the given configuration.
 //
 // Hedging sends multiple concurrent requests with staggered delays and returns
-// the first successful response to reduce tail latency. Only read-only HTTP methods
+// the first response to complete to reduce tail latency. Only read-only HTTP methods
 // (GET, HEAD, OPTIONS, TRACE) are hedged by default unless SetHedgingAllowNonReadOnly is used.
 //
 //		client.EnableHedging(
@@ -1605,7 +1596,7 @@ func (c *Client) wrapTransportWithHedging() {
 
 	currentTransport := c.httpClient.Transport
 	if currentTransport == nil {
-		currentTransport = http.DefaultTransport
+		currentTransport = createTransport(nil, nil)
 	}
 
 	// Already set
