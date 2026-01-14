@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -548,5 +549,57 @@ func TestHedgingWrapAlreadyWrapped(t *testing.T) {
 	count := atomic.LoadInt32(&attemptCount)
 	if count < 2 {
 		t.Errorf("Expected hedging to still work, got %d request(s)", count)
+	}
+}
+
+func TestHedgingRateDelayBetweenRequests(t *testing.T) {
+	requestTimes := make([]time.Time, 0, 3)
+	var mu sync.Mutex
+
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requestTimes = append(requestTimes, time.Now())
+		mu.Unlock()
+
+		// Slow response to ensure multiple hedged requests are sent
+		time.Sleep(500 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	// delay=10ms, upTo=3, maxPerSecond=5.0 (rateDelay = 200ms)
+	// Expected timing: req1 at 0, req2 at ~10ms + 200ms = ~210ms, req3 at ~420ms
+	c.EnableHedging(10*time.Millisecond, 3, 5.0)
+
+	_, err := c.R().Get(ts.URL + "/")
+	assertError(t, err)
+
+	// Wait for all requests to be recorded
+	time.Sleep(600 * time.Millisecond)
+
+	mu.Lock()
+	times := make([]time.Time, len(requestTimes))
+	copy(times, requestTimes)
+	mu.Unlock()
+
+	if len(times) < 2 {
+		t.Fatalf("Expected at least 2 hedged requests, got %d", len(times))
+	}
+
+	// Verify rate delay was applied between requests
+	// With maxPerSecond=5.0, rateDelay should be 200ms
+	// The gap between requests should be at least rateDelay (200ms)
+	expectedRateDelay := 200 * time.Millisecond
+	tolerance := 50 * time.Millisecond
+
+	for i := 1; i < len(times); i++ {
+		gap := times[i].Sub(times[i-1])
+		// Gap should be >= (delay + rateDelay) - tolerance
+		minExpectedGap := expectedRateDelay - tolerance
+		if gap < minExpectedGap {
+			t.Errorf("Gap between request %d and %d was %v, expected at least %v (rate delay should be ~%v)",
+				i-1, i, gap, minExpectedGap, expectedRateDelay)
+		}
 	}
 }
