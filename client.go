@@ -197,6 +197,7 @@ type Client struct {
 	responseBodyLimit        int64
 	resBodyUnlimitedReads    bool
 	jsonEscapeHTML           bool
+	setContentLength         bool
 	closeConnection          bool
 	notParseResponse         bool
 	isTrace                  bool
@@ -656,6 +657,7 @@ func (c *Client) R() *Request {
 		multipartFields:     make([]*MultipartField, 0),
 		jsonEscapeHTML:      c.jsonEscapeHTML,
 		log:                 c.log,
+		setContentLength:    c.setContentLength,
 		generateCurlCmd:     c.generateCurlCmd,
 		debugLogCurlCmd:     c.debugLogCurlCmd,
 		unescapeQueryParams: c.unescapeQueryParams,
@@ -1143,6 +1145,26 @@ func (c *Client) SetLogger(l Logger) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.log = l
+	return c
+}
+
+// IsContentLength method returns true if the user requests to set content length. Otherwise, it is false.
+func (c *Client) IsContentLength() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.setContentLength
+}
+
+// SetContentLength method enables the HTTP header `Content-Length` value for every request.
+// By default, Resty won't set `Content-Length`.
+//
+//	client.SetContentLength(true)
+//
+// Also, you have the option to enable a particular request. See [Request.SetContentLength]
+func (c *Client) SetContentLength(l bool) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.setContentLength = l
 	return c
 }
 

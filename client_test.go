@@ -513,6 +513,7 @@ func TestClientSettingsCoverage(t *testing.T) {
 	assertEqual(t, false, c.IsDebug())
 	assertEqual(t, math.MaxInt32, c.DebugBodyLimit())
 	assertNotNil(t, c.Logger())
+	assertEqual(t, false, c.IsContentLength())
 	assertEqual(t, 0, c.RetryCount())
 	assertEqual(t, time.Millisecond*100, c.RetryWaitTime())
 	assertEqual(t, time.Second*2, c.RetryMaxWaitTime())
@@ -572,9 +573,7 @@ func TestContentLengthWhenBodyIsNil(t *testing.T) {
 	client := dcnl()
 
 	fnPreRequestMiddleware1 := func(c *Client, r *Request) error {
-		// validate
-		assertEqual(t, int64(0), r.contentLength)
-		assertEqual(t, int64(0), r.RawRequest.ContentLength)
+		assertEqual(t, "0", r.Header.Get(hdrContentLengthKey))
 		return nil
 	}
 	client.SetRequestMiddlewares(
@@ -582,7 +581,7 @@ func TestContentLengthWhenBodyIsNil(t *testing.T) {
 		fnPreRequestMiddleware1,
 	)
 
-	client.R().SetBody(nil).Get("http://localhost")
+	client.R().SetContentLength(true).SetBody(nil).Get("http://localhost")
 }
 
 func TestClientPreRequestMiddlewares(t *testing.T) {
