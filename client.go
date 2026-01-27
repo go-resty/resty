@@ -646,8 +646,6 @@ func (c *Client) R() *Request {
 		debugLogCurlCmd:     c.debugLogCurlCmd,
 		unescapeQueryParams: c.unescapeQueryParams,
 		credentials:         c.credentials,
-		retryConditions:     slices.Clone(c.retryConditions),
-		retryHooks:          slices.Clone(c.retryHooks),
 	}
 
 	if c.ctx != nil {
@@ -1364,18 +1362,16 @@ func (c *Client) RetryConditions() []RetryConditionFunc {
 	return c.retryConditions
 }
 
-// AddRetryConditions method adds one or more retry condition functions into the request.
-// These retry conditions are executed to determine if the request can be retried.
-// The request will retry if any functions return `true`, otherwise return `false`.
+// AddRetryCondition method adds a retry condition function to an array of functions
+// that are checked to determine if the request is retried. The request will
+// retry if any functions return true and the error is nil.
 //
-// NOTE:
-//   - The client-level retry conditions are applied to all requests.
-//   - The request-level retry conditions are executed first before client-level
-//     retry conditions. See [Request.AddRetryConditions], [Request.SetRetryConditions]
-func (c *Client) AddRetryConditions(conditions ...RetryConditionFunc) *Client {
+// NOTE: These retry conditions are applied on all requests made using this Client.
+// For [Request] specific retry conditions, check [Request.AddRetryCondition]
+func (c *Client) AddRetryCondition(condition RetryConditionFunc) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.retryConditions = append(c.retryConditions, conditions...)
+	c.retryConditions = append(c.retryConditions, condition)
 	return c
 }
 
@@ -1386,16 +1382,12 @@ func (c *Client) RetryHooks() []RetryHookFunc {
 	return c.retryHooks
 }
 
-// AddRetryHooks method adds one or more side-effecting retry hooks to an array
-// of hooks that will be executed on each retry.
-//
-// NOTE:
-//   - All the retry hooks are executed on request retry.
-//   - The request-level retry hooks are executed first before client-level hooks.
-func (c *Client) AddRetryHooks(hooks ...RetryHookFunc) *Client {
+// AddRetryHook adds a side-effecting retry hook to an array of hooks
+// that will be executed on each retry.
+func (c *Client) AddRetryHook(hook RetryHookFunc) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.retryHooks = append(c.retryHooks, hooks...)
+	c.retryHooks = append(c.retryHooks, hook)
 	return c
 }
 
