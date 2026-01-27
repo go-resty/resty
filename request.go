@@ -398,9 +398,9 @@ func (r *Request) SetBody(body any) *Request {
 	return r
 }
 
-// SetResult method registers the response `Result` object type for automatic
+// SetResult method is to register the response `Result` object for automatic
 // unmarshalling of the HTTP response if the response status code is
-// between 200 and 299, and the content type is either JSON or XML.
+// between 200 and 299, and the content type is JSON or XML.
 //
 // Note: [Request.SetResult] input can be a pointer or non-pointer.
 //
@@ -427,23 +427,21 @@ func (r *Request) SetResult(v any) *Request {
 	return r
 }
 
-// SetResultError method registers the response `ResultError` object type for automatic
-// unmarshalling for the request, if the response status code is greater than 399 and
-// the content type is either JSON or XML.
+// SetError method is to register the request `Error` object for automatic unmarshalling for the request,
+// if the response status code is greater than 399 and the content type is either JSON or XML.
 //
-// NOTE: [Request.SetResultError] input can be a pointer or non-pointer.
+// NOTE: [Request.SetError] input can be a pointer or non-pointer.
 //
-//	client.R().SetResultError(&AuthError{})
+//	client.R().SetError(&AuthError{})
 //	// OR
-//	client.R().SetResultError(AuthError{})
+//	client.R().SetError(AuthError{})
 //
-// Accessing an unmarshalled error object from response instance.
+// Accessing an error value from response instance.
 //
-//	response.ResultError().(*AuthError)
+//	response.Error().(*AuthError)
 //
-// If this request ResultError object is nil, it will use the client-level error object
-// type if it is set.
-func (r *Request) SetResultError(err any) *Request {
+// If this request Error object is nil, Resty will use the client-level error object Type if it is set.
+func (r *Request) SetError(err any) *Request {
 	r.Error = getPointer(err)
 	return r
 }

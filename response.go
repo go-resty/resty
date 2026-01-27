@@ -26,9 +26,9 @@ type Response struct {
 	RawResponse *http.Response
 	IsRead      bool
 
-	// CascadeError field used to cascade the response processing and
-	// middleware execution errors
-	CascadeError error
+	// Err field used to cascade the response middleware error
+	// in the chain
+	Err error
 
 	bodyBytes  []byte
 	size       int64
@@ -63,51 +63,17 @@ func (r *Response) Proto() string {
 	return r.RawResponse.Proto
 }
 
-// Result method returns the unmarshalled result response object if it exists,
-// otherwise nil.
-//
-//	client := resty.New()
-//	defer client.Close()
-//
-//	res, err := client.R().
-//	   SetBody(User{
-//	     Username: "testuser",
-//	     Password: "testpass",
-//	   }).
-//	   SetResult(&LoginResponse{}).      // or SetResult(LoginResponse{}).
-//	   SetResultError(&LoginErrorResponse{}).  // or SetResultError(LoginErrorResponse{}).
-//	   Post("https://myapp.com/login")
-//
-//	fmt.Println(err, res)
-//	fmt.Println(res.Result().(*LoginResponse))
-//	fmt.Println(res.ResultError().(*LoginErrorResponse))
+// Result method returns the response value as an object if it has one
 //
 // See [Request.SetResult]
 func (r *Response) Result() any {
 	return r.Request.Result
 }
 
-// ResultError method returns the unmarshalled result error object if it exists,
-// otherwise nil.
+// Error method returns the error object if it has one
 //
-//	client := resty.New()
-//	defer client.Close()
-//
-//	res, err := client.R().
-//	   SetBody(User{
-//	     Username: "testuser",
-//	     Password: "testpass",
-//	   }).
-//	   SetResult(&LoginResponse{}).            // or SetResult(LoginResponse{}).
-//	   SetResultError(&LoginErrorResponse{}).  // or SetResultError(LoginErrorResponse{}).
-//	   Post("https://myapp.com/login")
-//
-//	fmt.Println(err, res)
-//	fmt.Println(res.Result().(*LoginResponse))
-//	fmt.Println(res.ResultError().(*LoginErrorResponse))
-//
-// See [Request.SetResultError], [Client.SetResultError]
-func (r *Response) ResultError() any {
+// See [Request.SetError], [Client.SetError]
+func (r *Response) Error() any {
 	return r.Request.Error
 }
 
@@ -177,17 +143,13 @@ func (r *Response) Size() int64 {
 	return r.size
 }
 
-// IsStatusSuccess method returns true if HTTP status `code >= 200 and <= 299` otherwise false.
-//
-// Example: 200, 201, 204, etc.
-func (r *Response) IsStatusSuccess() bool {
+// IsSuccess method returns true if HTTP status `code >= 200 and <= 299` otherwise false.
+func (r *Response) IsSuccess() bool {
 	return r.StatusCode() > 199 && r.StatusCode() < 300
 }
 
-// IsStatusFailure method returns true if HTTP status `code >= 400` otherwise false.
-//
-// Example: 400, 500, etc.
-func (r *Response) IsStatusFailure() bool {
+// IsError method returns true if HTTP status `code >= 400` otherwise false.
+func (r *Response) IsError() bool {
 	return r.StatusCode() > 399
 }
 
