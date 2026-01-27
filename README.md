@@ -18,7 +18,7 @@ Go to https://resty.dev and refer to godoc.
 
 ## Minimum Go Version
 
-Use `go1.23` and above.
+Use `go1.21` and above.
 
 ## Support & Donate
 
