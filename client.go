@@ -190,7 +190,7 @@ type Client struct {
 	retryMaxWaitTime         time.Duration
 	retryConditions          []RetryConditionFunc
 	retryHooks               []RetryHookFunc
-	retryDelayStrategy       RetryDelayStrategyFunc
+	retryStrategy            RetryStrategyFunc
 	isRetryDefaultConditions bool
 	allowNonIdempotentRetry  bool
 	headerAuthorizationKey   string
@@ -639,7 +639,7 @@ func (c *Client) R() *Request {
 		RetryCount:                 c.retryCount,
 		RetryWaitTime:              c.retryWaitTime,
 		RetryMaxWaitTime:           c.retryMaxWaitTime,
-		RetryDelayStrategy:         c.retryDelayStrategy,
+		RetryStrategy:              c.retryStrategy,
 		IsRetryDefaultConditions:   c.isRetryDefaultConditions,
 		CloseConnection:            c.closeConnection,
 		DoNotParseResponse:         c.notParseResponse,
@@ -1231,7 +1231,7 @@ func (c *Client) RetryCount() int {
 //
 //	first attempt + retry count = total attempts
 //
-// See [Request.SetRetryDelayStrategy]
+// See [Request.SetRetryStrategy]
 //
 // NOTE:
 //   - By default, Resty only does retry on idempotent HTTP verb, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
@@ -1281,25 +1281,24 @@ func (c *Client) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
 	return c
 }
 
-// RetryDelayStrategy method returns the retry delay strategy function;
-// otherwise, it is nil.
+// RetryStrategy method returns the retry strategy function; otherwise, it is nil.
 //
-// See [Client.SetRetryDelayStrategy]
-func (c *Client) RetryDelayStrategy() RetryDelayStrategyFunc {
+// See [Client.SetRetryStrategy]
+func (c *Client) RetryStrategy() RetryStrategyFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryDelayStrategy
+	return c.retryStrategy
 }
 
-// SetRetryDelayStrategy method used to set the custom Retry delay strategy
-// into Resty client, it is used to get wait time before each retry.
-// It can be overridden at request level, see [Request.SetRetryDelayStrategy]
+// SetRetryStrategy method used to set the custom Retry strategy into Resty client,
+// it is used to get wait time before each retry. It can be overridden at request
+// level, see [Request.SetRetryStrategy]
 //
-// By default, Resty employs the capped exponential backoff with a jitter delay strategy.
-func (c *Client) SetRetryDelayStrategy(rs RetryDelayStrategyFunc) *Client {
+// Default (nil) implies exponential backoff with a jitter strategy
+func (c *Client) SetRetryStrategy(rs RetryStrategyFunc) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.retryDelayStrategy = rs
+	c.retryStrategy = rs
 	return c
 }
 
