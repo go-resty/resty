@@ -95,9 +95,6 @@ type (
 	// SuccessHook type is for reacting to request success
 	SuccessHook func(*Client, *Response)
 
-	// CloseHook type is for reacting to client closing
-	CloseHook func()
-
 	// RequestFunc type is for extended manipulation of the Request instance
 	RequestFunc func(*Request) *Request
 
@@ -218,7 +215,6 @@ type Client struct {
 	invalidHooks             []ErrorHook
 	panicHooks               []ErrorHook
 	successHooks             []SuccessHook
-	closeHooks               []CloseHook
 	contentTypeEncoders      map[string]ContentTypeEncoder
 	contentTypeDecoders      map[string]ContentTypeDecoder
 	contentDecompresserKeys  []string
@@ -839,15 +835,6 @@ func (c *Client) OnPanic(h ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.panicHooks = append(c.panicHooks, h)
-	return c
-}
-
-// OnClose method adds a callback that will be run whenever the client is closed.
-// The hooks are executed in the order they were registered.
-func (c *Client) OnClose(h CloseHook) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.closeHooks = append(c.closeHooks, h)
 	return c
 }
 
@@ -2234,14 +2221,10 @@ func (c *Client) Clone(ctx context.Context) *Client {
 
 // Close method performs cleanup and closure activities on the client instance
 func (c *Client) Close() error {
-	// Execute close hooks first
-	c.onCloseHooks()
-
 	if c.LoadBalancer() != nil {
 		silently(c.LoadBalancer().Close())
 	}
 	close(c.certWatcherStopChan)
-
 	return nil
 }
 
@@ -2395,15 +2378,6 @@ func (c *Client) onInvalidHooks(req *Request, err error) {
 	defer c.lock.RUnlock()
 	for _, h := range c.invalidHooks {
 		h(req, err)
-	}
-}
-
-// Helper to run closeHooks hooks.
-func (c *Client) onCloseHooks() {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	for _, h := range c.closeHooks {
-		h()
 	}
 }
 
