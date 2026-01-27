@@ -1241,29 +1241,14 @@ func (r *Request) TraceInfo() TraceInfo {
 		return TraceInfo{}
 	}
 
-	ct.lock.RLock()
-	defer ct.lock.RUnlock()
-
 	ti := TraceInfo{
-		DNSLookup:      0,
-		TCPConnTime:    0,
-		ServerTime:     0,
+		DNSLookup:      ct.dnsDone.Sub(ct.dnsStart),
+		TLSHandshake:   ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
+		ServerTime:     ct.gotFirstResponseByte.Sub(ct.gotConn),
 		IsConnReused:   ct.gotConnInfo.Reused,
 		IsConnWasIdle:  ct.gotConnInfo.WasIdle,
 		ConnIdleTime:   ct.gotConnInfo.IdleTime,
 		RequestAttempt: r.Attempt,
-	}
-
-	if !ct.dnsStart.IsZero() && !ct.dnsDone.IsZero() {
-		ti.DNSLookup = ct.dnsDone.Sub(ct.dnsStart)
-	}
-
-	if !ct.tlsHandshakeDone.IsZero() && !ct.tlsHandshakeStart.IsZero() {
-		ti.TLSHandshake = ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart)
-	}
-
-	if !ct.gotFirstResponseByte.IsZero() && !ct.gotConn.IsZero() {
-		ti.ServerTime = ct.gotFirstResponseByte.Sub(ct.gotConn)
 	}
 
 	// Calculate the total time accordingly when connection is reused,
