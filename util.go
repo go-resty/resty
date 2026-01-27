@@ -393,14 +393,8 @@ func (ire *invalidRequestError) Error() string {
 
 func drainBody(res *Response) {
 	if res != nil && res.Body != nil {
-		drainReadCloser(res.Body)
-	}
-}
-
-func drainReadCloser(body io.ReadCloser) {
-	if body != nil {
-		defer closeq(body)
-		_, _ = io.Copy(io.Discard, body)
+		defer closeq(res.Body)
+		_, _ = io.Copy(io.Discard, res.Body)
 	}
 }
 
