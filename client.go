@@ -1488,52 +1488,7 @@ func (c *Client) RemoveProxy() *Client {
 	return c
 }
 
-// SetCertificateFromString method helps to set client certificates into Resty
-// from cert and key files to perform SSL client authentication
-//
-//	client.SetCertificateFromFile("certs/client.pem", "certs/client.key")
-func (c *Client) SetCertificateFromFile(certFilePath, certKeyFilePath string) *Client {
-	cert, err := tls.LoadX509KeyPair(certFilePath, certKeyFilePath)
-	if err != nil {
-		c.Logger().Errorf("client certificate/key parsing error: %v", err)
-		return c
-	}
-	c.SetCertificates(cert)
-	return c
-}
-
-// SetCertificateFromString method helps to set client certificates into Resty
-// from string to perform SSL client authentication
-//
-//	myClientCertStr := `-----BEGIN CERTIFICATE-----
-//	... cert content ...
-//	-----END CERTIFICATE-----`
-//
-//	myClientCertKeyStr := `-----BEGIN PRIVATE KEY-----
-//	... cert key content ...
-//	-----END PRIVATE KEY-----`
-//
-//	client.SetCertificateFromString(myClientCertStr, myClientCertKeyStr)
-func (c *Client) SetCertificateFromString(certStr, certKeyStr string) *Client {
-	cert, err := tls.X509KeyPair([]byte(certStr), []byte(certKeyStr))
-	if err != nil {
-		c.Logger().Errorf("client certificate/key parsing error: %v", err)
-		return c
-	}
-	c.SetCertificates(cert)
-	return c
-}
-
-// SetCertificates method helps to conveniently set client certificates into Resty
-// to perform SSL client authentication
-//
-//	cert, err := tls.LoadX509KeyPair("certs/client.pem", "certs/client.key")
-//	if err != nil {
-//		log.Printf("ERROR client certificate/key parsing error: %v", err)
-//		return
-//	}
-//
-//	client.SetCertificates(cert)
+// SetCertificates method helps to conveniently set client certificates into Resty.
 func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 	config, err := c.tlsConfig()
 	if err != nil {
@@ -1547,140 +1502,70 @@ func (c *Client) SetCertificates(certs ...tls.Certificate) *Client {
 	return c
 }
 
-// SetRootCertificates method helps to add one or more root certificates into the Resty client
+// SetRootCertificate method helps to add one or more root certificates into the Resty client
 //
-//	// one pem file path
-//	client.SetRootCertificates("/path/to/root/pemFile.pem")
-//
-//	// one or more pem file path(s)
-//	client.SetRootCertificates(
-//	    "/path/to/root/pemFile1.pem",
-//	    "/path/to/root/pemFile2.pem"
-//	    "/path/to/root/pemFile3.pem"
-//	)
-//
-//	// if you happen to have string slices
-//	client.SetRootCertificates(certs...)
-func (c *Client) SetRootCertificates(pemFilePaths ...string) *Client {
-	for _, fp := range pemFilePaths {
-		rootPemData, err := os.ReadFile(fp)
-		if err != nil {
-			c.Logger().Errorf("%v", err)
-			return c
-		}
-		c.handleCAs("root", rootPemData)
+//	client.SetRootCertificate("/path/to/root/pemFile.pem")
+func (c *Client) SetRootCertificate(pemFilePath string) *Client {
+	rootPemData, err := os.ReadFile(pemFilePath)
+	if err != nil {
+		c.Logger().Errorf("%v", err)
+		return c
 	}
+	c.handleCAs("root", rootPemData)
 	return c
 }
 
-// SetRootCertificatesWatcher method enables dynamic reloading of one or more root certificates.
+// SetRootCertificateWatcher enables dynamic reloading of one or more root certificates.
 // It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+// The caller is responsible for calling Close to stop the watcher.
 //
-//	client.SetRootCertificatesWatcher(
-//		&resty.CertWatcherOptions{
-//			PoolInterval: 24 * time.Hour,
-//		},
-//		"root-ca.crt",
-//	)
-func (c *Client) SetRootCertificatesWatcher(options *CertWatcherOptions, pemFilePaths ...string) *Client {
-	c.SetRootCertificates(pemFilePaths...)
-	for _, fp := range pemFilePaths {
-		c.initCertWatcher(fp, "root", options)
-	}
+//	client.SetRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
+//		PoolInterval: time.Hour * 24,
+//	})
+//
+//	defer client.Close()
+func (c *Client) SetRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
+	c.SetRootCertificate(pemFilePath)
+	c.initCertWatcher(pemFilePath, "root", options)
 	return c
 }
 
 // SetRootCertificateFromString method helps to add one or more root certificates
 // into the Resty client
 //
-//	myRootCertStr := `-----BEGIN CERTIFICATE-----
-//	... cert content ...
-//	-----END CERTIFICATE-----`
-//
-//	client.SetRootCertificateFromString(myRootCertStr)
+//	client.SetRootCertificateFromString("pem certs content")
 func (c *Client) SetRootCertificateFromString(pemCerts string) *Client {
 	c.handleCAs("root", []byte(pemCerts))
 	return c
 }
 
-// SetClientRootCertificates method helps to add one or more client's root
+// SetClientRootCertificate method helps to add one or more client's root
 // certificates into the Resty client
 //
-//	// one pem file path
-//	client.SetClientCertificates("/path/to/client/pemFile.pem")
-//
-//	// one or more pem file path(s)
-//	client.SetClientCertificates(
-//	    "/path/to/client/pemFile1.pem",
-//	    "/path/to/client/pemFile2.pem"
-//	    "/path/to/client/pemFile3.pem"
-//	)
-//
-//	// if you happen to have string slices
-//	client.SetClientCertificates(certs...)
-func (c *Client) SetClientRootCertificates(pemFilePaths ...string) *Client {
-	for _, fp := range pemFilePaths {
-		pemData, err := os.ReadFile(fp)
-		if err != nil {
-			c.Logger().Errorf("%v", err)
-			return c
-		}
-		c.handleCAs("client-root", pemData)
-	}
-	return c
-}
-
-// SetClientRootCertificatesWatcher method enables dynamic reloading of one or more client root certificates.
-// It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
-//
-//	client.SetClientRootCertificatesWatcher(
-//		&resty.CertWatcherOptions{
-//			PoolInterval: 24 * time.Hour,
-//		},
-//		"root-ca.crt",
-//	)
-func (c *Client) SetClientRootCertificatesWatcher(options *CertWatcherOptions, pemFilePaths ...string) *Client {
-	c.SetClientRootCertificates(pemFilePaths...)
-	for _, fp := range pemFilePaths {
-		c.initCertWatcher(fp, "client-root", options)
-	}
-	return c
-}
-
-// SetClientRootCertificateFromString method helps to add one or more clients
-// root certificates into the Resty client
-//
-//	myClientRootCertStr := `-----BEGIN CERTIFICATE-----
-//	... cert content ...
-//	-----END CERTIFICATE-----`
-//
-//	client.SetClientRootCertificateFromString(myClientRootCertStr)
-func (c *Client) SetClientRootCertificateFromString(pemCerts string) *Client {
-	c.handleCAs("client-root", []byte(pemCerts))
-	return c
-}
-
-func (c *Client) handleCAs(scope string, permCerts []byte) {
-	config, err := c.tlsConfig()
+//	client.SetClientRootCertificate("/path/to/root/pemFile.pem")
+func (c *Client) SetClientRootCertificate(pemFilePath string) *Client {
+	rootPemData, err := os.ReadFile(pemFilePath)
 	if err != nil {
 		c.Logger().Errorf("%v", err)
-		return
+		return c
 	}
+	c.handleCAs("client", rootPemData)
+	return c
+}
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	switch scope {
-	case "root":
-		if config.RootCAs == nil {
-			config.RootCAs = x509.NewCertPool()
-		}
-		config.RootCAs.AppendCertsFromPEM(permCerts)
-	case "client-root":
-		if config.ClientCAs == nil {
-			config.ClientCAs = x509.NewCertPool()
-		}
-		config.ClientCAs.AppendCertsFromPEM(permCerts)
-	}
+// SetClientRootCertificateWatcher enables dynamic reloading of one or more client root certificates.
+// It is designed for scenarios involving long-running Resty clients where certificates may be renewed.
+// The caller is responsible for calling Close to stop the watcher.
+//
+//	client.SetClientRootCertificateWatcher("root-ca.crt", &CertWatcherOptions{
+//		PoolInterval: time.Hour * 24,
+//	})
+//	defer client.Close()
+func (c *Client) SetClientRootCertificateWatcher(pemFilePath string, options *CertWatcherOptions) *Client {
+	c.SetClientRootCertificate(pemFilePath)
+	c.initCertWatcher(pemFilePath, "client", options)
+
+	return c
 }
 
 func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcherOptions) {
@@ -1726,15 +1611,47 @@ func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcher
 
 				switch scope {
 				case "root":
-					c.SetRootCertificates(pemFilePath)
-				case "client-root":
-					c.SetClientRootCertificates(pemFilePath)
+					c.SetRootCertificate(pemFilePath)
+				case "client":
+					c.SetClientRootCertificate(pemFilePath)
 				}
 
 				c.debugf("Cert %s reloaded.", pemFilePath)
 			}
 		}
 	}()
+}
+
+// SetClientRootCertificateFromString method helps to add one or more clients
+// root certificates into the Resty client
+//
+//	client.SetClientRootCertificateFromString("pem certs content")
+func (c *Client) SetClientRootCertificateFromString(pemCerts string) *Client {
+	c.handleCAs("client", []byte(pemCerts))
+	return c
+}
+
+func (c *Client) handleCAs(scope string, permCerts []byte) {
+	config, err := c.tlsConfig()
+	if err != nil {
+		c.Logger().Errorf("%v", err)
+		return
+	}
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	switch scope {
+	case "root":
+		if config.RootCAs == nil {
+			config.RootCAs = x509.NewCertPool()
+		}
+		config.RootCAs.AppendCertsFromPEM(permCerts)
+	case "client":
+		if config.ClientCAs == nil {
+			config.ClientCAs = x509.NewCertPool()
+		}
+		config.ClientCAs.AppendCertsFromPEM(permCerts)
+	}
 }
 
 // OutputDirectory method returns the output directory value from the client.
