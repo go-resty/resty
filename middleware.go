@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"maps"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -246,8 +245,7 @@ func createRawRequest(c *Client, r *Request) (err error) {
 	r.RawRequest.Close = r.CloseConnection
 
 	// Add headers into http request
-	r.RawRequest.Header = http.Header{}
-	maps.Copy(r.RawRequest.Header, r.Header)
+	r.RawRequest.Header = r.Header.Clone()
 
 	// Add cookies from client instance into http request
 	for _, cookie := range c.Cookies() {
