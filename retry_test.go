@@ -80,7 +80,7 @@ func TestRequestConditionalGet(t *testing.T) {
 	assertEqual(t, "TestGet: text response", resp.String())
 	assertEqual(t, 1, resp.Request.Attempt)
 	assertEqual(t, 1, externalCounter)
-	assertTrue(t, strings.Contains(lb.String(), "RETRY TRACE ID:"), "expected debug log with retry trace ID")
+	assertEqual(t, true, strings.Contains(lb.String(), "RETRY TRACE ID:"))
 
 	logResponse(t, resp)
 }
@@ -99,7 +99,7 @@ func TestClientRetryGetWithTimeout(t *testing.T) {
 	assertEqual(t, 0, resp.StatusCode())
 	assertEqual(t, 0, len(resp.Cookies()))
 	assertEqual(t, 0, len(resp.Header()))
-	assertErrorIs(t, context.DeadlineExceeded, err, "expected context deadline exceeded error")
+	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
 }
 
 func TestClientRetryWithMinAndMaxWaitTime(t *testing.T) {
@@ -131,7 +131,7 @@ func TestClientRetryWithMinAndMaxWaitTime(t *testing.T) {
 	// retryCount+1 == attempts were made
 	assertEqual(t, retryCount+1, res.Request.Attempt)
 
-	assertTrue(t, strings.Contains(lb.String(), "RETRY TRACE ID:"), "expected debug log with retry trace ID")
+	assertEqual(t, true, strings.Contains(lb.String(), "RETRY TRACE ID:"))
 
 	// Initial attempt has 0 time slept since last request
 	assertEqual(t, retryIntervals[0], uint64(0))
@@ -557,7 +557,7 @@ func TestClientRetryCountWithTimeout(t *testing.T) {
 	assertEqual(t, 0, len(resp.Cookies()))
 	assertEqual(t, 0, len(resp.Header()))
 	assertEqual(t, 2, resp.Request.Attempt)
-	assertErrorIs(t, context.DeadlineExceeded, err, "expected context deadline exceeded error")
+	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
 }
 
 func TestClientRetryTooManyRequestsAndRecover(t *testing.T) {
@@ -618,7 +618,7 @@ func TestClientRetryHookWithTimeout(t *testing.T) {
 
 	assertEqual(t, retryCount+1, resp.Request.Attempt)
 	assertEqual(t, 3, hookCalledCount)
-	assertErrorIs(t, context.DeadlineExceeded, err, "expected context deadline exceeded error")
+	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
 }
 
 var errSeekFailure = fmt.Errorf("failing seek test")
@@ -784,7 +784,7 @@ func TestRetryDefaultConditions(t *testing.T) {
 			Get(ts.URL + "/redirect-1")
 
 		assertNotNil(t, err)
-		assertTrue(t, (err.Error() == `Get "/redirect-11": stopped after 10 redirects`))
+		assertEqual(t, true, (err.Error() == `Get "/redirect-11": stopped after 10 redirects`))
 	})
 
 	t.Run("invalid scheme error", func(t *testing.T) {
@@ -797,8 +797,7 @@ func TestRetryDefaultConditions(t *testing.T) {
 			SetRetryCount(2).
 			Get("/")
 		assertNotNil(t, err)
-		assertTrue(t, strings.Contains(err.Error(), `unsupported protocol scheme "ftp"`),
-			"expected unsupported protocol scheme error")
+		assertEqual(t, true, strings.Contains(err.Error(), `unsupported protocol scheme "ftp"`))
 	})
 
 	t.Run("invalid header error", func(t *testing.T) {
@@ -810,21 +809,19 @@ func TestRetryDefaultConditions(t *testing.T) {
 			SetHeader("Header-Name", "bad header value \033").
 			Get(ts.URL + "/")
 		assertNotNil(t, err)
-		assertTrue(t, strings.Contains(err.Error(), "net/http: invalid header field value"),
-			"expected invalid header field value error")
+		assertEqual(t, true, strings.Contains(err.Error(), "net/http: invalid header field value"))
 
 		_, err = dcnl().R().
 			SetRetryCount(2).
 			SetHeader("Header-Name\033", "bad header value").
 			Get(ts.URL + "/")
 		assertNotNil(t, err)
-		assertTrue(t, strings.Contains(err.Error(), "net/http: invalid header field name"),
-			"expected invalid header field name error")
+		assertEqual(t, true, strings.Contains(err.Error(), "net/http: invalid header field name"))
 	})
 
 	t.Run("nil values", func(t *testing.T) {
 		result := applyRetryDefaultConditions(nil, nil)
-		assertFalse(t, result)
+		assertEqual(t, false, result)
 	})
 }
 
@@ -846,7 +843,7 @@ func TestRequestRetryPutIoReadSeekerForBuffer(t *testing.T) {
 		SetRetryCount(3).
 		SetAllowNonIdempotentRetry(true)
 
-	assertTrue(t, c.AllowNonIdempotentRetry(), "expected AllowNonIdempotentRetry to be true")
+	assertEqual(t, true, c.AllowNonIdempotentRetry())
 
 	buf := bytes.NewBuffer([]byte("body content"))
 	resp, err := c.R().
@@ -878,7 +875,7 @@ func TestRequestRetryPostIoReadSeeker(t *testing.T) {
 		SetRetryCount(3).
 		SetAllowNonIdempotentRetry(false)
 
-	assertFalse(t, c.AllowNonIdempotentRetry())
+	assertEqual(t, false, c.AllowNonIdempotentRetry())
 
 	resp, err := c.R().
 		SetBody([]byte("body content")).
@@ -917,11 +914,10 @@ func TestRequestRetryHooks(t *testing.T) {
 		Get("/set-retrycount-test")
 
 	debugLog := lb.String()
-	assertFalse(t, strings.Contains(debugLog, "This is client hook1"))
-	assertFalse(t, strings.Contains(debugLog, "This is client hook2"))
-	assertFalse(t, strings.Contains(debugLog, "This is request hook1"))
-	assertTrue(t, strings.Contains(debugLog, "This is request overwrite hook1"),
-		"expected to find request overwrite hook log")
+	assertEqual(t, false, strings.Contains(debugLog, "This is client hook1"))
+	assertEqual(t, false, strings.Contains(debugLog, "This is client hook2"))
+	assertEqual(t, false, strings.Contains(debugLog, "This is request hook1"))
+	assertEqual(t, true, strings.Contains(debugLog, "This is request overwrite hook1"))
 }
 
 func TestRequestSetRetryConditions(t *testing.T) {
@@ -1108,7 +1104,7 @@ func TestRetryCoverage(t *testing.T) {
 	t.Run("mock tls cert error", func(t *testing.T) {
 		certError := tls.CertificateVerificationError{}
 		result1 := applyRetryDefaultConditions(nil, &certError)
-		assertFalse(t, result1, "expected no retry for tls.CertificateVerificationError")
+		assertEqual(t, false, result1)
 	})
 }
 

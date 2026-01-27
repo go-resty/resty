@@ -216,7 +216,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		assertNotNil(t, err)
 		assertNotNil(t, srv)
 		var dnsErr *net.DNSError
-		assertTrue(t, errors.As(err, &dnsErr), "expected net.DNSError type")
+		assertEqual(t, true, errors.As(err, &dnsErr))
 
 		// mock net.LookupSRV call
 		srv.lookupSRV = func() ([]*net.SRV, error) {
@@ -255,7 +255,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		assertNotNil(t, err)
 		assertNotNil(t, srv)
 		var dnsErr *net.DNSError
-		assertTrue(t, errors.As(err, &dnsErr), "expected net.DNSError type")
+		assertEqual(t, true, errors.As(err, &dnsErr))
 
 		// mock net.LookupSRV call
 		srv.lookupSRV = func() ([]*net.SRV, error) {
@@ -293,7 +293,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		assertNotNil(t, err)
 		assertNotNil(t, srv)
 		var dnsErr *net.DNSError
-		assertTrue(t, errors.As(err, &dnsErr), "expected net.DNSError type")
+		assertEqual(t, true, errors.As(err, &dnsErr))
 
 		// mock net.LookupSRV call
 		srv.lookupSRV = func() ([]*net.SRV, error) {
@@ -347,7 +347,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		assertNotNil(t, err)
 		assertNotNil(t, srv)
 		var dnsErr *net.DNSError
-		assertTrue(t, errors.As(err, &dnsErr), "expected net.DNSError type")
+		assertEqual(t, true, errors.As(err, &dnsErr))
 
 		// mock net.LookupSRV call
 		srv.lookupSRV = func() ([]*net.SRV, error) {
@@ -379,19 +379,19 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		assertNotNil(t, err)
 		assertNotNil(t, srv)
 		var dnsErr *net.DNSError
-		assertTrue(t, errors.As(err, &dnsErr), "expected net.DNSError type")
+		assertEqual(t, true, errors.As(err, &dnsErr))
 
 		// default error flow
 		err = srv.Refresh()
 		assertNotNil(t, err)
-		assertTrue(t, errors.As(err, &dnsErr), "expected net.DNSError type")
+		assertEqual(t, true, errors.As(err, &dnsErr))
 
 		// replace with mock error flow
 		errMockTest := errors.New("network error")
 		srv.lookupSRV = func() ([]*net.SRV, error) { return nil, errMockTest }
 		err = srv.Refresh()
 		assertNotNil(t, err)
-		assertErrorIs(t, errMockTest, err, "expected network error type")
+		assertErrorIs(t, errMockTest, err)
 
 	})
 

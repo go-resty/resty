@@ -60,8 +60,8 @@ func TestSetContextWithError(t *testing.T) {
 		Get(ts.URL + "/mypage")
 
 	assertError(t, err)
-	assertEqual(t, http.StatusBadRequest, resp.StatusCode(), "expected bad request status code")
-	assertEqual(t, "", resp.String(), "expected empty response body on bad request")
+	assertEqual(t, http.StatusBadRequest, resp.StatusCode())
+	assertEqual(t, "", resp.String())
 
 	logResponse(t, resp)
 }
@@ -211,16 +211,16 @@ func TestClientRetryWithSetContext(t *testing.T) {
 
 	assertNotNil(t, ts)
 	assertNotNil(t, err)
-	assertErrorIs(t, context.DeadlineExceeded, err, "expected context deadline exceeded error")
+	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
 }
 
 func TestRequestContext(t *testing.T) {
 	client := dcnl()
 	r := client.NewRequest()
-	assertNotNil(t, r.Context(), "expected default context to be non-nil")
+	assertNotNil(t, r.Context())
 
 	r.SetContext(context.Background())
-	assertNotNil(t, r.Context(), "expected context to be set")
+	assertNotNil(t, r.Context())
 }
 
 func errIsContextCanceled(err error) bool {

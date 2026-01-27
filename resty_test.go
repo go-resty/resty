@@ -373,8 +373,8 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				formEncodedData := r.Form.Encode()
 				t.Logf("Received Form Encoded values: %v", formEncodedData)
 
-				assertTrue(t, strings.Contains(formEncodedData, "search_criteria=pencil"), "expected search_criteria=pencil")
-				assertTrue(t, strings.Contains(formEncodedData, "search_criteria=glass"), "expected search_criteria=glass")
+				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=pencil"))
+				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=glass"))
 
 				_, _ = w.Write([]byte("Success"))
 				return
@@ -831,7 +831,7 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 	const ws = " \n\r\t"
 	const qs = `"`
 	s := strings.Trim(input, ws)
-	assertTrue(t, strings.HasPrefix(s, "Digest "), "Digest auth header prefix expected")
+	assertEqual(t, true, strings.HasPrefix(s, "Digest "))
 	s = strings.Trim(s[7:], ws)
 	sl := strings.Split(s, ", ")
 
@@ -939,74 +939,56 @@ func dcnldr() *Request {
 	return c.R()
 }
 
-func assertNil(t *testing.T, v any, failureMsgs ...string) {
+func assertNil(t *testing.T, v any) {
 	t.Helper()
 	if !isNil(v) {
-		t.Errorf("[%v] was expected to be nil. Message: %v", v, strings.Join(failureMsgs, " "))
+		t.Errorf("[%v] was expected to be nil", v)
 	}
 }
 
-func assertNotNil(t *testing.T, v any, failureMsgs ...string) {
+func assertNotNil(t *testing.T, v any) {
 	t.Helper()
 	if isNil(v) {
-		t.Errorf("[%v] was expected to be non-nil. Message: %v", v, strings.Join(failureMsgs, " "))
+		t.Errorf("[%v] was expected to be non-nil", v)
 	}
 }
 
-func assertType(t *testing.T, typ, v any, failureMsgs ...string) {
+func assertType(t *testing.T, typ, v any) {
 	t.Helper()
 	if reflect.DeepEqual(reflect.TypeOf(typ), reflect.TypeOf(v)) {
-		t.Errorf("Expected type %t, got %t. Message: %v", typ, v, strings.Join(failureMsgs, " "))
+		t.Errorf("Expected type %t, got %t", typ, v)
 	}
 }
 
-func assertError(t *testing.T, err error, failureMsgs ...string) {
+func assertError(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
-		t.Errorf("Error occurred [%v]. Message: %v", err, strings.Join(failureMsgs, " "))
+		t.Errorf("Error occurred [%v]", err)
 	}
 }
 
-func assertErrorIs(t *testing.T, e, g error, failureMsgs ...string) (r bool) {
+func assertErrorIs(t *testing.T, e, g error) (r bool) {
 	t.Helper()
 	if !errors.Is(g, e) {
-		t.Errorf("Expected [%v], got [%v]. Message: %v", e, g, strings.Join(failureMsgs, " "))
+		t.Errorf("Expected [%v], got [%v]", e, g)
 	}
 
 	return true
 }
 
-func assertTrue(t *testing.T, g any, failureMsgs ...string) (r bool) {
-	t.Helper()
-	if !equal(true, g) {
-		t.Errorf("Expected `true`, got [%v]. Message: %v", g, strings.Join(failureMsgs, " "))
-	}
-
-	return
-}
-
-func assertFalse(t *testing.T, g any, failureMsgs ...string) (r bool) {
-	t.Helper()
-	if !equal(false, g) {
-		t.Errorf("Expected `false`, got [%v]. Message: %v", g, strings.Join(failureMsgs, " "))
-	}
-
-	return
-}
-
-func assertEqual(t *testing.T, e, g any, failureMsgs ...string) (r bool) {
+func assertEqual(t *testing.T, e, g any) (r bool) {
 	t.Helper()
 	if !equal(e, g) {
-		t.Errorf("Expected [%v], got [%v]. Message: %v", e, g, strings.Join(failureMsgs, " "))
+		t.Errorf("Expected [%v], got [%v]", e, g)
 	}
 
 	return
 }
 
-func assertNotEqual(t *testing.T, e, g any, failureMsgs ...string) (r bool) {
+func assertNotEqual(t *testing.T, e, g any) (r bool) {
 	t.Helper()
 	if equal(e, g) {
-		t.Errorf("Expected [%v], got [%v]. Message: %v", e, g, strings.Join(failureMsgs, " "))
+		t.Errorf("Expected [%v], got [%v]", e, g)
 	} else {
 		r = true
 	}
