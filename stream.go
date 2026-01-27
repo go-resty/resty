@@ -13,7 +13,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
-	"sync"
 )
 
 var (
@@ -107,12 +106,13 @@ func (gz *gzipReader) Close() error {
 	return nil
 }
 
-var flatePool = sync.Pool{New: func() any { return flate.NewReader(nopReader{}) }}
-
 func decompressDeflate(r io.ReadCloser) (io.ReadCloser, error) {
-	fr := flatePool.Get().(io.ReadCloser)
-	err := fr.(flate.Resetter).Reset(r, nil)
-	return &deflateReader{s: r, r: fr}, err
+	d := &deflateReader{
+		s: r,
+		r: flate.NewReader(r),
+	}
+
+	return d, nil
 }
 
 type deflateReader struct {
@@ -125,9 +125,7 @@ func (d *deflateReader) Read(p []byte) (n int, err error) {
 }
 
 func (d *deflateReader) Close() error {
-	if err := d.r.(flate.Resetter).Reset(nopReader{}, nil); err == nil {
-		flatePool.Put(d.r)
-	}
+	closeq(d.r)
 	closeq(d.s)
 	return nil
 }
@@ -211,10 +209,3 @@ func (r *nopReadCloser) Read(p []byte) (int, error) {
 }
 
 func (r *nopReadCloser) Close() error { return nil }
-
-var _ flate.Reader = (*nopReader)(nil)
-
-type nopReader struct{}
-
-func (nopReader) Read([]byte) (int, error) { return 0, io.EOF }
-func (nopReader) ReadByte() (byte, error)  { return 0, io.EOF }
