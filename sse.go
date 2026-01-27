@@ -585,16 +585,14 @@ func (es *EventSource) processEvent(scanner *bufio.Scanner) error {
 }
 
 func (es *EventSource) handleCallback(e *Event) {
+	es.lock.RLock()
+	defer es.lock.RUnlock()
+
 	eventName := e.Name
 	if len(eventName) == 0 {
 		eventName = defaultEventName
 	}
-
-	es.lock.RLock()
-	cb, found := es.onEvent[eventName]
-	es.lock.RUnlock()
-
-	if found {
+	if cb, found := es.onEvent[eventName]; found {
 		if cb.Result == nil {
 			cb.Func(e)
 			return
