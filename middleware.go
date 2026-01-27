@@ -538,8 +538,6 @@ func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
 	return
 }
 
-var hostnameReplacer = strings.NewReplacer(":", "_", ".", "_")
-
 // SaveToFileResponseMiddleware method used to write HTTP response body into
 // file. The filename is determined in the following order -
 //   - [Request.SetOutputFileName]
@@ -559,12 +557,8 @@ func SaveToFileResponseMiddleware(c *Client, res *Response) error {
 			}
 		}
 		if isStringEmpty(file) {
-			rURL, _ := url.Parse(res.Request.URL)
-			if isStringEmpty(rURL.Path) || rURL.Path == "/" {
-				file = hostnameReplacer.Replace(rURL.Host)
-			} else {
-				file = path.Base(rURL.Path)
-			}
+			urlPath, _ := url.Parse(res.Request.URL)
+			file = path.Base(urlPath.Path)
 		}
 	}
 

@@ -675,7 +675,6 @@ func (r *Request) SetOutputFileName(file string) *Request {
 //   - [Request.SetOutputFileName]
 //   - Content-Disposition header
 //   - Request URL using [path.Base]
-//   - Request URL hostname if path is empty or "/"
 //
 // It overrides the value set at the client instance level, see [Client.SetSaveResponse]
 func (r *Request) SetSaveResponse(save bool) *Request {
