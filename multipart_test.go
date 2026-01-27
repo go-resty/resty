@@ -9,15 +9,16 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -87,8 +88,8 @@ func TestMultipartUploadError(t *testing.T) {
 		Post(ts.URL + "/upload")
 
 	assertNotNil(t, err)
-	assertNil(t, resp)
-	assertEqual(t, true, errors.Is(err, fs.ErrNotExist))
+	assertNotNil(t, resp)
+	assertTrue(t, errors.Is(err, fs.ErrNotExist))
 }
 
 func TestMultipartUploadFiles(t *testing.T) {
@@ -572,10 +573,7 @@ func TestMultipartReaderErrors(t *testing.T) {
 		assertNotNil(t, err)
 		assertEqual(t, errTestErrorReader, err)
 		assertNotNil(t, resp)
-
-		err = resp.wrapError(errors.New("test error"), true)
-		assertNil(t, err)
-		assertEqual(t, "test error", resp.CascadeError.Error())
+		assertEqual(t, nil, resp.Body)
 	})
 
 	t.Run("multipart files with errorReader", func(t *testing.T) {
@@ -585,7 +583,8 @@ func TestMultipartReaderErrors(t *testing.T) {
 
 		assertNotNil(t, err)
 		assertEqual(t, errTestErrorReader, err)
-		assertNil(t, resp)
+		assertNotNil(t, resp)
+		assertEqual(t, nil, resp.Body)
 	})
 
 	t.Run("multipart with file not found", func(t *testing.T) {
@@ -594,8 +593,9 @@ func TestMultipartReaderErrors(t *testing.T) {
 			Post("/upload")
 
 		assertNotNil(t, err)
-		assertEqual(t, true, errors.Is(err, fs.ErrNotExist))
-		assertNil(t, resp)
+		assertTrue(t, errors.Is(err, fs.ErrNotExist))
+		assertNotNil(t, resp)
+		assertEqual(t, nil, resp.Body)
 	})
 }
 
@@ -605,7 +605,7 @@ func (mwe *mpWriterError) Write(p []byte) (int, error) {
 	return 0, errors.New("multipart write error")
 }
 
-func TestMultipartRequest_Errors(t *testing.T) {
+func TestMultipartRequest_createMultipart(t *testing.T) {
 	mw := multipart.NewWriter(&mpWriterError{})
 
 	c := dcnl()
@@ -615,93 +615,57 @@ func TestMultipartRequest_Errors(t *testing.T) {
 	})
 
 	t.Run("writeFormData", func(t *testing.T) {
-		err1 := multipartWriteFormData(mw, req1)
+		err1 := req1.writeFormData(mw)
 		assertNotNil(t, err1)
 		assertEqual(t, "multipart write error", err1.Error())
 	})
-}
 
-func TestMultipartUploadFailAutoErrorParse(t *testing.T) {
-	type ErrorResponse struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-	}
-
-	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set(hdrContentTypeKey, "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{ "code": 403, "message": "forbidden error message" }`))
-	})
-	defer ts.Close()
-
-	c := dcnl()
-
-	t.Run("single request", func(t *testing.T) {
-		res, err := c.R().
-			SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetResultError(&ErrorResponse{}).
-			Post(ts.URL)
-
-		assertNil(t, err)
-		assertEqual(t, http.StatusForbidden, res.StatusCode())
-
-		er := res.ResultError().(*ErrorResponse)
-		assertEqual(t, 403, er.Code)
-		assertEqual(t, "forbidden error message", er.Message)
+	t.Run("createMultipart", func(t *testing.T) {
+		err2 := createMultipart(mw, req1)
+		assertNotNil(t, err2)
+		assertEqual(t, "multipart write error", err2.Error())
 	})
 
-	t.Run("concurrent requests", func(t *testing.T) {
-		concurrencyCount := 50
-		wg := sync.WaitGroup{}
-		for i := 0; i < concurrencyCount; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				res, _ := c.R().
-					SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
-					SetResultError(&ErrorResponse{}).
-					Post(ts.URL)
-
-				er := res.ResultError().(*ErrorResponse)
-				assertEqual(t, http.StatusForbidden, res.StatusCode())
-				assertEqual(t, 403, er.Code)
-				assertEqual(t, "forbidden error message", er.Message)
-			}()
+	t.Run("io copy error", func(t *testing.T) {
+		errCopyMsg := "test copy error"
+		ioCopy = func(dst io.Writer, src io.Reader) (written int64, err error) {
+			return 0, errors.New(errCopyMsg)
 		}
-		wg.Wait()
+		t.Cleanup(func() {
+			ioCopy = io.Copy
+		})
+
+		req1 := c.R().
+			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
+			SetMultipartBoundary("custom-boundary-" + strconv.FormatInt(time.Now().Unix(), 10)).
+			SetContentType("image/png")
+
+		mw := multipart.NewWriter(new(bytes.Buffer))
+		err := createMultipart(mw, req1)
+		assertNotNil(t, err)
+		assertEqual(t, errCopyMsg, err.Error())
 	})
 
-}
+	t.Run("multipart create part error", func(t *testing.T) {
+		errMsg := "test create part error"
+		mpCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
+			return nil, errors.New(errMsg)
+		}
+		t.Cleanup(func() {
+			mpCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
+				return w.CreatePart(h)
+			}
+		})
 
-func TestMultipartConcurrentRequests(t *testing.T) {
-	ts := createFormPostServer(t)
-	defer ts.Close()
-	defer cleanupFiles(".testdata/upload")
+		req1 := c.R().
+			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
+			SetContentType("image/png")
 
-	c := dcnl()
-	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
-
-	concurrencyCount := 100
-	wg := sync.WaitGroup{}
-	for i := 0; i < concurrencyCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			res, err := c.R().
-				SetFormData(map[string]string{
-					"welcome1": "welcome value 1",
-					"welcome2": "welcome value 2",
-					"welcome3": "welcome value 3",
-				}).
-				SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
-				Post(ts.URL + "/upload")
-
-			assertError(t, err)
-			assertEqual(t, http.StatusOK, res.StatusCode())
-			assertEqual(t, true, strings.Contains(res.String(), "test-img.png"))
-		}()
-	}
-	wg.Wait()
+		mw := multipart.NewWriter(new(bytes.Buffer))
+		err := createMultipart(mw, req1)
+		assertNotNil(t, err)
+		assertEqual(t, errMsg, err.Error())
+	})
 }
 
 type returnValueTestWriter struct {

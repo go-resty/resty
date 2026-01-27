@@ -8,7 +8,6 @@ package resty
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -59,10 +58,6 @@ type MultipartField struct {
 	//
 	// It is primarily added for ordered multipart form-data field use cases
 	Values []string
-
-	// tempBuf is used to preserve the byte(s) read from the file to detect the content type.
-	// Or any possible read error early.
-	tempBuf []byte
 }
 
 // Clone method returns the deep copy of m except [io.Reader].
@@ -78,10 +73,6 @@ func (mf *MultipartField) resetReader() error {
 		return err
 	}
 	return nil
-}
-
-func (mf *MultipartField) isValues() bool {
-	return len(mf.Values) > 0
 }
 
 func (mf *MultipartField) close() {
@@ -104,7 +95,7 @@ func (mf *MultipartField) createHeader() textproto.MIMEHeader {
 	return h
 }
 
-func (mf *MultipartField) openFile() error {
+func (mf *MultipartField) openFileIfRequired() error {
 	if isStringEmpty(mf.FilePath) || mf.Reader != nil {
 		return nil
 	}
@@ -124,21 +115,6 @@ func (mf *MultipartField) openFile() error {
 	mf.Reader = file
 	mf.FileSize = fileStat.Size()
 
-	return nil
-}
-
-func (mf *MultipartField) detectContentType() error {
-	if !isStringEmpty(mf.ContentType) || mf.Reader == nil {
-		return nil
-	}
-
-	p := make([]byte, 512)
-	size, err := mf.Reader.Read(p)
-	if err != nil && err != io.EOF {
-		return err
-	}
-	mf.tempBuf = p[:size]
-	mf.ContentType = http.DetectContentType(mf.tempBuf)
 	return nil
 }
 

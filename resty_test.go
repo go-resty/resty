@@ -355,8 +355,6 @@ func createPostServer(t *testing.T) *httptest.Server {
 
 func createFormPostServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("Content-Type: %v", r.Header.Get(hdrConnectionKey))
-
 		if r.Method == MethodPost {
 			_ = r.ParseMultipartForm(10e6)
 
@@ -408,9 +406,9 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 						defer func() {
 							_ = f.Close()
 						}()
-						size, _ := io.Copy(f, infile)
+						_, _ = io.Copy(f, infile)
 
-						_, _ = w.Write([]byte(fmt.Sprintf("File: %v, uploaded as: %v, size: %v\n", hdr.Filename, fname, size)))
+						_, _ = w.Write([]byte(fmt.Sprintf("File: %v, uploaded as: %v\n", hdr.Filename, fname)))
 					}
 				}
 
