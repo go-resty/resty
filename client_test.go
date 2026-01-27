@@ -122,7 +122,7 @@ func TestClientRedirectPolicy(t *testing.T) {
 		SetHeader("Name3", "Value3").
 		Get(ts.URL + "/redirect-1")
 
-	assertEqual(t, true, err.Error() == "Get \"/redirect-21\": resty: stopped after 20 redirects")
+	assertTrue(t, err.Error() == "Get \"/redirect-21\": resty: stopped after 20 redirects")
 
 	redirects := res.RedirectHistory()
 	assertEqual(t, 20, len(redirects))
@@ -144,7 +144,7 @@ func TestClientTimeout(t *testing.T) {
 
 	c := dcnl().SetTimeout(200 * time.Millisecond)
 	_, err := c.R().Get(ts.URL + "/set-timeout-test")
-	assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+	assertErrorIs(t, context.DeadlineExceeded, err)
 }
 
 func TestClientTimeoutWithinThreshold(t *testing.T) {
@@ -193,19 +193,40 @@ func TestClientProxy(t *testing.T) {
 }
 
 func TestClientSetCertificates(t *testing.T) {
-	client := dcnl()
-	client.SetCertificates(tls.Certificate{})
+	certFile := filepath.Join(getTestDataPath(), "cert.pem")
+	keyFile := filepath.Join(getTestDataPath(), "key.pem")
 
-	transport, err := client.HTTPTransport()
+	t.Run("client cert from file", func(t *testing.T) {
+		c := dcnl()
+		c.SetCertificateFromFile(certFile, keyFile)
+		assertEqual(t, 1, len(c.TLSClientConfig().Certificates))
+	})
 
-	assertNil(t, err)
-	assertEqual(t, 1, len(transport.TLSClientConfig.Certificates))
+	t.Run("error-client cert from file", func(t *testing.T) {
+		c := dcnl()
+		c.SetCertificateFromFile(certFile+"no", keyFile+"no")
+		assertEqual(t, 0, len(c.TLSClientConfig().Certificates))
+	})
+
+	t.Run("client cert from string", func(t *testing.T) {
+		certPemData, _ := os.ReadFile(certFile)
+		keyPemData, _ := os.ReadFile(keyFile)
+		c := dcnl()
+		c.SetCertificateFromString(string(certPemData), string(keyPemData))
+		assertEqual(t, 1, len(c.TLSClientConfig().Certificates))
+	})
+
+	t.Run("error-client cert from string", func(t *testing.T) {
+		c := dcnl()
+		c.SetCertificateFromString(string("empty"), string("empty"))
+		assertEqual(t, 0, len(c.TLSClientConfig().Certificates))
+	})
 }
 
 func TestClientSetRootCertificate(t *testing.T) {
 	t.Run("root cert", func(t *testing.T) {
 		client := dcnl()
-		client.SetRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
+		client.SetRootCertificates(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
 		transport, err := client.HTTPTransport()
 
@@ -215,7 +236,7 @@ func TestClientSetRootCertificate(t *testing.T) {
 
 	t.Run("root cert not exists", func(t *testing.T) {
 		client := dcnl()
-		client.SetRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
+		client.SetRootCertificates(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
 		transport, err := client.HTTPTransport()
 
@@ -354,7 +375,7 @@ func TestClientTLSConfigerInterface(t *testing.T) {
 
 func TestClientSetClientRootCertificate(t *testing.T) {
 	client := dcnl()
-	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "sample-root.pem"))
+	client.SetClientRootCertificates(filepath.Join(getTestDataPath(), "sample-root.pem"))
 
 	transport, err := client.HTTPTransport()
 
@@ -364,7 +385,7 @@ func TestClientSetClientRootCertificate(t *testing.T) {
 
 func TestClientSetClientRootCertificateNotExists(t *testing.T) {
 	client := dcnl()
-	client.SetClientRootCertificate(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
+	client.SetClientRootCertificates(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
 	transport, err := client.HTTPTransport()
 
@@ -375,9 +396,10 @@ func TestClientSetClientRootCertificateNotExists(t *testing.T) {
 func TestClientSetClientRootCertificateWatcher(t *testing.T) {
 	t.Run("Cert exists", func(t *testing.T) {
 		client := dcnl()
-		client.SetClientRootCertificateWatcher(filepath.Join(getTestDataPath(), "sample-root.pem"), &CertWatcherOptions{
-			PoolInterval: time.Second * 1,
-		})
+		client.SetClientRootCertificatesWatcher(
+			&CertWatcherOptions{PoolInterval: time.Second * 1},
+			filepath.Join(getTestDataPath(), "sample-root.pem"),
+		)
 
 		transport, err := client.HTTPTransport()
 
@@ -387,7 +409,7 @@ func TestClientSetClientRootCertificateWatcher(t *testing.T) {
 
 	t.Run("Cert does not exist", func(t *testing.T) {
 		client := dcnl()
-		client.SetClientRootCertificateWatcher(filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"), nil)
+		client.SetClientRootCertificatesWatcher(nil, filepath.Join(getTestDataPath(), "not-exists-sample-root.pem"))
 
 		transport, err := client.HTTPTransport()
 
@@ -443,6 +465,51 @@ func TestClientSetHeaderVerbatim(t *testing.T) {
 	assertEqual(t, "value_standard", c.Header().Get("Header-Lowercase"))
 }
 
+func TestClientSetHeaderAny(t *testing.T) {
+	c := dcnl().
+		SetHeaderAny("X-Int-Value", 42).
+		SetHeaderAny("X-String-Value", "hello")
+
+	assertEqual(t, "42", c.Header().Get("X-Int-Value"))
+	assertEqual(t, "hello", c.Header().Get("X-String-Value"))
+}
+
+func TestClientSetHeaderVerbatimAny(t *testing.T) {
+	c := dcnl().
+		SetHeaderVerbatimAny("header-lowercase", 123)
+
+	//lint:ignore SA1008 valid one, so ignore this!
+	unConventionHdrValue := strings.Join(c.Header()["header-lowercase"], "")
+	assertEqual(t, "123", unConventionHdrValue)
+}
+
+func TestClientSetQueryParamAny(t *testing.T) {
+	c := dcnl().
+		SetQueryParamAny("page", 5).
+		SetQueryParamAny("active", true)
+
+	assertEqual(t, "5", c.QueryParams().Get("page"))
+	assertEqual(t, "true", c.QueryParams().Get("active"))
+}
+
+func TestClientSetPathParamAny(t *testing.T) {
+	c := dcnl().
+		SetPathParamAny("userId", 42).
+		SetPathParamAny("name", "john doe")
+
+	assertEqual(t, "42", c.PathParams()["userId"])
+	assertEqual(t, "john%20doe", c.PathParams()["name"])
+}
+
+func TestClientSetRawPathParamAny(t *testing.T) {
+	c := dcnl().
+		SetRawPathParamAny("userId", 42).
+		SetRawPathParamAny("name", "john doe")
+
+	assertEqual(t, "42", c.PathParams()["userId"])
+	assertEqual(t, "john doe", c.PathParams()["name"])
+}
+
 func TestClientSetTransport(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
@@ -458,7 +525,7 @@ func TestClientSetTransport(t *testing.T) {
 	transportInUse, err := client.HTTPTransport()
 
 	assertNil(t, err)
-	assertEqual(t, true, transport == transportInUse)
+	assertTrue(t, transport == transportInUse, "HTTP Transport should be of same type")
 }
 
 func TestClientSetScheme(t *testing.T) {
@@ -466,7 +533,7 @@ func TestClientSetScheme(t *testing.T) {
 
 	client.SetScheme("http")
 
-	assertEqual(t, true, client.scheme == "http")
+	assertEqual(t, "http", client.scheme, "Scheme should be 'http'")
 }
 
 func TestClientSetCookieJar(t *testing.T) {
@@ -474,10 +541,10 @@ func TestClientSetCookieJar(t *testing.T) {
 	backupJar := client.httpClient.Jar
 
 	client.SetCookieJar(nil)
-	assertNil(t, client.httpClient.Jar)
+	assertNil(t, client.httpClient.Jar, "CookieJar should be nil")
 
 	client.SetCookieJar(backupJar)
-	assertEqual(t, true, client.httpClient.Jar == backupJar)
+	assertTrue(t, client.httpClient.Jar == backupJar, "CookieJar should be set back to original jar")
 }
 
 // This test methods exist for test coverage purpose
@@ -488,28 +555,40 @@ func TestClientSettingsCoverage(t *testing.T) {
 	assertNotNil(t, c.CookieJar())
 	assertNotNil(t, c.ContentTypeEncoders())
 	assertNotNil(t, c.ContentTypeDecoders())
-	assertEqual(t, false, c.IsDebug())
+	assertFalse(t, c.IsDebug())
 	assertEqual(t, math.MaxInt32, c.DebugBodyLimit())
 	assertNotNil(t, c.Logger())
-	assertEqual(t, false, c.IsContentLength())
 	assertEqual(t, 0, c.RetryCount())
 	assertEqual(t, time.Millisecond*100, c.RetryWaitTime())
 	assertEqual(t, time.Second*2, c.RetryMaxWaitTime())
-	assertEqual(t, false, c.IsTrace())
+	assertFalse(t, c.IsTrace())
+	assertEqual(t, 0, len(c.RetryConditions()))
 
 	authToken := "sample auth token value"
 	c.SetAuthToken(authToken)
 	assertEqual(t, authToken, c.AuthToken())
 
+	customAuthHeader := "X-Custom-Authorization"
+	c.SetHeaderAuthorizationKey(customAuthHeader)
+	assertEqual(t, customAuthHeader, c.HeaderAuthorizationKey())
+
 	c.SetCloseConnection(true)
 
 	c.DisableDebug()
 
-	assertEqual(t, true, c.IsRetryDefaultConditions())
+	assertTrue(t, c.IsRetryDefaultConditions())
 	c.DisableRetryDefaultConditions()
-	assertEqual(t, false, c.IsRetryDefaultConditions())
+	assertFalse(t, c.IsRetryDefaultConditions())
 	c.EnableRetryDefaultConditions()
-	assertEqual(t, true, c.IsRetryDefaultConditions())
+	assertTrue(t, c.IsRetryDefaultConditions())
+
+	nr := nopReader{}
+	n, err1 := nr.Read(nil)
+	assertEqual(t, 0, n)
+	assertEqual(t, io.EOF, err1)
+	b, err1 := nr.ReadByte()
+	assertEqual(t, byte(0), b)
+	assertEqual(t, io.EOF, err1)
 
 	// [Start] Custom Transport scenario
 	ct := dcnl()
@@ -538,7 +617,9 @@ func TestContentLengthWhenBodyIsNil(t *testing.T) {
 	client := dcnl()
 
 	fnPreRequestMiddleware1 := func(c *Client, r *Request) error {
-		assertEqual(t, "0", r.Header.Get(hdrContentLengthKey))
+		// validate
+		assertEqual(t, int64(0), r.contentLength)
+		assertEqual(t, int64(0), r.RawRequest.ContentLength)
 		return nil
 	}
 	client.SetRequestMiddlewares(
@@ -546,7 +627,7 @@ func TestContentLengthWhenBodyIsNil(t *testing.T) {
 		fnPreRequestMiddleware1,
 	)
 
-	client.R().SetContentLength(true).SetBody(nil).Get("http://localhost")
+	client.R().SetBody(nil).Get("http://localhost")
 }
 
 func TestClientPreRequestMiddlewares(t *testing.T) {
@@ -565,7 +646,7 @@ func TestClientPreRequestMiddlewares(t *testing.T) {
 			b, _ := r.RawRequest.GetBody()
 			rb, _ := io.ReadAll(b)
 			c.Logger().Debugf("%s %v", string(rb), len(rb))
-			assertEqual(t, true, len(rb) >= 45)
+			assertTrue(t, len(rb) >= 45)
 		}
 		return nil
 	}
@@ -621,20 +702,20 @@ func TestClientAllowMethodGetPayload(t *testing.T) {
 	t.Run("method GET allow string payload at client level", func(t *testing.T) {
 		c := dcnl()
 		c.SetAllowMethodGetPayload(true)
-		assertEqual(t, true, c.AllowMethodGetPayload())
+		assertTrue(t, c.AllowMethodGetPayload())
 
 		payload := "test-payload"
 		resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
 
 		assertError(t, err)
-		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, payload, resp.String())
+		assertEqual(t, http.StatusOK, resp.StatusCode(), "Status code should be 200 OK")
+		assertEqual(t, payload, resp.String(), "Response payload should be same as request payload")
 	})
 
 	t.Run("method GET allow io.Reader payload at client level", func(t *testing.T) {
 		c := dcnl()
 		c.SetAllowMethodGetPayload(true)
-		assertEqual(t, true, c.AllowMethodGetPayload())
+		assertTrue(t, c.AllowMethodGetPayload())
 
 		payload := "test-payload"
 		body := bytes.NewReader([]byte(payload))
@@ -642,13 +723,13 @@ func TestClientAllowMethodGetPayload(t *testing.T) {
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, payload, resp.String())
+		assertEqual(t, payload, resp.String(), "Response payload should be same as request payload")
 	})
 
 	t.Run("method GET disallow payload at client level", func(t *testing.T) {
 		c := dcnl()
 		c.SetAllowMethodGetPayload(false)
-		assertEqual(t, false, c.AllowMethodGetPayload())
+		assertFalse(t, c.AllowMethodGetPayload())
 
 		payload := bytes.NewReader([]byte("test-payload"))
 		resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
@@ -667,7 +748,7 @@ func TestClientAllowMethodDeletePayload(t *testing.T) {
 		c := dcnl().SetBaseURL(ts.URL)
 
 		c.SetAllowMethodDeletePayload(true)
-		assertEqual(t, true, c.AllowMethodDeletePayload())
+		assertTrue(t, c.AllowMethodDeletePayload())
 
 		payload := "test-payload"
 		resp, err := c.R().SetBody(payload).Delete("/delete")
@@ -681,7 +762,7 @@ func TestClientAllowMethodDeletePayload(t *testing.T) {
 		c := dcnl().SetBaseURL(ts.URL)
 
 		c.SetAllowMethodDeletePayload(true)
-		assertEqual(t, true, c.AllowMethodDeletePayload())
+		assertTrue(t, c.AllowMethodDeletePayload())
 
 		payload := "test-payload"
 		body := bytes.NewReader([]byte(payload))
@@ -696,14 +777,14 @@ func TestClientAllowMethodDeletePayload(t *testing.T) {
 		c := dcnl().SetBaseURL(ts.URL)
 
 		c.SetAllowMethodDeletePayload(false)
-		assertEqual(t, false, c.AllowMethodDeletePayload())
+		assertFalse(t, c.AllowMethodDeletePayload())
 
 		payload := bytes.NewReader([]byte("test-payload"))
 		resp, err := c.R().SetBody(payload).Delete("/delete")
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, "", resp.String())
+		assertEqual(t, "", resp.String(), "Response payload should be empty")
 	})
 }
 
@@ -863,13 +944,14 @@ func TestClientLogCallbacks(t *testing.T) {
 
 	c, lb := dcldb()
 
-	c.OnRequestDebugLog(func(r *DebugLog) {
+	c.OnDebugLog(func(dl *DebugLog) {
+		// request
 		// masking authorization header
-		r.Header.Set("Authorization", "Bearer *******************************")
-	})
-	c.OnResponseDebugLog(func(r *DebugLog) {
-		r.Header.Add("X-Debug-Response-Log", "Modified :)")
-		r.Body += "\nModified the response body content"
+		dl.Request.Header.Set("Authorization", "Bearer *******************************")
+
+		// response
+		dl.Response.Header.Add("X-Debug-Response-Log", "Modified :)")
+		dl.Response.Body += "\nModified the response body content"
 	})
 
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
@@ -884,33 +966,21 @@ func TestClientLogCallbacks(t *testing.T) {
 
 	// Validating debug log updates
 	logInfo := lb.String()
-	assertEqual(t, true, strings.Contains(logInfo, "Bearer *******************************"))
-	assertEqual(t, true, strings.Contains(logInfo, "X-Debug-Response-Log"))
-	assertEqual(t, true, strings.Contains(logInfo, "Modified the response body content"))
+	assertTrue(t, strings.Contains(logInfo, "Bearer *******************************"))
+	assertTrue(t, strings.Contains(logInfo, "X-Debug-Response-Log"))
+	assertTrue(t, strings.Contains(logInfo, "Modified the response body content"))
 
 	// overwrite scenario
-	c.OnRequestDebugLog(func(r *DebugLog) {
-		// overwrite request debug log
+	c.OnDebugLog(func(dl *DebugLog) {
+		// overwrite debug log
 	})
 	resp, err = c.R().
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
 		Get(ts.URL + "/profile")
 	assertNil(t, err)
 	assertNotNil(t, resp)
-	assertEqual(t, int64(50), resp.Size())
-	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-request-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func1 to=resty.dev/v3.TestClientLogCallbacks.func3"))
-
-	c.OnRequestDebugLog(nil)
-	c.OnResponseDebugLog(func(r *DebugLog) {
-		// overwrite response debug log
-	})
-	resp, err = c.R().
-		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
-		Get(ts.URL + "/profile")
-	assertNil(t, err)
-	assertNotNil(t, resp)
-	assertEqual(t, int64(50), resp.Size())
-	assertEqual(t, true, strings.Contains(lb.String(), "Overwriting an existing on-response-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func2 to=resty.dev/v3.TestClientLogCallbacks.func4"))
+	assertEqual(t, int64(66), resp.Size())
+	assertTrue(t, strings.Contains(lb.String(), "Overwriting an existing on-debug-log callback from=resty.dev/v3.TestClientLogCallbacks.func1 to=resty.dev/v3.TestClientLogCallbacks.func2"))
 }
 
 func TestDebugLogSimultaneously(t *testing.T) {
@@ -947,6 +1017,7 @@ func TestCustomTransportSettings(t *testing.T) {
 		ExpectContinueTimeout:  1 * time.Second,
 		MaxIdleConns:           50,
 		MaxIdleConnsPerHost:    3,
+		MaxConnsPerHost:        100,
 		ResponseHeaderTimeout:  10 * time.Second,
 		MaxResponseHeaderBytes: 1 << 10,
 		WriteBufferSize:        2 << 10,
@@ -1012,7 +1083,7 @@ func TestNewWithLocalAddr(t *testing.T) {
 	assertEqual(t, "TestGet: text response", resp.String())
 }
 
-func TestClientOnResponseError(t *testing.T) {
+func TestClientOnResponseFailure(t *testing.T) {
 	tests := []struct {
 		name        string
 		setup       func(*Client)
@@ -1024,13 +1095,13 @@ func TestClientOnResponseError(t *testing.T) {
 			name: "successful_request",
 		},
 		{
-			name: "http_status_error",
+			name: "http_status_failure",
 			setup: func(client *Client) {
 				client.SetAuthToken("BAD")
 			},
 		},
 		{
-			name: "before_request_error",
+			name: "before_request_failure",
 			setup: func(client *Client) {
 				client.AddRequestMiddleware(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
@@ -1039,7 +1110,7 @@ func TestClientOnResponseError(t *testing.T) {
 			isError: true,
 		},
 		{
-			name: "before_request_error_retry",
+			name: "before_request_failure_retry",
 			setup: func(client *Client) {
 				client.SetRetryCount(3).AddRequestMiddleware(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
@@ -1048,7 +1119,7 @@ func TestClientOnResponseError(t *testing.T) {
 			isError: true,
 		},
 		{
-			name: "after_response_error",
+			name: "after_response_failure",
 			setup: func(client *Client) {
 				client.AddResponseMiddleware(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
@@ -1058,7 +1129,7 @@ func TestClientOnResponseError(t *testing.T) {
 			hasResponse: true,
 		},
 		{
-			name: "after_response_error_retry",
+			name: "after_response_failure_retry",
 			setup: func(client *Client) {
 				client.SetRetryCount(3).AddResponseMiddleware(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
@@ -1110,7 +1181,7 @@ func TestClientOnResponseError(t *testing.T) {
 			var errorHook1, errorHook2, successHook1, successHook2, panicHook1, panicHook2 int
 			defer func() {
 				if rec := recover(); rec != nil {
-					assertEqual(t, true, test.panics)
+					assertTrue(t, test.panics, "expected to panic")
 					assertEqual(t, 0, errorHook1)
 					assertEqual(t, 0, successHook1)
 					assertEqual(t, 1, panicHook1)
@@ -1122,11 +1193,11 @@ func TestClientOnResponseError(t *testing.T) {
 				SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
 				SetRetryCount(0).
 				SetRetryMaxWaitTime(time.Microsecond).
-				AddRetryCondition(func(response *Response, err error) bool {
+				AddRetryConditions(func(response *Response, err error) bool {
 					if err != nil {
 						return true
 					}
-					return response.IsError()
+					return response.IsStatusFailure()
 				}).
 				OnError(func(r *Request, err error) {
 					assertErrorHook(r, err)
@@ -1324,6 +1395,15 @@ func TestClientClone(t *testing.T) {
 
 	// assert interface/pointer type
 	assertEqual(t, parent.Client(), clone.Client())
+
+	// assert cookies
+	parentCookies := parent.Cookies()
+	cloneCookies := clone.Cookies()
+	assertEqual(t, len(parentCookies), len(cloneCookies))
+	for i := range parentCookies {
+		assertEqual(t, parentCookies[i].Name, cloneCookies[i].Name)
+		assertEqual(t, parentCookies[i].Value, cloneCookies[i].Value)
+	}
 }
 
 func TestResponseBodyLimit(t *testing.T) {
@@ -1422,72 +1502,157 @@ func TestClientDebugf(t *testing.T) {
 	})
 }
 
-var _ CircuitBreakerPolicy = CircuitBreaker5xxPolicy
+func TestClientOnClose(t *testing.T) {
+	var hookExecuted bool
 
-func TestClientCircuitBreaker(t *testing.T) {
-	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		t.Logf("Method: %v", r.Method)
-		t.Logf("Path: %v", r.URL.Path)
-
-		switch r.URL.Path {
-		case "/200":
-			w.WriteHeader(http.StatusOK)
-			return
-		case "/500":
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
+	c := dcnl()
+	c.OnClose(func() {
+		hookExecuted = true
 	})
+
+	err := c.Close()
+	assertNil(t, err)
+	assertTrue(t, hookExecuted, "OnClose hook should be executed")
+}
+
+func TestClientOnCloseMultipleHooks(t *testing.T) {
+	var executionOrder []string
+
+	c := dcnl()
+	c.OnClose(func() {
+		executionOrder = append(executionOrder, "first")
+	})
+	c.OnClose(func() {
+		executionOrder = append(executionOrder, "second")
+	})
+	c.OnClose(func() {
+		executionOrder = append(executionOrder, "third")
+	})
+
+	err := c.Close()
+	assertNil(t, err)
+	assertEqual(t, []string{"first", "second", "third"}, executionOrder)
+}
+
+func TestClientHedgingBasic(t *testing.T) {
+	var attemptCount int32
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
-	failThreshold := uint32(2)
-	successThreshold := uint32(1)
-	timeout := 500 * time.Millisecond
+	c := dcnl()
+	c.EnableHedging(20*time.Millisecond, 3, 0)
 
-	cb := NewCircuitBreaker().
-		SetTimeout(timeout).
-		SetFailureThreshold(failThreshold).
-		SetSuccessThreshold(successThreshold).
-		SetPolicies(CircuitBreaker5xxPolicy)
-
-	c := dcnl().SetCircuitBreaker(cb)
-
-	for i := uint32(0); i < failThreshold; i++ {
-		_, err := c.R().Get(ts.URL + "/500")
-		assertNil(t, err)
-	}
-	resp, err := c.R().Get(ts.URL + "/500")
-	assertErrorIs(t, ErrCircuitBreakerOpen, err)
-	assertNil(t, resp)
-	assertEqual(t, circuitBreakerStateOpen, c.circuitBreaker.getState())
-
-	time.Sleep(timeout + 1*time.Millisecond)
-	assertEqual(t, circuitBreakerStateHalfOpen, c.circuitBreaker.getState())
-
-	_, err = c.R().Get(ts.URL + "/500")
+	resp, err := c.R().Get(ts.URL + "/hedging-slow-first")
 	assertError(t, err)
-	assertEqual(t, circuitBreakerStateOpen, c.circuitBreaker.getState())
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertNotEqual(t, "", resp.String())
+}
 
-	time.Sleep(timeout + 1*time.Millisecond)
-	assertEqual(t, circuitBreakerStateHalfOpen, c.circuitBreaker.getState())
+func TestClientHedgingDisable(t *testing.T) {
+	var attemptCount int32
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
+	defer ts.Close()
 
-	for i := uint32(0); i < successThreshold; i++ {
-		_, err := c.R().Get(ts.URL + "/200")
-		assertNil(t, err)
+	c := dcnl()
+	c.EnableHedging(20*time.Millisecond, 3, 0)
+	assertEqual(t, true, c.IsHedgingEnabled())
+
+	c.DisableHedging()
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	resp, err := c.R().Get(ts.URL + "/hedging-slow-first")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+func TestClientHedgingNil(t *testing.T) {
+	c := dcnl()
+	c.hedging = nil
+	c.wrapTransportWithHedging()
+
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	_, ok := c.httpClient.Transport.(*hedgingTransport)
+	if ok {
+		t.Error("Transport shouldn't be hedgingTransport when hedging is nil")
 	}
-	assertEqual(t, circuitBreakerStateClosed, c.circuitBreaker.getState())
+}
 
-	resp, err = c.R().Get(ts.URL + "/200")
-	assertNil(t, err)
+func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
+	c := dcnl()
+
+	// Set retry first
+	c.SetRetryCount(2)
+	assertEqual(t, 2, c.RetryCount())
+
+	// Enable hedging should disable retry by default
+	c.EnableHedging(50*time.Millisecond, 3, 0)
+	assertEqual(t, 0, c.RetryCount())
+
+	// But user can re-enable retry as fallback
+	c.SetRetryCount(1)
+	assertEqual(t, 1, c.RetryCount())
+	assertEqual(t, true, c.IsHedgingEnabled())
+
+	// Disable hedging
+	c.DisableHedging()
+	assertEqual(t, false, c.IsHedgingEnabled())
+	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
+}
+
+func TestClientHedgingConfiguration(t *testing.T) {
+	c := dcnl()
+
+	// Setters require hedging to be enabled first
+	assertEqual(t, false, c.IsHedgingEnabled())
+
+	c.EnableHedging(50*time.Millisecond, 3, 10.0)
+
+	assertEqual(t, true, c.IsHedgingEnabled())
+	assertEqual(t, 50*time.Millisecond, c.HedgingDelay())
+	assertEqual(t, 3, c.HedgingUpTo())
+	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
+
+	// Now we can update individual settings
+	c.SetHedgingDelay(100 * time.Millisecond)
+	assertEqual(t, 100*time.Millisecond, c.HedgingDelay())
+
+	c.SetHedgingUpTo(5)
+	assertEqual(t, 5, c.HedgingUpTo())
+
+	c.SetHedgingMaxPerSecond(20.0)
+	assertEqual(t, 20.0, c.HedgingMaxPerSecond())
+}
+
+func TestClientHedgingWithRateLimit(t *testing.T) {
+	var attemptCount int32
+	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
+	defer ts.Close()
+
+	c := dcnl()
+	c.EnableHedging(10*time.Millisecond, 10, 5.0)
+
+	resp, err := c.R().Get(ts.URL + "/hedging-slow-all")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
+func TestClientHedgingSafeMethodsOnly(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	c.EnableHedging(20*time.Millisecond, 3, 0)
+
+	resp, err := c.R().Get(ts.URL + "/")
+	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
-	_, err = c.R().Get(ts.URL + "/500")
-	assertError(t, err)
-	assertEqual(t, uint32(1), c.circuitBreaker.failureCount.Load())
+	resp2, err2 := c.R().Head(ts.URL + "/")
+	assertError(t, err2)
+	assertEqual(t, http.StatusOK, resp2.StatusCode())
 
-	time.Sleep(timeout)
-
-	_, err = c.R().Get(ts.URL + "/500")
-	assertError(t, err)
-	assertEqual(t, uint32(1), c.circuitBreaker.failureCount.Load())
+	resp3, err3 := c.R().Options(ts.URL + "/")
+	assertError(t, err3)
+	assertEqual(t, http.StatusOK, resp3.StatusCode())
 }

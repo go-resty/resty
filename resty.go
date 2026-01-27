@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 // SPDX-License-Identifier: MIT
 
-// Package resty provides Simple HTTP and REST client library for Go.
+// Package resty provides Simple HTTP, REST, and SSE client library for Go.
 package resty // import "resty.dev/v3"
 
 import (
@@ -20,7 +20,7 @@ import (
 )
 
 // Version # of resty
-const Version = "3.0.0-dev"
+const Version = "3.0.0-beta.6"
 
 // New method creates a new Resty client.
 func New() *Client {
@@ -127,6 +127,10 @@ func createTransport(dialer *net.Dialer, transportSettings *TransportSettings) *
 		t.MaxIdleConnsPerHost = runtime.GOMAXPROCS(0) + 1
 	}
 
+	if transportSettings.MaxConnsPerHost > 0 {
+		t.MaxConnsPerHost = transportSettings.MaxConnsPerHost
+	}
+
 	//
 	// No default value in Resty for following settings, added to
 	// provide ability to set value otherwise the Go HTTP client
@@ -182,6 +186,7 @@ func createClient(hc *http.Client) *Client {
 
 	// Logger
 	c.SetLogger(createLogger())
+	c.SetDebugLogFormatter(DebugLogFormatter)
 
 	c.AddContentTypeEncoder(jsonKey, encodeJSON)
 	c.AddContentTypeEncoder(xmlKey, encodeXML)

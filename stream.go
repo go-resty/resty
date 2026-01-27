@@ -9,10 +9,12 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"io"
+	"sync"
 )
 
 var (
@@ -54,6 +56,30 @@ func encodeJSONEscapeHTMLIndent(w io.Writer, v any, esc bool, indent string) err
 
 func decodeJSON(r io.Reader, v any) error {
 	dec := json.NewDecoder(r)
+
+	// Handle nopReadCloser specially to support multiple JSON objects
+	// while preventing infinite loops
+	if nrc, ok := r.(*nopReadCloser); ok {
+		// Temporarily disable auto-reset to prevent infinite loops
+		originalReset := nrc.resetOnEOF
+		nrc.resetOnEOF = false
+		defer func() { nrc.resetOnEOF = originalReset }()
+
+		if err := doDecodeJSON(dec, v); err != nil {
+			return err
+		}
+
+		// After decoding, reset for future reads
+		nrc.Reset()
+		return nil
+	}
+
+	// For other readers, decode multiple JSON objects as intended
+	return doDecodeJSON(dec, v)
+}
+
+func doDecodeJSON(dec *json.Decoder, v any) error {
+	// Decode all JSON objects in the data
 	for {
 		if err := dec.Decode(v); err == io.EOF {
 			break
@@ -80,15 +106,12 @@ func decodeXML(r io.Reader, v any) error {
 	return nil
 }
 
+var gzipPool = sync.Pool{New: func() any { return new(gzip.Reader) }}
+
 func decompressGzip(r io.ReadCloser) (io.ReadCloser, error) {
-	nr, err := gzip.NewReader(r)
-	if err != nil {
-		return nil, err
-	}
-
-	gz := &gzipReader{s: r, r: nr}
-
-	return gz, nil
+	gr := gzipPool.Get().(*gzip.Reader)
+	err := gr.Reset(r)
+	return &gzipReader{s: r, r: gr}, err
 }
 
 type gzipReader struct {
@@ -101,18 +124,19 @@ func (gz *gzipReader) Read(p []byte) (n int, err error) {
 }
 
 func (gz *gzipReader) Close() error {
-	closeq(gz.r)
+	// TODO investigate sync.Pool usage safety with gzip.Reader reference GH-#1087
+	// gz.r.Reset(nopReader{})
+	// gzipPool.Put(gz.r)
 	closeq(gz.s)
 	return nil
 }
 
-func decompressDeflate(r io.ReadCloser) (io.ReadCloser, error) {
-	d := &deflateReader{
-		s: r,
-		r: flate.NewReader(r),
-	}
+var flatePool = sync.Pool{New: func() any { return flate.NewReader(nopReader{}) }}
 
-	return d, nil
+func decompressDeflate(r io.ReadCloser) (io.ReadCloser, error) {
+	fr := flatePool.Get().(io.ReadCloser)
+	err := fr.(flate.Resetter).Reset(r, nil)
+	return &deflateReader{s: r, r: fr}, err
 }
 
 type deflateReader struct {
@@ -125,7 +149,8 @@ func (d *deflateReader) Read(p []byte) (n int, err error) {
 }
 
 func (d *deflateReader) Close() error {
-	closeq(d.r)
+	d.r.(flate.Resetter).Reset(nopReader{}, nil)
+	flatePool.Put(d.r)
 	closeq(d.s)
 	return nil
 }
@@ -197,15 +222,41 @@ func (r *copyReadCloser) Close() error {
 var _ io.ReadCloser = (*nopReadCloser)(nil)
 
 type nopReadCloser struct {
-	r *bytes.Reader
+	r          *bytes.Reader
+	resetOnEOF bool // Whether to reset on EOF
 }
 
 func (r *nopReadCloser) Read(p []byte) (int, error) {
 	n, err := r.r.Read(p)
-	if err == io.EOF {
+	if err == io.EOF && r.resetOnEOF {
 		r.r.Seek(0, io.SeekStart)
 	}
 	return n, err
 }
 
 func (r *nopReadCloser) Close() error { return nil }
+
+// Reset allows manual reset of the reader position
+func (r *nopReadCloser) Reset() {
+	r.r.Seek(0, io.SeekStart)
+}
+
+var _ flate.Reader = (*nopReader)(nil)
+
+type nopReader struct{}
+
+func (nopReader) Read([]byte) (int, error) { return 0, io.EOF }
+func (nopReader) ReadByte() (byte, error)  { return 0, io.EOF }
+
+type gracefulStopReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (gsr *gracefulStopReader) Read(p []byte) (n int, err error) {
+	if err := gsr.ctx.Err(); err != nil {
+		// Return io.EOF to stop io.Copy gracefully without an error.
+		return 0, io.EOF
+	}
+	return gsr.r.Read(p)
+}

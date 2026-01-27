@@ -355,6 +355,8 @@ func createPostServer(t *testing.T) *httptest.Server {
 
 func createFormPostServer(t *testing.T) *httptest.Server {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("Content-Type: %v", r.Header.Get(hdrConnectionKey))
+
 		if r.Method == MethodPost {
 			_ = r.ParseMultipartForm(10e6)
 
@@ -373,8 +375,8 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 				formEncodedData := r.Form.Encode()
 				t.Logf("Received Form Encoded values: %v", formEncodedData)
 
-				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=pencil"))
-				assertEqual(t, true, strings.Contains(formEncodedData, "search_criteria=glass"))
+				assertTrue(t, strings.Contains(formEncodedData, "search_criteria=pencil"), "expected search_criteria=pencil")
+				assertTrue(t, strings.Contains(formEncodedData, "search_criteria=glass"), "expected search_criteria=glass")
 
 				_, _ = w.Write([]byte("Success"))
 				return
@@ -406,9 +408,9 @@ func createFormPostServer(t *testing.T) *httptest.Server {
 						defer func() {
 							_ = f.Close()
 						}()
-						_, _ = io.Copy(f, infile)
+						size, _ := io.Copy(f, infile)
 
-						_, _ = w.Write([]byte(fmt.Sprintf("File: %v, uploaded as: %v\n", hdr.Filename, fname)))
+						_, _ = w.Write([]byte(fmt.Sprintf("File: %v, uploaded as: %v, size: %v\n", hdr.Filename, fname, size)))
 					}
 				}
 
@@ -537,7 +539,7 @@ func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 
 				w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
-				if !strings.HasPrefix(auth, "Bearer ") {
+				if strings.HasPrefix(auth, "Basic ") {
 					w.Header().Set("Www-Authenticate", "Protected Realm")
 					w.WriteHeader(http.StatusUnauthorized)
 					_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
@@ -545,8 +547,8 @@ func createAuthServerTLSOptional(t *testing.T, useTLS bool) *httptest.Server {
 					return
 				}
 
-				if auth[7:] == "004DDB79-6801-4587-B976-F093E6AC44FF" || auth[7:] == "004DDB79-6801-4587-B976-F093E6AC44FF-Request" {
-					_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
+				if strings.Contains(auth, "004DDB79-6801-4587-B976-F093E6AC44FF") {
+					_, _ = w.Write([]byte(`{ "username": "auth_test", "message": "profile fetch successful" }`))
 				}
 			}
 
@@ -803,6 +805,12 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 		w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
 		if authorizationHeaderValid(t, r, conf) {
+			if r.URL.Path == "/dir/index.html" && r.Method == MethodPost {
+				body, err := io.ReadAll(r.Body)
+				assertNil(t, err)
+				assertEqual(t, `{"city":"Los Angeles","zip_code":"00000"}`, strings.TrimSpace(string(body)))
+			}
+
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
 		} else {
@@ -825,7 +833,7 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 	const ws = " \n\r\t"
 	const qs = `"`
 	s := strings.Trim(input, ws)
-	assertEqual(t, true, strings.HasPrefix(s, "Digest "))
+	assertTrue(t, strings.HasPrefix(s, "Digest "), "Digest auth header prefix expected")
 	s = strings.Trim(s[7:], ws)
 	sl := strings.Split(s, ", ")
 
@@ -873,6 +881,7 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 	// auth-int scenario
 	body, err := io.ReadAll(r.Body)
 	r.Body.Close()
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	assertError(t, err)
 	bodyHash := ""
 	if len(body) > 0 {
@@ -932,56 +941,74 @@ func dcnldr() *Request {
 	return c.R()
 }
 
-func assertNil(t *testing.T, v any) {
+func assertNil(t *testing.T, v any, failureMsgs ...string) {
 	t.Helper()
 	if !isNil(v) {
-		t.Errorf("[%v] was expected to be nil", v)
+		t.Errorf("[%v] was expected to be nil. Message: %v", v, strings.Join(failureMsgs, " "))
 	}
 }
 
-func assertNotNil(t *testing.T, v any) {
+func assertNotNil(t *testing.T, v any, failureMsgs ...string) {
 	t.Helper()
 	if isNil(v) {
-		t.Errorf("[%v] was expected to be non-nil", v)
+		t.Errorf("[%v] was expected to be non-nil. Message: %v", v, strings.Join(failureMsgs, " "))
 	}
 }
 
-func assertType(t *testing.T, typ, v any) {
+func assertType(t *testing.T, typ, v any, failureMsgs ...string) {
 	t.Helper()
 	if reflect.DeepEqual(reflect.TypeOf(typ), reflect.TypeOf(v)) {
-		t.Errorf("Expected type %t, got %t", typ, v)
+		t.Errorf("Expected type %t, got %t. Message: %v", typ, v, strings.Join(failureMsgs, " "))
 	}
 }
 
-func assertError(t *testing.T, err error) {
+func assertError(t *testing.T, err error, failureMsgs ...string) {
 	t.Helper()
 	if err != nil {
-		t.Errorf("Error occurred [%v]", err)
+		t.Errorf("Error occurred [%v]. Message: %v", err, strings.Join(failureMsgs, " "))
 	}
 }
 
-func assertErrorIs(t *testing.T, e, g error) (r bool) {
+func assertErrorIs(t *testing.T, e, g error, failureMsgs ...string) (r bool) {
 	t.Helper()
 	if !errors.Is(g, e) {
-		t.Errorf("Expected [%v], got [%v]", e, g)
+		t.Errorf("Expected [%v], got [%v]. Message: %v", e, g, strings.Join(failureMsgs, " "))
 	}
 
 	return true
 }
 
-func assertEqual(t *testing.T, e, g any) (r bool) {
+func assertTrue(t *testing.T, g any, failureMsgs ...string) (r bool) {
 	t.Helper()
-	if !equal(e, g) {
-		t.Errorf("Expected [%v], got [%v]", e, g)
+	if !equal(true, g) {
+		t.Errorf("Expected `true`, got [%v]. Message: %v", g, strings.Join(failureMsgs, " "))
 	}
 
 	return
 }
 
-func assertNotEqual(t *testing.T, e, g any) (r bool) {
+func assertFalse(t *testing.T, g any, failureMsgs ...string) (r bool) {
+	t.Helper()
+	if !equal(false, g) {
+		t.Errorf("Expected `false`, got [%v]. Message: %v", g, strings.Join(failureMsgs, " "))
+	}
+
+	return
+}
+
+func assertEqual(t *testing.T, e, g any, failureMsgs ...string) (r bool) {
+	t.Helper()
+	if !equal(e, g) {
+		t.Errorf("Expected [%v], got [%v]. Message: %v", e, g, strings.Join(failureMsgs, " "))
+	}
+
+	return
+}
+
+func assertNotEqual(t *testing.T, e, g any, failureMsgs ...string) (r bool) {
 	t.Helper()
 	if equal(e, g) {
-		t.Errorf("Expected [%v], got [%v]", e, g)
+		t.Errorf("Expected [%v], got [%v]. Message: %v", e, g, strings.Join(failureMsgs, " "))
 	} else {
 		r = true
 	}
@@ -1010,7 +1037,7 @@ func isNil(v any) bool {
 func logResponse(t *testing.T, resp *Response) {
 	t.Helper()
 	t.Logf("Response Status: %v", resp.Status())
-	t.Logf("Response Time: %v", resp.Time())
+	t.Logf("Response Duration: %v", resp.Duration())
 	t.Logf("Response Headers: %v", resp.Header())
 	t.Logf("Response Cookies: %v", resp.Cookies())
 	t.Logf("Response Body: %v", resp)

@@ -9,16 +9,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
-	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -34,12 +33,11 @@ func TestMultipartFormDataAndUpload(t *testing.T) {
 	t.Run("form data and upload", func(t *testing.T) {
 		resp, err := c.R().
 			SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetContentLength(true).
 			Post(ts.URL + "/upload")
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, true, strings.Contains(resp.String(), "test-img.png"))
+		assertTrue(t, strings.Contains(resp.String(), "test-img.png"))
 	})
 
 	t.Run("request form data and upload", func(t *testing.T) {
@@ -50,12 +48,11 @@ func TestMultipartFormDataAndUpload(t *testing.T) {
 				"welcome3": "welcome value 3",
 			}).
 			SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetContentLength(true).
 			Post(ts.URL + "/upload")
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, true, strings.Contains(resp.String(), "test-img.png"))
+		assertTrue(t, strings.Contains(resp.String(), "test-img.png"))
 	})
 }
 
@@ -70,12 +67,11 @@ func TestMultipartFormDataAndUploadMethodPatch(t *testing.T) {
 	resp, err := c.R().
 		SetFormData(map[string]string{"zip_code": "00002", "city": "Los Angeles"}).
 		SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
-		SetContentLength(true).
 		Patch(ts.URL + "/upload")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "test-img.png"))
+	assertTrue(t, strings.Contains(resp.String(), "test-img.png"))
 }
 
 func TestMultipartUploadError(t *testing.T) {
@@ -91,7 +87,7 @@ func TestMultipartUploadError(t *testing.T) {
 		Post(ts.URL + "/upload")
 
 	assertNotNil(t, err)
-	assertNotNil(t, resp)
+	assertNil(t, resp)
 	assertEqual(t, true, errors.Is(err, fs.ErrNotExist))
 }
 
@@ -121,8 +117,32 @@ func TestMultipartUploadFiles(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
-	assertEqual(t, true, strings.Contains(responseStr, "text-file.txt"))
+	assertTrue(t, strings.Contains(responseStr, "test-img.png"))
+	assertTrue(t, strings.Contains(responseStr, "text-file.txt"))
+}
+
+func TestMultipartFilesAndFormDataEmptyGH1046(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
+
+	basePath := getTestDataPath()
+
+	c := dcnld()
+
+	resp, err := c.R().
+		SetFiles(map[string]string{
+			"profile_img": filepath.Join(basePath, "test-img.png"),
+			"notes":       filepath.Join(basePath, "text-file.txt"),
+		}).
+		Post(ts.URL + "/upload")
+
+	responseStr := resp.String()
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertTrue(t, strings.Contains(responseStr, "test-img.png"))
+	assertTrue(t, strings.Contains(responseStr, "text-file.txt"))
 }
 
 func TestMultipartIoReaderFiles(t *testing.T) {
@@ -156,8 +176,8 @@ func TestMultipartIoReaderFiles(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "test-img.png"))
-	assertEqual(t, true, strings.Contains(responseStr, "text-file.txt"))
+	assertTrue(t, strings.Contains(responseStr, "test-img.png"))
+	assertTrue(t, strings.Contains(responseStr, "text-file.txt"))
 }
 
 func TestMultipartUploadFileNotOnGetOrDelete(t *testing.T) {
@@ -270,7 +290,7 @@ func TestMultipartField(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file.json"))
 }
 
 func TestMultipartFields(t *testing.T) {
@@ -314,8 +334,8 @@ func TestMultipartFields(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file-1.json"))
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file-2.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file-1.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file-2.json"))
 }
 
 func TestMultipartCustomBoundary(t *testing.T) {
@@ -353,20 +373,20 @@ func TestMultipartLargeFile(t *testing.T) {
 		c := dcnl()
 		resp, err := c.R().
 			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetMultipartBoundary("custom-boundary-"+strconv.FormatInt(time.Now().Unix(), 10)).
-			SetHeader("Content-Type", "image/png").
+			SetMultipartBoundary("custom-boundary-" + strconv.FormatInt(time.Now().Unix(), 10)).
+			SetContentType("image/png").
 			Post(ts.URL + "/upload")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully, file size: 2579629")) // 2579697
+		assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully, file size: 2579629")) // 2579697
 	})
 
 	t.Run("upload a 2+mb image file with content-type and incorrect custom boundary", func(t *testing.T) {
 		c := dcnl()
 		_, err := c.R().
 			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetMultipartBoundary(`"custom-boundary-"`+strconv.FormatInt(time.Now().Unix(), 10)).
-			SetHeader("Content-Type", "image/png").
+			SetMultipartBoundary(`"custom-boundary-"` + strconv.FormatInt(time.Now().Unix(), 10)).
+			SetContentType("image/png").
 			Post(ts.URL + "/upload")
 		assertNotNil(t, err)
 		assertEqual(t, "mime: invalid boundary character", err.Error())
@@ -379,7 +399,7 @@ func TestMultipartLargeFile(t *testing.T) {
 			Post(ts.URL + "/upload")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully, file size: 2579697"))
+		assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully, file size: 2579697"))
 	})
 
 	t.Run("upload a 50+mb binary file", func(t *testing.T) {
@@ -391,7 +411,7 @@ func TestMultipartLargeFile(t *testing.T) {
 			Post(ts.URL + "/upload")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully, file size: 52429044"))
+		assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully, file size: 52429044"))
 	})
 }
 
@@ -420,6 +440,11 @@ func TestMultipartFieldProgressCallback(t *testing.T) {
 	}
 
 	fields := []*MultipartField{
+		{
+			Name:             "test-image",
+			FilePath:         filepath.Join(getTestDataPath(), "test-img.png"),
+			ProgressCallback: progressCallback,
+		},
 		{
 			Name:             "test-image-1",
 			FileName:         "test-image-1.png",
@@ -455,9 +480,10 @@ func TestMultipartFieldProgressCallback(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "test-image-1.png"))
-	assertEqual(t, true, strings.Contains(responseStr, "50mbfile.bin"))
-	assertEqual(t, true, strings.Contains(responseStr, "100mbfile.bin"))
+	assertTrue(t, strings.Contains(responseStr, "test-image-1.png"))
+	assertTrue(t, strings.Contains(responseStr, "test-img.png"))
+	assertTrue(t, strings.Contains(responseStr, "50mbfile.bin"))
+	assertTrue(t, strings.Contains(responseStr, "100mbfile.bin"))
 }
 
 func TestMultipartOrderedFormData(t *testing.T) {
@@ -516,8 +542,8 @@ func TestMultipartOrderedFormData(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file-1.json"))
-	assertEqual(t, true, strings.Contains(responseStr, "upload-file-2.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file-1.json"))
+	assertTrue(t, strings.Contains(responseStr, "upload-file-2.json"))
 }
 
 var errTestErrorReader = errors.New("fake")
@@ -546,7 +572,10 @@ func TestMultipartReaderErrors(t *testing.T) {
 		assertNotNil(t, err)
 		assertEqual(t, errTestErrorReader, err)
 		assertNotNil(t, resp)
-		assertEqual(t, nil, resp.Body)
+
+		err = resp.wrapError(errors.New("test error"), true)
+		assertNil(t, err)
+		assertEqual(t, "test error", resp.CascadeError.Error())
 	})
 
 	t.Run("multipart files with errorReader", func(t *testing.T) {
@@ -556,8 +585,7 @@ func TestMultipartReaderErrors(t *testing.T) {
 
 		assertNotNil(t, err)
 		assertEqual(t, errTestErrorReader, err)
-		assertNotNil(t, resp)
-		assertEqual(t, nil, resp.Body)
+		assertNil(t, resp)
 	})
 
 	t.Run("multipart with file not found", func(t *testing.T) {
@@ -567,8 +595,7 @@ func TestMultipartReaderErrors(t *testing.T) {
 
 		assertNotNil(t, err)
 		assertEqual(t, true, errors.Is(err, fs.ErrNotExist))
-		assertNotNil(t, resp)
-		assertEqual(t, nil, resp.Body)
+		assertNil(t, resp)
 	})
 }
 
@@ -578,7 +605,7 @@ func (mwe *mpWriterError) Write(p []byte) (int, error) {
 	return 0, errors.New("multipart write error")
 }
 
-func TestMultipartRequest_createMultipart(t *testing.T) {
+func TestMultipartRequest_Errors(t *testing.T) {
 	mw := multipart.NewWriter(&mpWriterError{})
 
 	c := dcnl()
@@ -588,57 +615,93 @@ func TestMultipartRequest_createMultipart(t *testing.T) {
 	})
 
 	t.Run("writeFormData", func(t *testing.T) {
-		err1 := req1.writeFormData(mw)
+		err1 := multipartWriteFormData(mw, req1)
 		assertNotNil(t, err1)
 		assertEqual(t, "multipart write error", err1.Error())
 	})
+}
 
-	t.Run("createMultipart", func(t *testing.T) {
-		err2 := createMultipart(mw, req1)
-		assertNotNil(t, err2)
-		assertEqual(t, "multipart write error", err2.Error())
+func TestMultipartUploadFailAutoErrorParse(t *testing.T) {
+	type ErrorResponse struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(hdrContentTypeKey, "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{ "code": 403, "message": "forbidden error message" }`))
+	})
+	defer ts.Close()
+
+	c := dcnl()
+
+	t.Run("single request", func(t *testing.T) {
+		res, err := c.R().
+			SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
+			SetResultError(&ErrorResponse{}).
+			Post(ts.URL)
+
+		assertNil(t, err)
+		assertEqual(t, http.StatusForbidden, res.StatusCode())
+
+		er := res.ResultError().(*ErrorResponse)
+		assertEqual(t, 403, er.Code)
+		assertEqual(t, "forbidden error message", er.Message)
 	})
 
-	t.Run("io copy error", func(t *testing.T) {
-		errCopyMsg := "test copy error"
-		ioCopy = func(dst io.Writer, src io.Reader) (written int64, err error) {
-			return 0, errors.New(errCopyMsg)
+	t.Run("concurrent requests", func(t *testing.T) {
+		concurrencyCount := 50
+		wg := sync.WaitGroup{}
+		for i := 0; i < concurrencyCount; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				res, _ := c.R().
+					SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
+					SetResultError(&ErrorResponse{}).
+					Post(ts.URL)
+
+				er := res.ResultError().(*ErrorResponse)
+				assertEqual(t, http.StatusForbidden, res.StatusCode())
+				assertEqual(t, 403, er.Code)
+				assertEqual(t, "forbidden error message", er.Message)
+			}()
 		}
-		t.Cleanup(func() {
-			ioCopy = io.Copy
-		})
-
-		req1 := c.R().
-			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetMultipartBoundary("custom-boundary-"+strconv.FormatInt(time.Now().Unix(), 10)).
-			SetHeader("Content-Type", "image/png")
-
-		mw := multipart.NewWriter(new(bytes.Buffer))
-		err := createMultipart(mw, req1)
-		assertNotNil(t, err)
-		assertEqual(t, errCopyMsg, err.Error())
+		wg.Wait()
 	})
 
-	t.Run("multipart create part error", func(t *testing.T) {
-		errMsg := "test create part error"
-		mpCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
-			return nil, errors.New(errMsg)
-		}
-		t.Cleanup(func() {
-			mpCreatePart = func(w *multipart.Writer, h textproto.MIMEHeader) (io.Writer, error) {
-				return w.CreatePart(h)
-			}
-		})
+}
 
-		req1 := c.R().
-			SetFile("file", filepath.Join(getTestDataPath(), "test-img.png")).
-			SetHeader("Content-Type", "image/png")
+func TestMultipartConcurrentRequests(t *testing.T) {
+	ts := createFormPostServer(t)
+	defer ts.Close()
+	defer cleanupFiles(".testdata/upload")
 
-		mw := multipart.NewWriter(new(bytes.Buffer))
-		err := createMultipart(mw, req1)
-		assertNotNil(t, err)
-		assertEqual(t, errMsg, err.Error())
-	})
+	c := dcnl()
+	c.SetFormData(map[string]string{"zip_code": "00001", "city": "Los Angeles"})
+
+	concurrencyCount := 100
+	wg := sync.WaitGroup{}
+	for i := 0; i < concurrencyCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			res, err := c.R().
+				SetFormData(map[string]string{
+					"welcome1": "welcome value 1",
+					"welcome2": "welcome value 2",
+					"welcome3": "welcome value 3",
+				}).
+				SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
+				Post(ts.URL + "/upload")
+
+			assertError(t, err)
+			assertEqual(t, http.StatusOK, res.StatusCode())
+			assertEqual(t, true, strings.Contains(res.String(), "test-img.png"))
+		}()
+	}
+	wg.Wait()
 }
 
 type returnValueTestWriter struct {

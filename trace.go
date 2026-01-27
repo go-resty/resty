@@ -9,8 +9,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"net"
 	"net/http/httptrace"
+	"sync"
 	"time"
 )
 
@@ -19,45 +19,45 @@ import (
 type TraceInfo struct {
 	// DNSLookup is the duration that transport took to perform
 	// DNS lookup.
-	DNSLookup time.Duration
+	DNSLookup time.Duration `json:"dns_lookup_time"`
 
 	// ConnTime is the duration it took to obtain a successful connection.
-	ConnTime time.Duration
+	ConnTime time.Duration `json:"connection_time"`
 
 	// TCPConnTime is the duration it took to obtain the TCP connection.
-	TCPConnTime time.Duration
+	TCPConnTime time.Duration `json:"tcp_connection_time"`
 
 	// TLSHandshake is the duration of the TLS handshake.
-	TLSHandshake time.Duration
+	TLSHandshake time.Duration `json:"tls_handshake_time"`
 
 	// ServerTime is the server's duration for responding to the first byte.
-	ServerTime time.Duration
+	ServerTime time.Duration `json:"server_time"`
 
 	// ResponseTime is the duration since the first response byte from the server to
 	// request completion.
-	ResponseTime time.Duration
+	ResponseTime time.Duration `json:"response_time"`
 
 	// TotalTime is the duration of the total time request taken end-to-end.
-	TotalTime time.Duration
+	TotalTime time.Duration `json:"total_time"`
 
 	// IsConnReused is whether this connection has been previously
 	// used for another HTTP request.
-	IsConnReused bool
+	IsConnReused bool `json:"is_connection_reused"`
 
 	// IsConnWasIdle is whether this connection was obtained from an
 	// idle pool.
-	IsConnWasIdle bool
+	IsConnWasIdle bool `json:"is_connection_was_idle"`
 
 	// ConnIdleTime is the duration how long the connection that was previously
 	// idle, if IsConnWasIdle is true.
-	ConnIdleTime time.Duration
+	ConnIdleTime time.Duration `json:"connection_idle_time"`
 
 	// RequestAttempt is to represent the request attempt made during a Resty
 	// request execution flow, including retry count.
-	RequestAttempt int
+	RequestAttempt int `json:"request_attempt"`
 
 	// RemoteAddr returns the remote network address.
-	RemoteAddr net.Addr
+	RemoteAddr string `json:"remote_address"`
 }
 
 // String method returns string representation of request trace information.
@@ -80,10 +80,23 @@ func (ti TraceInfo) String() string {
 		ti.RemoteAddr)
 }
 
+// JSON method returns the JSON string of request trace information
+func (ti TraceInfo) JSON() string {
+	return toJSON(ti)
+}
+
+// Clone method returns the clone copy of [TraceInfo]
+func (ti TraceInfo) Clone() *TraceInfo {
+	ti2 := new(TraceInfo)
+	*ti2 = ti
+	return ti2
+}
+
 // clientTrace struct maps the [httptrace.ClientTrace] hooks into Fields
 // with the same naming for easy understanding. Plus additional insights
 // [Request].
 type clientTrace struct {
+	lock                 sync.RWMutex
 	getConn              time.Time
 	dnsStart             time.Time
 	dnsDone              time.Time
@@ -101,37 +114,55 @@ func (t *clientTrace) createContext(ctx context.Context) context.Context {
 		ctx,
 		&httptrace.ClientTrace{
 			DNSStart: func(_ httptrace.DNSStartInfo) {
+				t.lock.Lock()
 				t.dnsStart = time.Now()
+				t.lock.Unlock()
 			},
 			DNSDone: func(_ httptrace.DNSDoneInfo) {
+				t.lock.Lock()
 				t.dnsDone = time.Now()
+				t.lock.Unlock()
 			},
 			ConnectStart: func(_, _ string) {
+				t.lock.Lock()
 				if t.dnsDone.IsZero() {
 					t.dnsDone = time.Now()
 				}
 				if t.dnsStart.IsZero() {
 					t.dnsStart = t.dnsDone
 				}
+				t.lock.Unlock()
 			},
 			ConnectDone: func(net, addr string, err error) {
+				t.lock.Lock()
 				t.connectDone = time.Now()
+				t.lock.Unlock()
 			},
 			GetConn: func(_ string) {
+				t.lock.Lock()
 				t.getConn = time.Now()
+				t.lock.Unlock()
 			},
 			GotConn: func(ci httptrace.GotConnInfo) {
+				t.lock.Lock()
 				t.gotConn = time.Now()
 				t.gotConnInfo = ci
+				t.lock.Unlock()
 			},
 			GotFirstResponseByte: func() {
+				t.lock.Lock()
 				t.gotFirstResponseByte = time.Now()
+				t.lock.Unlock()
 			},
 			TLSHandshakeStart: func() {
+				t.lock.Lock()
 				t.tlsHandshakeStart = time.Now()
+				t.lock.Unlock()
 			},
 			TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
+				t.lock.Lock()
 				t.tlsHandshakeDone = time.Now()
+				t.lock.Unlock()
 			},
 		},
 	)

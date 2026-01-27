@@ -14,13 +14,13 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -62,10 +62,11 @@ type Request struct {
 	IsDone                     bool
 	IsSaveResponse             bool
 	Timeout                    time.Duration
+	HeaderAuthorizationKey     string
 	RetryCount                 int
 	RetryWaitTime              time.Duration
 	RetryMaxWaitTime           time.Duration
-	RetryStrategy              RetryStrategyFunc
+	RetryDelayStrategy         RetryDelayStrategyFunc
 	IsRetryDefaultConditions   bool
 	AllowNonIdempotentRetry    bool
 
@@ -78,27 +79,33 @@ type Request struct {
 	//	first attempt + retry count = total attempts
 	Attempt int
 
-	credentials         *credentials
-	isMultiPart         bool
-	isFormData          bool
-	setContentLength    bool
-	jsonEscapeHTML      bool
-	ctx                 context.Context
-	ctxCancelFunc       context.CancelFunc
-	values              map[string]any
-	client              *Client
-	bodyBuf             *bytes.Buffer
-	trace               *clientTrace
-	log                 Logger
-	baseURL             string
-	multipartBoundary   string
-	multipartFields     []*MultipartField
-	retryConditions     []RetryConditionFunc
-	resultCurlCmd       string
-	generateCurlCmd     bool
-	debugLogCurlCmd     bool
-	unescapeQueryParams bool
-	multipartErrChan    chan error
+	mu                   *sync.Mutex
+	credentials          *credentials
+	isMultiPart          bool
+	isFormData           bool
+	isContentLengthSet   bool
+	contentLength        int64
+	jsonEscapeHTML       bool
+	ctx                  context.Context
+	ctxCancelFunc        context.CancelFunc
+	values               map[string]any
+	client               *Client
+	bodyBuf              *bytes.Buffer
+	trace                *clientTrace
+	log                  Logger
+	baseURL              string
+	multipartBoundary    string
+	multipartFields      []*MultipartField
+	retryConditions      []RetryConditionFunc
+	isSetRetryConditions bool
+	retryHooks           []RetryHookFunc
+	isSetRetryHooks      bool
+	resultCurlCmd        string
+	generateCurlCmd      bool
+	debugLogCurlCmd      bool
+	unescapeQueryParams  bool
+	multipartErrChan     chan error
+	multipartCancelFunc  context.CancelFunc
 }
 
 // SetMethod method used to set the HTTP verb for the request
@@ -119,6 +126,8 @@ func (r *Request) SetURL(url string) *Request {
 // The returned context is always non-nil; it defaults to the
 // background context.
 func (r *Request) Context() context.Context {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.ctx == nil {
 		return context.Background()
 	}
@@ -134,6 +143,8 @@ func (r *Request) Context() context.Context {
 //
 // See [Request.WithContext], [Request.Clone]
 func (r *Request) SetContext(ctx context.Context) *Request {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.ctx = ctx
 	return r
 }
@@ -156,6 +167,14 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 	return rr
 }
 
+// SetContentType method is a convenient way to set the header Content-Type in the request
+//
+//	client.R().SetContentType("application/json")
+func (r *Request) SetContentType(ct string) *Request {
+	r.SetHeader(hdrContentTypeKey, ct)
+	return r
+}
+
 // SetHeader method sets a single header field and its value in the current request.
 //
 // For Example: To set `Content-Type` and `Accept` as `application/json`.
@@ -167,6 +186,24 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 // It overrides the header value set at the client instance level.
 func (r *Request) SetHeader(header, value string) *Request {
 	r.Header.Set(header, value)
+	return r
+}
+
+// SetHeaderAny method sets a single header field and its value in the current request.
+//
+// It is similar to [Request.SetHeader] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+// For Example: To set `X-Request-Id` with an integer value
+//
+//	client.R().SetHeaderAny("X-Request-Id", 12345)
+//
+// It overrides the header value set at the client instance level.
+//
+// See [Client.SetHeaderAny].
+func (r *Request) SetHeaderAny(header string, value any) *Request {
+	strVal := formatAnyToString(value)
+	r.Header.Set(header, strVal)
 	return r
 }
 
@@ -221,6 +258,24 @@ func (r *Request) SetHeaderVerbatim(header, value string) *Request {
 	return r
 }
 
+// SetHeaderVerbatimAny method sets the HTTP header key and value verbatim in the current request.
+//
+// It is similar to [Request.SetHeaderVerbatim] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+// For Example: To set header key as `x-trace-id` with an integer value
+//
+//	client.R().SetHeaderVerbatimAny("x-trace-id", 798940)
+//
+// It overrides the header value set at the client instance level.
+//
+// See [Client.SetHeaderVerbatimAny].
+func (r *Request) SetHeaderVerbatimAny(header string, value any) *Request {
+	strVal := formatAnyToString(value)
+	r.Header[header] = []string{strVal}
+	return r
+}
+
 // SetQueryParam method sets a single parameter and its value in the current request.
 // It will be formed as a query string for the request.
 //
@@ -233,6 +288,27 @@ func (r *Request) SetHeaderVerbatim(header, value string) *Request {
 // It overrides the query parameter value set at the client instance level.
 func (r *Request) SetQueryParam(param, value string) *Request {
 	r.QueryParams.Set(param, value)
+	return r
+}
+
+// SetQueryParamAny method sets a single query parameter and its value in the current request.
+// It will be formed as a query string for the request.
+//
+// It is similar to [Request.SetQueryParam] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+// For Example: To set `page` and `active` query parameters
+//
+//	client.R().
+//		SetQueryParamAny("page", 5).
+//		SetQueryParamAny("active", true)
+//
+// It overrides the query parameter value set at the client instance level.
+//
+// See [Client.SetQueryParamAny].
+func (r *Request) SetQueryParamAny(param string, value any) *Request {
+	strVal := formatAnyToString(value)
+	r.QueryParams.Set(param, strVal)
 	return r
 }
 
@@ -296,9 +372,8 @@ func (r *Request) SetQueryString(query string) *Request {
 	return r
 }
 
-// SetFormData method sets Form parameters and their values for the current request.
-// It applies only to HTTP methods `POST` and `PUT`, and by default requests
-// content type would be set as `application/x-www-form-urlencoded`.
+// SetFormData method sets form parameters and their values in the current request.
+// The request content type would be set as `application/x-www-form-urlencoded`.
 //
 //	client.R().
 //		SetFormData(map[string]string{
@@ -386,9 +461,9 @@ func (r *Request) SetBody(body any) *Request {
 	return r
 }
 
-// SetResult method is to register the response `Result` object for automatic
+// SetResult method registers the response `Result` object type for automatic
 // unmarshalling of the HTTP response if the response status code is
-// between 200 and 299, and the content type is JSON or XML.
+// between 200 and 299, and the content type is either JSON or XML.
 //
 // Note: [Request.SetResult] input can be a pointer or non-pointer.
 //
@@ -415,21 +490,23 @@ func (r *Request) SetResult(v any) *Request {
 	return r
 }
 
-// SetError method is to register the request `Error` object for automatic unmarshalling for the request,
-// if the response status code is greater than 399 and the content type is either JSON or XML.
+// SetResultError method registers the response `ResultError` object type for automatic
+// unmarshalling for the request, if the response status code is greater than 399 and
+// the content type is either JSON or XML.
 //
-// NOTE: [Request.SetError] input can be a pointer or non-pointer.
+// NOTE: [Request.SetResultError] input can be a pointer or non-pointer.
 //
-//	client.R().SetError(&AuthError{})
+//	client.R().SetResultError(&AuthError{})
 //	// OR
-//	client.R().SetError(AuthError{})
+//	client.R().SetResultError(AuthError{})
 //
-// Accessing an error value from response instance.
+// Accessing an unmarshalled error object from response instance.
 //
-//	response.Error().(*AuthError)
+//	response.ResultError().(*AuthError)
 //
-// If this request Error object is nil, Resty will use the client-level error object Type if it is set.
-func (r *Request) SetError(err any) *Request {
+// If this request ResultError object is nil, it will use the client-level error object
+// type if it is set.
+func (r *Request) SetResultError(err any) *Request {
 	r.Error = getPointer(err)
 	return r
 }
@@ -578,16 +655,13 @@ func (r *Request) SetMultipartBoundary(boundary string) *Request {
 	return r
 }
 
-// SetContentLength method sets the current request's HTTP header `Content-Length` value.
+// SetContentLength method sets the given content length value in the HTTP request.
 // By default, Resty won't set `Content-Length`.
 //
-// See [Client.SetContentLength]
-//
-//	client.R().SetContentLength(true)
-//
-// It overrides the value set at the client instance level.
-func (r *Request) SetContentLength(l bool) *Request {
-	r.setContentLength = l
+//	client.R().SetContentLength(3486547657)
+func (r *Request) SetContentLength(v int64) *Request {
+	r.contentLength = v
+	r.isContentLengthSet = true
 	return r
 }
 
@@ -645,6 +719,16 @@ func (r *Request) SetAuthScheme(scheme string) *Request {
 	return r
 }
 
+// SetHeaderAuthorizationKey method sets the given HTTP header name for Authorization in the request.
+//
+// It overrides the `Authorization` header name set by method [Client.SetHeaderAuthorizationKey].
+//
+//	client.R().SetHeaderAuthorizationKey("X-Custom-Authorization")
+func (r *Request) SetHeaderAuthorizationKey(k string) *Request {
+	r.HeaderAuthorizationKey = k
+	return r
+}
+
 // SetOutputFileName method sets the output file for the current HTTP request. The current
 // HTTP response will be saved in the given file. It is similar to the `curl -o` flag.
 //
@@ -659,7 +743,7 @@ func (r *Request) SetAuthScheme(scheme string) *Request {
 //
 // NOTE: In this scenario
 //   - [Response.BodyBytes] might be nil.
-//   - [Response].Body might be already read.
+//   - [Response].Body might have been already read.
 func (r *Request) SetOutputFileName(file string) *Request {
 	r.OutputFileName = file
 	r.SetSaveResponse(true)
@@ -674,6 +758,7 @@ func (r *Request) SetOutputFileName(file string) *Request {
 //   - [Request.SetOutputFileName]
 //   - Content-Disposition header
 //   - Request URL using [path.Base]
+//   - Request URL hostname if path is empty or "/"
 //
 // It overrides the value set at the client instance level, see [Client.SetSaveResponse]
 func (r *Request) SetSaveResponse(save bool) *Request {
@@ -691,12 +776,13 @@ func (r *Request) SetCloseConnection(close bool) *Request {
 }
 
 // SetDoNotParseResponse method instructs Resty not to parse the response body automatically.
+//
 // Resty exposes the raw response body as [io.ReadCloser]. If you use it, do not
 // forget to close the body, otherwise, you might get into connection leaks, and connection
 // reuse may not happen.
 //
-// NOTE: [Response] middlewares are not executed using this option. You have
-// taken over the control of response parsing from Resty.
+// NOTE: The default [Response] middlewares are not executed when using this option. User
+// takes over the control of handling response body from Resty.
 func (r *Request) SetDoNotParseResponse(notParse bool) *Request {
 	r.DoNotParseResponse = notParse
 	return r
@@ -718,7 +804,7 @@ func (r *Request) SetResponseBodyLimit(v int64) *Request {
 	return r
 }
 
-// SetResponseBodyUnlimitedReads method is to turn on/off the response body copy
+// SetResponseBodyUnlimitedReads method is to turn on/off the response body in memory
 // that provides an ability to do unlimited reads.
 //
 // It overrides the value set at the client level; see [Client.SetResponseBodyUnlimitedReads]
@@ -727,7 +813,7 @@ func (r *Request) SetResponseBodyLimit(v int64) *Request {
 //   - When debug mode is enabled
 //
 // NOTE: Use with care
-//   - Turning on this feature uses additional memory to store a copy of the response body buffer.
+//   - Turning on this feature keeps the response body in memory, which might cause additional memory usage.
 func (r *Request) SetResponseBodyUnlimitedReads(b bool) *Request {
 	r.ResponseBodyUnlimitedReads = b
 	return r
@@ -745,7 +831,7 @@ func (r *Request) SetResponseBodyUnlimitedReads(b bool) *Request {
 //	client.R().SetPathParam("path", "groups/developers")
 //
 //	Result:
-//	   URL - /v1/users/{userId}/details
+//	   URL - /v1/users/{path}/details
 //	   Composed URL - /v1/users/groups%2Fdevelopers/details
 //
 // It replaces the value of the key while composing the request URL.
@@ -754,6 +840,30 @@ func (r *Request) SetResponseBodyUnlimitedReads(b bool) *Request {
 // It overrides the path parameter set at the client instance level.
 func (r *Request) SetPathParam(param, value string) *Request {
 	r.PathParams[param] = url.PathEscape(value)
+	return r
+}
+
+// SetPathParamAny method sets a single URL path key-value pair in the
+// current request instance.
+//
+// It is similar to [Request.SetPathParam] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+//	client.R().SetPathParamAny("userId", 12345)
+//
+//	Result:
+//	   URL - /v1/users/{userId}/details
+//	   Composed URL - /v1/users/12345/details
+//
+// It replaces the value of the key while composing the request URL.
+// The value will be escaped using [url.PathEscape] function.
+//
+// It overrides the path parameter set at the client instance level.
+//
+// See [Client.SetPathParamAny].
+func (r *Request) SetPathParamAny(param string, value any) *Request {
+	strVal := formatAnyToString(value)
+	r.PathParams[param] = url.PathEscape(strVal)
 	return r
 }
 
@@ -784,16 +894,16 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 // SetRawPathParam method sets a single URL path key-value pair in the
 // Resty current request instance without path escape.
 //
-//	client.R().SetPathParam("userId", "sample@sample.com")
+//	client.R().SetRawPathParam("userId", "sample@sample.com")
 //
 //	Result:
 //	   URL - /v1/users/{userId}/details
 //	   Composed URL - /v1/users/sample@sample.com/details
 //
-//	client.R().SetPathParam("path", "groups/developers")
+//	client.R().SetRawPathParam("path", "groups/developers")
 //
 //	Result:
-//	   URL - /v1/users/{userId}/details
+//	   URL - /v1/users/{path}/details
 //	   Composed URL - /v1/users/groups/developers/details
 //
 // It replaces the value of the key while composing the request URL.
@@ -802,6 +912,30 @@ func (r *Request) SetPathParams(params map[string]string) *Request {
 // It overrides the raw path parameter set at the client instance level.
 func (r *Request) SetRawPathParam(param, value string) *Request {
 	r.PathParams[param] = value
+	return r
+}
+
+// SetRawPathParamAny method sets a single URL path key-value pair in the
+// current request instance without path escape.
+//
+// It is similar to [Request.SetRawPathParam] but accepts any type as the value and converts
+// it to a string using predefined formatting rules (integers, bools, time.Time, etc.).
+//
+//	client.R().SetRawPathParamAny("userId", 12345)
+//
+//	Result:
+//	   URL - /v1/users/{userId}/details
+//	   Composed URL - /v1/users/12345/details
+//
+// It replaces the value of the key while composing the request URL.
+// The value will be used as-is, no path escape applied.
+//
+// It overrides the raw path parameter set at the client instance level.
+//
+// See [Client.SetRawPathParamAny].
+func (r *Request) SetRawPathParamAny(param string, value any) *Request {
+	strVal := formatAnyToString(value)
+	r.PathParams[param] = strVal
 	return r
 }
 
@@ -945,14 +1079,56 @@ func (r *Request) SetDebug(d bool) *Request {
 	return r
 }
 
-// AddRetryCondition method adds a retry condition function to the request's
-// array of functions is checked to determine if the request can be retried.
-// The request will retry if any functions return true and the error is nil.
+// AddRetryConditions method adds one or more retry condition functions into the request.
+// These retry conditions are executed to determine if the request can be retried.
+// The request will retry if any functions return `true`, otherwise return `false`.
 //
-// NOTE: The request level retry conditions are checked before all retry
-// conditions from the client instance.
-func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
-	r.retryConditions = append(r.retryConditions, condition)
+// NOTE:
+//   - Retry conditions are executed on each retry attempt.
+//   - Default retry conditions are executed first.
+//   - Client-level retry conditions are applied to all requests.
+//   - Request-level retry conditions are executed before client-level retry conditions.
+//     See [Client.AddRetryConditions], [Request.SetRetryConditions]
+//   - Once a retry condition returns true, the remaining retry conditions are not executed.
+//   - Retry conditions are executed in the order in which they are added.
+func (r *Request) AddRetryConditions(conditions ...RetryConditionFunc) *Request {
+	r.retryConditions = append(r.retryConditions, conditions...)
+	return r
+}
+
+// SetRetryConditions method overwrites the retry conditions in the request.
+// These retry conditions are executed to determine if the request can be retried.
+// The request will retry if any function returns `true`, otherwise return `false`.
+//
+// NOTE:
+//   - It overwrites the existing retry conditions.
+//   - See [Request.AddRetryConditions] method for more details.
+func (r *Request) SetRetryConditions(conditions ...RetryConditionFunc) *Request {
+	r.retryConditions = conditions
+	r.isSetRetryConditions = true
+	return r
+}
+
+// AddRetryHooks method adds one or more side-effecting retry hooks in the request.
+//
+// NOTE:
+//   - Retry hooks are executed on each retry attempt.
+//   - The request-level retry hooks are executed first before client-level hooks.
+//     See [Client.AddRetryHooks]
+//   - Retry hooks are executed in the order in which they are added.
+func (r *Request) AddRetryHooks(hooks ...RetryHookFunc) *Request {
+	r.retryHooks = append(r.retryHooks, hooks...)
+	return r
+}
+
+// SetRetryHooks method overwrites side-effecting retry hooks in the request.
+//
+// NOTE:
+//   - It overwrites the existing retry hooks.
+//   - See [Request.AddRetryHooks] method for more details.
+func (r *Request) SetRetryHooks(hooks ...RetryHookFunc) *Request {
+	r.retryHooks = hooks
+	r.isSetRetryHooks = true
 	return r
 }
 
@@ -961,10 +1137,10 @@ func (r *Request) AddRetryCondition(condition RetryConditionFunc) *Request {
 //
 //	first attempt + retry count = total attempts
 //
-// See [Request.SetRetryStrategy]
+// See [Request.SetRetryDelayStrategy]
 //
 // NOTE:
-//   - By default, Resty only does retry on idempotent HTTP methods, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
+//   - By default, Resty only does retry on idempotent HTTP verb, [RFC 9110 Section 9.2.2], [RFC 9110 Section 18.2]
 //
 // [RFC 9110 Section 9.2.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
 // [RFC 9110 Section 18.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
@@ -989,13 +1165,13 @@ func (r *Request) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Request {
 	return r
 }
 
-// SetRetryStrategy method used to set the custom Retry strategy on request,
-// it is used to get wait time before each retry. It overrides the retry
-// strategy set at the client instance level, see [Client.SetRetryStrategy]
+// SetRetryDelayStrategy method used to set the custom Retry delay strategy on request,
+// it is used to get wait time before each retry. It overrides the retry delay
+// strategy set at the client instance level, see [Client.SetRetryDelayStrategy]
 //
-// Default (nil) implies capped exponential backoff with a jitter strategy
-func (r *Request) SetRetryStrategy(rs RetryStrategyFunc) *Request {
-	r.RetryStrategy = rs
+// By default, Resty employs the capped exponential backoff with a jitter delay strategy.
+func (r *Request) SetRetryDelayStrategy(rs RetryDelayStrategyFunc) *Request {
+	r.RetryDelayStrategy = rs
 	return r
 }
 
@@ -1070,10 +1246,12 @@ func (r *Request) SetTrace(t bool) *Request {
 }
 
 // EnableGenerateCurlCmd method enables the generation of curl commands for the current request.
-// It overrides the options set in the [Client].
 //
 // By default, Resty does not log the curl command in the debug log since it has the potential
-// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd].
+// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd] or
+// [Client.SetDebugLogCurlCmd].
+//
+// It overrides the options set in the [Client].
 //
 // NOTE: Use with care.
 //   - Potential to leak sensitive data from [Request] and [Response] in the debug log
@@ -1097,15 +1275,16 @@ func (r *Request) DisableGenerateCurlCmd() *Request {
 // SetGenerateCurlCmd method is used to turn on/off the generate curl command for the current request.
 //
 // By default, Resty does not log the curl command in the debug log since it has the potential
-// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd].
+// to leak sensitive data unless explicitly enabled via [Request.SetDebugLogCurlCmd] or
+// [Client.SetDebugLogCurlCmd].
+//
+// It overrides the options set by the [Client.SetGenerateCurlCmd]
 //
 // NOTE: Use with care.
 //   - Potential to leak sensitive data from [Request] and [Response] in the debug log
 //     when the debug log option is enabled.
 //   - Additional memory usage since the request body was reread.
 //   - curl body is not generated for [io.Reader] and multipart request flow.
-//
-// It overrides the options set by the [Client.SetGenerateCurlCmd]
 func (r *Request) SetGenerateCurlCmd(b bool) *Request {
 	r.generateCurlCmd = b
 	return r
@@ -1187,23 +1366,41 @@ func (r *Request) TraceInfo() TraceInfo {
 		return TraceInfo{}
 	}
 
+	ct.lock.RLock()
+	defer ct.lock.RUnlock()
+
 	ti := TraceInfo{
-		DNSLookup:      ct.dnsDone.Sub(ct.dnsStart),
-		TLSHandshake:   ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart),
-		ServerTime:     ct.gotFirstResponseByte.Sub(ct.gotConn),
+		DNSLookup:      0,
+		TCPConnTime:    0,
+		ServerTime:     0,
 		IsConnReused:   ct.gotConnInfo.Reused,
 		IsConnWasIdle:  ct.gotConnInfo.WasIdle,
 		ConnIdleTime:   ct.gotConnInfo.IdleTime,
 		RequestAttempt: r.Attempt,
 	}
 
-	// Calculate the total time accordingly,
-	// when connection is reused
-	if ct.gotConnInfo.Reused {
-		ti.TotalTime = ct.endTime.Sub(ct.getConn)
-	} else {
-		ti.TotalTime = ct.endTime.Sub(ct.dnsStart)
+	if !ct.dnsStart.IsZero() && !ct.dnsDone.IsZero() {
+		ti.DNSLookup = ct.dnsDone.Sub(ct.dnsStart)
 	}
+
+	if !ct.tlsHandshakeDone.IsZero() && !ct.tlsHandshakeStart.IsZero() {
+		ti.TLSHandshake = ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart)
+	}
+
+	if !ct.gotFirstResponseByte.IsZero() && !ct.gotConn.IsZero() {
+		ti.ServerTime = ct.gotFirstResponseByte.Sub(ct.gotConn)
+	}
+
+	// Calculate the total time accordingly when connection is reused,
+	// and DNS start and get conn time may be zero if the request is invalid.
+	// See issue #1016.
+	requestStartTime := r.Time
+	if ct.gotConnInfo.Reused && !ct.getConn.IsZero() {
+		requestStartTime = ct.getConn
+	} else if !ct.dnsStart.IsZero() {
+		requestStartTime = ct.dnsStart
+	}
+	ti.TotalTime = ct.endTime.Sub(requestStartTime)
 
 	// Only calculate on successful connections
 	if !ct.connectDone.IsZero() {
@@ -1222,7 +1419,7 @@ func (r *Request) TraceInfo() TraceInfo {
 
 	// Capture remote address info when connection is non-nil
 	if ct.gotConnInfo.Conn != nil {
-		ti.RemoteAddr = ct.gotConnInfo.Conn.RemoteAddr()
+		ti.RemoteAddr = ct.gotConnInfo.Conn.RemoteAddr().String()
 	}
 
 	return ti
@@ -1232,42 +1429,58 @@ func (r *Request) TraceInfo() TraceInfo {
 // HTTP verb method starts here
 //_______________________________________________________________________
 
-// Get method does GET HTTP request. It's defined in section 4.3.1 of RFC7231.
+// Get method does GET HTTP request. It's defined in section 9.3.1 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.1
 func (r *Request) Get(url string) (*Response, error) {
 	return r.Execute(MethodGet, url)
 }
 
-// Head method does HEAD HTTP request. It's defined in section 4.3.2 of RFC7231.
+// Head method does HEAD HTTP request. It's defined in section 9.3.2 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.2
 func (r *Request) Head(url string) (*Response, error) {
 	return r.Execute(MethodHead, url)
 }
 
-// Post method does POST HTTP request. It's defined in section 4.3.3 of RFC7231.
+// Post method does POST HTTP request. It's defined in section 9.3.3 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.3
 func (r *Request) Post(url string) (*Response, error) {
 	return r.Execute(MethodPost, url)
 }
 
-// Put method does PUT HTTP request. It's defined in section 4.3.4 of RFC7231.
+// Put method does PUT HTTP request. It's defined in section 9.3.4 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.4
 func (r *Request) Put(url string) (*Response, error) {
 	return r.Execute(MethodPut, url)
 }
 
-// Patch method does PATCH HTTP request. It's defined in section 2 of RFC5789.
+// Patch method does PATCH HTTP request. It's defined in section 2 of [RFC 5789].
+//
+// [RFC 5789]: https://datatracker.ietf.org/doc/html/rfc5789.html#section-2
 func (r *Request) Patch(url string) (*Response, error) {
 	return r.Execute(MethodPatch, url)
 }
 
-// Delete method does DELETE HTTP request. It's defined in section 4.3.5 of RFC7231.
+// Delete method does DELETE HTTP request. It's defined in section 9.3.5 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.5
 func (r *Request) Delete(url string) (*Response, error) {
 	return r.Execute(MethodDelete, url)
 }
 
-// Options method does OPTIONS HTTP request. It's defined in section 4.3.7 of RFC7231.
+// Options method does OPTIONS HTTP request. It's defined in section 9.3.7 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.7
 func (r *Request) Options(url string) (*Response, error) {
 	return r.Execute(MethodOptions, url)
 }
 
-// Trace method does TRACE HTTP request. It's defined in section 4.3.8 of RFC7231.
+// Trace method does TRACE HTTP request. It's defined in section 9.3.8 of [RFC 9110].
+//
+// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110.html#section-9.3.8
 func (r *Request) Trace(url string) (*Response, error) {
 	return r.Execute(MethodTrace, url)
 }
@@ -1300,7 +1513,6 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	}()
 
 	r.Method = method
-	r.URL = url
 
 	if r.RetryCount < 0 {
 		r.RetryCount = 0 // default behavior is no retry
@@ -1313,11 +1525,22 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		r.RetryTraceID = newGUID()
 	}
 
+	retryConditions := append(r.retryConditions, r.client.retryConditions...)
+	if r.isSetRetryConditions {
+		retryConditions = r.retryConditions
+	}
+
+	retryHooks := append(r.retryHooks, r.client.retryHooks...)
+	if r.isSetRetryHooks {
+		retryHooks = r.retryHooks
+	}
+
 	isInvalidRequestErr := false
 	// first attempt + retry count = total attempts
 	for i := 0; i <= r.RetryCount; i++ {
 		r.Attempt++
 		err = nil
+		r.URL = url
 		res, err = r.client.execute(r)
 		if err != nil {
 			if irErr, ok := err.(*invalidRequestError); ok {
@@ -1354,8 +1577,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			// apply user-defined retry conditions if default one
 			// is still false
 			if !needsRetry && res != nil {
-				// user defined retry conditions
-				retryConditions := append(r.retryConditions, r.client.RetryConditions()...)
+				// run user-defined retry conditions
 				for _, retryCondition := range retryConditions {
 					if needsRetry = retryCondition(res, err); needsRetry {
 						break
@@ -1375,7 +1597,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			}
 
 			// run user-defined retry hooks
-			for _, retryHookFunc := range r.client.RetryHooks() {
+			for _, retryHookFunc := range retryHooks {
 				retryHookFunc(res, err)
 			}
 
@@ -1393,11 +1615,11 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			select {
 			case <-r.Context().Done():
 				isCtxDone = true
-				timer.Stop()
 				err = wrapErrors(r.Context().Err(), err)
 				break
 			case <-timer.C:
 			}
+			timer.Stop()
 			if isCtxDone {
 				break
 			}
@@ -1451,6 +1673,11 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.FormData = cloneURLValues(r.FormData)
 	rr.QueryParams = cloneURLValues(r.QueryParams)
 	rr.PathParams = maps.Clone(r.PathParams)
+
+	// reset content length if not set by user
+	if !r.isContentLengthSet {
+		rr.contentLength = 0
+	}
 
 	// clone basic auth
 	if r.credentials != nil {
@@ -1605,17 +1832,6 @@ func (r *Request) initTraceIfEnabled() {
 func (r *Request) isHeaderExists(k string) bool {
 	_, f := r.Header[k]
 	return f
-}
-
-func (r *Request) writeFormData(w *multipart.Writer) error {
-	for k, v := range r.FormData {
-		for _, iv := range v {
-			if err := w.WriteField(k, iv); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func (r *Request) isPayloadSupported() bool {

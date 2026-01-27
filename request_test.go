@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -25,7 +26,8 @@ import (
 )
 
 type AuthSuccess struct {
-	ID, Message string
+	ID      string `xml:"Id"`
+	Message string `xml:"Message"`
 }
 
 type AuthError struct {
@@ -279,17 +281,17 @@ func TestPostJSONStructInvalidLogin(t *testing.T) {
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(credentials{Username: "testuser", Password: "testpass1"}).
-		SetError(AuthError{}).
+		SetResultError(AuthError{}).
 		SetJSONEscapeHTML(false).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
 
-	authError := resp.Error().(*AuthError)
+	authError := resp.ResultError().(*AuthError)
 	assertEqual(t, "unauthorized", authError.ID)
 	assertEqual(t, "Invalid credentials", authError.Message)
-	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	t.Logf("Result Error: %q", resp.ResultError().(*AuthError))
 
 	logResponse(t, resp)
 }
@@ -302,16 +304,16 @@ func TestPostJSONErrorRFC7807(t *testing.T) {
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
 		SetBody(credentials{Username: "testuser", Password: "testpass1"}).
-		SetError(AuthError{}).
+		SetResultError(AuthError{}).
 		Post(ts.URL + "/login?ct=problem")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
 
-	authError := resp.Error().(*AuthError)
+	authError := resp.ResultError().(*AuthError)
 	assertEqual(t, "unauthorized", authError.ID)
 	assertEqual(t, "Invalid credentials", authError.Message)
-	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	t.Logf("Result Error: %q", resp.ResultError().(*AuthError))
 
 	logResponse(t, resp)
 }
@@ -480,7 +482,6 @@ func TestPostXMLBytesSuccess(t *testing.T) {
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody([]byte(`<?xml version="1.0" encoding="UTF-8"?><User><Username>testuser</Username><Password>testpass</Password></User>`)).
 		SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
-		SetContentLength(true).
 		Post(ts.URL + "/login")
 
 	assertError(t, err)
@@ -496,7 +497,6 @@ func TestPostXMLStructSuccess(t *testing.T) {
 	resp, err := dcnldr().
 		SetHeader(hdrContentTypeKey, "application/xml").
 		SetBody(credentials{Username: "testuser", Password: "testpass"}).
-		SetContentLength(true).
 		SetResult(&AuthSuccess{}).
 		Post(ts.URL + "/login")
 
@@ -513,7 +513,7 @@ func TestPostXMLStructInvalidLogin(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl()
-	c.SetError(&AuthError{})
+	c.SetResultError(&AuthError{})
 
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/xml").
@@ -524,7 +524,7 @@ func TestPostXMLStructInvalidLogin(t *testing.T) {
 	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
 	assertEqual(t, resp.Header().Get("Www-Authenticate"), "Protected Realm")
 
-	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	t.Logf("Result Error: %q", resp.ResultError().(*AuthError))
 
 	logResponse(t, resp)
 }
@@ -619,7 +619,7 @@ func TestRequestInsecureBasicAuth(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(logBuf.String(),
+	assertTrue(t, strings.Contains(logBuf.String(),
 		"WARN RESTY Using sensitive credentials in HTTP mode is not secure. Use HTTPS"))
 
 	t.Logf("Result Success: %q", resp.Result().(*AuthSuccess))
@@ -633,7 +633,7 @@ func TestRequestBasicAuthFail(t *testing.T) {
 
 	c := dcnl()
 	c.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
-		SetError(AuthError{})
+		SetResultError(AuthError{})
 
 	resp, err := c.R().
 		SetBasicAuth("myuser", "basicauth1").
@@ -642,7 +642,7 @@ func TestRequestBasicAuthFail(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusUnauthorized, resp.StatusCode())
 
-	t.Logf("Result Error: %q", resp.Error().(*AuthError))
+	t.Logf("Result Error: %q", resp.ResultError().(*AuthError))
 	logResponse(t, resp)
 }
 
@@ -671,13 +671,62 @@ func TestRequestAuthScheme(t *testing.T) {
 		SetAuthScheme("OAuth").
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF")
 
-	resp, err := c.R().
-		SetAuthScheme("Bearer").
-		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
-		Get(ts.URL + "/profile")
+	t.Run("override auth scheme", func(t *testing.T) {
+		resp, err := c.R().
+			SetAuthScheme("Bearer").
+			SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF-Request").
+			Get(ts.URL + "/profile")
 
-	assertError(t, err)
-	assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+	})
+
+	t.Run("empty auth scheme at client level GH954", func(t *testing.T) {
+		tokenValue := "004DDB79-6801-4587-B976-F093E6AC44FF"
+
+		// set client level
+		c.SetAuthScheme("").
+			SetAuthToken(tokenValue)
+
+		resp, err := c.R().
+			Get(ts.URL + "/profile")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
+	})
+
+	t.Run("empty auth scheme at request level GH954", func(t *testing.T) {
+		tokenValue := "004DDB79-6801-4587-B976-F093E6AC44FF"
+
+		// set client level
+		c := dcnl().
+			SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+			SetAuthToken(tokenValue)
+
+		resp, err := c.R().
+			SetAuthScheme("").
+			Get(ts.URL + "/profile")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
+	})
+
+	t.Run("only client level auth token GH959", func(t *testing.T) {
+		tokenValue := "004DDB79-6801-4587-B976-F093E6AC44FF"
+
+		c := dcnl().
+			SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+			SetAuthToken(tokenValue)
+
+		resp, err := c.R().
+			Get(ts.URL + "/profile")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "Bearer "+tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
+	})
 }
 
 func TestFormData(t *testing.T) {
@@ -686,7 +735,6 @@ func TestFormData(t *testing.T) {
 
 	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
-		SetContentLength(true).
 		SetDebug(true)
 	c.outputLogTo(io.Discard)
 
@@ -709,7 +757,7 @@ func TestMultiValueFormData(t *testing.T) {
 	}
 
 	c := dcnl()
-	c.SetContentLength(true).SetDebug(true)
+	c.SetDebug(true)
 	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
@@ -727,7 +775,6 @@ func TestFormDataDisableWarn(t *testing.T) {
 
 	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
-		SetContentLength(true).
 		SetDisableWarn(true)
 	c.outputLogTo(io.Discard)
 
@@ -846,7 +893,6 @@ func TestPutJSONString(t *testing.T) {
 	client := dcnl()
 
 	client.AddRequestMiddleware(func(c *Client, r *Request) error {
-		c.SetContentLength(true)
 		r.SetHeader("X-Custom-Request-Middleware", "Request middleware")
 		return nil
 	})
@@ -887,7 +933,6 @@ func TestRequestMiddleware(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl()
-	c.SetContentLength(true)
 
 	c.AddRequestMiddleware(func(c *Client, r *Request) error {
 		r.SetHeader("X-Custom-Request-Middleware", "Request middleware")
@@ -919,7 +964,7 @@ func TestHTTPAutoRedirectUpTo10(t *testing.T) {
 	assertEqual(t, 307, finalReq.StatusCode)
 	assertEqual(t, ts.URL+"/redirect-10", finalReq.URL)
 
-	assertEqual(t, true, (err.Error() == "Get /redirect-11: stopped after 10 redirects" ||
+	assertTrue(t, (err.Error() == "Get /redirect-11: stopped after 10 redirects" ||
 		err.Error() == "Get \"/redirect-11\": stopped after 10 redirects"))
 }
 
@@ -933,7 +978,7 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 	_, err := c.R().Get(ts.URL + "/redirect-host-check-1")
 
 	assertNotNil(t, err)
-	assertEqual(t, true, strings.Contains(err.Error(), "redirect is not allowed as per DomainCheckRedirectPolicy"))
+	assertTrue(t, strings.Contains(err.Error(), "redirect is not allowed as per DomainCheckRedirectPolicy"))
 }
 
 func TestHttpMethods(t *testing.T) {
@@ -1053,7 +1098,6 @@ func TestRawFileUploadByBody(t *testing.T) {
 
 	resp, err := dcnldr().
 		SetBody(fileBytes).
-		SetContentLength(true).
 		SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
 		Put(ts.URL + "/raw-upload")
 
@@ -1069,19 +1113,19 @@ func TestProxySetting(t *testing.T) {
 
 	assertNil(t, err)
 
-	assertEqual(t, false, c.IsProxySet())
+	assertFalse(t, c.IsProxySet())
 	assertNotNil(t, transport.Proxy)
 
 	c.SetProxy("http://sampleproxy:8888")
-	assertEqual(t, true, c.IsProxySet())
+	assertTrue(t, c.IsProxySet())
 	assertNotNil(t, transport.Proxy)
 
 	c.SetProxy("//not.a.user@%66%6f%6f.com:8888")
-	assertEqual(t, true, c.IsProxySet())
+	assertTrue(t, c.IsProxySet())
 	assertNotNil(t, transport.Proxy)
 
 	c.SetProxy("http://sampleproxy:8888")
-	assertEqual(t, true, c.IsProxySet())
+	assertTrue(t, c.IsProxySet())
 	c.RemoveProxy()
 	assertNil(t, c.ProxyURL())
 	assertNil(t, transport.Proxy)
@@ -1101,12 +1145,12 @@ func TestGetClient(t *testing.T) {
 func TestIncorrectURL(t *testing.T) {
 	c := dcnl()
 	_, err := c.R().Get("//not.a.user@%66%6f%6f.com/just/a/path/also")
-	assertEqual(t, true, (strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
+	assertTrue(t, (strings.Contains(err.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
 		strings.Contains(err.Error(), "parse \"//not.a.user@%66%6f%6f.com/just/a/path/also\"")))
 
 	c.SetBaseURL("//not.a.user@%66%6f%6f.com")
 	_, err1 := c.R().Get("/just/a/path/also")
-	assertEqual(t, true, (strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
+	assertTrue(t, (strings.Contains(err1.Error(), "parse //not.a.user@%66%6f%6f.com/just/a/path/also") ||
 		strings.Contains(err1.Error(), "parse \"//not.a.user@%66%6f%6f.com/just/a/path/also\"")))
 }
 
@@ -1216,16 +1260,16 @@ func TestMultiParamsQueryString(t *testing.T) {
 	_, _ = req1.SetQueryParam("status", "pending").
 		Get(ts1.URL)
 
-	assertEqual(t, true, strings.Contains(req1.URL, "status=pending"))
+	assertTrue(t, strings.Contains(req1.URL, "status=pending"))
 	// pending overrides open
-	assertEqual(t, false, strings.Contains(req1.URL, "status=open"))
+	assertFalse(t, strings.Contains(req1.URL, "status=open"))
 
 	_, _ = req1.SetQueryParam("status", "approved").
 		Get(ts1.URL)
 
-	assertEqual(t, true, strings.Contains(req1.URL, "status=approved"))
+	assertTrue(t, strings.Contains(req1.URL, "status=approved"))
 	// approved overrides pending
-	assertEqual(t, false, strings.Contains(req1.URL, "status=pending"))
+	assertFalse(t, strings.Contains(req1.URL, "status=pending"))
 
 	ts2 := createGetServer(t)
 	defer ts2.Close()
@@ -1238,12 +1282,12 @@ func TestMultiParamsQueryString(t *testing.T) {
 
 	_, _ = req2.SetQueryParamsFromValues(v).Get(ts2.URL)
 
-	assertEqual(t, true, strings.Contains(req2.URL, "status=pending"))
-	assertEqual(t, true, strings.Contains(req2.URL, "status=approved"))
-	assertEqual(t, true, strings.Contains(req2.URL, "status=reject"))
+	assertTrue(t, strings.Contains(req2.URL, "status=pending"))
+	assertTrue(t, strings.Contains(req2.URL, "status=approved"))
+	assertTrue(t, strings.Contains(req2.URL, "status=reject"))
 
 	// because it's removed by key
-	assertEqual(t, false, strings.Contains(req2.URL, "status=open"))
+	assertFalse(t, strings.Contains(req2.URL, "status=open"))
 }
 
 func TestSetQueryStringTypical(t *testing.T) {
@@ -1295,6 +1339,50 @@ func TestSetHeaderMultipleValue(t *testing.T) {
 	assertEqual(t, "Bearer xyz", r.Header.Get("authorization"))
 }
 
+func TestRequestSetHeaderAny(t *testing.T) {
+	r := dcnldr().
+		SetHeaderAny("X-Int-Value", 42).
+		SetHeaderAny("X-String-Value", "hello")
+
+	assertEqual(t, "42", r.Header.Get("X-Int-Value"))
+	assertEqual(t, "hello", r.Header.Get("X-String-Value"))
+}
+
+func TestRequestSetHeaderVerbatimAny(t *testing.T) {
+	r := dcnldr().
+		SetHeaderVerbatimAny("header-lowercase", 123)
+
+	//lint:ignore SA1008 valid one ignore this!
+	assertEqual(t, "123", strings.Join(r.Header["header-lowercase"], ""))
+}
+
+func TestRequestSetQueryParamAny(t *testing.T) {
+	r := dcnldr().
+		SetQueryParamAny("page", 5).
+		SetQueryParamAny("active", true)
+
+	assertEqual(t, "5", r.QueryParams.Get("page"))
+	assertEqual(t, "true", r.QueryParams.Get("active"))
+}
+
+func TestRequestSetPathParamAny(t *testing.T) {
+	r := dcnldr().
+		SetPathParamAny("userId", 42).
+		SetPathParamAny("name", "john doe")
+
+	assertEqual(t, "42", r.PathParams["userId"])
+	assertEqual(t, "john%20doe", r.PathParams["name"])
+}
+
+func TestRequestSetRawPathParamAny(t *testing.T) {
+	r := dcnldr().
+		SetRawPathParamAny("userId", 42).
+		SetRawPathParamAny("name", "john doe")
+
+	assertEqual(t, "42", r.PathParams["userId"])
+	assertEqual(t, "john doe", r.PathParams["name"])
+}
+
 func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
@@ -1312,8 +1400,8 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
-	assertEqual(t, true, resp.Size() != 0)
-	assertEqual(t, true, resp.Time() > 0)
+	assertTrue(t, resp.Size() != 0)
+	assertTrue(t, resp.Duration() > 0)
 
 	f, err1 := os.Open(filepath.Join(baseOutputDir, outputFilePath))
 	defer closeq(f)
@@ -1341,8 +1429,8 @@ func TestOutputPathDirNotExists(t *testing.T) {
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
-	assertEqual(t, true, resp.Size() != 0)
-	assertEqual(t, true, resp.Time() > 0)
+	assertTrue(t, resp.Size() != 0)
+	assertTrue(t, resp.Duration() > 0)
 }
 
 func TestOutputFileAbsPath(t *testing.T) {
@@ -1372,12 +1460,12 @@ func TestRequestSaveResponse(t *testing.T) {
 		SetSaveResponse(true).
 		SetOutputDirectory(filepath.Join(getTestDataPath(), "go-resty"))
 
-	assertEqual(t, true, c.IsSaveResponse())
+	assertTrue(t, c.IsSaveResponse())
 
 	t.Run("content-disposition save response request", func(t *testing.T) {
 		outputFile := filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")
 		c.SetSaveResponse(false)
-		assertEqual(t, false, c.IsSaveResponse())
+		assertFalse(t, c.IsSaveResponse())
 
 		res, err := c.R().
 			SetSaveResponse(true).
@@ -1393,7 +1481,7 @@ func TestRequestSaveResponse(t *testing.T) {
 	t.Run("use filename from path", func(t *testing.T) {
 		outputFile := filepath.Join(getTestDataPath(), "go-resty", "my-image.png")
 		c.SetSaveResponse(false)
-		assertEqual(t, false, c.IsSaveResponse())
+		assertFalse(t, c.IsSaveResponse())
 
 		res, err := c.R().
 			SetSaveResponse(true).
@@ -1404,6 +1492,13 @@ func TestRequestSaveResponse(t *testing.T) {
 
 		_, err = os.Stat(outputFile)
 		assertNil(t, err)
+	})
+
+	t.Run("empty path", func(t *testing.T) {
+		_, err := c.R().
+			SetSaveResponse(true).
+			Get(ts.URL)
+		assertError(t, err)
 	})
 
 }
@@ -1469,7 +1564,7 @@ func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
 			Get(ts.URL + "/")
 
 		assertError(t, err)
-		assertEqual(t, true, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
+		assertTrue(t, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
 	})
 
 	t.Run("do not parse response debug log request level", func(t *testing.T) {
@@ -1485,7 +1580,7 @@ func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
 			Get(ts.URL + "/")
 
 		assertError(t, err)
-		assertEqual(t, true, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
+		assertTrue(t, strings.Contains(lgr.String(), "***** DO NOT PARSE RESPONSE - Enabled *****"))
 	})
 }
 
@@ -1526,8 +1621,8 @@ func TestGetPathParamAndPathParams(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "TestGetPathParams: text response"))
-	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/details"))
+	assertTrue(t, strings.Contains(resp.String(), "TestGetPathParams: text response"))
+	assertTrue(t, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/details"))
 
 	logResponse(t, resp)
 }
@@ -1584,28 +1679,42 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 
 	file, _ := os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
 	defer file.Close()
+	fi, _ := file.Stat()
 
-	resp, err := dcnldr().
+	c := dcnl()
+	c.SetRequestMiddlewares(
+		PrepareRequestMiddleware,
+		func(c *Client, r *Request) error {
+			// validate content length values
+			assertTrue(t, r.isContentLengthSet)
+			assertTrue(t, r.contentLength == fi.Size())
+			assertTrue(t, r.RawRequest.ContentLength == fi.Size())
+			assertEqual(t, r.contentLength, r.RawRequest.ContentLength)
+			return nil
+		},
+	)
+
+	resp, err := c.R().
 		SetBody(file).
-		SetHeader("Content-Type", "image/png").
+		SetContentType("image/png").
+		SetContentLength(fi.Size()).
 		Post(ts.URL + "/upload")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully"))
+	assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully"))
 
 	file, _ = os.Open(filepath.Join(getTestDataPath(), "test-img.png"))
 	defer file.Close()
 
 	resp, err = dcnldr().
 		SetBody(file).
-		SetHeader("Content-Type", "image/png").
-		SetContentLength(true).
+		SetContentType("image/png").
 		Post(ts.URL + "/upload")
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "File Uploaded successfully"))
+	assertTrue(t, strings.Contains(resp.String(), "File Uploaded successfully"))
 }
 
 func TestHostHeaderOverride(t *testing.T) {
@@ -1635,7 +1744,7 @@ func TestNotFoundWithError(t *testing.T) {
 
 	resp, err := dcnl().R().
 		SetHeader(hdrContentTypeKey, "application/json").
-		SetError(&httpError).
+		SetResultError(&httpError).
 		Get(ts.URL + "/not-found-with-error")
 
 	assertError(t, err)
@@ -1655,7 +1764,7 @@ func TestNotFoundWithoutError(t *testing.T) {
 
 	c := dcnl().outputLogTo(os.Stdout)
 	resp, err := c.R().
-		SetError(&httpError).
+		SetResultError(&httpError).
 		SetHeader(hdrContentTypeKey, "application/json").
 		Get(ts.URL + "/not-found-no-error")
 
@@ -1688,8 +1797,8 @@ func TestPathParamURLInput(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
-	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users%2Fdevelopers/https:%2F%2Fexample.com"))
+	assertTrue(t, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
+	assertTrue(t, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users%2Fdevelopers/https:%2F%2Fexample.com"))
 
 	logResponse(t, resp)
 }
@@ -1716,8 +1825,8 @@ func TestRawPathParamURLInput(t *testing.T) {
 
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
-	assertEqual(t, true, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
-	assertEqual(t, true, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users/developers/https://example.com"))
+	assertTrue(t, strings.Contains(resp.String(), "TestPathParamURLInput: text response"))
+	assertTrue(t, strings.Contains(resp.String(), "/v1/users/sample@sample.com/100002/users/developers/https://example.com"))
 
 	logResponse(t, resp)
 }
@@ -1739,15 +1848,17 @@ func TestTraceInfo(t *testing.T) {
 			assertNotNil(t, resp)
 
 			tr := resp.Request.TraceInfo()
-			assertEqual(t, true, tr.DNSLookup >= 0)
-			assertEqual(t, true, tr.ConnTime >= 0)
-			assertEqual(t, true, tr.TLSHandshake >= 0)
-			assertEqual(t, true, tr.ServerTime >= 0)
-			assertEqual(t, true, tr.ResponseTime >= 0)
-			assertEqual(t, true, tr.TotalTime >= 0)
-			assertEqual(t, true, tr.TotalTime < time.Hour)
-			assertEqual(t, true, tr.TotalTime == resp.Time())
-			assertEqual(t, tr.RemoteAddr.String(), serverAddr)
+			assertTrue(t, tr.DNSLookup >= 0)
+			assertTrue(t, tr.ConnTime >= 0)
+			assertTrue(t, tr.TLSHandshake >= 0)
+			assertTrue(t, tr.ServerTime >= 0)
+			assertTrue(t, tr.ResponseTime >= 0)
+			assertTrue(t, tr.TotalTime >= 0)
+			assertTrue(t, tr.TotalTime < time.Hour)
+			assertTrue(t, tr.TotalTime == resp.Duration())
+			assertEqual(t, tr.RemoteAddr, serverAddr)
+
+			assertNotNil(t, tr.Clone())
 		}
 
 		client.DisableTrace()
@@ -1760,16 +1871,28 @@ func TestTraceInfo(t *testing.T) {
 			assertNotNil(t, resp)
 
 			tr := resp.Request.TraceInfo()
-			assertEqual(t, true, tr.DNSLookup >= 0)
-			assertEqual(t, true, tr.ConnTime >= 0)
-			assertEqual(t, true, tr.TLSHandshake >= 0)
-			assertEqual(t, true, tr.ServerTime >= 0)
-			assertEqual(t, true, tr.ResponseTime >= 0)
-			assertEqual(t, true, tr.TotalTime >= 0)
-			assertEqual(t, true, tr.TotalTime == resp.Time())
-			assertEqual(t, tr.RemoteAddr.String(), serverAddr)
+			assertTrue(t, tr.DNSLookup >= 0)
+			assertTrue(t, tr.ConnTime >= 0)
+			assertTrue(t, tr.TLSHandshake >= 0)
+			assertTrue(t, tr.ServerTime >= 0)
+			assertTrue(t, tr.ResponseTime >= 0)
+			assertTrue(t, tr.TotalTime >= 0)
+			assertTrue(t, tr.TotalTime == resp.Duration())
+			assertEqual(t, tr.RemoteAddr, serverAddr)
 		}
 
+	})
+
+	t.Run("enable trace on invalid request, issue #1016", func(t *testing.T) {
+		resp, err := client.R().EnableTrace().Get("unknown://url.com")
+		assertNotNil(t, err)
+		tr := resp.Request.TraceInfo()
+		assertTrue(t, tr.DNSLookup == 0)
+		assertTrue(t, tr.ConnTime == 0)
+		assertTrue(t, tr.TLSHandshake == 0)
+		assertTrue(t, tr.ServerTime == 0)
+		assertTrue(t, tr.ResponseTime == 0)
+		assertTrue(t, tr.TotalTime > 0 && tr.TotalTime < time.Second)
 	})
 
 	t.Run("enable trace and debug on request", func(t *testing.T) {
@@ -1781,10 +1904,31 @@ func TestTraceInfo(t *testing.T) {
 			resp, err := c.R().EnableTrace().EnableDebug().Get(u)
 			assertNil(t, err)
 			assertNotNil(t, resp)
+
+			jsonStr := resp.Request.TraceInfo().JSON()
+			assertTrue(t, strings.Contains(jsonStr, serverAddr))
 		}
 
 		logContent := logBuf.String()
 		regexTraceInfoHeader := regexp.MustCompile("TRACE INFO:")
+		matches := regexTraceInfoHeader.FindAllStringIndex(logContent, -1)
+		assertEqual(t, len(requestURLs), len(matches))
+	})
+
+	t.Run("enable trace and debug on request json formatter", func(t *testing.T) {
+		c, logBuf := dcldb()
+		c.SetBaseURL(ts.URL)
+		c.SetDebugLogFormatter(DebugLogJSONFormatter)
+
+		requestURLs := []string{"/", "/json", "/long-text", "/long-json"}
+		for _, u := range requestURLs {
+			resp, err := c.R().EnableTrace().EnableDebug().Get(u)
+			assertNil(t, err)
+			assertNotNil(t, resp)
+		}
+
+		logContent := logBuf.String()
+		regexTraceInfoHeader := regexp.MustCompile(`"trace_info":{"`)
 		matches := regexTraceInfoHeader.FindAllStringIndex(logContent, -1)
 		assertEqual(t, len(requestURLs), len(matches))
 	})
@@ -1805,12 +1949,12 @@ func TestTraceInfoWithoutEnableTrace(t *testing.T) {
 		assertNotNil(t, resp)
 
 		tr := resp.Request.TraceInfo()
-		assertEqual(t, true, tr.DNSLookup == 0)
-		assertEqual(t, true, tr.ConnTime == 0)
-		assertEqual(t, true, tr.TLSHandshake == 0)
-		assertEqual(t, true, tr.ServerTime == 0)
-		assertEqual(t, true, tr.ResponseTime == 0)
-		assertEqual(t, true, tr.TotalTime == 0)
+		assertTrue(t, tr.DNSLookup == 0)
+		assertTrue(t, tr.ConnTime == 0)
+		assertTrue(t, tr.TLSHandshake == 0)
+		assertTrue(t, tr.ServerTime == 0)
+		assertTrue(t, tr.ResponseTime == 0)
+		assertTrue(t, tr.TotalTime == 0)
 	}
 }
 
@@ -1826,14 +1970,91 @@ func TestTraceInfoOnTimeout(t *testing.T) {
 	assertNotNil(t, resp)
 
 	tr := resp.Request.TraceInfo()
-	assertEqual(t, true, tr.DNSLookup >= 0)
-	assertEqual(t, true, tr.ConnTime == 0)
-	assertEqual(t, true, tr.TLSHandshake == 0)
-	assertEqual(t, true, tr.TCPConnTime == 0)
-	assertEqual(t, true, tr.ServerTime == 0)
-	assertEqual(t, true, tr.ResponseTime == 0)
-	assertEqual(t, true, tr.TotalTime > 0)
-	assertEqual(t, true, tr.TotalTime == resp.Time())
+	assertTrue(t, tr.DNSLookup >= 0)
+	assertTrue(t, tr.ConnTime == 0)
+	assertTrue(t, tr.TLSHandshake == 0)
+	assertTrue(t, tr.TCPConnTime == 0)
+	assertTrue(t, tr.ServerTime == 0)
+	assertTrue(t, tr.ResponseTime == 0)
+	assertTrue(t, tr.TotalTime > 0)
+	assertTrue(t, tr.TotalTime == resp.Duration())
+}
+
+func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
+	t.Run("timeout with very short timeout", func(t *testing.T) {
+		client := New().
+			SetTimeout(1 * time.Millisecond).
+			SetBaseURL("http://resty-nowhere.local").
+			EnableTrace()
+
+		resp, err := client.R().Get("/")
+		assertNotNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+
+		assertTrue(t, tr.DNSLookup == 0)
+		assertTrue(t, tr.ConnTime == 0)
+		assertTrue(t, tr.TLSHandshake == 0)
+		assertTrue(t, tr.TCPConnTime == 0)
+		assertTrue(t, tr.ServerTime == 0)
+		assertTrue(t, tr.ResponseTime == 0)
+		assertTrue(t, tr.TotalTime > 0)
+		assertTrue(t, tr.TotalTime == resp.Duration())
+	})
+
+	t.Run("successful request with SetTimeout", func(t *testing.T) {
+		ts := createGetServer(t)
+		defer ts.Close()
+
+		client := New().
+			SetTimeout(5 * time.Second).
+			SetBaseURL(ts.URL).
+			EnableTrace()
+
+		resp, err := client.R().Get("/")
+		assertNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+
+		assertTrue(t, tr.DNSLookup >= 0)
+		assertTrue(t, tr.ConnTime >= 0)
+		assertTrue(t, tr.TLSHandshake >= 0)
+		assertTrue(t, tr.TCPConnTime >= 0)
+		assertTrue(t, tr.ServerTime >= 0)
+		assertTrue(t, tr.ResponseTime >= 0)
+		assertTrue(t, tr.TotalTime > 0)
+		assertTrue(t, tr.TotalTime == resp.Duration())
+	})
+
+	t.Run("HTTPS request with TLS handshake", func(t *testing.T) {
+		ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("OK"))
+		}))
+		defer ts.Close()
+
+		client := New().
+			SetTimeout(5 * time.Second).
+			SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
+			EnableTrace()
+
+		resp, err := client.R().Get(ts.URL)
+		assertNil(t, err)
+		assertNotNil(t, resp)
+
+		tr := resp.Request.TraceInfo()
+
+		assertTrue(t, tr.TLSHandshake > 0)
+		assertTrue(t, tr.DNSLookup >= 0)
+		assertTrue(t, tr.ConnTime >= 0)
+		assertTrue(t, tr.TCPConnTime >= 0)
+		assertTrue(t, tr.ServerTime >= 0)
+		assertTrue(t, tr.ResponseTime >= 0)
+		assertTrue(t, tr.TotalTime > 0)
+		assertTrue(t, tr.TotalTime == resp.Duration())
+	})
 }
 
 func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
@@ -1854,7 +2075,7 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+		assertTrue(t, strings.Contains(output.String(), "REQUEST TOO LARGE"))
 	})
 
 	t.Run("post form with no more than 512 bytes data", func(t *testing.T) {
@@ -1870,7 +2091,7 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(output.String(), "Alex"))
+		assertTrue(t, strings.Contains(output.String(), "Alex"))
 	})
 
 	t.Run("post string with more than 512 bytes data", func(t *testing.T) {
@@ -1884,7 +2105,7 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+		assertTrue(t, strings.Contains(output.String(), "REQUEST TOO LARGE"))
 	})
 
 	t.Run("post string slice with more than 512 bytes data", func(t *testing.T) {
@@ -1896,7 +2117,7 @@ func TestDebugLoggerRequestBodyTooLarge(t *testing.T) {
 			Post(formTs.URL + "/profile")
 		assertNil(t, err)
 		assertNotNil(t, resp)
-		assertEqual(t, true, strings.Contains(output.String(), "REQUEST TOO LARGE"))
+		assertTrue(t, strings.Contains(output.String(), "REQUEST TOO LARGE"))
 	})
 
 }
@@ -1914,7 +2135,7 @@ func TestPostMapTemporaryRedirect(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
 
-func TestPostWith204Responset(t *testing.T) {
+func TestPostWith204Response(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
@@ -2021,7 +2242,7 @@ func TestResponseBodyUnlimitedReads(t *testing.T) {
 		SetJSONEscapeHTML(false).
 		SetResponseBodyUnlimitedReads(true)
 
-	assertEqual(t, true, c.ResponseBodyUnlimitedReads())
+	assertTrue(t, c.ResponseBodyUnlimitedReads())
 
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
@@ -2050,11 +2271,11 @@ func TestRequestAllowPayload(t *testing.T) {
 	t.Run("default method is GET", func(t *testing.T) {
 		r := c.R()
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 
 		r.SetAllowMethodGetPayload(true)
 		result2 := r.isPayloadSupported()
-		assertEqual(t, true, result2)
+		assertTrue(t, result2)
 	})
 
 	t.Run("method GET", func(t *testing.T) {
@@ -2062,32 +2283,32 @@ func TestRequestAllowPayload(t *testing.T) {
 			SetMethod(MethodGet)
 
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 
 		r.SetAllowMethodGetPayload(true)
 		result2 := r.isPayloadSupported()
-		assertEqual(t, true, result2)
+		assertTrue(t, result2)
 	})
 
 	t.Run("method POST", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodPost)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, true, result1)
+		assertTrue(t, result1)
 	})
 
 	t.Run("method PUT", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodPut)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, true, result1)
+		assertTrue(t, result1)
 	})
 
 	t.Run("method PATCH", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodPatch)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, true, result1)
+		assertTrue(t, result1)
 	})
 
 	t.Run("method DELETE", func(t *testing.T) {
@@ -2095,32 +2316,32 @@ func TestRequestAllowPayload(t *testing.T) {
 			SetMethod(MethodDelete)
 
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 
 		r.SetAllowMethodDeletePayload(true)
 		result2 := r.isPayloadSupported()
-		assertEqual(t, true, result2)
+		assertTrue(t, result2)
 	})
 
 	t.Run("method HEAD", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodHead)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 	})
 
 	t.Run("method OPTIONS", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodOptions)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 	})
 
 	t.Run("method TRACE", func(t *testing.T) {
 		r := c.R().
 			SetMethod(MethodTrace)
 		result1 := r.isPayloadSupported()
-		assertEqual(t, false, result1)
+		assertFalse(t, result1)
 	})
 
 }
@@ -2137,7 +2358,7 @@ func TestRequestNoRetryOnNonIdempotentMethod(t *testing.T) {
 
 	c := dcnl().
 		SetTimeout(time.Second * 3).
-		AddRetryHook(
+		AddRetryHooks(
 			func(response *Response, _ error) {
 				read, err := bufReader.Read(bufCpy)
 
@@ -2163,25 +2384,25 @@ func TestRequestContextTimeout(t *testing.T) {
 
 	t.Run("use client set timeout", func(t *testing.T) {
 		c := dcnl().SetTimeout(200 * time.Millisecond)
-		assertEqual(t, true, c.Timeout() > 0)
+		assertTrue(t, c.Timeout() > 0)
 
 		req := c.R()
-		assertEqual(t, true, req.Timeout > 0)
+		assertTrue(t, req.Timeout > 0)
 
 		_, err := req.Get(ts.URL + "/set-timeout-test")
 
-		assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+		assertTrue(t, errors.Is(err, context.DeadlineExceeded))
 	})
 
 	t.Run("use request set timeout", func(t *testing.T) {
 		c := dcnl()
-		assertEqual(t, true, c.Timeout() == 0)
+		assertTrue(t, c.Timeout() == 0)
 
 		_, err := c.R().
 			SetTimeout(200 * time.Millisecond).
 			Get(ts.URL + "/set-timeout-test")
 
-		assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+		assertTrue(t, errors.Is(err, context.DeadlineExceeded))
 	})
 
 	t.Run("use external context for timeout", func(t *testing.T) {
@@ -2193,7 +2414,7 @@ func TestRequestContextTimeout(t *testing.T) {
 			SetContext(ctx).
 			Get(ts.URL + "/set-timeout-test")
 
-		assertEqual(t, true, errors.Is(err, context.DeadlineExceeded))
+		assertTrue(t, errors.Is(err, context.DeadlineExceeded))
 	})
 
 }
@@ -2240,7 +2461,7 @@ func TestRequestSetResultAndSetOutputFile(t *testing.T) {
 	assertEqual(t, `{ "id": "success", "message": "login successful" }`, string(fileContent))
 }
 
-func TestRequestBodyContentLength(t *testing.T) {
+func TestRequestBodyContentLengthValidation(t *testing.T) {
 	ts := createGenericServer(t)
 	defer ts.Close()
 
@@ -2249,8 +2470,10 @@ func TestRequestBodyContentLength(t *testing.T) {
 	c.SetRequestMiddlewares(
 		PrepareRequestMiddleware,
 		func(c *Client, r *Request) error {
-			_, found := r.Header[hdrContentLengthKey]
-			assertEqual(t, true, found)
+			// validate content length
+			assertTrue(t, r.contentLength > 0)
+			assertTrue(t, r.RawRequest.ContentLength > 0)
+			assertEqual(t, r.contentLength, r.RawRequest.ContentLength)
 			return nil
 		},
 	)
@@ -2258,7 +2481,6 @@ func TestRequestBodyContentLength(t *testing.T) {
 	buf := bytes.NewBuffer([]byte(`{"content":"json content sending to server"}`))
 	res, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json").
-		SetContentLength(true).
 		SetBody(buf).
 		Put("/json")
 
@@ -2302,43 +2524,85 @@ func TestRequestFuncs(t *testing.T) {
 	assertEqual(t, "TestGet: text response", resp.String())
 }
 
+func TestHTTPWarnGH970(t *testing.T) {
+	lookupText := "Using sensitive credentials in HTTP mode is not secure. Use HTTPS"
+
+	t.Run("SSL used", func(t *testing.T) {
+		ts := createAuthServerTLSOptional(t, true)
+		defer ts.Close()
+
+		c, lb := dcldb()
+		c.SetBaseURL(ts.URL).
+			SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+
+		res, err := c.R().
+			SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
+			Get("/profile")
+
+		assertNil(t, err)
+		assertTrue(t, strings.Contains(res.String(), "profile fetch successful"))
+		assertFalse(t, strings.Contains(lb.String(), lookupText))
+	})
+
+	t.Run("non-SSL used", func(t *testing.T) {
+		ts := createAuthServerTLSOptional(t, false)
+		defer ts.Close()
+
+		c, lb := dcldb()
+		c.SetBaseURL(ts.URL)
+
+		res, err := c.R().
+			SetAuthToken("004DDB79-6801-4587-B976-F093E6AC44FF").
+			Get("/profile")
+
+		assertNil(t, err)
+		assertTrue(t, strings.Contains(res.String(), "profile fetch successful"))
+		assertTrue(t, strings.Contains(lb.String(), lookupText))
+	})
+}
+
 // This test methods exist for test coverage purpose
 // to validate the getter and setter
 func TestRequestSettingsCoverage(t *testing.T) {
 	c := dcnl()
 
 	r1 := c.R()
-	assertEqual(t, false, r1.CloseConnection)
+	assertFalse(t, r1.CloseConnection)
 	r1.SetCloseConnection(true)
-	assertEqual(t, true, r1.CloseConnection)
+	assertTrue(t, r1.CloseConnection)
 
 	r2 := c.R()
-	assertEqual(t, false, r2.IsTrace)
+	assertFalse(t, r2.IsTrace)
 	r2.EnableTrace()
-	assertEqual(t, true, r2.IsTrace)
+	assertTrue(t, r2.IsTrace)
 	r2.DisableTrace()
-	assertEqual(t, false, r2.IsTrace)
+	assertFalse(t, r2.IsTrace)
 
 	r3 := c.R()
-	assertEqual(t, false, r3.ResponseBodyUnlimitedReads)
+	assertFalse(t, r3.ResponseBodyUnlimitedReads)
 	r3.SetResponseBodyUnlimitedReads(true)
-	assertEqual(t, true, r3.ResponseBodyUnlimitedReads)
+	assertTrue(t, r3.ResponseBodyUnlimitedReads)
 	r3.SetResponseBodyUnlimitedReads(false)
-	assertEqual(t, false, r3.ResponseBodyUnlimitedReads)
+	assertFalse(t, r3.ResponseBodyUnlimitedReads)
 
 	r4 := c.R()
-	assertEqual(t, false, r4.Debug)
+	assertFalse(t, r4.Debug)
 	r4.EnableDebug()
-	assertEqual(t, true, r4.Debug)
+	assertTrue(t, r4.Debug)
 	r4.DisableDebug()
-	assertEqual(t, false, r4.Debug)
+	assertFalse(t, r4.Debug)
 
 	r5 := c.R()
-	assertEqual(t, true, r5.IsRetryDefaultConditions)
+	assertTrue(t, r5.IsRetryDefaultConditions)
 	r5.DisableRetryDefaultConditions()
-	assertEqual(t, false, r5.IsRetryDefaultConditions)
+	assertFalse(t, r5.IsRetryDefaultConditions)
 	r5.EnableRetryDefaultConditions()
-	assertEqual(t, true, r5.IsRetryDefaultConditions)
+	assertTrue(t, r5.IsRetryDefaultConditions)
+
+	r6 := c.R()
+	customAuthHeader := "X-Custom-Authorization"
+	r6.SetHeaderAuthorizationKey(customAuthHeader)
+	assertEqual(t, customAuthHeader, r6.HeaderAuthorizationKey)
 
 	invalidJsonBytes := []byte(`{\" \": "value here"}`)
 	result := jsonIndent(invalidJsonBytes)
@@ -2350,14 +2614,14 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			if err, ok := rec.(error); ok {
-				assertEqual(t, true, strings.Contains(err.Error(), "resty: Request.Clone nil context"))
+				assertTrue(t, strings.Contains(err.Error(), "resty: Request.Clone nil context"))
 			}
 		}
 	}()
-	r6 := c.R()
+	rc := c.R()
 	//lint:ignore SA1012 test case nil check
-	r62 := r6.Clone(nil)
-	assertEqual(t, nil, r62.ctx)
+	rc2 := rc.Clone(nil)
+	assertEqual(t, nil, rc2.ctx)
 }
 
 func TestRequestDataRace(t *testing.T) {

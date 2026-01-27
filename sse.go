@@ -8,6 +8,7 @@ package resty
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ import (
 var (
 	defaultSseMaxBufSize = 1 << 15 // 32kb
 	defaultEventName     = "message"
+	defaultHTTPMethod    = MethodGet
 
 	headerID    = []byte("id:")
 	headerData  = []byte("data:")
@@ -39,7 +41,7 @@ type (
 	// EventOpenFunc is a callback function type used to receive notification
 	// when Resty establishes a connection with the server for the
 	// Server-Sent Events(SSE)
-	EventOpenFunc func(url string)
+	EventOpenFunc func(url string, respHdr http.Header)
 
 	// EventMessageFunc is a callback function type used to receive event details
 	// from the Server-Sent Events(SSE) stream
@@ -48,6 +50,10 @@ type (
 	// EventErrorFunc is a callback function type used to receive notification
 	// when an error occurs with [EventSource] processing
 	EventErrorFunc func(error)
+
+	// EventRequestFailureFunc is a callback function type used to receive event
+	// details from the Server-Sent Events(SSE) request failure
+	EventRequestFailureFunc func(err error, res *http.Response)
 
 	// Event struct represents the event details from the Server-Sent Events(SSE) stream
 	Event struct {
@@ -63,7 +69,9 @@ type (
 	EventSource struct {
 		lock             *sync.RWMutex
 		url              string
+		method           string
 		header           http.Header
+		body             io.Reader
 		lastEventID      string
 		retryCount       int
 		retryWaitTime    time.Duration
@@ -72,6 +80,7 @@ type (
 		maxBufSize       int
 		onOpen           EventOpenFunc
 		onError          EventErrorFunc
+		onRequestFailure EventRequestFailureFunc
 		onEvent          map[string]*callback
 		log              Logger
 		closed           bool
@@ -91,8 +100,8 @@ type (
 //		SetURL("https://sse.dev/test").
 //		OnMessage(
 //			func(e any) {
-//				e = e.(*Event)
-//				fmt.Println(e)
+//				event := e.(*Event)
+//				fmt.Println(event)
 //			},
 //			nil, // see method godoc
 //		)
@@ -126,6 +135,14 @@ func (es *EventSource) SetURL(url string) *EventSource {
 	return es
 }
 
+// SetMethod method sets a [EventSource] connection HTTP method in the instance
+//
+//	es.SetMethod("POST"), or es.SetMethod(resty.MethodPost)
+func (es *EventSource) SetMethod(method string) *EventSource {
+	es.method = method
+	return es
+}
+
 // SetHeader method sets a header and its value to the [EventSource] instance.
 // It overwrites the header value if the key already exists. These headers will be sent in
 // the request while establishing a connection to the event source
@@ -137,6 +154,75 @@ func (es *EventSource) SetHeader(header, value string) *EventSource {
 	defer es.lock.Unlock()
 	es.header.Set(header, value)
 	return es
+}
+
+// SetBody method sets body value to the [EventSource] instance
+//
+// Example:
+// es.SetBody(bytes.NewReader([]byte(`{"test":"put_data"}`)))
+func (es *EventSource) SetBody(body io.Reader) *EventSource {
+	es.body = body
+	return es
+}
+
+// TLSClientConfig method returns the [tls.Config] from underlying client transport
+// otherwise returns nil
+func (es *EventSource) TLSClientConfig() *tls.Config {
+	cfg, err := es.tlsConfig()
+	if err != nil {
+		es.Logger().Errorf("%v", err)
+	}
+	return cfg
+}
+
+// SetTLSClientConfig method sets TLSClientConfig for underlying client Transport.
+//
+// Values supported by https://pkg.go.dev/crypto/tls#Config can be configured.
+//
+//	// Disable SSL cert verification for local development
+//	es.SetTLSClientConfig(&tls.Config{
+//		InsecureSkipVerify: true
+//	})
+//
+// NOTE: This method overwrites existing [http.Transport.TLSClientConfig]
+func (es *EventSource) SetTLSClientConfig(tlsConfig *tls.Config) *EventSource {
+	es.lock.Lock()
+	defer es.lock.Unlock()
+
+	// TLSClientConfiger interface handling
+	if tc, ok := es.httpClient.Transport.(TLSClientConfiger); ok {
+		if err := tc.SetTLSClientConfig(tlsConfig); err != nil {
+			es.log.Errorf("%v", err)
+		}
+		return es
+	}
+
+	// default standard transport handling
+	if transport, ok := es.httpClient.Transport.(*http.Transport); ok {
+		transport.TLSClientConfig = tlsConfig
+	}
+
+	return es
+}
+
+// getting TLS client config if not exists then create one
+func (es *EventSource) tlsConfig() (*tls.Config, error) {
+	es.lock.Lock()
+	defer es.lock.Unlock()
+
+	if tc, ok := es.httpClient.Transport.(TLSClientConfiger); ok {
+		return tc.TLSClientConfig(), nil
+	}
+
+	transport, ok := es.httpClient.Transport.(*http.Transport)
+	if !ok {
+		return nil, ErrNotHttpTransportType
+	}
+
+	if transport.TLSClientConfig == nil {
+		transport.TLSClientConfig = &tls.Config{}
+	}
+	return transport.TLSClientConfig, nil
 }
 
 // AddHeader method adds a header and its value to the [EventSource] instance.
@@ -172,7 +258,7 @@ func (es *EventSource) SetRetryCount(count int) *EventSource {
 //
 // Default is 100 milliseconds.
 //
-// NOTE: The server-sent retry value takes precedence if available.
+// NOTE: The server-sent retry value takes precedence if present.
 //
 //	es.SetRetryWaitTime(1 * time.Second)
 func (es *EventSource) SetRetryWaitTime(waitTime time.Duration) *EventSource {
@@ -187,7 +273,7 @@ func (es *EventSource) SetRetryWaitTime(waitTime time.Duration) *EventSource {
 //
 // Default is 2 seconds.
 //
-// NOTE: The server-sent retry value takes precedence if available.
+// NOTE: The server-sent retry value takes precedence if present.
 //
 //	es.SetRetryMaxWaitTime(3 * time.Second)
 func (es *EventSource) SetRetryMaxWaitTime(maxWaitTime time.Duration) *EventSource {
@@ -207,6 +293,13 @@ func (es *EventSource) SetMaxBufSize(bufSize int) *EventSource {
 	defer es.lock.Unlock()
 	es.maxBufSize = bufSize
 	return es
+}
+
+// Logger method returns the logger instance used by the event source instance.
+func (es *EventSource) Logger() Logger {
+	es.lock.RLock()
+	defer es.lock.RUnlock()
+	return es.log
 }
 
 // SetLogger method sets given writer for logging
@@ -255,9 +348,30 @@ func (es *EventSource) OnError(ef EventErrorFunc) *EventSource {
 	defer es.lock.Unlock()
 	if es.onError != nil {
 		es.log.Warnf("Overwriting an existing OnError callback from=%s to=%s",
-			functionName(es.OnError), functionName(ef))
+			functionName(es.onError), functionName(ef))
 	}
 	es.onError = ef
+	return es
+}
+
+// OnRequestFailure registered callback gets triggered when the HTTP request
+// failure while establishing a SSE connection.
+//
+//	es.OnRequestFailure(func(err error, res *http.Response) {
+//		fmt.Println("Error and response:", err, res)
+//	})
+//
+// Note:
+//   - Do not forget to close the HTTP response body.
+//   - HTTP response may be nil.
+func (es *EventSource) OnRequestFailure(ef EventRequestFailureFunc) *EventSource {
+	es.lock.Lock()
+	defer es.lock.Unlock()
+	if es.onRequestFailure != nil {
+		es.log.Warnf("Overwriting an existing OnRequestFailure callback from=%s to=%s",
+			functionName(es.onRequestFailure), functionName(ef))
+	}
+	es.onRequestFailure = ef
 	return es
 }
 
@@ -267,8 +381,8 @@ func (es *EventSource) OnError(ef EventErrorFunc) *EventSource {
 //
 //	es.OnMessage(
 //		func(e any) {
-//			e = e.(*Event)
-//			fmt.Println("Event message", e)
+//			event := e.(*Event)
+//			fmt.Println("Event message", event)
 //		},
 //		nil,
 //	)
@@ -277,8 +391,8 @@ func (es *EventSource) OnError(ef EventErrorFunc) *EventSource {
 //	// to do auto-unmarshal
 //	es.OnMessage(
 //		func(e any) {
-//			e = e.(*MyData)
-//			fmt.Println(e)
+//			event := e.(*MyData)
+//			fmt.Println(event)
 //		},
 //		MyData{},
 //	)
@@ -293,8 +407,8 @@ func (es *EventSource) OnMessage(ef EventMessageFunc, result any) *EventSource {
 //	es.AddEventListener(
 //		"friend_logged_in",
 //		func(e any) {
-//			e = e.(*Event)
-//			fmt.Println(e)
+//			event := e.(*Event)
+//			fmt.Println(event)
 //		},
 //		nil,
 //	)
@@ -304,8 +418,8 @@ func (es *EventSource) OnMessage(ef EventMessageFunc, result any) *EventSource {
 //	es.AddEventListener(
 //		"friend_logged_in",
 //		func(e any) {
-//			e = e.(*UserLoggedIn)
-//			fmt.Println(e)
+//			event := e.(*UserLoggedIn)
+//			fmt.Println(event)
 //		},
 //		UserLoggedIn{},
 //	)
@@ -330,8 +444,8 @@ func (es *EventSource) AddEventListener(eventName string, ef EventMessageFunc, r
 //		SetURL("https://sse.dev/test").
 //		OnMessage(
 //			func(e any) {
-//				e = e.(*Event)
-//				fmt.Println(e)
+//				event := e.(*Event)
+//				fmt.Println(event)
 //			},
 //			nil, // see method godoc
 //		)
@@ -343,8 +457,15 @@ func (es *EventSource) Get() error {
 	if isStringEmpty(es.url) {
 		return fmt.Errorf("resty:sse: event source URL is required")
 	}
-	if _, found := es.onEvent[defaultEventName]; !found {
-		return fmt.Errorf("resty:sse: OnMessage function is required")
+
+	if isStringEmpty(es.method) {
+		// It is up to the user to choose which http method to use, depending on the specific code implementation. No restrictions are imposed here.
+		// Ensure compatibility, use GET as default http method
+		es.method = defaultHTTPMethod
+	}
+
+	if len(es.onEvent) == 0 {
+		return fmt.Errorf("resty:sse: At least one OnMessage/AddEventListener func is required")
 	}
 
 	// reset to begin
@@ -358,7 +479,7 @@ func (es *EventSource) Get() error {
 		if err != nil {
 			return err
 		}
-		es.triggerOnOpen()
+		es.triggerOnOpen(res.Header.Clone())
 		if err := es.listenStream(res); err != nil {
 			return err
 		}
@@ -384,11 +505,11 @@ func (es *EventSource) isClosed() bool {
 	return es.closed
 }
 
-func (es *EventSource) triggerOnOpen() {
+func (es *EventSource) triggerOnOpen(hdr http.Header) {
 	es.lock.RLock()
 	defer es.lock.RUnlock()
 	if es.onOpen != nil {
-		es.onOpen(strings.Clone(es.url))
+		es.onOpen(strings.Clone(es.url), hdr)
 	}
 }
 
@@ -400,8 +521,16 @@ func (es *EventSource) triggerOnError(err error) {
 	}
 }
 
+func (es *EventSource) triggerOnRequestFailure(err error, res *http.Response) {
+	es.lock.RLock()
+	defer es.lock.RUnlock()
+	if es.onRequestFailure != nil {
+		es.onRequestFailure(err, res)
+	}
+}
+
 func (es *EventSource) createRequest() (*http.Request, error) {
-	req, err := http.NewRequest(MethodGet, es.url, nil)
+	req, err := http.NewRequest(es.method, es.url, es.body)
 	if err != nil {
 		return nil, err
 	}
@@ -452,7 +581,7 @@ func (es *EventSource) connect() (*http.Response, error) {
 			break
 		}
 
-		rRes := wrapResponse(resp)
+		rRes := wrapResponse(resp, req)
 		needsRetry := applyRetryDefaultConditions(rRes, doErr)
 
 		// retry not required stop here
@@ -461,6 +590,9 @@ func (es *EventSource) connect() (*http.Response, error) {
 				err = wrapErrors(fmt.Errorf("resty:sse: %v", rRes.Status()), doErr)
 			} else {
 				err = doErr
+			}
+			if err != nil {
+				es.triggerOnRequestFailure(err, resp)
 			}
 			break
 		}
@@ -507,56 +639,67 @@ func (es *EventSource) listenStream(res *http.Response) error {
 			return nil
 		}
 
-		e, err := readEvent(scanner)
-		if err != nil {
-			if err == io.EOF {
-				return err
-			}
-			es.triggerOnError(err)
+		if err := es.processEvent(scanner); err != nil {
 			return err
-		}
-
-		ed, err := parseEvent(e)
-		if err != nil {
-			es.triggerOnError(err)
-			continue // parsing errors, just continue
-		}
-
-		if len(ed.ID) > 0 {
-			es.lock.Lock()
-			es.lastEventID = string(ed.ID)
-			es.lock.Unlock()
-		}
-
-		if len(ed.Retry) > 0 {
-			if retry, err := strconv.Atoi(string(ed.Retry)); err == nil {
-				es.lock.Lock()
-				es.serverSentRetry = time.Second * time.Duration(retry)
-				es.lock.Unlock()
-			} else {
-				es.triggerOnError(err)
-			}
-		}
-
-		if len(ed.Data) > 0 {
-			es.handleCallback(&Event{
-				ID:   string(ed.ID),
-				Name: string(ed.Event),
-				Data: string(ed.Data),
-			})
 		}
 	}
 }
 
-func (es *EventSource) handleCallback(e *Event) {
-	es.lock.RLock()
-	defer es.lock.RUnlock()
+func (es *EventSource) processEvent(scanner *bufio.Scanner) error {
+	e, err := readEvent(scanner)
+	if err != nil {
+		if err == io.EOF {
+			return err
+		}
+		es.triggerOnError(err)
+		return err
+	}
 
+	ed, err := parseEvent(e)
+	if err != nil {
+		es.triggerOnError(err)
+		return nil // parsing errors, will not return error.
+	}
+	defer putRawEvent(ed)
+
+	if len(ed.ID) > 0 {
+		es.lock.Lock()
+		es.lastEventID = string(ed.ID)
+		es.lock.Unlock()
+	}
+
+	if len(ed.Retry) > 0 {
+		if retry, err := strconv.Atoi(string(ed.Retry)); err == nil {
+			es.lock.Lock()
+			es.serverSentRetry = time.Millisecond * time.Duration(retry)
+			es.lock.Unlock()
+		} else {
+			es.triggerOnError(err)
+		}
+	}
+
+	if len(ed.Data) > 0 {
+		es.handleCallback(&Event{
+			ID:   string(ed.ID),
+			Name: string(ed.Event),
+			Data: string(ed.Data),
+		})
+	}
+
+	return nil
+}
+
+func (es *EventSource) handleCallback(e *Event) {
 	eventName := e.Name
 	if len(eventName) == 0 {
 		eventName = defaultEventName
 	}
-	if cb, found := es.onEvent[eventName]; found {
+
+	es.lock.RLock()
+	cb, found := es.onEvent[eventName]
+	es.lock.RUnlock()
+
+	if found {
 		if cb.Result == nil {
 			cb.Func(e)
 			return
@@ -583,11 +726,11 @@ func readEventFunc(scanner *bufio.Scanner) ([]byte, error) {
 	return nil, io.EOF
 }
 
-func wrapResponse(res *http.Response) *Response {
+func wrapResponse(res *http.Response, req *http.Request) *Response {
 	if res == nil {
 		return nil
 	}
-	return &Response{RawResponse: res}
+	return &Response{RawResponse: res, Request: &Request{RawRequest: req}}
 }
 
 type rawEvent struct {
@@ -606,7 +749,7 @@ func parseEventFunc(msg []byte) (*rawEvent, error) {
 		return nil, errors.New("resty:sse: event message was empty")
 	}
 
-	e := new(rawEvent)
+	e := newRawEvent()
 
 	// Split the line by "\n"
 	for _, line := range bytes.FieldsFunc(msg, func(r rune) bool { return r == '\n' }) {
@@ -639,7 +782,26 @@ func trimHeader(size int, data []byte) []byte {
 		return data
 	}
 	data = data[size:]
-	data = bytes.TrimSpace(data)
-	data = bytes.TrimSuffix(data, []byte("\n"))
+	if len(data) > 0 && data[0] == ' ' {
+		data = data[1:]
+	}
+	if len(data) > 0 && data[len(data)-1] == '\n' {
+		data = data[:len(data)-1]
+	}
 	return data
+}
+
+var rawEventPool = &sync.Pool{New: func() any { return new(rawEvent) }}
+
+func newRawEvent() *rawEvent {
+	e := rawEventPool.Get().(*rawEvent)
+	e.ID = e.ID[:0]
+	e.Data = e.Data[:0]
+	e.Event = e.Event[:0]
+	e.Retry = e.Retry[:0]
+	return e
+}
+
+func putRawEvent(e *rawEvent) {
+	rawEventPool.Put(e)
 }

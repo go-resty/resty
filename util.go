@@ -7,10 +7,12 @@ package resty
 
 import (
 	"bytes"
-	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +23,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -69,9 +72,74 @@ func (l *logger) output(format string, v ...any) {
 	l.l.Printf(format, v...)
 }
 
+//‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+// In Memory JSON & XML Marshal and Unmarshal using Go package
+//_____________________________________________________________
+
+var (
+	// InMemoryJSONMarshal function performs the JSON marshalling completely in memory.
+	//
+	//	c := resty.New()
+	//	defer c.Close()
+	//
+	//	c.AddContentTypeEncoder("application/json", resty.InMemoryJSONMarshal)
+	InMemoryJSONMarshal = func(w io.Writer, v any) error {
+		jsonData, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(jsonData)
+		return err
+	}
+
+	// InMemoryJSONUnmarshal function performs the JSON unmarshalling completely in memory.
+	//
+	//	c := resty.New()
+	//	defer c.Close()
+	//
+	//	c.AddContentTypeDecoder("application/json", resty.InMemoryJSONUnmarshal)
+	InMemoryJSONUnmarshal = func(r io.Reader, v any) error {
+		byteData, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(byteData, v)
+	}
+
+	// InMemoryXMLMarshal function performs the XML marshalling completely in memory.
+	//
+	//	c := resty.New()
+	//	defer c.Close()
+	//
+	//	c.AddContentTypeEncoder("application/xml", resty.InMemoryXMLMarshal)
+	InMemoryXMLMarshal = func(w io.Writer, v any) error {
+		xmlData, err := xml.Marshal(v)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(xmlData)
+		return err
+	}
+
+	// InMemoryJSONUnmarshal function performs the XML unmarshalling completely in memory.
+	//
+	//	c := resty.New()
+	//	defer c.Close()
+	//
+	//	c.AddContentTypeDecoder("application/xml", resty.InMemoryXMLUnmarshal)
+	InMemoryXMLUnmarshal = func(r io.Reader, v any) error {
+		byteData, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
+		return xml.Unmarshal(byteData, v)
+	}
+)
+
 // credentials type is to hold an username and password information
 type credentials struct {
-	Username, Password string
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // Clone method returns clone of c.
@@ -130,13 +198,6 @@ func inferContentTypeMapKey(v string) string {
 		return xmlKey
 	}
 	return ""
-}
-
-// DebugLog struct is used to collect details from Resty request and response
-// for debug logging callback purposes.
-type DebugLog struct {
-	Header http.Header
-	Body   string
 }
 
 func firstNonEmpty(v ...string) string {
@@ -332,93 +393,77 @@ func (ire *invalidRequestError) Error() string {
 
 func drainBody(res *Response) {
 	if res != nil && res.Body != nil {
-		defer closeq(res.Body)
-		_, _ = io.Copy(io.Discard, res.Body)
+		drainReadCloser(res.Body)
 	}
 }
 
-func requestDebugLogger(c *Client, r *Request) {
-	if !r.Debug {
-		return
+func drainReadCloser(body io.ReadCloser) {
+	if body != nil {
+		defer closeq(body)
+		_, _ = io.Copy(io.Discard, body)
 	}
-
-	rr := r.RawRequest
-	rh := rr.Header.Clone()
-	if c.Client().Jar != nil {
-		for _, cookie := range c.Client().Jar.Cookies(r.RawRequest.URL) {
-			s := fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
-			if c := rh.Get(hdrCookieKey); isStringEmpty(c) {
-				rh.Set(hdrCookieKey, s)
-			} else {
-				rh.Set(hdrCookieKey, c+"; "+s)
-			}
-		}
-	}
-	rl := &DebugLog{Header: sanitizeHeaders(rh), Body: r.fmtBodyString(r.DebugBodyLimit)}
-	c.lock.RLock()
-	if c.requestDebugLog != nil {
-		c.requestDebugLog(rl)
-	}
-	c.lock.RUnlock()
-
-	reqLog := "\n==============================================================================\n"
-
-	if r.generateCurlCmd && r.debugLogCurlCmd {
-		reqLog += "~~~ REQUEST(CURL) ~~~\n" +
-			fmt.Sprintf("	%v\n", r.resultCurlCmd)
-	}
-
-	reqLog += "~~~ REQUEST ~~~\n" +
-		fmt.Sprintf("%s  %s  %s\n", r.Method, rr.URL.RequestURI(), rr.Proto) +
-		fmt.Sprintf("HOST   : %s\n", rr.URL.Host) +
-		fmt.Sprintf("HEADERS:\n%s\n", composeHeaders(rl.Header)) +
-		fmt.Sprintf("BODY   :\n%v\n", rl.Body) +
-		"------------------------------------------------------------------------------\n"
-
-	if len(r.RetryTraceID) > 0 {
-		reqLog += fmt.Sprintf("RETRY TRACE ID: %s\n", r.RetryTraceID) +
-			fmt.Sprintf("ATTEMPT       : %d\n", r.Attempt) +
-			"------------------------------------------------------------------------------\n"
-	}
-
-	r.initValuesMap()
-	r.values[debugRequestLogKey] = reqLog
 }
 
-func responseDebugLogger(c *Client, res *Response) {
-	if !res.Request.Debug {
-		return
-	}
+func toJSON(v any) string {
+	buf := acquireBuffer()
+	defer releaseBuffer(buf)
+	_ = encodeJSON(buf, v)
+	return buf.String()
+}
 
-	bodyStr := res.fmtBodyString(res.Request.DebugBodyLimit)
+// formatAnyToString converts various types of values to their string representation
+// based on predefined formatting rules.
+func formatAnyToString(value any) string {
+	switch v := value.(type) {
 
-	rl := &DebugLog{Header: sanitizeHeaders(res.Header().Clone()), Body: bodyStr}
-	c.lock.RLock()
-	if c.responseDebugLog != nil {
-		c.responseDebugLog(rl)
-	}
-	c.lock.RUnlock()
+	// Tier 1: most common URL types
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	case bool:
+		return strconv.FormatBool(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case []string:
+		return strings.Join(v, ",")
 
-	debugLog := res.Request.values[debugRequestLogKey].(string)
-	debugLog += "~~~ RESPONSE ~~~\n" +
-		fmt.Sprintf("STATUS       : %s\n", res.Status()) +
-		fmt.Sprintf("PROTO        : %s\n", res.Proto()) +
-		fmt.Sprintf("RECEIVED AT  : %v\n", res.ReceivedAt().Format(time.RFC3339Nano)) +
-		fmt.Sprintf("TIME DURATION: %v\n", res.Time()) +
-		"HEADERS      :\n" +
-		composeHeaders(rl.Header) + "\n"
-	if res.Request.IsSaveResponse {
-		debugLog += "BODY         :\n***** RESPONSE WRITTEN INTO FILE *****\n"
-	} else {
-		debugLog += fmt.Sprintf("BODY         :\n%v\n", rl.Body)
-	}
-	if res.Request.IsTrace {
-		debugLog += "------------------------------------------------------------------------------\n"
-		debugLog += fmt.Sprintf("%v\n", res.Request.TraceInfo())
-	}
-	debugLog += "==============================================================================\n"
+	// Tier 2: common stdlib types
+	case time.Time:
+		return v.Format(time.RFC3339)
+	case []byte:
+		return string(v)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
 
-	res.Request.log.Debugf("%s", debugLog)
+	// Tier 3: less common integers (signed)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int16:
+		return strconv.FormatInt(int64(v), 10)
+	case int8:
+		return strconv.FormatInt(int64(v), 10)
+
+	// Tier 4: less common integers (unsigned)
+	case uint64:
+		return strconv.FormatUint(v, 10)
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint:
+		return strconv.FormatUint(uint64(v), 10)
+
+	// Tier 5: rare types and fallbacks
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case fmt.Stringer:
+		return v.String()
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -455,7 +500,7 @@ func newGUID() string {
 	// Timestamp, 4 bytes, big endian
 	binary.BigEndian.PutUint32(b[:], uint32(time.Now().Unix()))
 
-	// Machine, first 3 bytes of md5(hostname)
+	// Machine, first 3 bytes of sha256.Sum256([]byte(hostname))
 	b[4], b[5], b[6] = machineID[0], machineID[1], machineID[2]
 
 	// Pid, 2 bytes, specs don't specify endianness, but we use big endian.
@@ -487,13 +532,12 @@ var osHostname = os.Hostname
 // readMachineID generates and returns a machine id.
 // If this function fails to get the hostname it will cause a runtime error.
 func readMachineID() []byte {
-	var sum [3]byte
-	id := sum[:]
+	const idSize = 3
+	id := make([]byte, idSize)
 
 	if hostname, err := osHostname(); err == nil {
-		hw := md5.New()
-		_, _ = hw.Write([]byte(hostname))
-		copy(id, hw.Sum(nil))
+		hash := sha256.Sum256([]byte(hostname))
+		copy(id, hash[:idSize])
 		return id
 	}
 

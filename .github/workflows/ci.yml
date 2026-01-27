@@ -27,7 +27,7 @@ jobs:
     name: Build
     strategy:
       matrix:
-        go: [ 'stable', '1.21.x' ]
+        go: [ 'stable', '1.23.x' ]
         os: [ ubuntu-latest ]
 
     runs-on: ${{ matrix.os }}

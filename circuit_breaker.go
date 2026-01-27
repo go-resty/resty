@@ -8,8 +8,129 @@ package resty
 import (
 	"errors"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
+)
+
+// ErrCircuitBreakerOpen is returned when the circuit breaker is open.
+var ErrCircuitBreakerOpen = errors.New("resty: circuit breaker open")
+
+type (
+	// CircuitBreakerTriggerHook type is for reacting to circuit breaker trigger hooks.
+	CircuitBreakerTriggerHook func(*Request, error)
+
+	// CircuitBreakerStateChangeHook type is for reacting to circuit breaker state change hooks.
+	CircuitBreakerStateChangeHook func(oldState, newState CircuitBreakerState)
+
+	// CircuitBreakerState type represents the state of the circuit breaker.
+	CircuitBreakerState uint32
+)
+
+// group is an interface for types that can be combined and inverted
+type group[T any] interface {
+	op(T) T
+	empty() T
+	inverse() T
+}
+
+// totalAndFailures tracks total requests and failures
+type totalAndFailures struct {
+	total    int
+	failures int
+}
+
+func (tf totalAndFailures) op(g totalAndFailures) totalAndFailures {
+	tf.total += g.total
+	tf.failures += g.failures
+	return tf
+}
+
+func (tf totalAndFailures) empty() totalAndFailures {
+	return totalAndFailures{}
+}
+
+func (tf totalAndFailures) inverse() totalAndFailures {
+	tf.total = -tf.total
+	tf.failures = -tf.failures
+	return tf
+}
+
+// slidingWindow implements a time-based sliding window for tracking values
+type slidingWindow[G group[G]] struct {
+	mutex     sync.RWMutex
+	total     G
+	values    []G
+	idx       int
+	lastStart time.Time
+	interval  time.Duration
+}
+
+func newSlidingWindow[G group[G]](empty func() G, interval time.Duration, buckets int) *slidingWindow[G] {
+	return &slidingWindow[G]{
+		total:     empty(),
+		values:    make([]G, buckets),
+		idx:       0,
+		lastStart: time.Now(),
+		interval:  interval,
+	}
+}
+
+func (sw *slidingWindow[G]) Add(val G) {
+	sw.mutex.Lock()
+	defer sw.mutex.Unlock()
+
+	now := time.Now()
+	elapsed := now.Sub(sw.lastStart)
+	bucketDuration := sw.interval / time.Duration(len(sw.values))
+
+	// Advance window if needed
+	if elapsed >= bucketDuration {
+		bucketsToAdvance := int(elapsed / bucketDuration)
+		if bucketsToAdvance >= len(sw.values) {
+			// Reset all buckets
+			for i := range sw.values {
+				sw.values[i] = sw.total.empty()
+			}
+			sw.total = sw.total.empty()
+			sw.idx = 0
+		} else {
+			// Remove old buckets
+			for i := 0; i < bucketsToAdvance; i++ {
+				sw.idx = (sw.idx + 1) % len(sw.values)
+				sw.total = sw.total.op(sw.values[sw.idx].inverse())
+				sw.values[sw.idx] = sw.total.empty()
+			}
+		}
+		sw.lastStart = now
+	}
+
+	// Add to current bucket
+	sw.values[sw.idx] = sw.values[sw.idx].op(val)
+	sw.total = sw.total.op(val)
+}
+
+func (sw *slidingWindow[G]) Get() G {
+	sw.mutex.RLock()
+	defer sw.mutex.RUnlock()
+	return sw.total
+}
+
+func (sw *slidingWindow[G]) SetInterval(interval time.Duration) {
+	sw.mutex.Lock()
+	defer sw.mutex.Unlock()
+	sw.interval = interval
+}
+
+const (
+	// CircuitBreakerStateClosed represents the closed state of the circuit breaker.
+	CircuitBreakerStateClosed CircuitBreakerState = iota
+
+	// CircuitBreakerStateOpen represents the open state of the circuit breaker.
+	CircuitBreakerStateOpen
+
+	// CircuitBreakerStateHalfOpen represents the half-open state of the circuit breaker.
+	CircuitBreakerStateHalfOpen
 )
 
 // CircuitBreaker struct implements a state machine to monitor and manage the
@@ -23,73 +144,105 @@ import (
 //   - To Open State: when the failure count reaches the failure threshold.
 //   - Half-Open Check: when the specified timeout reaches, a single request is allowed
 //     to determine the transition state; if failed, it goes back to the open state.
+//
+// Use [NewCircuitBreakerWithCount] or [NewCircuitBreakerWithRatio] to create a new [CircuitBreaker]
+// instance accordingly.
 type CircuitBreaker struct {
-	policies         []CircuitBreakerPolicy
-	timeout          time.Duration
-	failureThreshold uint32
-	successThreshold uint32
-	state            atomic.Value // circuitBreakerState
-	failureCount     atomic.Uint32
-	successCount     atomic.Uint32
-	lastFailureAt    time.Time
+	lock         *sync.RWMutex
+	policies     []CircuitBreakerPolicy
+	resetTimeout time.Duration
+	state        atomic.Value // CircuitBreakerState
+	sw           *slidingWindow[totalAndFailures]
+
+	// Hooks
+	triggerHooks     []CircuitBreakerTriggerHook
+	stateChangeHooks []CircuitBreakerStateChangeHook
+
+	// Count-based
+	failureThreshold uint64
+	successThreshold uint64
+
+	// Ratio-based
+	isRatioBased bool
+	failureRatio float64 // Threshold, e.g., 0.5 for 50% failure
+	minRequests  uint64  // Minimum number of requests to consider failure ratio
 }
 
-// NewCircuitBreaker method creates a new [CircuitBreaker] with default settings.
+// NewCircuitBreakerWithCount method creates a new [CircuitBreaker] instance with Count settings.
 //
 // The default settings are:
-//   - Timeout: 10 seconds
-//   - FailThreshold: 3
-//   - SuccessThreshold: 1
 //   - Policies: CircuitBreaker5xxPolicy
-func NewCircuitBreaker() *CircuitBreaker {
+func NewCircuitBreakerWithCount(failureThreshold uint64, successThreshold uint64,
+	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
+	cb := newCircuitBreaker(resetTimeout, policies...)
+	cb.failureThreshold = failureThreshold
+	cb.successThreshold = successThreshold
+	return cb
+}
+
+// NewCircuitBreakerWithRatio method creates a new [CircuitBreaker] instance with Ratio settings.
+//
+// The default settings are:
+//   - Policies: CircuitBreaker5xxPolicy
+func NewCircuitBreakerWithRatio(failureRatio float64, minRequests uint64,
+	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
+	cb := newCircuitBreaker(resetTimeout, policies...)
+	cb.failureRatio = failureRatio
+	cb.minRequests = minRequests
+	cb.isRatioBased = true
+	return cb
+}
+
+func newCircuitBreaker(resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
 	cb := &CircuitBreaker{
-		policies:         []CircuitBreakerPolicy{CircuitBreaker5xxPolicy},
-		timeout:          10 * time.Second,
-		failureThreshold: 3,
-		successThreshold: 1,
+		lock:         &sync.RWMutex{},
+		resetTimeout: resetTimeout,
+		policies:     []CircuitBreakerPolicy{CircuitBreaker5xxPolicy},
 	}
-	cb.state.Store(circuitBreakerStateClosed)
+	cb.state.Store(CircuitBreakerStateClosed)
+	cb.sw = newSlidingWindow(
+		func() totalAndFailures { return totalAndFailures{} },
+		resetTimeout,
+		10,
+	)
+	if len(policies) > 0 {
+		cb.policies = policies
+	}
 	return cb
 }
 
-// SetPolicies method sets the one or more given CircuitBreakerPolicy(s) into
-// [CircuitBreaker], which will be used to determine whether a request is failed
-// or successful by evaluating the response instance.
-//
-//	// set one policy
-//	cb.SetPolicies(CircuitBreaker5xxPolicy)
-//
-//	// set multiple polices
-//	cb.SetPolicies(policy1, policy2, policy3)
-//
-//	// if you have slice, do
-//	cb.SetPolicies(policies...)
-//
-// NOTE: This method overwrites the policies with the given new ones. See [CircuitBreaker.AddPolicies]
-func (cb *CircuitBreaker) SetPolicies(policies ...CircuitBreakerPolicy) *CircuitBreaker {
-	cb.policies = policies
+// OnTrigger method adds a [CircuitBreakerTriggerHook] to the [CircuitBreaker] instance.
+func (cb *CircuitBreaker) OnTrigger(hooks ...CircuitBreakerTriggerHook) *CircuitBreaker {
+	cb.lock.Lock()
+	defer cb.lock.Unlock()
+	cb.triggerHooks = append(cb.triggerHooks, hooks...)
 	return cb
 }
 
-// SetTimeout method sets the timeout duration for the [CircuitBreaker]. When the
-// timeout reaches, a single request is allowed to determine the state.
-func (cb *CircuitBreaker) SetTimeout(timeout time.Duration) *CircuitBreaker {
-	cb.timeout = timeout
+// onTriggerHooks method executes all registered trigger hooks.
+func (cb *CircuitBreaker) onTriggerHooks(req *Request, err error) {
+	cb.lock.RLock()
+	defer cb.lock.RUnlock()
+	for _, h := range cb.triggerHooks {
+		h(req, err)
+	}
+}
+
+// OnStateChange method adds a [CircuitBreakerStateChangeHook] to the [CircuitBreaker] instance.
+func (cb *CircuitBreaker) OnStateChange(hooks ...CircuitBreakerStateChangeHook) *CircuitBreaker {
+	cb.lock.Lock()
+	defer cb.lock.Unlock()
+	cb.stateChangeHooks = append(cb.stateChangeHooks, hooks...)
 	return cb
 }
 
-// SetFailureThreshold method sets the number of failures that must occur within the
-// timeout duration for the [CircuitBreaker] to transition to the Open state.
-func (cb *CircuitBreaker) SetFailureThreshold(threshold uint32) *CircuitBreaker {
-	cb.failureThreshold = threshold
-	return cb
-}
-
-// SetSuccessThreshold method sets the number of successes that must occur to transition
-// the [CircuitBreaker] from the Half-Open state to the Closed state.
-func (cb *CircuitBreaker) SetSuccessThreshold(threshold uint32) *CircuitBreaker {
-	cb.successThreshold = threshold
-	return cb
+// onStateChangeHooks method executes all registered state change hooks.
+func (cb *CircuitBreaker) onStateChangeHooks(oldState, newState CircuitBreakerState) {
+	cb.lock.RLock()
+	defer cb.lock.RUnlock()
+	for _, h := range cb.stateChangeHooks {
+		h(oldState, newState)
+	}
 }
 
 // CircuitBreakerPolicy is a function type that determines whether a response should
@@ -102,26 +255,12 @@ func CircuitBreaker5xxPolicy(resp *http.Response) bool {
 	return resp.StatusCode > 499
 }
 
-var ErrCircuitBreakerOpen = errors.New("resty: circuit breaker open")
-
-type circuitBreakerState uint32
-
-const (
-	circuitBreakerStateClosed circuitBreakerState = iota
-	circuitBreakerStateOpen
-	circuitBreakerStateHalfOpen
-)
-
-func (cb *CircuitBreaker) getState() circuitBreakerState {
-	return cb.state.Load().(circuitBreakerState)
+func (cb *CircuitBreaker) getState() CircuitBreakerState {
+	return cb.state.Load().(CircuitBreakerState)
 }
 
 func (cb *CircuitBreaker) allow() error {
-	if cb == nil {
-		return nil
-	}
-
-	if cb.getState() == circuitBreakerStateOpen {
+	if cb.getState() == CircuitBreakerStateOpen {
 		return ErrCircuitBreakerOpen
 	}
 
@@ -129,10 +268,6 @@ func (cb *CircuitBreaker) allow() error {
 }
 
 func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
-	if cb == nil {
-		return
-	}
-
 	failed := false
 	for _, policy := range cb.policies {
 		if policy(resp) {
@@ -142,44 +277,61 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 	}
 
 	if failed {
-		if cb.failureCount.Load() > 0 && time.Since(cb.lastFailureAt) > cb.timeout {
-			cb.failureCount.Store(0)
-		}
+		cb.sw.Add(totalAndFailures{total: 1, failures: 1})
 
 		switch cb.getState() {
-		case circuitBreakerStateClosed:
-			failCount := cb.failureCount.Add(1)
-			if failCount >= cb.failureThreshold {
-				cb.open()
+		case CircuitBreakerStateClosed:
+			tf := cb.sw.Get()
+
+			if cb.isRatioBased {
+				if tf.total >= int(cb.minRequests) {
+					currentFailureRatio := float64(tf.failures) / float64(tf.total)
+					if currentFailureRatio >= cb.failureRatio {
+						cb.open()
+					}
+				}
 			} else {
-				cb.lastFailureAt = time.Now()
+				if tf.failures >= int(cb.failureThreshold) {
+					cb.open()
+				}
 			}
-		case circuitBreakerStateHalfOpen:
+		case CircuitBreakerStateHalfOpen:
 			cb.open()
 		}
-	} else {
-		switch cb.getState() {
-		case circuitBreakerStateClosed:
-			return
-		case circuitBreakerStateHalfOpen:
-			successCount := cb.successCount.Add(1)
-			if successCount >= cb.successThreshold {
-				cb.changeState(circuitBreakerStateClosed)
-			}
+
+		return
+	}
+
+	cb.sw.Add(totalAndFailures{total: 1, failures: 0})
+
+	switch cb.getState() {
+	case CircuitBreakerStateClosed:
+		return
+	case CircuitBreakerStateHalfOpen:
+		tf := cb.sw.Get()
+		if tf.total-tf.failures >= int(cb.successThreshold) {
+			cb.changeState(CircuitBreakerStateClosed)
 		}
 	}
 }
 
 func (cb *CircuitBreaker) open() {
-	cb.changeState(circuitBreakerStateOpen)
+	cb.changeState(CircuitBreakerStateOpen)
 	go func() {
-		time.Sleep(cb.timeout)
-		cb.changeState(circuitBreakerStateHalfOpen)
+		time.Sleep(cb.resetTimeout)
+		cb.changeState(CircuitBreakerStateHalfOpen)
 	}()
 }
 
-func (cb *CircuitBreaker) changeState(state circuitBreakerState) {
-	cb.failureCount.Store(0)
-	cb.successCount.Store(0)
+func (cb *CircuitBreaker) changeState(state CircuitBreakerState) {
+	oldState := cb.getState()
+	cb.sw = newSlidingWindow(
+		func() totalAndFailures { return totalAndFailures{} },
+		cb.resetTimeout,
+		10,
+	)
 	cb.state.Store(state)
+	if oldState != state {
+		cb.onStateChangeHooks(oldState, state)
+	}
 }

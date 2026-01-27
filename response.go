@@ -26,9 +26,9 @@ type Response struct {
 	RawResponse *http.Response
 	IsRead      bool
 
-	// Err field used to cascade the response middleware error
-	// in the chain
-	Err error
+	// CascadeError field used to cascade the response processing and
+	// middleware execution errors
+	CascadeError error
 
 	bodyBytes  []byte
 	size       int64
@@ -63,17 +63,51 @@ func (r *Response) Proto() string {
 	return r.RawResponse.Proto
 }
 
-// Result method returns the response value as an object if it has one
+// Result method returns the unmarshalled result response object if it exists,
+// otherwise nil.
+//
+//	client := resty.New()
+//	defer client.Close()
+//
+//	res, err := client.R().
+//	   SetBody(User{
+//	     Username: "testuser",
+//	     Password: "testpass",
+//	   }).
+//	   SetResult(&LoginResponse{}).      // or SetResult(LoginResponse{}).
+//	   SetResultError(&LoginErrorResponse{}).  // or SetResultError(LoginErrorResponse{}).
+//	   Post("https://myapp.com/login")
+//
+//	fmt.Println(err, res)
+//	fmt.Println(res.Result().(*LoginResponse))
+//	fmt.Println(res.ResultError().(*LoginErrorResponse))
 //
 // See [Request.SetResult]
 func (r *Response) Result() any {
 	return r.Request.Result
 }
 
-// Error method returns the error object if it has one
+// ResultError method returns the unmarshalled result error object if it exists,
+// otherwise nil.
 //
-// See [Request.SetError], [Client.SetError]
-func (r *Response) Error() any {
+//	client := resty.New()
+//	defer client.Close()
+//
+//	res, err := client.R().
+//	   SetBody(User{
+//	     Username: "testuser",
+//	     Password: "testpass",
+//	   }).
+//	   SetResult(&LoginResponse{}).            // or SetResult(LoginResponse{}).
+//	   SetResultError(&LoginErrorResponse{}).  // or SetResultError(LoginErrorResponse{}).
+//	   Post("https://myapp.com/login")
+//
+//	fmt.Println(err, res)
+//	fmt.Println(res.Result().(*LoginResponse))
+//	fmt.Println(res.ResultError().(*LoginErrorResponse))
+//
+// See [Request.SetResultError], [Client.SetResultError]
+func (r *Response) ResultError() any {
 	return r.Request.Error
 }
 
@@ -99,7 +133,7 @@ func (r *Response) Cookies() []*http.Cookie {
 // NOTE:
 //   - Returns an empty string on auto-unmarshal scenarios, unless
 //     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
-//   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set
+//   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set.
 func (r *Response) String() string {
 	r.readIfRequired()
 	return strings.TrimSpace(string(r.bodyBytes))
@@ -111,18 +145,18 @@ func (r *Response) String() string {
 // NOTE:
 //   - Returns an empty byte slice on auto-unmarshal scenarios, unless
 //     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
-//   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set
+//   - Returns an empty byte slice when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set.
 func (r *Response) Bytes() []byte {
 	r.readIfRequired()
 	return r.bodyBytes
 }
 
-// Time method returns the duration of HTTP response time from the request we sent
+// Duration method returns the duration of HTTP response time from the request we sent
 // and received a request.
 //
 // See [Response.ReceivedAt] to know when the client received a response and see
 // `Response.Request.Time` to know when the client sent a request.
-func (r *Response) Time() time.Duration {
+func (r *Response) Duration() time.Duration {
 	if r.Request.trace != nil {
 		return r.Request.TraceInfo().TotalTime
 	}
@@ -143,13 +177,17 @@ func (r *Response) Size() int64 {
 	return r.size
 }
 
-// IsSuccess method returns true if HTTP status `code >= 200 and <= 299` otherwise false.
-func (r *Response) IsSuccess() bool {
+// IsStatusSuccess method returns true if HTTP status `code >= 200 and <= 299` otherwise false.
+//
+// Example: 200, 201, 204, etc.
+func (r *Response) IsStatusSuccess() bool {
 	return r.StatusCode() > 199 && r.StatusCode() < 300
 }
 
-// IsError method returns true if HTTP status `code >= 400` otherwise false.
-func (r *Response) IsError() bool {
+// IsStatusFailure method returns true if HTTP status `code >= 400` otherwise false.
+//
+// Example: 400, 500, etc.
+func (r *Response) IsStatusFailure() bool {
 	return r.StatusCode() > 399
 }
 
@@ -183,6 +221,10 @@ func (r *Response) setReceivedAt() {
 func (r *Response) fmtBodyString(sl int) string {
 	if r.Request.DoNotParseResponse {
 		return "***** DO NOT PARSE RESPONSE - Enabled *****"
+	}
+
+	if r.Request.IsSaveResponse {
+		return "***** RESPONSE WRITTEN INTO FILE *****"
 	}
 
 	bl := len(r.bodyBytes)
@@ -233,7 +275,7 @@ func (r *Response) readAll() (err error) {
 	} else {
 		r.bodyBytes, err = ioReadAll(r.Body)
 		closeq(r.Body)
-		r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes)}
+		r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes), resetOnEOF: true}
 	}
 	if err == io.ErrUnexpectedEOF {
 		// content-encoding scenario's - empty/no response body from server
@@ -261,7 +303,7 @@ func (r *Response) wrapCopyReadCloser() {
 		f: func(b *bytes.Buffer) {
 			r.bodyBytes = append([]byte{}, b.Bytes()...)
 			closeq(r.Body)
-			r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes)}
+			r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes), resetOnEOF: true}
 			releaseBuffer(b)
 		},
 	}
@@ -292,4 +334,14 @@ func (r *Response) wrapContentDecompresser() error {
 	}
 
 	return nil
+}
+
+func (r *Response) wrapError(err error, preserve bool) error {
+	r.CascadeError = wrapErrors(err, r.CascadeError)
+	if preserve {
+		return nil
+	}
+	e := r.CascadeError
+	r.CascadeError = nil
+	return e
 }
