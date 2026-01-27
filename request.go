@@ -62,7 +62,6 @@ type Request struct {
 	IsDone                     bool
 	IsSaveResponse             bool
 	Timeout                    time.Duration
-	HeaderAuthorizationKey     string
 	RetryCount                 int
 	RetryWaitTime              time.Duration
 	RetryMaxWaitTime           time.Duration
