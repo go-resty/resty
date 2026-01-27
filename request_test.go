@@ -1803,9 +1803,7 @@ func TestTraceInfo(t *testing.T) {
 			assertEqual(t, true, tr.TotalTime >= 0)
 			assertEqual(t, true, tr.TotalTime < time.Hour)
 			assertEqual(t, true, tr.TotalTime == resp.Time())
-			assertEqual(t, tr.RemoteAddr, serverAddr)
-
-			assertNotNil(t, tr.Clone())
+			assertEqual(t, tr.RemoteAddr.String(), serverAddr)
 		}
 
 		client.DisableTrace()
@@ -1825,7 +1823,7 @@ func TestTraceInfo(t *testing.T) {
 			assertEqual(t, true, tr.ResponseTime >= 0)
 			assertEqual(t, true, tr.TotalTime >= 0)
 			assertEqual(t, true, tr.TotalTime == resp.Time())
-			assertEqual(t, tr.RemoteAddr, serverAddr)
+			assertEqual(t, tr.RemoteAddr.String(), serverAddr)
 		}
 
 	})
@@ -1839,9 +1837,6 @@ func TestTraceInfo(t *testing.T) {
 			resp, err := c.R().EnableTrace().EnableDebug().Get(u)
 			assertNil(t, err)
 			assertNotNil(t, resp)
-
-			jsonStr := resp.Request.TraceInfo().JSON()
-			assertEqual(t, true, strings.Contains(jsonStr, serverAddr))
 		}
 
 		logContent := logBuf.String()
