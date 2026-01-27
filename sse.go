@@ -343,9 +343,8 @@ func (es *EventSource) Get() error {
 	if isStringEmpty(es.url) {
 		return fmt.Errorf("resty:sse: event source URL is required")
 	}
-
-	if len(es.onEvent) == 0 {
-		return fmt.Errorf("resty:sse: At least one OnMessage/AddEventListener func is required")
+	if _, found := es.onEvent[defaultEventName]; !found {
+		return fmt.Errorf("resty:sse: OnMessage function is required")
 	}
 
 	// reset to begin
