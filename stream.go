@@ -123,7 +123,9 @@ func (gz *gzipReader) Read(p []byte) (n int, err error) {
 }
 
 func (gz *gzipReader) Close() error {
-	gz.r.Reset(nopReader{})
+	if err := gz.r.Reset(nopReader{}); err != nil {
+		return err
+	}
 	gzipPool.Put(gz.r)
 	closeq(gz.s)
 	return nil
