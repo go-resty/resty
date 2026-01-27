@@ -89,6 +89,10 @@ type (
 	// ResponseMiddleware type is for response middleware, called after a response has been received
 	ResponseMiddleware func(*Client, *Response) error
 
+	// DebugLogCallback type is for request and response debug log callback purpose.
+	// It gets called before Resty logs it
+	DebugLogCallback func(*DebugLog)
+
 	// ErrorHook type is for reacting to request errors, called after all retries were attempted
 	ErrorHook func(*Request, error)
 
@@ -203,8 +207,8 @@ type Client struct {
 	ctx                      context.Context
 	httpClient               *http.Client
 	proxyURL                 *url.URL
-	debugLogFormatter        DebugLogFormatterFunc
-	debugLogCallback         DebugLogCallbackFunc
+	requestDebugLog          DebugLogCallback
+	responseDebugLog         DebugLogCallback
 	generateCurlCmd          bool
 	debugLogCurlCmd          bool
 	unescapeQueryParams      bool
@@ -1017,36 +1021,29 @@ func (c *Client) SetDebugBodyLimit(sl int) *Client {
 	return c
 }
 
-func (c *Client) debugLogCallbackFunc() DebugLogCallbackFunc {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.debugLogCallback
-}
-
-// OnDebugLog method sets the debug log callback function to the client instance.
+// OnRequestDebugLog method sets the request debug log callback to the client instance.
 // Registered callback gets called before the Resty logs the information.
-func (c *Client) OnDebugLog(dlc DebugLogCallbackFunc) *Client {
+func (c *Client) OnRequestDebugLog(dlc DebugLogCallback) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if c.debugLogCallback != nil {
-		c.log.Warnf("Overwriting an existing on-debug-log callback from=%s to=%s",
-			functionName(c.debugLogCallback), functionName(dlc))
+	if c.requestDebugLog != nil {
+		c.log.Warnf("Overwriting an existing on-request-debug-log callback from=%s to=%s",
+			functionName(c.requestDebugLog), functionName(dlc))
 	}
-	c.debugLogCallback = dlc
+	c.requestDebugLog = dlc
 	return c
 }
 
-func (c *Client) debugLogFormatterFunc() DebugLogFormatterFunc {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.debugLogFormatter
-}
-
-// SetDebugLogFormatter method sets the Resty debug log formatter to the client instance.
-func (c *Client) SetDebugLogFormatter(df DebugLogFormatterFunc) *Client {
+// OnResponseDebugLog method sets the response debug log callback to the client instance.
+// Registered callback gets called before the Resty logs the information.
+func (c *Client) OnResponseDebugLog(dlc DebugLogCallback) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.debugLogFormatter = df
+	if c.responseDebugLog != nil {
+		c.log.Warnf("Overwriting an existing on-response-debug-log callback from=%s to=%s",
+			functionName(c.responseDebugLog), functionName(dlc))
+	}
+	c.responseDebugLog = dlc
 	return c
 }
 
@@ -2248,7 +2245,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		req.RawRequest.Host = hostHeader
 	}
 
-	prepareRequestDebugInfo(c, req)
+	requestDebugLogger(c, req)
 
 	req.Time = time.Now()
 	resp, err := c.Client().Do(req.withTimeout())
@@ -2281,7 +2278,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	debugLogger(c, response)
+	responseDebugLogger(c, response)
 
 	// Apply Response middleware
 	for _, f := range c.responseMiddlewares() {

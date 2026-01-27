@@ -182,7 +182,6 @@ func createClient(hc *http.Client) *Client {
 
 	// Logger
 	c.SetLogger(createLogger())
-	c.SetDebugLogFormatter(DebugLogFormatter)
 
 	c.AddContentTypeEncoder(jsonKey, encodeJSON)
 	c.AddContentTypeEncoder(xmlKey, encodeXML)
