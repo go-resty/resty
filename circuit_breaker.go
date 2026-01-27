@@ -8,7 +8,6 @@ package resty
 import (
 	"errors"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -16,26 +15,12 @@ import (
 // ErrCircuitBreakerOpen is returned when the circuit breaker is open.
 var ErrCircuitBreakerOpen = errors.New("resty: circuit breaker open")
 
-type (
-	// CircuitBreakerTriggerHook type is for reacting to circuit breaker trigger hooks.
-	CircuitBreakerTriggerHook func(*Request, error)
-
-	// CircuitBreakerStateChangeHook type is for reacting to circuit breaker state change hooks.
-	CircuitBreakerStateChangeHook func(oldState, newState CircuitBreakerState)
-
-	// CircuitBreakerState type represents the state of the circuit breaker.
-	CircuitBreakerState uint32
-)
+type circuitBreakerState uint32
 
 const (
-	// CircuitBreakerStateClosed represents the closed state of the circuit breaker.
-	CircuitBreakerStateClosed CircuitBreakerState = iota
-
-	// CircuitBreakerStateOpen represents the open state of the circuit breaker.
-	CircuitBreakerStateOpen
-
-	// CircuitBreakerStateHalfOpen represents the half-open state of the circuit breaker.
-	CircuitBreakerStateHalfOpen
+	circuitBreakerStateClosed circuitBreakerState = iota
+	circuitBreakerStateOpen
+	circuitBreakerStateHalfOpen
 )
 
 // CircuitBreaker struct implements a state machine to monitor and manage the
@@ -53,7 +38,6 @@ const (
 // Use [NewCircuitBreakerWithCount] or [NewCircuitBreakerWithRatio] to create a new [CircuitBreaker]
 // instance accordingly.
 type CircuitBreaker struct {
-	lock          *sync.RWMutex
 	policies      []CircuitBreakerPolicy
 	resetTimeout  time.Duration
 	state         atomic.Value // circuitBreakerState
@@ -61,15 +45,11 @@ type CircuitBreaker struct {
 	successCount  atomic.Uint64
 	lastFailureAt atomic.Value // time.Time
 
-	// Hooks
-	triggerHooks     []CircuitBreakerTriggerHook
-	stateChangeHooks []CircuitBreakerStateChangeHook
-
-	// Count-based
+	// Count based
 	failureThreshold uint64
 	successThreshold uint64
 
-	// Ratio-based
+	// Ratio based
 	isRatioBased bool
 	failureRatio float64 // Threshold, e.g., 0.5 for 50% failure
 	minRequests  uint64  // Minimum number of requests to consider failure ratio
@@ -103,49 +83,14 @@ func NewCircuitBreakerWithRatio(failureRatio float64, minRequests uint64,
 
 func newCircuitBreaker(resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
 	cb := &CircuitBreaker{
-		lock:         &sync.RWMutex{},
 		resetTimeout: resetTimeout,
 		policies:     []CircuitBreakerPolicy{CircuitBreaker5xxPolicy},
 	}
-	cb.state.Store(CircuitBreakerStateClosed)
+	cb.state.Store(circuitBreakerStateClosed)
 	if len(policies) > 0 {
 		cb.policies = policies
 	}
 	return cb
-}
-
-// OnTrigger method adds a [CircuitBreakerTriggerHook] to the [CircuitBreaker] instance.
-func (cb *CircuitBreaker) OnTrigger(hooks ...CircuitBreakerTriggerHook) *CircuitBreaker {
-	cb.lock.Lock()
-	defer cb.lock.Unlock()
-	cb.triggerHooks = append(cb.triggerHooks, hooks...)
-	return cb
-}
-
-// onTriggerHooks method executes all registered trigger hooks.
-func (cb *CircuitBreaker) onTriggerHooks(req *Request, err error) {
-	cb.lock.RLock()
-	defer cb.lock.RUnlock()
-	for _, h := range cb.triggerHooks {
-		h(req, err)
-	}
-}
-
-// OnStateChange method adds a [CircuitBreakerStateChangeHook] to the [CircuitBreaker] instance.
-func (cb *CircuitBreaker) OnStateChange(hooks ...CircuitBreakerStateChangeHook) *CircuitBreaker {
-	cb.lock.Lock()
-	defer cb.lock.Unlock()
-	cb.stateChangeHooks = append(cb.stateChangeHooks, hooks...)
-	return cb
-}
-
-// onStateChangeHooks method executes all registered state change hooks.
-func (cb *CircuitBreaker) onStateChangeHooks(oldState, newState CircuitBreakerState) {
-	cb.lock.RLock()
-	defer cb.lock.RUnlock()
-	for _, h := range cb.stateChangeHooks {
-		h(oldState, newState)
-	}
 }
 
 // CircuitBreakerPolicy is a function type that determines whether a response should
@@ -158,12 +103,12 @@ func CircuitBreaker5xxPolicy(resp *http.Response) bool {
 	return resp.StatusCode > 499
 }
 
-func (cb *CircuitBreaker) getState() CircuitBreakerState {
-	return cb.state.Load().(CircuitBreakerState)
+func (cb *CircuitBreaker) getState() circuitBreakerState {
+	return cb.state.Load().(circuitBreakerState)
 }
 
 func (cb *CircuitBreaker) allow() error {
-	if cb.getState() == CircuitBreakerStateOpen {
+	if cb.getState() == circuitBreakerStateOpen {
 		return ErrCircuitBreakerOpen
 	}
 
@@ -189,7 +134,7 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 		}
 
 		switch cb.getState() {
-		case CircuitBreakerStateClosed:
+		case circuitBreakerStateClosed:
 			failureCount := cb.failureCount.Add(1)
 			cb.lastFailureAt.Store(time.Now())
 
@@ -206,7 +151,7 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 					cb.open()
 				}
 			}
-		case CircuitBreakerStateHalfOpen:
+		case circuitBreakerStateHalfOpen:
 			cb.open()
 		}
 
@@ -214,34 +159,29 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 	}
 
 	switch cb.getState() {
-	case CircuitBreakerStateClosed:
+	case circuitBreakerStateClosed:
 		return
-	case CircuitBreakerStateHalfOpen:
+	case circuitBreakerStateHalfOpen:
 		successCount := cb.successCount.Add(1)
 		if successCount >= cb.successThreshold {
-			cb.changeState(CircuitBreakerStateClosed)
+			cb.changeState(circuitBreakerStateClosed)
 		}
 	}
 }
 
 func (cb *CircuitBreaker) open() {
-	cb.changeState(CircuitBreakerStateOpen)
+	cb.changeState(circuitBreakerStateOpen)
 	if cb.isRatioBased {
 		cb.totalCount.Store(0)
 	}
 	go func() {
 		time.Sleep(cb.resetTimeout)
-		cb.changeState(CircuitBreakerStateHalfOpen)
+		cb.changeState(circuitBreakerStateHalfOpen)
 	}()
 }
 
-func (cb *CircuitBreaker) changeState(state CircuitBreakerState) {
+func (cb *CircuitBreaker) changeState(state circuitBreakerState) {
 	cb.failureCount.Store(0)
 	cb.successCount.Store(0)
-
-	oldState := cb.getState()
 	cb.state.Store(state)
-	if oldState != state {
-		cb.onStateChangeHooks(oldState, state)
-	}
 }
