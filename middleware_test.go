@@ -194,7 +194,7 @@ func Test_parseRequestURL(t *testing.T) {
 			expectedURL: "https://example.com/foo/bar",
 		},
 		{
-			name: "using BaseURL with relative path in request URL with leading slash",
+			name: "using BaseURL with relative path in request URL wit leading slash",
 			initClient: func(c *Client) {
 				c.SetBaseURL("https://example.com")
 			},
@@ -505,7 +505,7 @@ func TestParseRequestBody(t *testing.T) {
 			expectedContentType: plainTextType,
 		},
 		{
-			name: "string body with GET method and AllowMethodGetPayload by request",
+			name: "string body with GET method and AllowMethodGetPayload by requst",
 			initRequest: func(r *Request) {
 				r.SetAllowMethodGetPayload(true)
 				r.SetBody("foo")
