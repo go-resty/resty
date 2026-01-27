@@ -693,7 +693,8 @@ func TestRequestAuthScheme(t *testing.T) {
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
+		assertEqual(t, "", resp.Request.Header.Get(hdrAuthorizationKey))
+		assertEqual(t, tokenValue, resp.Request.RawRequest.Header.Get(hdrAuthorizationKey))
 	})
 
 	t.Run("empty auth scheme at request level GH954", func(t *testing.T) {
@@ -709,8 +710,8 @@ func TestRequestAuthScheme(t *testing.T) {
 			Get(ts.URL + "/profile")
 
 		assertError(t, err)
-		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
+		assertEqual(t, "", resp.Request.Header.Get(hdrAuthorizationKey))
+		assertEqual(t, tokenValue, resp.Request.RawRequest.Header.Get(hdrAuthorizationKey))
 	})
 
 	t.Run("only client level auth token GH959", func(t *testing.T) {
@@ -725,7 +726,8 @@ func TestRequestAuthScheme(t *testing.T) {
 
 		assertError(t, err)
 		assertEqual(t, http.StatusOK, resp.StatusCode())
-		assertEqual(t, "Bearer "+tokenValue, resp.Request.Header.Get(hdrAuthorizationKey))
+		assertEqual(t, "", resp.Request.Header.Get(hdrAuthorizationKey))
+		assertEqual(t, "Bearer "+tokenValue, resp.Request.RawRequest.Header.Get(hdrAuthorizationKey))
 	})
 }
 
