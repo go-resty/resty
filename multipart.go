@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/textproto"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -103,10 +102,6 @@ func (mf *MultipartField) openFileIfRequired() error {
 	file, err := os.Open(mf.FilePath)
 	if err != nil {
 		return err
-	}
-
-	if isStringEmpty(mf.FileName) {
-		mf.FileName = filepath.Base(mf.FilePath)
 	}
 
 	// if file open is success, stat will succeed
