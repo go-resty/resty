@@ -581,7 +581,7 @@ func (es *EventSource) connect() (*http.Response, error) {
 			break
 		}
 
-		rRes := wrapResponse(resp, req)
+		rRes := wrapResponse(resp)
 		needsRetry := applyRetryDefaultConditions(rRes, doErr)
 
 		// retry not required stop here
@@ -726,11 +726,11 @@ func readEventFunc(scanner *bufio.Scanner) ([]byte, error) {
 	return nil, io.EOF
 }
 
-func wrapResponse(res *http.Response, req *http.Request) *Response {
+func wrapResponse(res *http.Response) *Response {
 	if res == nil {
 		return nil
 	}
-	return &Response{RawResponse: res, Request: &Request{RawRequest: req}}
+	return &Response{RawResponse: res}
 }
 
 type rawEvent struct {
