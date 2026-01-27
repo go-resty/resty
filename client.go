@@ -2193,11 +2193,7 @@ func (c *Client) Clone(ctx context.Context) *Client {
 	cc.formData = cloneURLValues(c.formData)
 	cc.header = c.header.Clone()
 	cc.pathParams = maps.Clone(c.pathParams)
-
-	if c.credentials != nil {
-		cc.credentials = c.credentials.Clone()
-	}
-
+	cc.credentials = c.credentials.Clone()
 	cc.contentTypeEncoders = maps.Clone(c.contentTypeEncoders)
 	cc.contentTypeDecoders = maps.Clone(c.contentTypeDecoders)
 	cc.contentDecompressers = maps.Clone(c.contentDecompressers)
