@@ -971,7 +971,6 @@ func TestCustomTransportSettings(t *testing.T) {
 		ExpectContinueTimeout:  1 * time.Second,
 		MaxIdleConns:           50,
 		MaxIdleConnsPerHost:    3,
-		MaxConnsPerHost:        100,
 		ResponseHeaderTimeout:  10 * time.Second,
 		MaxResponseHeaderBytes: 1 << 10,
 		WriteBufferSize:        2 << 10,
