@@ -108,7 +108,7 @@ func (r *Response) Result() any {
 //
 // See [Request.SetResultError], [Client.SetResultError]
 func (r *Response) ResultError() any {
-	return r.Request.Error
+	return r.Request.ResultError
 }
 
 // Header method returns the response headers
@@ -133,7 +133,7 @@ func (r *Response) Cookies() []*http.Cookie {
 // NOTE:
 //   - Returns an empty string on auto-unmarshal scenarios, unless
 //     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
-//   - Returns an empty string when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set.
+//   - Returns an empty string when [Client.SetResponseDoNotParse] or [Request.SetResponseDoNotParse] set.
 func (r *Response) String() string {
 	r.readIfRequired()
 	return strings.TrimSpace(string(r.bodyBytes))
@@ -145,7 +145,7 @@ func (r *Response) String() string {
 // NOTE:
 //   - Returns an empty byte slice on auto-unmarshal scenarios, unless
 //     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
-//   - Returns an empty byte slice when [Client.SetDoNotParseResponse] or [Request.SetDoNotParseResponse] set.
+//   - Returns an empty byte slice when [Client.SetResponseDoNotParse] or [Request.SetResponseDoNotParse] set.
 func (r *Response) Bytes() []byte {
 	r.readIfRequired()
 	return r.bodyBytes
@@ -160,7 +160,7 @@ func (r *Response) Duration() time.Duration {
 	if r.Request.trace != nil {
 		return r.Request.TraceInfo().TotalTime
 	}
-	return r.receivedAt.Sub(r.Request.Time)
+	return r.receivedAt.Sub(r.Request.StartTime)
 }
 
 // ReceivedAt method returns the time we received a response from the server for the request.
@@ -219,11 +219,11 @@ func (r *Response) setReceivedAt() {
 }
 
 func (r *Response) fmtBodyString(sl int) string {
-	if r.Request.DoNotParseResponse {
+	if r.Request.IsResponseDoNotParse {
 		return "***** DO NOT PARSE RESPONSE - Enabled *****"
 	}
 
-	if r.Request.IsSaveResponse {
+	if r.Request.IsResponseSaveToFile {
 		return "***** RESPONSE WRITTEN INTO FILE *****"
 	}
 
@@ -256,7 +256,7 @@ func (r *Response) fmtBodyString(sl int) string {
 }
 
 func (r *Response) readIfRequired() {
-	if len(r.bodyBytes) == 0 && !r.Request.DoNotParseResponse {
+	if len(r.bodyBytes) == 0 && !r.Request.IsResponseDoNotParse {
 		_ = r.readAll()
 	}
 }

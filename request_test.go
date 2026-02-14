@@ -396,7 +396,7 @@ func TestForceContentTypeForGH276andGH240(t *testing.T) {
 	resp, err := c.R().
 		SetBody(map[string]any{"username": "testuser", "password": "testpass"}).
 		SetResult(AuthSuccess{}).
-		SetForceResponseContentType("application/json").
+		SetResponseForceContentType("application/json").
 		Post(ts.URL + "/login-json-html")
 
 	assertNil(t, err) // JSON response comes with incorrect content-type, we correct it with ForceContentType
@@ -775,7 +775,7 @@ func TestFormDataDisableWarn(t *testing.T) {
 
 	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
-		SetDisableWarn(true)
+		SetLoggerWarnLevel(true)
 	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
@@ -973,7 +973,7 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl().
-		SetRedirectPolicy(DomainCheckRedirectPolicy("127.0.0.1"))
+		SetRedirectPolicy(RedirectDomainCheckPolicy("127.0.0.1"))
 
 	_, err := c.R().Get(ts.URL + "/redirect-host-check-1")
 
@@ -1376,8 +1376,8 @@ func TestRequestSetPathParamAny(t *testing.T) {
 
 func TestRequestSetRawPathParamAny(t *testing.T) {
 	r := dcnldr().
-		SetRawPathParamAny("userId", 42).
-		SetRawPathParamAny("name", "john doe")
+		SetPathRawParamAny("userId", 42).
+		SetPathRawParamAny("name", "john doe")
 
 	assertEqual(t, "42", r.PathParams["userId"])
 	assertEqual(t, "john doe", r.PathParams["name"])
@@ -1390,13 +1390,13 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 
 	baseOutputDir := filepath.Join(getTestDataPath(), "dir-sample")
 	client := dcnl().
-		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
-		SetOutputDirectory(baseOutputDir).
+		SetRedirectPolicy(RedirectFlexiblePolicy(10)).
+		SetResponseSaveDirectory(baseOutputDir).
 		SetDebug(true)
 
 	outputFilePath := "go-resty/test-img-success.png"
 	resp, err := client.R().
-		SetOutputFileName(outputFilePath).
+		SetResponseSaveFileName(outputFilePath).
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1409,8 +1409,8 @@ func TestOutputFileWithBaseDirAndRelativePath(t *testing.T) {
 }
 
 func TestOutputFileWithBaseDirError(t *testing.T) {
-	c := dcnl().SetRedirectPolicy(FlexibleRedirectPolicy(10)).
-		SetOutputDirectory(filepath.Join(getTestDataPath(), `go-resty\0`))
+	c := dcnl().SetRedirectPolicy(RedirectFlexiblePolicy(10)).
+		SetResponseSaveDirectory(filepath.Join(getTestDataPath(), `go-resty\0`))
 
 	_ = c
 }
@@ -1421,11 +1421,11 @@ func TestOutputPathDirNotExists(t *testing.T) {
 	defer cleanupFiles(filepath.Join(".testdata", "not-exists-dir"))
 
 	client := dcnl().
-		SetRedirectPolicy(FlexibleRedirectPolicy(10)).
-		SetOutputDirectory(filepath.Join(getTestDataPath(), "not-exists-dir"))
+		SetRedirectPolicy(RedirectFlexiblePolicy(10)).
+		SetResponseSaveDirectory(filepath.Join(getTestDataPath(), "not-exists-dir"))
 
 	resp, err := client.R().
-		SetOutputFileName("test-img-success.png").
+		SetResponseSaveFileName("test-img-success.png").
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1441,7 +1441,7 @@ func TestOutputFileAbsPath(t *testing.T) {
 	outputFile := filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")
 
 	res, err := dcnlr().
-		SetOutputFileName(outputFile).
+		SetResponseSaveFileName(outputFile).
 		Get(ts.URL + "/my-image.png")
 
 	assertError(t, err)
@@ -1457,18 +1457,18 @@ func TestRequestSaveResponse(t *testing.T) {
 	defer cleanupFiles(filepath.Join(".testdata", "go-resty"))
 
 	c := dcnl().
-		SetSaveResponse(true).
-		SetOutputDirectory(filepath.Join(getTestDataPath(), "go-resty"))
+		SetResponseSaveToFile(true).
+		SetResponseSaveDirectory(filepath.Join(getTestDataPath(), "go-resty"))
 
-	assertTrue(t, c.IsSaveResponse())
+	assertTrue(t, c.IsResponseSaveToFile())
 
 	t.Run("content-disposition save response request", func(t *testing.T) {
 		outputFile := filepath.Join(getTestDataPath(), "go-resty", "test-img-success-2.png")
-		c.SetSaveResponse(false)
-		assertFalse(t, c.IsSaveResponse())
+		c.SetResponseSaveToFile(false)
+		assertFalse(t, c.IsResponseSaveToFile())
 
 		res, err := c.R().
-			SetSaveResponse(true).
+			SetResponseSaveToFile(true).
 			Get(ts.URL + "/my-image.png?content-disposition=true&filename=test-img-success-2.png")
 
 		assertError(t, err)
@@ -1480,11 +1480,11 @@ func TestRequestSaveResponse(t *testing.T) {
 
 	t.Run("use filename from path", func(t *testing.T) {
 		outputFile := filepath.Join(getTestDataPath(), "go-resty", "my-image.png")
-		c.SetSaveResponse(false)
-		assertFalse(t, c.IsSaveResponse())
+		c.SetResponseSaveToFile(false)
+		assertFalse(t, c.IsResponseSaveToFile())
 
 		res, err := c.R().
-			SetSaveResponse(true).
+			SetResponseSaveToFile(true).
 			Get(ts.URL + "/my-image.png")
 
 		assertError(t, err)
@@ -1496,7 +1496,7 @@ func TestRequestSaveResponse(t *testing.T) {
 
 	t.Run("empty path", func(t *testing.T) {
 		_, err := c.R().
-			SetSaveResponse(true).
+			SetResponseSaveToFile(true).
 			Get(ts.URL)
 		assertError(t, err)
 	})
@@ -1521,7 +1521,7 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 	defer ts.Close()
 
 	t.Run("do not parse response 1", func(t *testing.T) {
-		client := dcnl().SetDoNotParseResponse(true)
+		client := dcnl().SetResponseDoNotParse(true)
 		resp, err := client.R().
 			SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 			Get(ts.URL + "/")
@@ -1536,7 +1536,7 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 
 	t.Run("manual reset raw response - do not parse response 2", func(t *testing.T) {
 		resp, err := dcnl().R().
-			SetDoNotParseResponse(true).
+			SetResponseDoNotParse(true).
 			Get(ts.URL + "/")
 
 		assertError(t, err)
@@ -1553,7 +1553,7 @@ func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
 
 	t.Run("do not parse response debug log client level", func(t *testing.T) {
 		c := dcnl().
-			SetDoNotParseResponse(true).
+			SetResponseDoNotParse(true).
 			SetDebug(true)
 
 		var lgr bytes.Buffer
@@ -1575,7 +1575,7 @@ func TestRequestDoNotParseResponseDebugLog(t *testing.T) {
 
 		_, err := c.R().
 			SetDebug(true).
-			SetDoNotParseResponse(true).
+			SetResponseDoNotParse(true).
 			SetQueryParam("request_no", strconv.FormatInt(time.Now().Unix(), 10)).
 			Get(ts.URL + "/")
 
@@ -1595,7 +1595,7 @@ func TestRequestExpectContentTypeTest(t *testing.T) {
 	c := dcnl()
 	resp, err := c.R().
 		SetResult(noCtTest{}).
-		SetExpectResponseContentType("application/json").
+		SetResponseExpectContentType("application/json").
 		Get(ts.URL + "/json-no-set")
 
 	assertError(t, err)
@@ -1683,7 +1683,7 @@ func TestRequestFileUploadAsReader(t *testing.T) {
 
 	c := dcnl()
 	c.SetRequestMiddlewares(
-		PrepareRequestMiddleware,
+		MiddlewareRequestCreate,
 		func(c *Client, r *Request) error {
 			// validate content length values
 			assertTrue(t, r.isContentLengthSet)
@@ -1809,7 +1809,7 @@ func TestRawPathParamURLInput(t *testing.T) {
 
 	c := dcnl().
 		SetBaseURL(ts.URL).
-		SetRawPathParams(map[string]string{
+		SetPathRawParams(map[string]string{
 			"userId": "sample@sample.com",
 			"path":   "users/developers",
 		})
@@ -1817,8 +1817,8 @@ func TestRawPathParamURLInput(t *testing.T) {
 	assertEqual(t, "sample@sample.com", c.PathParams()["userId"])
 	assertEqual(t, "users/developers", c.PathParams()["path"])
 
-	resp, err := c.R().EnableDebug().
-		SetRawPathParams(map[string]string{
+	resp, err := c.R().SetDebug(true).
+		SetPathRawParams(map[string]string{
 			"subAccountId": "100002",
 			"website":      "https://example.com",
 		}).Get("/v1/users/{userId}/{subAccountId}/{path}/{website}")
@@ -1841,7 +1841,7 @@ func TestTraceInfo(t *testing.T) {
 	client := dcnl()
 
 	t.Run("enable trace on client", func(t *testing.T) {
-		client.SetBaseURL(ts.URL).EnableTrace()
+		client.SetBaseURL(ts.URL).SetTrace(true)
 		for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
 			resp, err := client.R().Get(u)
 			assertNil(t, err)
@@ -1861,12 +1861,12 @@ func TestTraceInfo(t *testing.T) {
 			assertNotNil(t, tr.Clone())
 		}
 
-		client.DisableTrace()
+		client.SetTrace(false)
 	})
 
 	t.Run("enable trace on request", func(t *testing.T) {
 		for _, u := range []string{"/", "/json", "/long-text", "/long-json"} {
-			resp, err := client.R().EnableTrace().Get(u)
+			resp, err := client.R().SetTrace(true).Get(u)
 			assertNil(t, err)
 			assertNotNil(t, resp)
 
@@ -1884,7 +1884,7 @@ func TestTraceInfo(t *testing.T) {
 	})
 
 	t.Run("enable trace on invalid request, issue #1016", func(t *testing.T) {
-		resp, err := client.R().EnableTrace().Get("unknown://url.com")
+		resp, err := client.R().SetTrace(true).Get("unknown://url.com")
 		assertNotNil(t, err)
 		tr := resp.Request.TraceInfo()
 		assertTrue(t, tr.DNSLookup == 0)
@@ -1901,7 +1901,7 @@ func TestTraceInfo(t *testing.T) {
 
 		requestURLs := []string{"/", "/json", "/long-text", "/long-json"}
 		for _, u := range requestURLs {
-			resp, err := c.R().EnableTrace().EnableDebug().Get(u)
+			resp, err := c.R().SetTrace(true).SetDebug(true).Get(u)
 			assertNil(t, err)
 			assertNotNil(t, resp)
 
@@ -1922,7 +1922,7 @@ func TestTraceInfo(t *testing.T) {
 
 		requestURLs := []string{"/", "/json", "/long-text", "/long-json"}
 		for _, u := range requestURLs {
-			resp, err := c.R().EnableTrace().EnableDebug().Get(u)
+			resp, err := c.R().SetTrace(true).SetDebug(true).Get(u)
 			assertNil(t, err)
 			assertNotNil(t, resp)
 		}
@@ -1963,7 +1963,7 @@ func TestTraceInfoOnTimeout(t *testing.T) {
 		DialerTimeout: 100 * time.Millisecond,
 	}).
 		SetBaseURL("http://resty-nowhere.local").
-		EnableTrace()
+		SetTrace(true)
 
 	resp, err := client.R().Get("/")
 	assertNotNil(t, err)
@@ -1985,7 +1985,7 @@ func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
 		client := New().
 			SetTimeout(1 * time.Millisecond).
 			SetBaseURL("http://resty-nowhere.local").
-			EnableTrace()
+			SetTrace(true)
 
 		resp, err := client.R().Get("/")
 		assertNotNil(t, err)
@@ -2010,7 +2010,7 @@ func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
 		client := New().
 			SetTimeout(5 * time.Second).
 			SetBaseURL(ts.URL).
-			EnableTrace()
+			SetTrace(true)
 
 		resp, err := client.R().Get("/")
 		assertNil(t, err)
@@ -2038,7 +2038,7 @@ func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
 		client := New().
 			SetTimeout(5 * time.Second).
 			SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true}).
-			EnableTrace()
+			SetTrace(true)
 
 		resp, err := client.R().Get(ts.URL)
 		assertNil(t, err)
@@ -2188,7 +2188,7 @@ func TestRequestClone(t *testing.T) {
 	// set an non-interface value
 	parent.URL = ts.URL
 	parent.SetPathParam("name", "parent")
-	parent.SetRawPathParam("name", "parent")
+	parent.SetPathRawParam("name", "parent")
 	// set http header
 	parent.SetHeader("X-Header", "parent")
 	// set an interface value
@@ -2273,7 +2273,7 @@ func TestRequestAllowPayload(t *testing.T) {
 		result1 := r.isPayloadSupported()
 		assertFalse(t, result1)
 
-		r.SetAllowMethodGetPayload(true)
+		r.SetMethodGetAllowPayload(true)
 		result2 := r.isPayloadSupported()
 		assertTrue(t, result2)
 	})
@@ -2285,7 +2285,7 @@ func TestRequestAllowPayload(t *testing.T) {
 		result1 := r.isPayloadSupported()
 		assertFalse(t, result1)
 
-		r.SetAllowMethodGetPayload(true)
+		r.SetMethodGetAllowPayload(true)
 		result2 := r.isPayloadSupported()
 		assertTrue(t, result2)
 	})
@@ -2318,7 +2318,7 @@ func TestRequestAllowPayload(t *testing.T) {
 		result1 := r.isPayloadSupported()
 		assertFalse(t, result1)
 
-		r.SetAllowMethodDeletePayload(true)
+		r.SetMethodDeleteAllowPayload(true)
 		result2 := r.isPayloadSupported()
 		assertTrue(t, result2)
 	})
@@ -2446,7 +2446,7 @@ func TestRequestSetResultAndSetOutputFile(t *testing.T) {
 		SetBody(&credentials{Username: "testuser", Password: "testpass"}).
 		SetResponseBodyUnlimitedReads(true).
 		SetResult(&AuthSuccess{}).
-		SetOutputFileName(outputFile).
+		SetResponseSaveFileName(outputFile).
 		Post("/login")
 
 	assertError(t, err)
@@ -2468,7 +2468,7 @@ func TestRequestBodyContentLengthValidation(t *testing.T) {
 	c := dcnl().SetBaseURL(ts.URL)
 
 	c.SetRequestMiddlewares(
-		PrepareRequestMiddleware,
+		MiddlewareRequestCreate,
 		func(c *Client, r *Request) error {
 			// validate content length
 			assertTrue(t, r.contentLength > 0)
@@ -2567,36 +2567,36 @@ func TestRequestSettingsCoverage(t *testing.T) {
 	c := dcnl()
 
 	r1 := c.R()
-	assertFalse(t, r1.CloseConnection)
+	assertFalse(t, r1.IsCloseConnection)
 	r1.SetCloseConnection(true)
-	assertTrue(t, r1.CloseConnection)
+	assertTrue(t, r1.IsCloseConnection)
 
 	r2 := c.R()
 	assertFalse(t, r2.IsTrace)
-	r2.EnableTrace()
+	r2.SetTrace(true)
 	assertTrue(t, r2.IsTrace)
-	r2.DisableTrace()
+	r2.SetTrace(false)
 	assertFalse(t, r2.IsTrace)
 
 	r3 := c.R()
-	assertFalse(t, r3.ResponseBodyUnlimitedReads)
+	assertFalse(t, r3.IsResponseBodyUnlimitedReads)
 	r3.SetResponseBodyUnlimitedReads(true)
-	assertTrue(t, r3.ResponseBodyUnlimitedReads)
+	assertTrue(t, r3.IsResponseBodyUnlimitedReads)
 	r3.SetResponseBodyUnlimitedReads(false)
-	assertFalse(t, r3.ResponseBodyUnlimitedReads)
+	assertFalse(t, r3.IsResponseBodyUnlimitedReads)
 
 	r4 := c.R()
-	assertFalse(t, r4.Debug)
-	r4.EnableDebug()
-	assertTrue(t, r4.Debug)
-	r4.DisableDebug()
-	assertFalse(t, r4.Debug)
+	assertFalse(t, r4.IsDebug)
+	r4.SetDebug(true)
+	assertTrue(t, r4.IsDebug)
+	r4.SetDebug(false)
+	assertFalse(t, r4.IsDebug)
 
 	r5 := c.R()
 	assertTrue(t, r5.IsRetryDefaultConditions)
-	r5.DisableRetryDefaultConditions()
+	r5.SetRetryDefaultConditions(false)
 	assertFalse(t, r5.IsRetryDefaultConditions)
-	r5.EnableRetryDefaultConditions()
+	r5.SetRetryDefaultConditions(true)
 	assertTrue(t, r5.IsRetryDefaultConditions)
 
 	r6 := c.R()

@@ -25,9 +25,16 @@ import (
 // Request Middleware(s)
 //_______________________________________________________________________
 
-// PrepareRequestMiddleware method is used to prepare HTTP requests from
-// user provides request values. Request preparation fails if any error occurs
-func PrepareRequestMiddleware(c *Client, r *Request) (err error) {
+// MiddlewareRequestCreate method is used to prepare HTTP requests using the
+// user-provided request values. It performs the following operations -
+//   - Parse the request URL with path params and query params
+//   - Parse the request headers from client and request level
+//   - Parse the request body based on the content type and body type
+//   - Create the underlying [http.Request] object
+//   - Add credentials such as Basic Auth and Token Auth into the request
+//
+// Returns an error if request preparation fails.
+func MiddlewareRequestCreate(c *Client, r *Request) (err error) {
 	if err = parseRequestURL(c, r); err != nil {
 		return err
 	}
@@ -242,7 +249,7 @@ func createRawRequest(c *Client, r *Request) (err error) {
 	r.SetContext(r.RawRequest.Context())
 
 	// Assign close connection option
-	r.RawRequest.Close = r.CloseConnection
+	r.RawRequest.Close = r.IsCloseConnection
 
 	// Add headers into http request
 	r.RawRequest.Header = r.Header
@@ -512,24 +519,25 @@ func handleRequestBody(c *Client, r *Request) error {
 // Response Middleware(s)
 //_______________________________________________________________________
 
-// AutoParseResponseMiddleware method is used to parse the response body automatically
-// based on registered HTTP response `Content-Type` decoder, see [Client.AddContentTypeDecoder];
-// if [Request.SetResult], [Request.SetResultError], or [Client.SetResultError] is used
-func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
+// MiddlewareResponseAutoParse method is used to parse the response body automatically
+// based on the registered HTTP response `Content-Type` decoder, see [Client.AddContentTypeDecoder];
+// if [Request.SetResult], [Request.SetResultError], or [Client.SetResultError] is used, it performs
+// the auto unmarshalling into the respective object.
+func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 	if (res.CascadeError != nil && (res.Request.isMultiPart && res.StatusCode() == 0)) ||
-		res.Request.DoNotParseResponse {
+		res.Request.IsResponseDoNotParse {
 		return // move on
 	}
 
 	if res.StatusCode() == http.StatusNoContent {
-		res.Request.Error = nil
+		res.Request.ResultError = nil
 		return
 	}
 
 	rct := firstNonEmpty(
-		res.Request.ForceResponseContentType,
+		res.Request.ResponseForceContentType,
 		res.Header().Get(hdrContentTypeKey),
-		res.Request.ExpectResponseContentType,
+		res.Request.ResponseExpectContentType,
 	)
 	decKey := inferContentTypeMapKey(rct)
 	decFunc, found := c.inferContentTypeDecoder(rct, decKey)
@@ -541,7 +549,7 @@ func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
 
 	// HTTP status code > 199 and < 300, considered as Result
 	if res.IsStatusSuccess() && res.Request.Result != nil {
-		res.Request.Error = nil
+		res.Request.ResultError = nil
 		defer closeq(res.Body)
 		err = decFunc(res.Body, res.Request.Result)
 		res.IsRead = true
@@ -551,13 +559,13 @@ func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
 	// HTTP status code > 399, considered as Error
 	if res.IsStatusFailure() {
 		// global error type registered at client-instance
-		if res.Request.Error == nil {
-			res.Request.Error = c.newErrorInterface()
+		if res.Request.ResultError == nil {
+			res.Request.ResultError = c.newErrorInterface()
 		}
 
-		if res.Request.Error != nil {
+		if res.Request.ResultError != nil {
 			defer closeq(res.Body)
-			err = decFunc(res.Body, res.Request.Error)
+			err = decFunc(res.Body, res.Request.ResultError)
 			res.IsRead = true
 			return
 		}
@@ -568,17 +576,17 @@ func AutoParseResponseMiddleware(c *Client, res *Response) (err error) {
 
 var hostnameReplacer = strings.NewReplacer(":", "_", ".", "_")
 
-// SaveToFileResponseMiddleware method used to write HTTP response body into
+// MiddlewareResponseSaveToFile method used to write HTTP response body into
 // file. The filename is determined in the following order -
-//   - [Request.SetOutputFileName]
+//   - [Request.SetResponseSaveFileName]
 //   - Content-Disposition header
 //   - Request URL using [path.Base]
-func SaveToFileResponseMiddleware(c *Client, res *Response) error {
-	if res.CascadeError != nil || !res.Request.IsSaveResponse {
+func MiddlewareResponseSaveToFile(c *Client, res *Response) error {
+	if res.CascadeError != nil || !res.Request.IsResponseSaveToFile {
 		return nil
 	}
 
-	file := res.Request.OutputFileName
+	file := res.Request.ResponseSaveFileName
 	if isStringEmpty(file) {
 		cntDispositionValue := res.Header().Get(hdrContentDisposition)
 		if len(cntDispositionValue) > 0 {
@@ -596,8 +604,8 @@ func SaveToFileResponseMiddleware(c *Client, res *Response) error {
 		}
 	}
 
-	if len(c.OutputDirectory()) > 0 && !filepath.IsAbs(file) {
-		file = filepath.Join(c.OutputDirectory(), string(filepath.Separator), file)
+	if len(c.ResponseSaveDirectory()) > 0 && !filepath.IsAbs(file) {
+		file = filepath.Join(c.ResponseSaveDirectory(), string(filepath.Separator), file)
 	}
 
 	file = filepath.Clean(file)

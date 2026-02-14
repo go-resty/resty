@@ -96,7 +96,7 @@ func TestClientResponseMiddleware(t *testing.T) {
 
 	c := dcnl()
 	c.AddResponseMiddleware(func(c *Client, res *Response) error {
-		t.Logf("Request sent at: %v", res.Request.Time)
+		t.Logf("Request sent at: %v", res.Request.StartTime)
 		t.Logf("Response Received at: %v", res.ReceivedAt())
 
 		return nil
@@ -115,7 +115,7 @@ func TestClientRedirectPolicy(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
 
-	c := dcnl().SetRedirectPolicy(FlexibleRedirectPolicy(20), DomainCheckRedirectPolicy("127.0.0.1"))
+	c := dcnl().SetRedirectPolicy(RedirectFlexiblePolicy(20), RedirectDomainCheckPolicy("127.0.0.1"))
 	res, err := c.R().
 		SetHeader("Name1", "Value1").
 		SetHeader("Name2", "Value2").
@@ -131,7 +131,7 @@ func TestClientRedirectPolicy(t *testing.T) {
 	assertEqual(t, 307, finalReq.StatusCode)
 	assertEqual(t, ts.URL+"/redirect-20", finalReq.URL)
 
-	c.SetRedirectPolicy(NoRedirectPolicy())
+	c.SetRedirectPolicy(RedirectNoPolicy())
 	res, err = c.R().Get(ts.URL + "/redirect-1")
 	assertNil(t, err)
 	assertEqual(t, http.StatusTemporaryRedirect, res.StatusCode())
@@ -503,8 +503,8 @@ func TestClientSetPathParamAny(t *testing.T) {
 
 func TestClientSetRawPathParamAny(t *testing.T) {
 	c := dcnl().
-		SetRawPathParamAny("userId", 42).
-		SetRawPathParamAny("name", "john doe")
+		SetPathRawParamAny("userId", 42).
+		SetPathRawParamAny("name", "john doe")
 
 	assertEqual(t, "42", c.PathParams()["userId"])
 	assertEqual(t, "john doe", c.PathParams()["name"])
@@ -574,12 +574,12 @@ func TestClientSettingsCoverage(t *testing.T) {
 
 	c.SetCloseConnection(true)
 
-	c.DisableDebug()
+	c.SetDebug(false)
 
 	assertTrue(t, c.IsRetryDefaultConditions())
-	c.DisableRetryDefaultConditions()
+	c.SetRetryDefaultConditions(false)
 	assertFalse(t, c.IsRetryDefaultConditions())
-	c.EnableRetryDefaultConditions()
+	c.SetRetryDefaultConditions(true)
 	assertTrue(t, c.IsRetryDefaultConditions())
 
 	nr := nopReader{}
@@ -623,7 +623,7 @@ func TestContentLengthWhenBodyIsNil(t *testing.T) {
 		return nil
 	}
 	client.SetRequestMiddlewares(
-		PrepareRequestMiddleware,
+		MiddlewareRequestCreate,
 		fnPreRequestMiddleware1,
 	)
 
@@ -652,7 +652,7 @@ func TestClientPreRequestMiddlewares(t *testing.T) {
 	}
 
 	client.SetRequestMiddlewares(
-		PrepareRequestMiddleware,
+		MiddlewareRequestCreate,
 		fnPreRequestMiddleware1,
 		fnPreRequestMiddleware2,
 	)
@@ -685,7 +685,7 @@ func TestClientPreRequestMiddlewareError(t *testing.T) {
 		return errors.New("error from PreRequestMiddleware")
 	}
 	c.SetRequestMiddlewares(
-		PrepareRequestMiddleware,
+		MiddlewareRequestCreate,
 		fnPreRequestMiddleware1,
 	)
 
@@ -701,8 +701,8 @@ func TestClientAllowMethodGetPayload(t *testing.T) {
 
 	t.Run("method GET allow string payload at client level", func(t *testing.T) {
 		c := dcnl()
-		c.SetAllowMethodGetPayload(true)
-		assertTrue(t, c.AllowMethodGetPayload())
+		c.SetMethodGetAllowPayload(true)
+		assertTrue(t, c.IsMethodGetAllowPayload())
 
 		payload := "test-payload"
 		resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
@@ -714,8 +714,8 @@ func TestClientAllowMethodGetPayload(t *testing.T) {
 
 	t.Run("method GET allow io.Reader payload at client level", func(t *testing.T) {
 		c := dcnl()
-		c.SetAllowMethodGetPayload(true)
-		assertTrue(t, c.AllowMethodGetPayload())
+		c.SetMethodGetAllowPayload(true)
+		assertTrue(t, c.IsMethodGetAllowPayload())
 
 		payload := "test-payload"
 		body := bytes.NewReader([]byte(payload))
@@ -728,8 +728,8 @@ func TestClientAllowMethodGetPayload(t *testing.T) {
 
 	t.Run("method GET disallow payload at client level", func(t *testing.T) {
 		c := dcnl()
-		c.SetAllowMethodGetPayload(false)
-		assertFalse(t, c.AllowMethodGetPayload())
+		c.SetMethodGetAllowPayload(false)
+		assertFalse(t, c.IsMethodGetAllowPayload())
 
 		payload := bytes.NewReader([]byte("test-payload"))
 		resp, err := c.R().SetBody(payload).Get(ts.URL + "/get-method-payload-test")
@@ -747,8 +747,8 @@ func TestClientAllowMethodDeletePayload(t *testing.T) {
 	t.Run("method DELETE allow string payload at client level", func(t *testing.T) {
 		c := dcnl().SetBaseURL(ts.URL)
 
-		c.SetAllowMethodDeletePayload(true)
-		assertTrue(t, c.AllowMethodDeletePayload())
+		c.SetMethodDeleteAllowPayload(true)
+		assertTrue(t, c.IsMethodDeleteAllowPayload())
 
 		payload := "test-payload"
 		resp, err := c.R().SetBody(payload).Delete("/delete")
@@ -761,8 +761,8 @@ func TestClientAllowMethodDeletePayload(t *testing.T) {
 	t.Run("method DELETE allow io.Reader payload at client level", func(t *testing.T) {
 		c := dcnl().SetBaseURL(ts.URL)
 
-		c.SetAllowMethodDeletePayload(true)
-		assertTrue(t, c.AllowMethodDeletePayload())
+		c.SetMethodDeleteAllowPayload(true)
+		assertTrue(t, c.IsMethodDeleteAllowPayload())
 
 		payload := "test-payload"
 		body := bytes.NewReader([]byte(payload))
@@ -776,8 +776,8 @@ func TestClientAllowMethodDeletePayload(t *testing.T) {
 	t.Run("method DELETE disallow payload at client level", func(t *testing.T) {
 		c := dcnl().SetBaseURL(ts.URL)
 
-		c.SetAllowMethodDeletePayload(false)
-		assertFalse(t, c.AllowMethodDeletePayload())
+		c.SetMethodDeleteAllowPayload(false)
+		assertFalse(t, c.IsMethodDeleteAllowPayload())
 
 		payload := bytes.NewReader([]byte("test-payload"))
 		resp, err := c.R().SetBody(payload).Delete("/delete")

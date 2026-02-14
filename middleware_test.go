@@ -73,7 +73,7 @@ func Test_parseRequestURL(t *testing.T) {
 		{
 			name: "apply client raw path parameters",
 			initClient: func(c *Client) {
-				c.SetRawPathParams(map[string]string{
+				c.SetPathRawParams(map[string]string{
 					"foo": "1/2",
 					"bar": "3",
 				})
@@ -86,7 +86,7 @@ func Test_parseRequestURL(t *testing.T) {
 		{
 			name: "apply request raw path parameters",
 			initRequest: func(r *Request) {
-				r.SetRawPathParams(map[string]string{
+				r.SetPathRawParams(map[string]string{
 					"foo": "4",
 					"bar": "5/6",
 				})
@@ -97,13 +97,13 @@ func Test_parseRequestURL(t *testing.T) {
 		{
 			name: "apply request and client raw path parameters",
 			initClient: func(c *Client) {
-				c.SetRawPathParams(map[string]string{
+				c.SetPathRawParams(map[string]string{
 					"foo": "1", // ignored, because of the request's "foo"
 					"bar": "2/3",
 				})
 			},
 			initRequest: func(r *Request) {
-				r.SetRawPathParams(map[string]string{
+				r.SetPathRawParams(map[string]string{
 					"foo": "4/5",
 				})
 				r.URL = "https://example.com/{foo}/{bar}"
@@ -115,7 +115,7 @@ func Test_parseRequestURL(t *testing.T) {
 			initRequest: func(r *Request) {
 				r.SetPathParams(map[string]string{
 					"foo": "4/5",
-				}).SetRawPathParams(map[string]string{
+				}).SetPathRawParams(map[string]string{
 					"foo": "4/5", // it gets overwritten since same key name
 					"bar": "6/7",
 				})
@@ -306,12 +306,12 @@ func Test_parseRequestURL(t *testing.T) {
 			name: "unescape query params",
 			initClient: func(c *Client) {
 				c.SetBaseURL("https://example.com/").
-					SetUnescapeQueryParams(true). // this line is just code coverage; I will restructure this test in v3 for the client and request the respective init method
+					SetQueryParamsUnescape(true). // this line is just code coverage; I will restructure this test in v3 for the client and request the respective init method
 					SetQueryParam("fromclient", "hey unescape").
 					SetQueryParam("initone", "cáfe")
 			},
 			initRequest: func(r *Request) {
-				r.SetUnescapeQueryParams(true) // this line takes effect
+				r.SetQueryParamsUnescape(true) // this line takes effect
 				r.SetQueryParams(
 					map[string]string{
 						"registry": "nacos://test:6801", // GH #797
@@ -488,7 +488,7 @@ func TestParseRequestBody(t *testing.T) {
 		{
 			name: "string body with GET method and AllowMethodGetPayload by client",
 			initClient: func(c *Client) {
-				c.SetAllowMethodGetPayload(true)
+				c.SetMethodGetAllowPayload(true)
 			},
 			initRequest: func(r *Request) {
 				r.SetBody("foo")
@@ -501,7 +501,7 @@ func TestParseRequestBody(t *testing.T) {
 		{
 			name: "string body with GET method and AllowMethodGetPayload by request",
 			initRequest: func(r *Request) {
-				r.SetAllowMethodGetPayload(true)
+				r.SetMethodGetAllowPayload(true)
 				r.SetBody("foo")
 				r.Method = http.MethodGet
 			},
@@ -565,7 +565,7 @@ func TestParseRequestBody(t *testing.T) {
 		{
 			name: "string body with DELETE method with AllowMethodDeletePayload by request",
 			initRequest: func(r *Request) {
-				r.SetAllowMethodDeletePayload(true)
+				r.SetMethodDeleteAllowPayload(true)
 				r.SetBody("foo")
 				r.Method = http.MethodDelete
 			},
@@ -880,14 +880,14 @@ func TestMiddlewareSaveToFileErrorCases(t *testing.T) {
 
 	// dir create error
 	req1 := c.R()
-	req1.SetOutputFileName(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
-	err1 := SaveToFileResponseMiddleware(c, &Response{Request: req1})
+	req1.SetResponseSaveFileName(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
+	err1 := MiddlewareResponseSaveToFile(c, &Response{Request: req1})
 	assertEqual(t, errDirMsg, err1.Error())
 
 	// file create error
 	req2 := c.R()
-	req2.SetOutputFileName(filepath.Join(tempDir, "sample.txt"))
-	err2 := SaveToFileResponseMiddleware(c, &Response{Request: req2})
+	req2.SetResponseSaveFileName(filepath.Join(tempDir, "sample.txt"))
+	err2 := MiddlewareResponseSaveToFile(c, &Response{Request: req2})
 	assertEqual(t, errFileMsg, err2.Error())
 }
 
@@ -905,8 +905,8 @@ func TestMiddlewareSaveToFileCopyError(t *testing.T) {
 
 	// copy error
 	req1 := c.R()
-	req1.SetOutputFileName(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
-	err1 := SaveToFileResponseMiddleware(c, &Response{Request: req1, Body: io.NopCloser(bytes.NewBufferString("Test context"))})
+	req1.SetResponseSaveFileName(filepath.Join(tempDir, "new-res-dir", "sample.txt"))
+	err1 := MiddlewareResponseSaveToFile(c, &Response{Request: req1, Body: io.NopCloser(bytes.NewBufferString("Test context"))})
 	assertEqual(t, errCopyMsg, err1.Error())
 }
 
@@ -915,11 +915,11 @@ func TestRequestURL_GH797(t *testing.T) {
 	defer ts.Close()
 	c := dcnl().
 		SetBaseURL(ts.URL).
-		SetUnescapeQueryParams(true). // this line is just code coverage; I will restructure this test in v3 for the client and request the respective init method
+		SetQueryParamsUnescape(true). // this line is just code coverage; I will restructure this test in v3 for the client and request the respective init method
 		SetQueryParam("fromclient", "hey unescape").
 		SetQueryParam("initone", "cáfe")
 	resp, err := c.R().
-		SetUnescapeQueryParams(true). // this line takes effect
+		SetQueryParamsUnescape(true). // this line takes effect
 		SetQueryParams(
 			map[string]string{
 				"registry": "nacos://test:6801", // GH #797

@@ -200,13 +200,13 @@ func createClient(hc *http.Client) *Client {
 
 	// request middlewares
 	c.SetRequestMiddlewares(
-		PrepareRequestMiddleware,
+		MiddlewareRequestCreate,
 	)
 
 	// response middlewares
 	c.SetResponseMiddlewares(
-		AutoParseResponseMiddleware,
-		SaveToFileResponseMiddleware,
+		MiddlewareResponseAutoParse,
+		MiddlewareResponseSaveToFile,
 	)
 
 	return c

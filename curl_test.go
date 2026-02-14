@@ -29,8 +29,8 @@ func TestCurlGenerateUnexecutedRequest(t *testing.T) {
 
 	assertEqual(t, "", req.CurlCmd())
 
-	curlCmdUnexecuted := req.EnableGenerateCurlCmd().CurlCmd()
-	req.DisableGenerateCurlCmd()
+	curlCmdUnexecuted := req.SetCurlCmdGenerate(true).CurlCmd()
+	req.SetCurlCmdGenerate(false)
 
 	if !strings.Contains(curlCmdUnexecuted, "Cookie: count=1") ||
 		!strings.Contains(curlCmdUnexecuted, "curl -X POST") ||
@@ -49,7 +49,7 @@ func TestCurlGenerateExecutedRequest(t *testing.T) {
 	data := map[string]string{
 		"name": "Resty",
 	}
-	c := dcnl().EnableDebug()
+	c := dcnl().SetDebug(true)
 	req := c.R().
 		SetBody(data).
 		SetCookies(
@@ -60,15 +60,15 @@ func TestCurlGenerateExecutedRequest(t *testing.T) {
 
 	url := ts.URL + "/curl-cmd-post"
 	resp, err := req.
-		EnableGenerateCurlCmd().
+		SetCurlCmdGenerate(true).
 		Post(url)
 	if err != nil {
 		t.Fatal(err)
 	}
 	curlCmdExecuted := resp.Request.CurlCmd()
 
-	c.DisableGenerateCurlCmd()
-	req.DisableGenerateCurlCmd()
+	c.SetCurlCmdGenerate(false)
+	req.SetCurlCmdGenerate(false)
 	if !strings.Contains(curlCmdExecuted, "Cookie: count=1") ||
 		!strings.Contains(curlCmdExecuted, "curl -X POST") ||
 		!strings.Contains(curlCmdExecuted, `-d '{"name":"Resty"}'`) ||
@@ -84,8 +84,8 @@ func TestCurlCmdDebugMode(t *testing.T) {
 	defer ts.Close()
 
 	c, logBuf := dcldb()
-	c.EnableGenerateCurlCmd().
-		SetDebugLogCurlCmd(true)
+	c.SetCurlCmdGenerate(true).
+		SetCurlCmdDebugLog(true)
 
 	// Build request
 	req := c.R().
@@ -97,7 +97,7 @@ func TestCurlCmdDebugMode(t *testing.T) {
 				{Name: "count", Value: "1"},
 			},
 		).
-		SetDebugLogCurlCmd(true)
+		SetCurlCmdDebugLog(true)
 
 	// Execute request: set debug mode
 	url := ts.URL + "/curl-cmd-post"
@@ -106,8 +106,8 @@ func TestCurlCmdDebugMode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c.DisableGenerateCurlCmd()
-	req.DisableGenerateCurlCmd()
+	c.SetCurlCmdGenerate(false)
+	req.SetCurlCmdGenerate(false)
 
 	// test logContent curl cmd
 	logContent := logBuf.String()
@@ -218,9 +218,9 @@ func TestCurl_buildCurlCmd(t *testing.T) {
 
 func TestCurlRequestGetBodyError(t *testing.T) {
 	c := dcnl().
-		EnableDebug().
+		SetDebug(true).
 		SetRequestMiddlewares(
-			PrepareRequestMiddleware,
+			MiddlewareRequestCreate,
 			func(_ *Client, r *Request) error {
 				r.RawRequest.GetBody = func() (io.ReadCloser, error) {
 					return nil, errors.New("test case error")
@@ -242,8 +242,8 @@ func TestCurlRequestGetBodyError(t *testing.T) {
 
 	assertEqual(t, "", req.CurlCmd())
 
-	curlCmdUnexecuted := req.EnableGenerateCurlCmd().CurlCmd()
-	req.DisableGenerateCurlCmd()
+	curlCmdUnexecuted := req.SetCurlCmdGenerate(true).CurlCmd()
+	req.SetCurlCmdGenerate(false)
 
 	if !strings.Contains(curlCmdUnexecuted, "Cookie: count=1") ||
 		!strings.Contains(curlCmdUnexecuted, "curl -X POST") ||
@@ -256,15 +256,15 @@ func TestCurlRequestGetBodyError(t *testing.T) {
 
 func TestCurlRequestMiddlewaresError(t *testing.T) {
 	errMsg := "middleware error"
-	c := dcnl().EnableDebug().
+	c := dcnl().SetDebug(true).
 		SetRequestMiddlewares(
 			func(c *Client, r *Request) error {
 				return errors.New(errMsg)
 			},
-			PrepareRequestMiddleware,
+			MiddlewareRequestCreate,
 		)
 
-	curlCmdUnexecuted := c.R().EnableGenerateCurlCmd().CurlCmd()
+	curlCmdUnexecuted := c.R().SetCurlCmdGenerate(true).CurlCmd()
 	assertEqual(t, "", curlCmdUnexecuted)
 }
 

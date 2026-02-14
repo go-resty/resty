@@ -16,14 +16,14 @@ func Benchmark_parseRequestURL_PathParams(b *testing.B) {
 	c := New().SetPathParams(map[string]string{
 		"foo": "1",
 		"bar": "2",
-	}).SetRawPathParams(map[string]string{
+	}).SetPathRawParams(map[string]string{
 		"foo": "3",
 		"xyz": "4",
 	})
 	r := c.R().SetPathParams(map[string]string{
 		"foo": "5",
 		"qwe": "6",
-	}).SetRawPathParams(map[string]string{
+	}).SetPathRawParams(map[string]string{
 		"foo": "7",
 		"asd": "8",
 	})

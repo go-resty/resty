@@ -920,13 +920,13 @@ func dcnl() *Client {
 }
 
 func dcnld() *Client {
-	return dcnl().EnableDebug()
+	return dcnl().SetDebug(true)
 }
 
 func dcldb() (*Client, *bytes.Buffer) {
 	logBuf := acquireBuffer()
 	c := New().
-		EnableDebug().
+		SetDebug(true).
 		outputLogTo(logBuf)
 	return c, logBuf
 }

@@ -25,7 +25,7 @@ func TestEventSourceSimpleFlow(t *testing.T) {
 
 	messageCounter := 0
 	messageFunc := func(e any) {
-		event := e.(*Event)
+		event := e.(*SSE)
 		assertEqual(t, strconv.Itoa(messageCounter), event.ID)
 		assertTrue(t, strings.HasPrefix(event.Data, "The time is"))
 		messageCounter++
@@ -138,7 +138,7 @@ func TestEventSourceOverwriteFuncs(t *testing.T) {
 
 	message2Counter := 0
 	messageFunc2 := func(e any) {
-		event := e.(*Event)
+		event := e.(*SSE)
 		assertEqual(t, strconv.Itoa(message2Counter), event.ID)
 		assertTrue(t, strings.HasPrefix(event.Data, "The time is"))
 		message2Counter++
@@ -189,7 +189,7 @@ func TestEventSourceRetry(t *testing.T) {
 
 	messageCounter := 2 // 0 & 1 connection failure
 	messageFunc := func(e any) {
-		event := e.(*Event)
+		event := e.(*SSE)
 		assertEqual(t, strconv.Itoa(messageCounter), event.ID)
 		assertTrue(t, strings.HasPrefix(event.Data, "The time is"))
 		messageCounter++
@@ -404,7 +404,7 @@ func TestEventSourceParseAndReadError(t *testing.T) {
 	assertNil(t, err)
 
 	// parse error
-	parseEvent = func(_ []byte) (*rawEvent, error) {
+	parseEvent = func(_ []byte) (*rawSSE, error) {
 		return nil, errors.New("test error")
 	}
 	counter = 0
@@ -475,7 +475,7 @@ func TestEventSourceWithDifferentMethods(t *testing.T) {
 
 			messageCounter := 0
 			messageFunc := func(e any) {
-				event := e.(*Event)
+				event := e.(*SSE)
 				assertEqual(t, strconv.Itoa(messageCounter), event.ID)
 				assertTrue(t, strings.HasPrefix(event.Data, fmt.Sprintf("%s method test:", tc.method)))
 				messageCounter++
@@ -590,7 +590,7 @@ func TestEventSource_readEventFunc(t *testing.T) {
 }
 
 func TestEventSourceCoverage(t *testing.T) {
-	es := NewEventSource()
+	es := NewSSESource()
 	err1 := es.Get()
 	assertEqual(t, "resty:sse: event source URL is required", err1.Error())
 
@@ -608,8 +608,8 @@ func TestEventSourceCoverage(t *testing.T) {
 	parseEvent([]byte{})
 }
 
-func createEventSource(t *testing.T, url string, fn EventMessageFunc, rt any) *EventSource {
-	es := NewEventSource().
+func createEventSource(t *testing.T, url string, fn SSEMessageFunc, rt any) *SSESource {
+	es := NewSSESource().
 		SetURL(url).
 		SetMethod(MethodGet).
 		AddHeader("X-Test-Header-1", "test header 1").
@@ -617,7 +617,7 @@ func createEventSource(t *testing.T, url string, fn EventMessageFunc, rt any) *E
 		SetRetryCount(2).
 		SetRetryWaitTime(200 * time.Millisecond).
 		SetRetryMaxWaitTime(1000 * time.Millisecond).
-		SetMaxBufSize(1 << 14). // 16kb
+		SetSizeMaxBuffer(1 << 14). // 16kb
 		SetLogger(createLogger()).
 		OnOpen(func(url string, respHdr http.Header) {
 			t.Log("I'm connected:", url, respHdr)

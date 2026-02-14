@@ -190,7 +190,7 @@ func TestClientDigestAuthWithBodyQopAuthIntGetBodyNil(t *testing.T) {
 
 	c := dcnl().SetDigestAuth(conf.username, conf.password)
 	c.SetRequestMiddlewares(
-		PrepareRequestMiddleware,
+		MiddlewareRequestCreate,
 		func(c *Client, r *Request) error {
 			r.RawRequest.GetBody = nil
 			return nil
@@ -215,7 +215,7 @@ func TestClientDigestAuthWithGetBodyError(t *testing.T) {
 
 	c := dcnl().SetDigestAuth(conf.username, conf.password)
 	c.SetRequestMiddlewares(
-		PrepareRequestMiddleware,
+		MiddlewareRequestCreate,
 		func(c *Client, r *Request) error {
 			r.RawRequest.GetBody = func() (_ io.ReadCloser, _ error) {
 				return nil, errors.New("get body test error")
@@ -244,7 +244,7 @@ func TestClientDigestAuthWithGetBodyNilReadError(t *testing.T) {
 
 	c := dcnl().SetDigestAuth(conf.username, conf.password)
 	c.SetRequestMiddlewares(
-		PrepareRequestMiddleware,
+		MiddlewareRequestCreate,
 		func(c *Client, r *Request) error {
 			r.RawRequest.GetBody = nil
 			return nil

@@ -40,19 +40,19 @@ func (f RedirectPolicyFunc) Apply(req *http.Request, via []*http.Request) error 
 	return f(req, via)
 }
 
-// NoRedirectPolicy is used to disable the redirects in the Resty client
+// RedirectNoPolicy is used to disable the redirects in the Resty client
 //
-//	resty.SetRedirectPolicy(resty.NoRedirectPolicy())
-func NoRedirectPolicy() RedirectPolicy {
+//	resty.SetRedirectPolicy(resty.RedirectNoPolicy())
+func RedirectNoPolicy() RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	})
 }
 
-// FlexibleRedirectPolicy method is convenient for creating several redirect policies for Resty clients.
+// RedirectFlexiblePolicy method is convenient for creating several redirect policies for Resty clients.
 //
-//	resty.SetRedirectPolicy(FlexibleRedirectPolicy(20))
-func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
+//	resty.SetRedirectPolicy(RedirectFlexiblePolicy(20))
+func RedirectFlexiblePolicy(noOfRedirect int) RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		if len(via) >= noOfRedirect {
 			return fmt.Errorf("resty: stopped after %d redirects", noOfRedirect)
@@ -62,11 +62,11 @@ func FlexibleRedirectPolicy(noOfRedirect int) RedirectPolicy {
 	})
 }
 
-// DomainCheckRedirectPolicy method is convenient for defining domain name redirect rules in Resty clients.
+// RedirectDomainCheckPolicy method is convenient for defining domain name redirect rules in Resty clients.
 // Redirect is allowed only for the host mentioned in the policy.
 //
-//	resty.SetRedirectPolicy(resty.DomainCheckRedirectPolicy("host1.com", "host2.org", "host3.net"))
-func DomainCheckRedirectPolicy(hostnames ...string) RedirectPolicy {
+//	resty.SetRedirectPolicy(resty.RedirectDomainCheckPolicy("host1.com", "host2.org", "host3.net"))
+func RedirectDomainCheckPolicy(hostnames ...string) RedirectPolicy {
 	hosts := make(map[string]bool)
 	for _, h := range hostnames {
 		hosts[strings.ToLower(h)] = true

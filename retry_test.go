@@ -66,7 +66,7 @@ func TestRequestConditionalGet(t *testing.T) {
 	c, lb := dcldb()
 
 	resp, err := c.R().
-		EnableDebug().
+		SetDebug(true).
 		AddRetryConditions(check).
 		SetRetryCount(1).
 		SetRetryWaitTime(50*time.Millisecond).
@@ -80,7 +80,7 @@ func TestRequestConditionalGet(t *testing.T) {
 	assertEqual(t, "TestGet: text response", resp.String())
 	assertEqual(t, 1, resp.Request.Attempt)
 	assertEqual(t, 1, externalCounter)
-	assertTrue(t, strings.Contains(lb.String(), "RETRY TRACE ID:"), "expected debug log with retry trace ID")
+	assertTrue(t, strings.Contains(lb.String(), "CORRELATION ID:"), "expected debug log with correlation ID")
 
 	logResponse(t, resp)
 }
@@ -124,14 +124,14 @@ func TestClientRetryWithMinAndMaxWaitTime(t *testing.T) {
 				return true
 			},
 		)
-	res, _ := c.R().EnableDebug().Get(ts.URL + "/set-retrywaittime-test")
+	res, _ := c.R().SetDebug(true).Get(ts.URL + "/set-retrywaittime-test")
 
 	retryIntervals[res.Request.Attempt-1] = parseTimeSleptFromResponse(res.String())
 
 	// retryCount+1 == attempts were made
 	assertEqual(t, retryCount+1, res.Request.Attempt)
 
-	assertTrue(t, strings.Contains(lb.String(), "RETRY TRACE ID:"), "expected debug log with retry trace ID")
+	assertTrue(t, strings.Contains(lb.String(), "CORRELATION ID:"), "expected debug log with correlation ID")
 
 	// Initial attempt has 0 time slept since last request
 	assertEqual(t, retryIntervals[0], uint64(0))
@@ -844,14 +844,14 @@ func TestRequestRetryPutIoReadSeekerForBuffer(t *testing.T) {
 			},
 		).
 		SetRetryCount(3).
-		SetAllowNonIdempotentRetry(true)
+		SetRetryAllowNonIdempotent(true)
 
-	assertTrue(t, c.AllowNonIdempotentRetry(), "expected AllowNonIdempotentRetry to be true")
+	assertTrue(t, c.IsRetryAllowNonIdempotent(), "expected AllowNonIdempotentRetry to be true")
 
 	buf := bytes.NewBuffer([]byte("body content"))
 	resp, err := c.R().
 		SetBody(buf).
-		SetAllowMethodGetPayload(false).
+		SetMethodGetAllowPayload(false).
 		Put(srv.URL)
 
 	assertNil(t, err)
@@ -876,13 +876,13 @@ func TestRequestRetryPostIoReadSeeker(t *testing.T) {
 			},
 		).
 		SetRetryCount(3).
-		SetAllowNonIdempotentRetry(false)
+		SetRetryAllowNonIdempotent(false)
 
-	assertFalse(t, c.AllowNonIdempotentRetry())
+	assertFalse(t, c.IsRetryAllowNonIdempotent())
 
 	resp, err := c.R().
 		SetBody([]byte("body content")).
-		SetAllowNonIdempotentRetry(true).
+		SetRetryAllowNonIdempotent(true).
 		Post(srv.URL)
 
 	assertNil(t, err)

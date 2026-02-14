@@ -29,13 +29,13 @@ func TestGetMethodWhenResponseIsNull(t *testing.T) {
 		w.Write([]byte("null"))
 	}))
 
-	client := New().SetRetryCount(3).EnableGenerateCurlCmd()
+	client := New().SetRetryCount(3).SetCurlCmdGenerate(true)
 
 	var x any
 	resp, err := client.R().SetBody("{}").
 		SetHeader("Content-Type", "application/json; charset=utf-8").
-		SetForceResponseContentType("application/json").
-		SetAllowMethodGetPayload(true).
+		SetResponseForceContentType("application/json").
+		SetMethodGetAllowPayload(true).
 		SetResponseBodyUnlimitedReads(true).
 		SetResult(&x).
 		Get(server.URL + "/test")
@@ -195,7 +195,7 @@ func TestGzipReaderPanicOnConcurrentCorruptedBody(t *testing.T) {
 
 				var out map[string]any
 				client.R().
-					SetAllowNonIdempotentRetry(true).
+					SetRetryAllowNonIdempotent(true).
 					SetResult(&out).
 					Post(server.URL)
 			}()
