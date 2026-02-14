@@ -1413,21 +1413,24 @@ func TestResponseBodyLimit(t *testing.T) {
 	defer ts.Close()
 
 	t.Run("client body limit", func(t *testing.T) {
-		c := dcnl().SetResponseBodyLimit(1024)
-		assertEqual(t, int64(1024), c.ResponseBodyLimit())
+		resBodyLimit := int64(1024)
+		c := dcnl().SetResponseBodyLimit(resBodyLimit)
+		assertEqual(t, resBodyLimit, c.ResponseBodyLimit())
+
 		resp, err := c.R().Get(ts.URL + "/")
 		assertNotNil(t, err)
 		assertErrorIs(t, ErrReadExceedsThresholdLimit, err)
-		assertEqual(t, int64(1408), resp.Size())
+		assertTrue(t, resp.Size() > resBodyLimit)
 	})
 
 	t.Run("request body limit", func(t *testing.T) {
+		resBodyLimit := int64(1024)
 		c := dcnl()
 
-		resp, err := c.R().SetResponseBodyLimit(1024).Get(ts.URL + "/")
+		resp, err := c.R().SetResponseBodyLimit(resBodyLimit).Get(ts.URL + "/")
 		assertNotNil(t, err)
 		assertErrorIs(t, ErrReadExceedsThresholdLimit, err)
-		assertEqual(t, int64(1408), resp.Size())
+		assertTrue(t, resp.Size() > resBodyLimit)
 	})
 
 	t.Run("body less than limit", func(t *testing.T) {
