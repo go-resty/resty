@@ -315,7 +315,7 @@ func (r *Response) wrapContentDecompresser() error {
 		return nil
 	}
 
-	if decFunc, f := r.Request.client.ContentDecompressers()[ce]; f {
+	if decFunc, f := r.Request.client.ContentDecompressers()[strings.ToLower(ce)]; f {
 		dec, err := decFunc(r.Body)
 		if err != nil {
 			if err == io.EOF {

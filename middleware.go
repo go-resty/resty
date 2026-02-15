@@ -448,7 +448,7 @@ func handleFormData(c *Client, r *Request) {
 }
 
 func handleRequestBody(c *Client, r *Request) error {
-	contentType := r.Header.Get(hdrContentTypeKey)
+	contentType := strings.ToLower(r.Header.Get(hdrContentTypeKey))
 	if isStringEmpty(contentType) {
 		// it is highly recommended that the user provide a request content-type
 		// so that we can minimize memory allocation and compute.
@@ -534,11 +534,11 @@ func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 		return
 	}
 
-	rct := firstNonEmpty(
+	rct := strings.ToLower(firstNonEmpty(
 		res.Request.ResponseForceContentType,
 		res.Header().Get(hdrContentTypeKey),
 		res.Request.ResponseExpectContentType,
-	)
+	))
 	decKey := inferContentTypeMapKey(rct)
 	decFunc, found := c.inferContentTypeDecoder(rct, decKey)
 	if !found {

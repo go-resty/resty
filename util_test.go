@@ -282,7 +282,7 @@ func TestInMemoryJSONPost(t *testing.T) {
 
 	c := dcnl().
 		AddContentTypeEncoder(jsonContentType, InMemoryJSONMarshal).
-		AddContentTypeDecoder(jsonContentType, InMemoryJSONUnmarshal)
+		AddContentTypeDecoder("appLiCaTion/JSon", InMemoryJSONUnmarshal)
 
 	r := c.R().
 		SetHeader(hdrContentTypeKey, jsonContentType).

@@ -912,7 +912,7 @@ func TestLzwCompress(t *testing.T) {
 	assertEqual(t, ErrContentDecompresserNotFound, err)
 
 	// Register LZW content decoder
-	c.AddContentDecompresser("compress", func(r io.ReadCloser) (io.ReadCloser, error) {
+	c.AddContentDecompresser("ComPreSs", func(r io.ReadCloser) (io.ReadCloser, error) {
 		l := &lzwReader{
 			s: r,
 			r: lzw.NewReader(r, lzw.LSB, 8),

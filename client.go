@@ -924,7 +924,7 @@ func (c *Client) ContentTypeEncoders() map[string]ContentTypeEncoder {
 func (c *Client) AddContentTypeEncoder(ct string, e ContentTypeEncoder) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.contentTypeEncoders[ct] = e
+	c.contentTypeEncoders[strings.ToLower(ct)] = e
 	return c
 }
 
@@ -952,7 +952,7 @@ func (c *Client) ContentTypeDecoders() map[string]ContentTypeDecoder {
 func (c *Client) AddContentTypeDecoder(ct string, d ContentTypeDecoder) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.contentTypeDecoders[ct] = d
+	c.contentTypeDecoders[strings.ToLower(ct)] = d
 	return c
 }
 
@@ -983,10 +983,11 @@ func (c *Client) ContentDecompressers() map[string]ContentDecompresser {
 func (c *Client) AddContentDecompresser(k string, d ContentDecompresser) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if !slices.Contains(c.contentDecompresserKeys, k) {
-		c.contentDecompresserKeys = slices.Insert(c.contentDecompresserKeys, 0, k)
+	lk := strings.ToLower(k)
+	if !slices.Contains(c.contentDecompresserKeys, lk) {
+		c.contentDecompresserKeys = slices.Insert(c.contentDecompresserKeys, 0, lk)
 	}
-	c.contentDecompressers[k] = d
+	c.contentDecompressers[lk] = d
 	return c
 }
 
@@ -1011,6 +1012,7 @@ func (c *Client) SetContentDecompresserKeys(keys []string) *Client {
 	result := make([]string, 0)
 	decoders := c.ContentDecompressers()
 	for _, k := range keys {
+		k = strings.ToLower(k)
 		if _, f := decoders[k]; f {
 			result = append(result, k)
 		}

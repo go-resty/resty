@@ -182,7 +182,7 @@ func handleLoginEndpoint(t *testing.T, w http.ResponseWriter, r *http.Request) {
 			} else if r.URL.Query().Get("ct") == "rpc" {
 				w.Header().Set(hdrContentTypeKey, "application/json-rpc")
 			} else {
-				w.Header().Set(hdrContentTypeKey, "application/json")
+				w.Header().Set(hdrContentTypeKey, "AppLicAtioN/jsON")
 			}
 
 			if err != nil {
@@ -639,7 +639,7 @@ func createGenericServer(t *testing.T) *httptest.Server {
 			// LZW
 			case "/lzw-test":
 				w.Header().Set(hdrContentTypeKey, plainTextType)
-				w.Header().Set(hdrContentEncodingKey, "compress")
+				w.Header().Set(hdrContentEncodingKey, "coMpReSs")
 				zw := lzw.NewWriter(w, lzw.LSB, 8)
 				_, _ = zw.Write([]byte("This is LZW response testing"))
 				zw.Close()
