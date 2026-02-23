@@ -1542,8 +1542,13 @@ func TestClientHedgingBasic(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+
 	c := dcnl()
-	c.EnableHedging(20*time.Millisecond, 3, 0)
+	c.SetHedging(h)
 
 	resp, err := c.R().Get(ts.URL + "/hedging-slow-first")
 	assertError(t, err)
@@ -1556,12 +1561,17 @@ func TestClientHedgingDisable(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertEqual(t, true, c.IsHedgingEnabled())
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
 
-	c.DisableHedging()
-	assertEqual(t, false, c.IsHedgingEnabled())
+	c := dcnl()
+	c.SetHedging(h)
+	assertEqual(t, true, c.isHedgingEnabled())
+
+	c.SetHedging(nil)
+	assertEqual(t, false, c.isHedgingEnabled())
 
 	resp, err := c.R().Get(ts.URL + "/hedging-slow-first")
 	assertError(t, err)
@@ -1570,14 +1580,16 @@ func TestClientHedgingDisable(t *testing.T) {
 
 func TestClientHedgingNil(t *testing.T) {
 	c := dcnl()
-	c.hedging = nil
-	c.wrapTransportWithHedging()
 
-	assertEqual(t, false, c.IsHedgingEnabled())
-
-	_, ok := c.httpClient.Transport.(*hedgingTransport)
-	if ok {
+	assertEqual(t, false, c.isHedgingEnabled())
+	if _, ok := c.httpClient.Transport.(*Hedging); ok {
 		t.Error("Transport shouldn't be hedgingTransport when hedging is nil")
+	}
+
+	c.SetHedging(NewHedging())
+	assertEqual(t, true, c.isHedgingEnabled())
+	if _, ok := c.httpClient.Transport.(*Hedging); !ok {
+		t.Error("Transport should be hedgingTransport when hedging is set")
 	}
 }
 
@@ -1589,42 +1601,22 @@ func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	assertEqual(t, 2, c.RetryCount())
 
 	// Enable hedging should disable retry by default
-	c.EnableHedging(50*time.Millisecond, 3, 0)
+	h := NewHedging().
+		SetDelay(50 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+	c.SetHedging(h)
 	assertEqual(t, 0, c.RetryCount())
 
 	// But user can re-enable retry as fallback
 	c.SetRetryCount(1)
 	assertEqual(t, 1, c.RetryCount())
-	assertEqual(t, true, c.IsHedgingEnabled())
+	assertEqual(t, true, c.isHedgingEnabled())
 
 	// Disable hedging
-	c.DisableHedging()
-	assertEqual(t, false, c.IsHedgingEnabled())
+	c.SetHedging(nil)
+	assertEqual(t, false, c.isHedgingEnabled())
 	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
-}
-
-func TestClientHedgingConfiguration(t *testing.T) {
-	c := dcnl()
-
-	// Setters require hedging to be enabled first
-	assertEqual(t, false, c.IsHedgingEnabled())
-
-	c.EnableHedging(50*time.Millisecond, 3, 10.0)
-
-	assertEqual(t, true, c.IsHedgingEnabled())
-	assertEqual(t, 50*time.Millisecond, c.HedgingDelay())
-	assertEqual(t, 3, c.HedgingUpTo())
-	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
-
-	// Now we can update individual settings
-	c.SetHedgingDelay(100 * time.Millisecond)
-	assertEqual(t, 100*time.Millisecond, c.HedgingDelay())
-
-	c.SetHedgingUpTo(5)
-	assertEqual(t, 5, c.HedgingUpTo())
-
-	c.SetHedgingMaxPerSecond(20.0)
-	assertEqual(t, 20.0, c.HedgingMaxPerSecond())
 }
 
 func TestClientHedgingWithRateLimit(t *testing.T) {
@@ -1632,8 +1624,12 @@ func TestClientHedgingWithRateLimit(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(10*time.Millisecond, 10, 5.0)
+	h := NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(10).
+		SetMaxRequestPerSecond(5.0)
+
+	c := dcnl().SetHedging(h)
 
 	resp, err := c.R().Get(ts.URL + "/hedging-slow-all")
 	assertError(t, err)
@@ -1644,8 +1640,12 @@ func TestClientHedgingSafeMethodsOnly(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(20*time.Millisecond, 3, 0)
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+
+	c := dcnl().SetHedging(h)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)

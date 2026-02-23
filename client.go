@@ -227,7 +227,7 @@ type Client struct {
 	contentDecompressers       map[string]ContentDecompresser
 	certWatcherStopChan        chan bool
 	circuitBreaker             *CircuitBreaker
-	hedging                    *hedgingConfig
+	hedging                    *Hedging
 }
 
 // CertWatcherOptions allows configuring a watcher that reloads dynamically TLS certs.
@@ -1446,203 +1446,59 @@ func (c *Client) AddRetryHooks(hooks ...RetryHookFunc) *Client {
 	return c
 }
 
-// isHedgingEnabled method returns true if hedging is enabled and get client clock.
-func (c *Client) IsHedgingEnabled() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.isHedgingEnabled()
-}
-
 // isHedgingEnabled method returns true if hedging is enabled.
 func (c *Client) isHedgingEnabled() bool {
-	return c.hedging != nil && c.hedging.enabled
-}
-
-// SetHedgingDelay method sets the delay between hedged requests.
-func (c *Client) SetHedgingDelay(delay time.Duration) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	if c.isHedgingEnabled() {
-		c.hedging.delay = delay
-		return c
-	}
-	c.log.Errorf("SetHedgingDelay: %v", ErrHedgingDisabled)
-	return c
-}
-
-// HedgingDelay method returns the configured hedging delay.
-func (c *Client) HedgingDelay() time.Duration {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if c.isHedgingEnabled() {
-		return c.hedging.delay
-	}
-	return hedgingDefaultDelay
+	return c.hedging != nil
 }
 
-// SetHedgingUpTo method sets maximum concurrent hedged requests.
-func (c *Client) SetHedgingUpTo(upTo int) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	if c.isHedgingEnabled() {
-		c.hedging.upTo = upTo
-		return c
-	}
-	c.log.Errorf("SetHedgingUpTo: %v", ErrHedgingDisabled)
-	return c
-}
-
-// HedgingUpTo method returns the maximum concurrent requests.
-func (c *Client) HedgingUpTo() int {
+// Hedging method returns the hedging configuration of the client.
+// If nil is returned, it means hedging is disabled.
+func (c *Client) Hedging() *Hedging {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if c.isHedgingEnabled() {
-		return c.hedging.upTo
-	}
-	return hedgingDefaultUpTo
+	return c.hedging
 }
 
-// SetHedgingMaxPerSecond method sets rate limit for hedged requests.
-func (c *Client) SetHedgingMaxPerSecond(maxPerSecond float64) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	if c.isHedgingEnabled() {
-		c.hedging.maxPerSecond = maxPerSecond
-		return c
-	}
-	c.log.Errorf("SetHedgingMaxPerSecond: %v", ErrHedgingDisabled)
-	return c
-}
-
-// HedgingMaxPerSecond method returns the hedging rate limit.
-func (c *Client) HedgingMaxPerSecond() float64 {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if c.isHedgingEnabled() {
-		return c.hedging.maxPerSecond
-	}
-	return hedgingDefaultMaxPerSecond
-}
-
-// SetHedgingAllowNonReadOnly method allows hedging for non-read-only HTTP methods.
-// By default, only read-only methods (GET, HEAD, OPTIONS, TRACE) are hedged.
-// NOTE:
-//   - Use this with caution as hedging write operations can lead to duplicates.
-func (c *Client) SetHedgingAllowNonReadOnly(allow bool) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	if c.isHedgingEnabled() {
-		c.hedging.allowNonReadOnly = allow
-		// Re-wrap to apply new settings
-		c.unwrapHedgingTransport()
-		c.wrapTransportWithHedging()
-		return c
-	}
-	c.log.Errorf("SetHedgingAllowNonReadOnly: %v", ErrHedgingDisabled)
-	return c
-}
-
-// IsHedgingAllowNonReadOnly method returns true if hedging is enabled for non-read-only methods.
-func (c *Client) IsHedgingAllowNonReadOnly() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if c.isHedgingEnabled() {
-		return c.hedging.allowNonReadOnly
-	}
-	return hedgingDefaultAllowNonReadOnly
-}
-
-// EnableHedging method enables hedging with the given configuration.
+// SetHedging method sets the hedging instance into client. If nil is passed, it disables hedging.
 //
-// Hedging sends multiple concurrent requests with staggered delays and returns
-// the first response to complete to reduce tail latency. Only read-only HTTP methods
-// (GET, HEAD, OPTIONS, TRACE) are hedged by default unless SetHedgingAllowNonReadOnly is used.
-//
-//		client.EnableHedging(
-//		    50*time.Millisecond,   // delay between requests
-//		    3,                     // max 3 concurrent requests
-//		    10.0,                  // max 10 hedged requests per second
-//		)
-//	 Last one come from rate package, to use fractional rates, e.g.
-//	 - 0.1 = 1 request every 10 seconds
-//	 - 0.5 = 1 request every 2 seconds
-//	 - 1.0 = 1 request per second
-//	 - 2.5 = 2.5 requests per second (5 requests every 2 seconds)
-//	 - 10.0 = 10 requests per second
-func (c *Client) EnableHedging(delay time.Duration, upTo int, maxPerSecond float64) *Client {
+// See [NewHedging] for more details about the Hedging configuration.
+func (c *Client) SetHedging(h *Hedging) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if c.hedging == nil {
-		c.hedging = &hedgingConfig{}
+	// if nil is passed, we disable hedging
+	// by reverting the transport instance
+	if h == nil {
+		if ht, ok := c.httpClient.Transport.(*Hedging); ok {
+			c.httpClient.Transport = ht.transport
+			c.hedging = h
+		}
+		return c
 	}
 
-	c.hedging.delay = delay
-	c.hedging.upTo = upTo
-	c.hedging.maxPerSecond = maxPerSecond
-	c.hedging.enabled = true
-
-	// Disable retry by default when hedging is enabled.
-	// Users can re-enable retry if they want it as a fallback mechanism.
-	if c.retryCount > 0 {
-		c.log.Warnf("Disabling retry (count: %d) as hedging is now enabled. You can re-enable retry with SetRetryCount() if you want it as a fallback.", c.retryCount)
-		c.retryCount = 0
-	}
-
-	c.wrapTransportWithHedging()
-
-	return c
-}
-
-// DisableHedging method disables hedging.
-func (c *Client) DisableHedging() *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	if c.isHedgingEnabled() {
-		c.hedging.enabled = false
-	}
-
-	c.unwrapHedgingTransport()
-
-	return c
-}
-
-func (c *Client) wrapTransportWithHedging() {
-	if c.hedging == nil || !c.hedging.enabled {
-		return
-	}
+	// enable hedging if its not already enabled
 
 	currentTransport := c.httpClient.Transport
 	if currentTransport == nil {
 		currentTransport = createTransport(nil, nil)
 	}
 
-	// Already set
-	if _, ok := currentTransport.(*hedgingTransport); ok {
-		return
+	// Disable retry by default when hedging is enabled.
+	// Users can re-enable retry if they want it as a fallback mechanism.
+	if c.retryCount > 0 {
+		c.log.Warnf("Disabling retry (count: %d) as hedging is now enabled."+
+			" You can re-enable retry with SetRetryCount() if you really want it as a fallback."+
+			" otherwise, hedging and retry requests can overwhelm the server.", c.retryCount)
+		c.retryCount = 0
 	}
 
-	// Calculate rate delay: if maxPerSecond is 10, delay is 100ms (1s / 10)
-	var rateDelay time.Duration
-	if c.hedging.maxPerSecond > 0 {
-		rateDelay = time.Duration(float64(time.Second) / c.hedging.maxPerSecond)
-	}
+	h.transport = currentTransport
+	c.httpClient.Transport = h
+	c.hedging = h
 
-	c.httpClient.Transport = &hedgingTransport{
-		transport:        currentTransport,
-		delay:            c.hedging.delay,
-		upTo:             c.hedging.upTo,
-		rateDelay:        rateDelay,
-		allowNonReadOnly: c.hedging.allowNonReadOnly,
-	}
-}
-
-func (c *Client) unwrapHedgingTransport() {
-	if ht, ok := c.httpClient.Transport.(*hedgingTransport); ok {
-		c.httpClient.Transport = ht.transport
-	}
+	return c
 }
 
 // TLSClientConfig method returns the [tls.Config] from underlying client transport

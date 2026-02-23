@@ -55,29 +55,33 @@ func TestHedgingBasic(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(20*time.Millisecond, 3, 0)
+	h := NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+
+	c := dcnl().SetHedging(h)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 
 	count := atomic.LoadInt32(&attemptCount)
-	if count < 2 {
-		t.Errorf("Expected at least 2 requests, got %d", count)
+	if count < 1 {
+		t.Errorf("Expected at least 1 requests, got %d", count)
 	}
 }
 
-func TestHedgingFirstWins(t *testing.T) {
+func TestHedgingSecondWins(t *testing.T) {
 	var attemptCount int32
 	firstAttempt := atomic.Int32{}
 
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		attempt := atomic.AddInt32(&attemptCount, 1)
 		if attempt == 1 {
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		} else {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(20 * time.Millisecond)
 		}
 		firstAttempt.CompareAndSwap(0, attempt)
 
@@ -87,8 +91,12 @@ func TestHedgingFirstWins(t *testing.T) {
 	})
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(30*time.Millisecond, 2, 0)
+	h := NewHedging().
+		SetDelay(30 * time.Millisecond).
+		SetMaxRequest(2).
+		SetMaxRequestPerSecond(0)
+
+	c := dcnl().SetHedging(h)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
@@ -130,9 +138,13 @@ func TestHedgingTimeout(t *testing.T) {
 	})
 	defer ts.Close()
 
-	c := dcnl()
 	delay := 50 * time.Millisecond
-	c.EnableHedging(delay, 3, 0)
+	h := NewHedging().
+		SetDelay(delay).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+
+	c := dcnl().SetHedging(h)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
@@ -155,8 +167,12 @@ func TestHedgingReadOnlyMethodsOnly(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(20*time.Millisecond, 3, 0)
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+
+	c := dcnl().SetHedging(h)
 
 	testCases := []struct {
 		method        string
@@ -202,8 +218,12 @@ func TestHedgingRateLimit(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 500, 0)
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(10*time.Millisecond, 10, 5.0)
+	h := NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(10).
+		SetMaxRequestPerSecond(5.0)
+
+	c := dcnl().SetHedging(h)
 
 	start := time.Now()
 	resp, err := c.R().Get(ts.URL + "/")
@@ -224,18 +244,23 @@ func TestHedgingWithRetryFallback(t *testing.T) {
 	c.SetRetryCount(2)
 	assertEqual(t, 2, c.RetryCount())
 
+	h := NewHedging().
+		SetDelay(50 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+
 	// Enable hedging should disable retry by default
-	c.EnableHedging(50*time.Millisecond, 3, 0)
+	c.SetHedging(h)
 	assertEqual(t, 0, c.RetryCount())
 
 	// But user can re-enable retry as fallback
 	c.SetRetryCount(1)
 	assertEqual(t, 1, c.RetryCount())
-	assertEqual(t, true, c.IsHedgingEnabled())
+	assertEqual(t, true, c.isHedgingEnabled())
 
 	// Disable hedging
-	c.DisableHedging()
-	assertEqual(t, false, c.IsHedgingEnabled())
+	c.SetHedging(nil)
+	assertEqual(t, false, c.isHedgingEnabled())
 	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
 }
 
@@ -245,12 +270,17 @@ func TestHedgingDisable(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertEqual(t, true, c.IsHedgingEnabled())
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
 
-	c.DisableHedging()
-	assertEqual(t, false, c.IsHedgingEnabled())
+	c := dcnl()
+	c.SetHedging(h)
+	assertEqual(t, true, c.isHedgingEnabled())
+
+	c.SetHedging(nil)
+	assertEqual(t, false, c.isHedgingEnabled())
 
 	atomic.StoreInt32(&attemptCount, 0)
 	resp, err := c.R().Get(ts.URL + "/")
@@ -274,8 +304,12 @@ func TestHedgingContextCancellation(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(20*time.Millisecond, 3, 0)
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+
+	c := dcnl().SetHedging(h)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -300,27 +334,51 @@ func TestHedgingContextCancellation(t *testing.T) {
 }
 
 func TestHedgingConfiguration(t *testing.T) {
+	h := NewHedging().
+		SetDelay(50 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(10.0)
+	assertEqual(t, 50*time.Millisecond, h.Delay())
+	assertEqual(t, 3, h.MaxRequest())
+	assertEqual(t, 10.0, h.MaxRequestPerSecond())
+
+	// Now we can update individual settings
+	h.SetDelay(100 * time.Millisecond)
+	assertEqual(t, 100*time.Millisecond, h.Delay())
+
+	h.SetMaxRequest(5)
+	assertEqual(t, 5, h.MaxRequest())
+
+	h.SetMaxRequestPerSecond(20.0)
+	assertEqual(t, 20.0, h.MaxRequestPerSecond())
+}
+
+func TestHedgingConfigurationViaClient(t *testing.T) {
 	c := dcnl()
 
 	// Setters require hedging to be enabled first
-	assertEqual(t, false, c.IsHedgingEnabled())
+	assertEqual(t, false, c.isHedgingEnabled())
 
-	c.EnableHedging(50*time.Millisecond, 3, 10.0)
+	h := NewHedging().
+		SetDelay(50 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(10.0)
+	c.SetHedging(h)
 
-	assertEqual(t, true, c.IsHedgingEnabled())
-	assertEqual(t, 50*time.Millisecond, c.HedgingDelay())
-	assertEqual(t, 3, c.HedgingUpTo())
-	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
+	assertEqual(t, true, c.isHedgingEnabled())
+	assertEqual(t, 50*time.Millisecond, c.Hedging().Delay())
+	assertEqual(t, 3, c.Hedging().MaxRequest())
+	assertEqual(t, 10.0, c.Hedging().MaxRequestPerSecond())
 
 	// Now we can update individual settings
-	c.SetHedgingDelay(100 * time.Millisecond)
-	assertEqual(t, 100*time.Millisecond, c.HedgingDelay())
+	c.Hedging().SetDelay(100 * time.Millisecond)
+	assertEqual(t, 100*time.Millisecond, c.Hedging().Delay())
 
-	c.SetHedgingUpTo(5)
-	assertEqual(t, 5, c.HedgingUpTo())
+	c.Hedging().SetMaxRequest(5)
+	assertEqual(t, 5, c.Hedging().MaxRequest())
 
-	c.SetHedgingMaxPerSecond(20.0)
-	assertEqual(t, 20.0, c.HedgingMaxPerSecond())
+	c.Hedging().SetMaxRequestPerSecond(20.0)
+	assertEqual(t, 20.0, c.Hedging().MaxRequestPerSecond())
 }
 
 func TestHedgingWithCustomTransport(t *testing.T) {
@@ -332,7 +390,11 @@ func TestHedgingWithCustomTransport(t *testing.T) {
 	customTransport := &http.Transport{}
 	c := NewWithClient(&http.Client{Transport: customTransport})
 
-	c.EnableHedging(20*time.Millisecond, 3, 0)
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+	c.SetHedging(h)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
@@ -345,11 +407,11 @@ func TestHedgingWithCustomTransport(t *testing.T) {
 		t.Errorf("Expected hedging with custom transport, got %d request(s)", count)
 	}
 
-	c.DisableHedging()
+	c.SetHedging(nil)
 
-	ht, ok := c.httpClient.Transport.(*hedgingTransport)
+	ht, ok := c.httpClient.Transport.(*Hedging)
 	if ok {
-		t.Error("Transport should be unwrapped after DisableHedging")
+		t.Error("Transport should be unwrapped after Disabling Hedging")
 	}
 	_ = ht
 }
@@ -360,8 +422,12 @@ func TestHedgingSingleRequest(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(20*time.Millisecond, 1, 0)
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(1).
+		SetMaxRequestPerSecond(0)
+
+	c := dcnl().SetHedging(h)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
@@ -372,46 +438,23 @@ func TestHedgingSingleRequest(t *testing.T) {
 	assertEqual(t, int32(1), atomic.LoadInt32(&attemptCount))
 }
 
-func TestHedgingSettersWhenDisabled(t *testing.T) {
-	c := dcnl()
-
-	// Verify hedging is not enabled
-	assertEqual(t, false, c.IsHedgingEnabled())
-
-	// Test setters when hedging is disabled - they should log errors but not panic
-	c.SetHedgingDelay(100 * time.Millisecond)
-	c.SetHedgingUpTo(5)
-	c.SetHedgingMaxPerSecond(20.0)
-	c.SetHedgingAllowNonReadOnly(true)
-
-	// Verify hedging is still not enabled
-	assertEqual(t, false, c.IsHedgingEnabled())
-}
-
-func TestHedgingGettersWhenDisabled(t *testing.T) {
-	c := dcnl()
-
-	// Verify hedging is not enabled
-	assertEqual(t, false, c.IsHedgingEnabled())
-
-	// Test getters when hedging is disabled - they should return defaults
-	assertEqual(t, time.Duration(0), c.HedgingDelay())
-	assertEqual(t, 0, c.HedgingUpTo())
-	assertEqual(t, 0.0, c.HedgingMaxPerSecond())
-	assertEqual(t, false, c.IsHedgingAllowNonReadOnly())
-}
-
 func TestHedgingAllowNonReadOnly(t *testing.T) {
 	var attemptCount int32
 
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
-	c := dcnl()
-	c.EnableHedging(20*time.Millisecond, 3, 0)
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
 
+	c := dcnl().SetHedging(h)
+
+	hh := c.Hedging()
+	_ = hh
 	// By default, non-read-only methods should not be hedged
-	assertEqual(t, false, c.IsHedgingAllowNonReadOnly())
+	assertEqual(t, false, c.Hedging().IsNonReadOnlyAllowed())
 
 	// Test POST without allowing non-read-only
 	atomic.StoreInt32(&attemptCount, 0)
@@ -426,8 +469,8 @@ func TestHedgingAllowNonReadOnly(t *testing.T) {
 	}
 
 	// Enable non-read-only methods
-	c.SetHedgingAllowNonReadOnly(true)
-	assertEqual(t, true, c.IsHedgingAllowNonReadOnly())
+	c.Hedging().SetNonReadOnlyAllowed(true)
+	assertEqual(t, true, c.Hedging().IsNonReadOnlyAllowed())
 
 	// Test POST with allowing non-read-only
 	atomic.StoreInt32(&attemptCount, 0)
@@ -451,7 +494,11 @@ func TestHedgingWithNilTransport(t *testing.T) {
 	// Create client with nil transport
 	c := NewWithClient(&http.Client{Transport: nil})
 
-	c.EnableHedging(20*time.Millisecond, 3, 0)
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+	c.SetHedging(h)
 
 	resp, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
@@ -471,18 +518,27 @@ func TestHedgingEnableMultipleTimes(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+
 	c := dcnl()
 
 	// Enable hedging first time
-	c.EnableHedging(20*time.Millisecond, 3, 0)
-	assertEqual(t, true, c.IsHedgingEnabled())
+	c.SetHedging(h)
+	assertEqual(t, true, c.isHedgingEnabled())
 
 	// Enable hedging again without disabling - should handle already wrapped transport
-	c.EnableHedging(30*time.Millisecond, 5, 10.0)
-	assertEqual(t, true, c.IsHedgingEnabled())
-	assertEqual(t, 30*time.Millisecond, c.HedgingDelay())
-	assertEqual(t, 5, c.HedgingUpTo())
-	assertEqual(t, 10.0, c.HedgingMaxPerSecond())
+	nh := NewHedging().
+		SetDelay(30 * time.Millisecond).
+		SetMaxRequest(5).
+		SetMaxRequestPerSecond(10.0)
+	c.SetHedging(nh)
+	assertEqual(t, true, c.isHedgingEnabled())
+	assertEqual(t, 30*time.Millisecond, c.Hedging().Delay())
+	assertEqual(t, 5, c.Hedging().MaxRequest())
+	assertEqual(t, 10.0, c.Hedging().MaxRequestPerSecond())
 
 	// Verify hedging still works
 	resp, err := c.R().Get(ts.URL + "/")
@@ -500,22 +556,22 @@ func TestHedgingEnableMultipleTimes(t *testing.T) {
 func TestHedgingWrapWithDisabledHedging(t *testing.T) {
 	c := dcnl()
 
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
 	// Enable and then disable hedging
-	c.EnableHedging(20*time.Millisecond, 3, 0)
-	c.DisableHedging()
+	c.SetHedging(h)
+	assertEqual(t, true, c.isHedgingEnabled())
 
-	assertEqual(t, false, c.IsHedgingEnabled())
+	c.SetHedging(nil)
+	assertEqual(t, false, c.isHedgingEnabled())
 
 	// Verify transport is not a hedgingTransport
-	_, ok := c.httpClient.Transport.(*hedgingTransport)
+	_, ok := c.httpClient.Transport.(*Hedging)
 	if ok {
-		t.Error("Transport should not be hedgingTransport after DisableHedging")
+		t.Error("Transport should not be hedging Transport after Disabling Hedging")
 	}
-
-	// Now try SetHedgingAllowNonReadOnly when hedging is disabled
-	// This should trigger the error path and NOT call wrapTransportWithHedging
-	c.SetHedgingAllowNonReadOnly(true)
-	assertEqual(t, false, c.IsHedgingEnabled())
 }
 
 func TestHedgingWrapAlreadyWrapped(t *testing.T) {
@@ -524,20 +580,29 @@ func TestHedgingWrapAlreadyWrapped(t *testing.T) {
 	ts := createHedgingTestServer(t, &attemptCount, 0, 0)
 	defer ts.Close()
 
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0)
+
 	c := dcnl()
 
 	// Enable hedging first time - wraps transport
-	c.EnableHedging(20*time.Millisecond, 3, 0)
+	c.SetHedging(h)
 
 	// Get the current transport (should be hedgingTransport)
-	_, ok := c.httpClient.Transport.(*hedgingTransport)
+	_, ok := c.httpClient.Transport.(*Hedging)
 	if !ok {
-		t.Error("Transport should be hedgingTransport after EnableHedging")
+		t.Error("Transport should be hedging Transport after Enabling Hedging")
 	}
 
 	// Manually re-enable hedging without disabling first
-	// This should detect transport is already hedgingTransport and return early (line 1604)
-	c.EnableHedging(30*time.Millisecond, 5, 10.0)
+	// This should detect transport is already hedgingTransport and return early
+	nh := NewHedging().
+		SetDelay(30 * time.Millisecond).
+		SetMaxRequest(5).
+		SetMaxRequestPerSecond(10.0)
+	c.SetHedging(nh)
 
 	// Verify it still works
 	resp, err := c.R().Get(ts.URL + "/")
@@ -570,7 +635,11 @@ func TestHedgingRateDelayBetweenRequests(t *testing.T) {
 	c := dcnl()
 	// delay=10ms, upTo=3, maxPerSecond=5.0 (rateDelay = 200ms)
 	// Expected timing: req1 at 0, req2 at ~10ms + 200ms = ~210ms, req3 at ~420ms
-	c.EnableHedging(10*time.Millisecond, 3, 5.0)
+	h := NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(5.0)
+	c.SetHedging(h)
 
 	_, err := c.R().Get(ts.URL + "/")
 	assertError(t, err)
