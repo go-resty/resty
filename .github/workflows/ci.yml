@@ -5,17 +5,17 @@ on:
     branches:
       - v2
     paths-ignore:
-      - '**.md'
-      - '**.bazel'
-      - 'WORKSPACE'
+      - "**.md"
+      - "**.bazel"
+      - "WORKSPACE"
   pull_request:
     branches:
       - main
       - v2
     paths-ignore:
-      - '**.md'
-      - '**.bazel'
-      - 'WORKSPACE'
+      - "**.md"
+      - "**.bazel"
+      - "WORKSPACE"
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -25,8 +25,8 @@ jobs:
     name: Build
     strategy:
       matrix:
-        go: [ 'stable', '1.23.x' ]
-        os: [ ubuntu-latest ]
+        go: ["stable", "1.25.x"]
+        os: [ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
 

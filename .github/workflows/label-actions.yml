@@ -1,19 +1,19 @@
-name: 'Label'
+name: "Label"
 
 on:
   pull_request:
     types: [labeled]
     paths-ignore:
-      - '**.md'
-      - '**.bazel'
-      - 'WORKSPACE'
+      - "**.md"
+      - "**.bazel"
+      - "WORKSPACE"
 
 jobs:
   build:
     strategy:
       matrix:
-        go: [ 'stable', '1.23.x' ]
-        os: [ ubuntu-latest ]
+        go: ["stable", "1.25.x"]
+        os: [ubuntu-latest]
 
     name: Run Build
     if: ${{ github.event.label.name == 'run-build' }}
