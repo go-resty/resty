@@ -131,7 +131,7 @@ func parseRequestURL(c *Client, r *Request) error {
 		}
 
 		if r.client.LoadBalancer() != nil {
-			r.baseURL, err = r.client.LoadBalancer().Next()
+			r.baseURL, err = r.client.LoadBalancer().NextWithContext(r.Context())
 			if err != nil {
 				return &invalidRequestError{Err: err}
 			}

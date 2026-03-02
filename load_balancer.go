@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -15,10 +16,13 @@ import (
 	"time"
 )
 
+// ErrNoBaseURLs error returned when no base URLs are found
+var ErrNoBaseURLs = errors.New("resty: no base URLs found")
+
 // LoadBalancer is the interface that wraps the HTTP client load-balancing
 // algorithm that returns the "Next" Base URL for the request to target
 type LoadBalancer interface {
-	Next() (string, error)
+	NextWithContext(ctx context.Context) (string, error)
 	Feedback(*RequestFeedback)
 	Close() error
 }
@@ -34,6 +38,10 @@ type RequestFeedback struct {
 // NewRoundRobin method creates the new Round-Robin(RR) request load balancer
 // instance with given base URLs
 func NewRoundRobin(baseURLs ...string) (*RoundRobin, error) {
+	if len(baseURLs) == 0 {
+		return nil, ErrNoBaseURLs
+	}
+
 	rr := &RoundRobin{lock: new(sync.Mutex)}
 	if err := rr.Refresh(baseURLs...); err != nil {
 		return rr, err
@@ -51,10 +59,21 @@ type RoundRobin struct {
 	current  int
 }
 
-// Next method returns the next Base URL based on the Round-Robin(RR) algorithm
-func (rr *RoundRobin) Next() (string, error) {
+// NextWithContext method returns the next Base URL based on the Round-Robin(RR) algorithm
+// with context support for cancellation
+func (rr *RoundRobin) NextWithContext(ctx context.Context) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
 	rr.lock.Lock()
 	defer rr.lock.Unlock()
+
+	if len(rr.baseURLs) == 0 {
+		return "", ErrNoBaseURLs
+	}
 
 	baseURL := rr.baseURLs[rr.current]
 	rr.current = (rr.current + 1) % len(rr.baseURLs)
@@ -135,7 +154,7 @@ func NewWeightedRoundRobin(recovery time.Duration, hosts ...*Host) (*WeightedRou
 		recovery = 120 * time.Second // defaults to 120 seconds
 	}
 	wrr := &WeightedRoundRobin{
-		lock:     new(sync.Mutex),
+		lock:     new(sync.RWMutex),
 		hosts:    make([]*Host, 0),
 		tick:     time.NewTicker(recovery),
 		recovery: recovery,
@@ -153,7 +172,7 @@ var _ LoadBalancer = (*WeightedRoundRobin)(nil)
 // WeightedRoundRobin struct used to represent the host details for
 // Weighted Round-Robin(WRR) algorithm implementation
 type WeightedRoundRobin struct {
-	lock          *sync.Mutex
+	lock          *sync.RWMutex
 	hosts         []*Host
 	totalWeight   int
 	tick          *time.Ticker
@@ -165,8 +184,15 @@ type WeightedRoundRobin struct {
 	recovery time.Duration
 }
 
-// Next method returns the next Base URL based on Weighted Round-Robin(WRR)
-func (wrr *WeightedRoundRobin) Next() (string, error) {
+// NextWithContext method returns the next Base URL based on Weighted Round-Robin(WRR)
+// with context support for cancellation
+func (wrr *WeightedRoundRobin) NextWithContext(ctx context.Context) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
 	wrr.lock.Lock()
 	defer wrr.lock.Unlock()
 
@@ -196,6 +222,10 @@ func (wrr *WeightedRoundRobin) Next() (string, error) {
 // Feedback method process the request feedback for Weighted Round-Robin(WRR)
 // request load balancer
 func (wrr *WeightedRoundRobin) Feedback(f *RequestFeedback) {
+	if f == nil {
+		return
+	}
+
 	wrr.lock.Lock()
 	defer wrr.lock.Unlock()
 
@@ -273,7 +303,11 @@ func (wrr *WeightedRoundRobin) SetRecoveryDuration(d time.Duration) {
 func (wrr *WeightedRoundRobin) ticker() {
 	for range wrr.tick.C {
 		wrr.lock.Lock()
-		for _, host := range wrr.hosts {
+		hosts := make([]*Host, len(wrr.hosts))
+		copy(hosts, wrr.hosts)
+		wrr.lock.Unlock()
+
+		for _, host := range hosts {
 			if host.state == HostStateInActive {
 				host.state = HostStateActive
 				host.failedRequests = 0
@@ -283,7 +317,6 @@ func (wrr *WeightedRoundRobin) ticker() {
 				}
 			}
 		}
-		wrr.lock.Unlock()
 	}
 }
 
@@ -334,9 +367,10 @@ type SRVWeightedRoundRobin struct {
 	lookupSRV func() ([]*net.SRV, error)
 }
 
-// Next method returns the next SRV Base URL based on Weighted Round-Robin(RR)
-func (swrr *SRVWeightedRoundRobin) Next() (string, error) {
-	return swrr.wrr.Next()
+// NextWithContext method returns the next SRV Base URL based on Weighted Round-Robin(RR)
+// with context support for cancellation
+func (swrr *SRVWeightedRoundRobin) NextWithContext(ctx context.Context) (string, error) {
+	return swrr.wrr.NextWithContext(ctx)
 }
 
 // Feedback method does nothing in SRV Base URL based on Weighted Round-Robin(WRR)

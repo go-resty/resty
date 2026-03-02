@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -23,8 +24,9 @@ func TestRoundRobin(t *testing.T) {
 
 		runCount := 5
 		var result []string
+		ctx := context.Background()
 		for i := 0; i < runCount; i++ {
-			baseURL, _ := rr.Next()
+			baseURL, _ := rr.NextWithContext(ctx)
 			result = append(result, baseURL)
 		}
 
@@ -49,8 +51,9 @@ func TestRoundRobin(t *testing.T) {
 
 		runCount := 30
 		var result []string
+		ctx := context.Background()
 		for i := 0; i < runCount; i++ {
-			baseURL, _ := rr.Next()
+			baseURL, _ := rr.NextWithContext(ctx)
 			result = append(result, baseURL)
 		}
 
@@ -76,8 +79,9 @@ func TestRoundRobin(t *testing.T) {
 
 		runCount := 5
 		var result []string
+		ctx := context.Background()
 		for i := 0; i < runCount; i++ {
-			baseURL, _ := rr.Next()
+			baseURL, _ := rr.NextWithContext(ctx)
 			result = append(result, baseURL)
 		}
 
@@ -92,6 +96,43 @@ func TestRoundRobin(t *testing.T) {
 
 		rr.Feedback(&RequestFeedback{})
 		rr.Close()
+	})
+
+	t.Run("NextWithContext context cancellation", func(t *testing.T) {
+		rr, _ := NewRoundRobin("https://example.com")
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_, err := rr.NextWithContext(ctx)
+		assertErrorIs(t, context.Canceled, err)
+	})
+
+	t.Run("NextWithContext normal operation", func(t *testing.T) {
+		rr, _ := NewRoundRobin("https://example1.com", "https://example2.com")
+		ctx := context.Background()
+		url1, err := rr.NextWithContext(ctx)
+		assertNil(t, err)
+		url2, err := rr.NextWithContext(ctx)
+		assertNil(t, err)
+		assertNotEqual(t, url1, url2)
+	})
+}
+
+func TestRoundRobinNoBaseURLs(t *testing.T) {
+	t.Run("new round robin no base urls", func(t *testing.T) {
+		rr, err := NewRoundRobin()
+		assertErrorIs(t, ErrNoBaseURLs, err)
+		assertNil(t, rr)
+	})
+
+	t.Run("new round robin no base urls on next with context", func(t *testing.T) {
+		rr, err := NewRoundRobin("https://example1.com")
+		assertNil(t, err)
+		assertNotNil(t, rr)
+
+		rr.Refresh()
+		ctx := context.Background()
+		_, err = rr.NextWithContext(ctx)
+		assertErrorIs(t, ErrNoBaseURLs, err)
 	})
 }
 
@@ -109,8 +150,9 @@ func TestWeightedRoundRobin(t *testing.T) {
 
 		runCount := 5
 		var result []string
+		ctx := context.Background()
 		for i := 0; i < runCount; i++ {
-			baseURL, err := wrr.Next()
+			baseURL, err := wrr.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
 		}
@@ -123,6 +165,8 @@ func TestWeightedRoundRobin(t *testing.T) {
 		assertEqual(t, runCount, len(expected))
 		assertEqual(t, runCount, len(result))
 		assertEqual(t, expected, result)
+
+		wrr.Feedback(nil)
 	})
 
 	t.Run("3 hosts with weight {2,1,10}", func(t *testing.T) {
@@ -143,8 +187,9 @@ func TestWeightedRoundRobin(t *testing.T) {
 
 		runCount := 10
 		var result []string
+		ctx := context.Background()
 		for i := 0; i < runCount; i++ {
-			baseURL, err := wrr.Next()
+			baseURL, err := wrr.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
 			if baseURL == "https://example3.com" && i%2 != 0 {
@@ -184,8 +229,9 @@ func TestWeightedRoundRobin(t *testing.T) {
 
 		runCount := 5
 		var result []string
+		ctx := context.Background()
 		for i := 0; i < runCount; i++ {
-			baseURL, err := wrr.Next()
+			baseURL, err := wrr.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
 		}
@@ -205,8 +251,30 @@ func TestWeightedRoundRobin(t *testing.T) {
 		assertNil(t, err)
 		defer wrr.Close()
 
-		_, err = wrr.Next()
+		_, err = wrr.NextWithContext(context.Background())
 		assertErrorIs(t, ErrNoActiveHost, err)
+	})
+
+	t.Run("NextWithContext context cancellation", func(t *testing.T) {
+		wrr, _ := NewWeightedRoundRobin(0, &Host{BaseURL: "https://example.com", Weight: 1})
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_, err := wrr.NextWithContext(ctx)
+		assertErrorIs(t, context.Canceled, err)
+	})
+
+	t.Run("NextWithContext normal operation", func(t *testing.T) {
+		hosts := []*Host{
+			{BaseURL: "https://example1.com", Weight: 1},
+			{BaseURL: "https://example2.com", Weight: 1},
+		}
+		wrr, _ := NewWeightedRoundRobin(0, hosts...)
+		ctx := context.Background()
+		url1, err := wrr.NextWithContext(ctx)
+		assertNil(t, err)
+		url2, err := wrr.NextWithContext(ctx)
+		assertNil(t, err)
+		assertNotEqual(t, url1, url2)
 	})
 }
 
@@ -233,8 +301,9 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 
 		runCount := 5
 		var result []string
+		ctx := context.Background()
 		for i := 0; i < runCount; i++ {
-			baseURL, err := srv.Next()
+			baseURL, err := srv.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
 		}
@@ -271,8 +340,9 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 
 		runCount := 5
 		var result []string
+		ctx := context.Background()
 		for i := 0; i < runCount; i++ {
-			baseURL, err := srv.Next()
+			baseURL, err := srv.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
 		}
@@ -315,8 +385,9 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 
 		runCount := 20
 		var result []string
+		ctx := context.Background()
 		for i := 0; i < runCount; i++ {
-			baseURL, err := srv.Next()
+			baseURL, err := srv.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
 
@@ -363,7 +434,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 
 		go func() {
 			for i := 0; i < 10; i++ {
-				baseURL, _ := srv.Next()
+				baseURL, _ := srv.NextWithContext(context.Background())
 				assertNotNil(t, baseURL)
 				time.Sleep(15 * time.Millisecond)
 			}
@@ -438,7 +509,7 @@ func TestLoadBalancerRequestFlowError(t *testing.T) {
 		c.SetLoadBalancer(wrr)
 
 		resp, err := c.R().Get("/")
-		assertEqual(t, ErrNoActiveHost, err)
+		assertErrorIs(t, ErrNoActiveHost, err)
 		assertNil(t, resp)
 	})
 
