@@ -672,3 +672,35 @@ func TestHedgingRateDelayBetweenRequests(t *testing.T) {
 		}
 	}
 }
+
+func TestHedgingNoDoubleWrap(t *testing.T) {
+	h1 := NewHedging().SetDelay(50 * time.Millisecond)
+	h2 := NewHedging().SetDelay(100 * time.Millisecond)
+
+	c := dcnl()
+
+	// Enable hedging first time
+	c.SetHedging(h1)
+	_, ok := c.httpClient.Transport.(*Hedging)
+	assertTrue(t, ok, "Hedging transport")
+
+	// Enable different hedging without disabling first
+	c.SetHedging(h2)
+
+	// Both should be Hedging
+	hedging2, ok := c.httpClient.Transport.(*Hedging)
+	assertTrue(t, ok, "Hedging transport")
+
+	// The wrapped transport should NOT be another Hedging
+	_, isHedging := hedging2.transport.(*Hedging)
+	assertFalse(t, isHedging, "Double-wrapped hedging detected - transport should be unwrapped")
+
+	// Verify transport chain depth, should only have one Hedging layer
+	if hedging, ok := c.httpClient.Transport.(*Hedging); ok {
+		_, isHedging := hedging.transport.(*Hedging)
+		assertFalse(t, isHedging, "Double-wrapped hedging detected")
+	}
+
+	// Verify the configuration is the new one
+	assertEqual(t, hedging2.Delay(), 100*time.Millisecond, "Expected 100ms delay")
+}

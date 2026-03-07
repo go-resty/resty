@@ -1485,6 +1485,12 @@ func (c *Client) SetHedging(h *Hedging) *Client {
 		currentTransport = createTransport(nil, nil)
 	}
 
+	// If current transport is already a Hedging instance, unwrap it
+	// to avoid double-wrapping (e.g., when SetHedging is called multiple times)
+	if hedging, ok := currentTransport.(*Hedging); ok {
+		currentTransport = hedging.transport
+	}
+
 	// Disable retry by default when hedging is enabled.
 	// Users can re-enable retry if they want it as a fallback mechanism.
 	if c.retryCount > 0 {
