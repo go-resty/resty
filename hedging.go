@@ -166,7 +166,30 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	ctx := req.Context()
-	hedgeCtx, cancel := context.WithCancel(ctx)
+	deadline, hasDeadline := ctx.Deadline()
+
+	// Derive hedgeCtx from the original request context to respect cancellations
+	var (
+		hedgeCtx context.Context
+		cancel   context.CancelFunc
+	)
+	if hasDeadline {
+		// Use original deadline for the race (first to complete wins)
+		remaining := time.Until(deadline)
+		if remaining > 0 {
+			hedgeCtx, cancel = context.WithTimeout(ctx, remaining)
+		} else {
+			// Deadline already expired, use context with cancel
+			hedgeCtx, cancel = context.WithCancel(ctx)
+		}
+	} else {
+		// No deadline in original context, create cancellable context from it
+		hedgeCtx, cancel = context.WithCancel(ctx)
+	}
+
+	// defer cancel() ensures cleanup on all paths (timeout, cancellation, or normal return)
+	// cancel() may also be called inside once.Do() when a request wins, but calling it
+	// multiple times is safe and ensures the context is canceled as soon as any goroutine completes
 	defer cancel()
 
 	type result struct {
@@ -174,14 +197,20 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 		err  error
 	}
 
-	resultCh := make(chan result, ht.MaxRequest())
+	ht.lock.RLock()
+	maxReq := ht.maxRequest
+	delay := ht.delay
+	rateDelay := ht.rateDelay
+	ht.lock.RUnlock()
+
+	resultCh := make(chan result, maxReq)
 	var once sync.Once
 
-	for i := 0; i < ht.MaxRequest(); i++ {
+	for i := range maxReq {
 		if i > 0 {
-			if ht.Delay() > 0 {
+			if delay > 0 {
 				select {
-				case <-time.After(ht.Delay()):
+				case <-time.After(delay):
 				case <-hedgeCtx.Done():
 					break
 				}
@@ -189,9 +218,6 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 
 			// Rate limiting: add delay between requests based on maxPerSecond
 			// to prevent overwhelming the server.
-			ht.lock.RLock()
-			rateDelay := ht.rateDelay
-			ht.lock.RUnlock()
 			if rateDelay > 0 {
 				select {
 				case <-time.After(rateDelay):
@@ -202,13 +228,16 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		go func() {
-			hedgedReq := req.Clone(ctx)
+			hedgedReq := req.Clone(hedgeCtx)
 			resp, err := ht.transport.RoundTrip(hedgedReq)
 
 			won := false
 			once.Do(func() {
 				won = true
 				resultCh <- result{resp: resp, err: err}
+
+				// Cancel inside once.Do() to stop other goroutines immediately when a request wins
+				// defer cancel() ensures cleanup even if no request completes successfully
 				cancel()
 			})
 
