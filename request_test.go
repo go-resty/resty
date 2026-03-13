@@ -2657,3 +2657,12 @@ func TestRequestDataRace(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestRequestSetLabel(t *testing.T) {
+	c := New()
+	r := c.R().
+		SetLabel("AddUser")
+
+	assertEqual(t, "AddUser", r.Label)
+}
+

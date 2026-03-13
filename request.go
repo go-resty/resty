@@ -73,6 +73,7 @@ type Request struct {
 	RetryDelayStrategy           RetryDelayStrategyFunc
 	IsRetryDefaultConditions     bool
 	IsRetryAllowNonIdempotent    bool
+	Label                        string
 
 	// Attempt provides insights into no. of attempts
 	// Resty made.
@@ -1291,6 +1292,18 @@ func (r *Request) SetMethodGetAllowPayload(allow bool) *Request {
 // It overrides the option set by the [Client.SetMethodDeleteAllowPayload]
 func (r *Request) SetMethodDeleteAllowPayload(allow bool) *Request {
 	r.IsMethodDeleteAllowPayload = allow
+	return r
+}
+
+// SetLabel method sets the label for the request, which can be used for logging and debugging purposes.
+// By default, the label is empty.
+//
+//  client.R().SetLabel("GetUserDetails").Get("/users/12345")
+//
+// In Response middlewares, you can access the label using [Response.Request.Label]
+// Then log the label along with time duration and method to get better insights into the request lifecycle.
+func (r *Request) SetLabel(label string) *Request {
+	r.Label = label
 	return r
 }
 
