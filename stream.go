@@ -106,52 +106,169 @@ func decodeXML(r io.Reader, v any) error {
 	return nil
 }
 
-var gzipPool = sync.Pool{New: func() any { return new(gzip.Reader) }}
+// gzipReaderPool pools actual *gzip.Reader objects for reuse via Reset().
+// This avoids the allocation cost of gzip.NewReader for each decompression.
+// Thread-safety is ensured by the gzipReaderWrapper's mutex which guards access.
+var gzipReaderPool = sync.Pool{
+	New: func() any {
+		// Return nil; let's create reader on first use or get them from pool
+		return nil
+	},
+}
+
+// gzipReaderWrapper wraps a pooled gzip.Reader with a mutex for safe concurrent access.
+// The mutex ensures exclusive access to the reader during Read() and state transitions.
+type gzipReaderWrapper struct {
+	mu *sync.Mutex
+	r  io.ReadCloser
+	gr *gzip.Reader
+}
+
+// acquireGzipReader gets a gzip.Reader from the pool or creates one.
+// It resets the reader for the new stream using the provided io.ReadCloser.
+func acquireGzipReader(r io.ReadCloser) (*gzipReaderWrapper, error) {
+	w := &gzipReaderWrapper{
+		mu: new(sync.Mutex),
+		r:  r,
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Try to get a cached reader from the pool
+	if cached := gzipReaderPool.Get(); cached != nil {
+		w.gr = cached.(*gzip.Reader)
+		// Reset the pooled reader for the new stream
+		if err := w.gr.Reset(r); err != nil {
+			gzipReaderPool.Put(w.gr) // Return to pool on reset error
+			return nil, err
+		}
+	} else {
+		// Pool is empty, create a new reader
+		gr, err := gzip.NewReader(r)
+		if err != nil {
+			return nil, err
+		}
+		w.gr = gr
+	}
+
+	return w, nil
+}
+
+// releaseGzipReader returns the gzip reader to the pool for reuse,
+// and closes the underlying source.
+func releaseGzipReader(w *gzipReaderWrapper) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.gr != nil {
+		gzipReaderPool.Put(w.gr)
+		w.gr = nil
+	}
+	if w.r != nil {
+		closeq(w.r)
+		w.r = nil
+	}
+}
 
 func decompressGzip(r io.ReadCloser) (io.ReadCloser, error) {
-	gr := gzipPool.Get().(*gzip.Reader)
-	err := gr.Reset(r)
-	return &gzipReader{s: r, r: gr}, err
+	return acquireGzipReader(r)
 }
 
-type gzipReader struct {
-	s io.ReadCloser
-	r *gzip.Reader
+// Implement io.ReadCloser for gzipReaderWrapper
+func (w *gzipReaderWrapper) Read(p []byte) (n int, err error) {
+	// Hold the lock during Read to ensure exclusive access to the gzip reader
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.gr == nil {
+		return 0, io.EOF
+	}
+	return w.gr.Read(p)
 }
 
-func (gz *gzipReader) Read(p []byte) (n int, err error) {
-	return gz.r.Read(p)
-}
-
-func (gz *gzipReader) Close() error {
-	// TODO investigate sync.Pool usage safety with gzip.Reader reference GH-#1087
-	// gz.r.Reset(nopReader{})
-	// gzipPool.Put(gz.r)
-	closeq(gz.s)
+func (w *gzipReaderWrapper) Close() error {
+	releaseGzipReader(w)
 	return nil
 }
 
-var flatePool = sync.Pool{New: func() any { return flate.NewReader(nopReader{}) }}
+// flateReaderPool pools io.ReadCloser (flate.Reader) objects for reuse via Reset().
+// This avoids the allocation cost of flate.NewReader for each decompression.
+// Thread-safety is ensured by the deflateReaderWrapper's mutex which guards access.
+var flateReaderPool = sync.Pool{
+	New: func() any {
+		// Return nil; let's create reader on first use or get them from pool
+		return nil
+	},
+}
+
+// deflateReaderWrapper wraps a pooled flate.Reader with a mutex for safe concurrent access.
+// The mutex ensures exclusive access to the reader during Read() and state transitions.
+type deflateReaderWrapper struct {
+	mu *sync.Mutex
+	r  io.ReadCloser
+	fr io.ReadCloser
+}
+
+// acquireDeflateReader gets a flate.Reader from the pool or creates one.
+// It resets the reader for the new stream using the provided io.ReadCloser.
+func acquireDeflateReader(r io.ReadCloser) (*deflateReaderWrapper, error) {
+	w := &deflateReaderWrapper{
+		mu: new(sync.Mutex),
+		r:  r,
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Try to get a cached reader from the pool
+	if cached := flateReaderPool.Get(); cached != nil {
+		w.fr = cached.(io.ReadCloser)
+		// Reset the pooled reader for the new stream; flate.Resetter.Reset never errors
+		w.fr.(flate.Resetter).Reset(r, nil)
+	} else {
+		// Pool is empty, create a new reader
+		w.fr = flate.NewReader(r)
+	}
+
+	return w, nil
+}
+
+// releaseDeflateReader returns the flate reader to the pool for reuse,
+// and closes the underlying source.
+func releaseDeflateReader(w *deflateReaderWrapper) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.fr != nil {
+		w.fr.(flate.Resetter).Reset(nopReader{}, nil)
+		flateReaderPool.Put(w.fr)
+		w.fr = nil
+	}
+	if w.r != nil {
+		closeq(w.r)
+		w.r = nil
+	}
+}
 
 func decompressDeflate(r io.ReadCloser) (io.ReadCloser, error) {
-	fr := flatePool.Get().(io.ReadCloser)
-	err := fr.(flate.Resetter).Reset(r, nil)
-	return &deflateReader{s: r, r: fr}, err
+	return acquireDeflateReader(r)
 }
 
-type deflateReader struct {
-	s io.ReadCloser
-	r io.ReadCloser
+// Implement io.ReadCloser for deflateReaderWrapper
+func (w *deflateReaderWrapper) Read(p []byte) (n int, err error) {
+	// Hold the lock during Read to ensure exclusive access to the flate reader
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.fr == nil {
+		return 0, io.EOF
+	}
+	return w.fr.Read(p)
 }
 
-func (d *deflateReader) Read(p []byte) (n int, err error) {
-	return d.r.Read(p)
-}
-
-func (d *deflateReader) Close() error {
-	d.r.(flate.Resetter).Reset(nopReader{}, nil)
-	flatePool.Put(d.r)
-	closeq(d.s)
+func (w *deflateReaderWrapper) Close() error {
+	releaseDeflateReader(w)
 	return nil
 }
 
