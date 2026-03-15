@@ -71,7 +71,7 @@ type (
 		url              string
 		method           string
 		header           http.Header
-		body             io.Reader
+		bodyBytes        []byte
 		lastEventID      string
 		retryCount       int
 		retryWaitTime    time.Duration
@@ -161,7 +161,21 @@ func (sse *SSESource) SetHeader(header, value string) *SSESource {
 // Example:
 // sse.SetBody(bytes.NewReader([]byte(`{"test":"put_data"}`)))
 func (sse *SSESource) SetBody(body io.Reader) *SSESource {
-	sse.body = body
+	sse.lock.Lock()
+	defer sse.lock.Unlock()
+	if body == nil {
+		sse.bodyBytes = nil
+		return sse
+	}
+
+	sse.bodyBytes = nil
+	bodyBytes, err := ioReadAll(body)
+	if err != nil {
+		sse.log.Errorf("resty:sse: unable to read body, error: %v", err)
+		return sse
+	}
+
+	sse.bodyBytes = bodyBytes
 	return sse
 }
 
@@ -530,7 +544,13 @@ func (sse *SSESource) triggerOnRequestFailure(err error, res *http.Response) {
 }
 
 func (sse *SSESource) createRequest() (*http.Request, error) {
-	req, err := http.NewRequest(sse.method, sse.url, sse.body)
+	var reqBody io.Reader
+	if sse.bodyBytes != nil {
+		// create reader from bytes on each request
+		reqBody = bytes.NewReader(sse.bodyBytes)
+	}
+
+	req, err := http.NewRequest(sse.method, sse.url, reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -571,6 +591,7 @@ func (sse *SSESource) connect() (*http.Response, error) {
 
 		resp, doErr := sse.httpClient.Do(req)
 		if resp != nil && resp.StatusCode == http.StatusOK {
+			// successful connection, return response to listenStream
 			return resp, nil
 		}
 
