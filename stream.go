@@ -86,7 +86,7 @@ func decodeJSON(r io.Reader, v any) error {
 }
 
 func doDecodeJSON(dec *json.Decoder, v any) error {
-	// Decode all JSON objects in the data
+	// for range starts from 0, similar to for loop; iterates exactly maxDecodeObjects times
 	for range maxDecodeObjects {
 		if err := dec.Decode(v); err != nil {
 			if err == io.EOF {
@@ -94,6 +94,13 @@ func doDecodeJSON(dec *json.Decoder, v any) error {
 			}
 			return err
 		}
+	}
+	// One extra decode to detect EOF when the input has exactly maxDecodeObjects objects
+	if err := dec.Decode(v); err != nil {
+		if err == io.EOF {
+			return nil
+		}
+		return err
 	}
 	return fmt.Errorf("resty: JSON decode exceeded %d objects without EOF", maxDecodeObjects)
 }
@@ -104,6 +111,7 @@ func encodeXML(w io.Writer, v any) error {
 
 func decodeXML(r io.Reader, v any) error {
 	dec := xml.NewDecoder(r)
+	// for range starts from 0, similar to for loop; iterates exactly maxDecodeObjects times
 	for range maxDecodeObjects {
 		if err := dec.Decode(v); err != nil {
 			if err == io.EOF {
@@ -111,6 +119,13 @@ func decodeXML(r io.Reader, v any) error {
 			}
 			return err
 		}
+	}
+	// One extra decode to detect EOF when the input has exactly maxDecodeObjects objects
+	if err := dec.Decode(v); err != nil {
+		if err == io.EOF {
+			return nil
+		}
+		return err
 	}
 	return fmt.Errorf("resty: XML decode exceeded %d objects without EOF", maxDecodeObjects)
 }
