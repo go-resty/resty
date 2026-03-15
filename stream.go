@@ -13,12 +13,21 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 )
 
 var (
 	ErrContentDecompresserNotFound = errors.New("resty: content decoder not found")
+
+	// It's good to have decode limit; let's start with object size
+	// limit as 1M objects, which should be more than enough for most
+	// use cases if users need more, they can always implement their
+	// own decoder and set it in Client.SetContentDecoder
+	//
+	// Max 1 million objects, +1 to detect if we exceed the limit without EOF
+	maxDecodeObjects = 1000001
 )
 
 type (
@@ -80,14 +89,15 @@ func decodeJSON(r io.Reader, v any) error {
 
 func doDecodeJSON(dec *json.Decoder, v any) error {
 	// Decode all JSON objects in the data
-	for {
-		if err := dec.Decode(v); err == io.EOF {
-			break
-		} else if err != nil {
+	for range maxDecodeObjects {
+		if err := dec.Decode(v); err != nil {
+			if err == io.EOF {
+				return nil
+			}
 			return err
 		}
 	}
-	return nil
+	return fmt.Errorf("resty: JSON decode exceeded %d objects without EOF", maxDecodeObjects)
 }
 
 func encodeXML(w io.Writer, v any) error {
@@ -96,14 +106,15 @@ func encodeXML(w io.Writer, v any) error {
 
 func decodeXML(r io.Reader, v any) error {
 	dec := xml.NewDecoder(r)
-	for {
-		if err := dec.Decode(v); err == io.EOF {
-			break
-		} else if err != nil {
+	for range maxDecodeObjects {
+		if err := dec.Decode(v); err != nil {
+			if err == io.EOF {
+				return nil
+			}
 			return err
 		}
 	}
-	return nil
+	return fmt.Errorf("resty: XML decode exceeded %d objects without EOF", maxDecodeObjects)
 }
 
 // gzipReaderPool pools actual *gzip.Reader objects for reuse via Reset().
@@ -162,6 +173,7 @@ func releaseGzipReader(w *gzipReaderWrapper) {
 	defer w.mu.Unlock()
 
 	if w.gr != nil {
+		w.gr.Reset(nopReader{}) // clear reference to the closed source before pooling
 		gzipReaderPool.Put(w.gr)
 		w.gr = nil
 	}
@@ -272,37 +284,57 @@ func (w *deflateReaderWrapper) Close() error {
 	return nil
 }
 
+// ErrReadExceedsThresholdLimit is returned when the read operation exceeds the defined threshold limit.
 var ErrReadExceedsThresholdLimit = errors.New("resty: read exceeds the threshold limit")
 
 var _ io.ReadCloser = (*limitReadCloser)(nil)
+var _ resetter = (*limitReadCloser)(nil)
+
+// resetter is an interface that defines a Reset method for resetting the reader state.
+type resetter interface {
+	Reset() error
+}
+
+const unlimitedRead = 0
 
 type limitReadCloser struct {
 	r io.Reader
-	l int64
-	t int64
+	l int64 // Limit (0 or <0 - unlimited, >0 limit)
+	t int64 // Total bytes read
 	f func(s int64)
 }
 
 func (l *limitReadCloser) Read(p []byte) (n int, err error) {
-	if l.l == 0 {
+	switch {
+	case l.l <= unlimitedRead:
+		n, err = l.r.Read(p)
+		l.t += int64(n)
+		l.f(l.t)
+		return n, err
+	default:
+		remaining := l.l - l.t
+		if remaining <= 0 {
+			return 0, ErrReadExceedsThresholdLimit
+		}
+		if remaining < int64(len(p)) {
+			p = p[:remaining]
+		}
 		n, err = l.r.Read(p)
 		l.t += int64(n)
 		l.f(l.t)
 		return n, err
 	}
-	if l.t > l.l {
-		return 0, ErrReadExceedsThresholdLimit
-	}
-	n, err = l.r.Read(p)
-	l.t += int64(n)
-	l.f(l.t)
-	return n, err
 }
 
 func (l *limitReadCloser) Close() error {
 	if c, ok := l.r.(io.Closer); ok {
 		return c.Close()
 	}
+	return nil
+}
+
+func (l *limitReadCloser) Reset() error {
+	l.t = 0 // Reset total bytes read to zero
 	return nil
 }
 
@@ -339,14 +371,14 @@ func (r *copyReadCloser) Close() error {
 var _ io.ReadCloser = (*nopReadCloser)(nil)
 
 type nopReadCloser struct {
-	r          *bytes.Reader
+	r          io.Reader
 	resetOnEOF bool // Whether to reset on EOF
 }
 
 func (r *nopReadCloser) Read(p []byte) (int, error) {
 	n, err := r.r.Read(p)
 	if err == io.EOF && r.resetOnEOF {
-		r.r.Seek(0, io.SeekStart)
+		r.Reset()
 	}
 	return n, err
 }
@@ -355,7 +387,15 @@ func (r *nopReadCloser) Close() error { return nil }
 
 // Reset allows manual reset of the reader position
 func (r *nopReadCloser) Reset() {
-	r.r.Seek(0, io.SeekStart)
+	// If the underlying reader supports seeking, reset to the beginning
+	if seeker, ok := r.r.(io.Seeker); ok {
+		seeker.Seek(0, io.SeekStart)
+	}
+
+	// Also try to reset underlying layer
+	if ur, ok := r.r.(resetter); ok {
+		_ = ur.Reset()
+	}
 }
 
 var _ flate.Reader = (*nopReader)(nil)

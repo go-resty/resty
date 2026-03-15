@@ -48,31 +48,79 @@ func TestGetMethodWhenResponseIsNull(t *testing.T) {
 }
 
 func TestDecodeJSON(t *testing.T) {
-	// Test single object
-	jsonData := `{"name": "John", "age": 30}`
-	reader := bytes.NewReader([]byte(jsonData))
-	var result map[string]any
-	err := decodeJSON(reader, &result)
-	assertNil(t, err)
-	assertEqual(t, "John", result["name"])
-	assertEqual(t, float64(30), result["age"])
+	t.Run("single object", func(t *testing.T) {
+		jsonData := `{"name": "John", "age": 30}`
+		reader := bytes.NewReader([]byte(jsonData))
+		var result map[string]any
+		err := decodeJSON(reader, &result)
+		assertNil(t, err)
+		assertEqual(t, "John", result["name"])
+		assertEqual(t, float64(30), result["age"])
+	})
 
-	// Test multiple objects - should get the last one
-	multipleJSON := `{"id": 1}
+	t.Run("multiple objects", func(t *testing.T) {
+		multipleJSON := `{"id": 1}
 {"id": 2}
 {"id": 3}`
-	reader2 := bytes.NewReader([]byte(multipleJSON))
-	var result2 map[string]any
-	err = decodeJSON(reader2, &result2)
-	assertNil(t, err)
-	assertEqual(t, float64(3), result2["id"])
+		reader2 := bytes.NewReader([]byte(multipleJSON))
+		var result2 map[string]any
+		err := decodeJSON(reader2, &result2)
+		assertNil(t, err)
+		assertEqual(t, float64(3), result2["id"])
+	})
 
-	// Test malformed JSON
-	malformedJSON := `{"name": "John", "age":}`
-	reader3 := bytes.NewReader([]byte(malformedJSON))
-	var result3 map[string]any
-	err = decodeJSON(reader3, &result3)
-	assertNotNil(t, err)
+	t.Run("list of objects", func(t *testing.T) {
+		multipleJSON := `[{"id": 1},
+{"id": 2},
+{"id": 3}]`
+		reader2 := bytes.NewReader([]byte(multipleJSON))
+		var result2 []map[string]any
+		err := decodeJSON(reader2, &result2)
+		assertNil(t, err)
+		assertEqual(t, float64(3), result2[2]["id"])
+	})
+
+	t.Run("malformed JSON", func(t *testing.T) {
+		malformedJSON := `{"name": "John", "age":}`
+		reader3 := bytes.NewReader([]byte(malformedJSON))
+		var result3 map[string]any
+		err := decodeJSON(reader3, &result3)
+		assertNotNil(t, err)
+	})
+
+	t.Run("empty body", func(t *testing.T) {
+		emptyJSON := ``
+		reader4 := bytes.NewReader([]byte(emptyJSON))
+		var result4 map[string]any
+		err := decodeJSON(reader4, &result4)
+		assertNil(t, err)
+	})
+
+	t.Run("exceeds maxDecodeObjects limit", func(t *testing.T) {
+		preMaxDecodeObjects := maxDecodeObjects
+		maxDecodeObjects = 51 // Set a lower limit for testing
+		t.Cleanup(func() {
+			maxDecodeObjects = preMaxDecodeObjects // Reset to original value after test
+		})
+
+		// Build a reader that returns maxDecodeObjects+1 objects without EOF
+		// by using a custom reader that signals no EOF until asked enough times.
+		// Simplest approach: patch the limit via the loop by creating a reader
+		// backed by a sufficient number of elements. We instead test the boundary
+		// by constructing exactly that many elements with a streaming reader
+		// built from io.MultiReader.
+		elem := []byte(`{"key": "value"}`)
+		readers := make([]io.Reader, maxDecodeObjects+1)
+		for i := range readers {
+			readers[i] = bytes.NewReader(elem)
+		}
+		r := io.MultiReader(readers...)
+
+		var v map[string]any
+		err := decodeJSON(r, &v)
+		assertNotNil(t, err)
+		assertEqual(t, "resty: JSON decode exceeded 51 objects without EOF", err.Error())
+	})
 }
 
 func TestWrapCopyReadCloser(t *testing.T) {
@@ -251,7 +299,7 @@ func TestGzipReaderAcquireAndResetError(t *testing.T) {
 		assertTrue(t, strings.Contains(err.Error(), "gzip") ||
 			strings.Contains(err.Error(), "header") ||
 			strings.Contains(err.Error(), "invalid"),
-			"expected gzip-related error, got: %v", err.Error())
+			"expected gzip-related error, got: "+err.Error())
 	})
 
 	t.Run("reset error", func(t *testing.T) {
@@ -266,8 +314,7 @@ func TestGzipReaderAcquireAndResetError(t *testing.T) {
 
 		errorReader := &brokenReadCloser{}
 
-		// Now acquire again with invalid data to trigger Reset error
-		// invalidData := io.NopCloser(bytes.NewReader([]byte("not gzip data")))
+		// Now acquire again with a broken reader to trigger Reset error on pool-hit path
 		wrapper2, err := acquireGzipReader(errorReader)
 		assertNotNil(t, err)
 		assertNil(t, wrapper2)
@@ -474,4 +521,93 @@ func TestDeflateReaderPoolConcurrentAccess(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestLimitCloserResetterInterface(t *testing.T) {
+	testStr := "This is limit reset test"
+	testStrLen := int64(len(testStr))
+	r := bytes.NewReader([]byte(testStr))
+	lc := &limitReadCloser{
+		r: r,
+		l: testStrLen,
+		f: func(total int64) {},
+	}
+	assertEqual(t, testStrLen, lc.l)
+
+	rc := nopReadCloser{r: lc, resetOnEOF: true}
+	rc.Read(make([]byte, 25)) // read to reach total size
+	assertEqual(t, testStrLen, lc.l)
+	assertEqual(t, testStrLen, lc.t)
+
+	rc.Reset() // reset should change the total to 0
+	assertEqual(t, int64(0), lc.t)
+}
+
+func TestDecodeXML(t *testing.T) {
+	type Item struct {
+		Name string `xml:"name"`
+	}
+
+	t.Run("single object", func(t *testing.T) {
+		data := `<Item><name>foo</name></Item>`
+		var v Item
+		err := decodeXML(bytes.NewReader([]byte(data)), &v)
+		assertNil(t, err)
+		assertEqual(t, "foo", v.Name)
+	})
+
+	t.Run("multiple objects - last one wins", func(t *testing.T) {
+		data := `<Item><name>first</name></Item><Item><name>last</name></Item>`
+		var v Item
+		err := decodeXML(bytes.NewReader([]byte(data)), &v)
+		assertNil(t, err)
+		assertEqual(t, "last", v.Name)
+	})
+
+	t.Run("malformed XML returns error", func(t *testing.T) {
+		data := `<Item><name>broken</name>`
+		var v Item
+		err := decodeXML(bytes.NewReader([]byte(data)), &v)
+		assertNotNil(t, err)
+	})
+
+	t.Run("exceeds maxDecodeObjects limit", func(t *testing.T) {
+		preMaxDecodeObjects := maxDecodeObjects
+		maxDecodeObjects = 51 // Set a lower limit for testing
+		t.Cleanup(func() {
+			maxDecodeObjects = preMaxDecodeObjects // Reset to original value after test
+		})
+
+		// Build a reader that returns maxDecodeObjects+1 objects without EOF
+		// by using a custom reader that signals no EOF until asked enough times.
+		// Simplest approach: patch the limit via the loop by creating a reader
+		// backed by a sufficient number of elements. We instead test the boundary
+		// by constructing exactly that many elements with a streaming reader
+		// built from io.MultiReader.
+		elem := []byte(`<Item><name>x</name></Item>`)
+		readers := make([]io.Reader, maxDecodeObjects+1)
+		for i := range readers {
+			readers[i] = bytes.NewReader(elem)
+		}
+		r := io.MultiReader(readers...)
+
+		var v Item
+		err := decodeXML(r, &v)
+		assertNotNil(t, err)
+		assertEqual(t, "resty: XML decode exceeded 51 objects without EOF", err.Error())
+	})
+}
+
+func TestStreamMisc(t *testing.T) {
+	t.Run("wrapper gzip reader is nil", func(t *testing.T) {
+		// Simulate a scenario where gzip.NewReader returns a wrapper with nil gr
+		// due to an error, and ensure that Read on the wrapper does not panic
+		// and returns an appropriate error instead.
+		gzipReader := &gzipReaderWrapper{mu: new(sync.Mutex)}
+		n, err := gzipReader.Read(make([]byte, 5))
+		assertNotNil(t, err)
+		assertErrorIs(t, io.EOF, err)
+		assertEqual(t, 0, n)
+
+	})
 }

@@ -1420,7 +1420,7 @@ func TestResponseBodyLimit(t *testing.T) {
 		resp, err := c.R().Get(ts.URL + "/")
 		assertNotNil(t, err)
 		assertErrorIs(t, ErrReadExceedsThresholdLimit, err)
-		assertTrue(t, resp.Size() > resBodyLimit)
+		assertTrue(t, resp.Size() == resBodyLimit)
 	})
 
 	t.Run("request body limit", func(t *testing.T) {
@@ -1430,7 +1430,7 @@ func TestResponseBodyLimit(t *testing.T) {
 		resp, err := c.R().SetResponseBodyLimit(resBodyLimit).Get(ts.URL + "/")
 		assertNotNil(t, err)
 		assertErrorIs(t, ErrReadExceedsThresholdLimit, err)
-		assertTrue(t, resp.Size() > resBodyLimit)
+		assertTrue(t, resp.Size() == resBodyLimit)
 	})
 
 	t.Run("body less than limit", func(t *testing.T) {
