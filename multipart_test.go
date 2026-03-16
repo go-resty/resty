@@ -719,7 +719,7 @@ func TestMultipartCornerCoverage(t *testing.T) {
 		Reader: bytes.NewBufferString("I have no seek capability"),
 	}
 	err := mf.resetReader()
-	assertNil(t, err)
+	assertEqual(t, ErrReaderNotSeekable, err)
 
 	mf = &MultipartField{
 		Name:   "foo",
@@ -941,5 +941,31 @@ func TestStringReaderFactoryLen(t *testing.T) {
 	factory := NewStringReaderFactory(content)
 
 	assertEqual(t, int64(len(content)), factory.Len())
+}
+
+func TestRetryNonSeekableReaderWithoutFactoryReturnsError(t *testing.T) {
+	attemptCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attemptCount++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	client := dcnl()
+	_, err := client.R().
+		SetRetryCount(2).
+		SetRetryWaitTime(10 * time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		SetMultipartFields(&MultipartField{
+			Name:        "file",
+			FileName:    "test.txt",
+			ContentType: "text/plain",
+			Reader:      bytes.NewBufferString("non-seekable"),
+		}).
+		Post(srv.URL)
+
+	assertErrorIs(t, ErrReaderNotSeekable, err)
+	assertEqual(t, 1, attemptCount)
 }
 

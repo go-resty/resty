@@ -7,6 +7,7 @@ package resty
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,15 @@ import (
 )
 
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+// ErrReaderNotSeekable is returned when a multipart field reader
+// does not implement [io.ReadSeeker] and no [ReaderFactory] is provided.
+// This prevents silent data corruption during retry attempts where a
+// consumed [io.Reader] would produce an empty or truncated body.
+var ErrReaderNotSeekable = errors.New(
+	"resty: multipart reader is not seekable and no factory provided; " +
+		"use resty.NewMultipartFieldFromFactory for retry support with non-seekable readers",
+)
 
 // ReaderFactory is an interface for creating fresh [io.Reader] instances
 // per retry attempt. This is useful for non-seekable readers (cipher streams,
@@ -124,7 +134,7 @@ func (mf *MultipartField) resetReader() error {
 		return err
 	}
 
-	return nil
+	return ErrReaderNotSeekable
 }
 
 func (mf *MultipartField) isValues() bool {
