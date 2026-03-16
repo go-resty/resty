@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,21 @@ import (
 )
 
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+// ReaderFactory is an interface for creating fresh [io.Reader] instances
+// per retry attempt. This is useful for non-seekable readers (cipher streams,
+// network pipes, etc.) that cannot be reset via [io.ReadSeeker].
+//
+// See [NewMultipartFieldFromFactory], [BytesReaderFactory], [StringReaderFactory].
+type ReaderFactory interface {
+	NewReader() io.Reader
+}
+
+// LenReaderFactory is an optional interface that ReaderFactory implementations
+// can implement to provide content length.
+type LenReaderFactory interface {
+	Len() int64
+}
 
 func escapeQuotes(s string) string {
 	return quoteEscaper.Replace(s)
@@ -60,6 +76,12 @@ type MultipartField struct {
 	// It is primarily added for ordered multipart form-data field use cases
 	Values []string
 
+	// Factory is used to create a fresh io.Reader for each retry attempt.
+	// This is required for non-seekable readers (e.g., cipher streams, network pipes).
+	// When Factory is set, Reader is ignored and Factory.NewReader() is called
+	// for each retry attempt.
+	Factory ReaderFactory
+
 	// tempBuf is used to preserve the byte(s) read from the file to detect the content type.
 	// Or any possible read error early.
 	tempBuf []byte
@@ -72,11 +94,36 @@ func (mf *MultipartField) Clone() *MultipartField {
 	return mf2
 }
 
+// NewMultipartFieldFromFactory creates a [MultipartField] with a [ReaderFactory]
+// for retry support with non-seekable readers.
+//
+// When Factory is set, [ReaderFactory.NewReader] is called to obtain a fresh
+// [io.Reader] for each attempt (initial + retries).
+func NewMultipartFieldFromFactory(name, fileName, contentType string, factory ReaderFactory) *MultipartField {
+	return &MultipartField{
+		Name:        name,
+		FileName:    fileName,
+		ContentType: contentType,
+		Factory:     factory,
+	}
+}
+
 func (mf *MultipartField) resetReader() error {
+	if mf.Factory != nil {
+		mf.close()
+		mf.Reader = mf.Factory.NewReader()
+		return nil
+	}
+
+	if mf.Reader == nil {
+		return nil
+	}
+
 	if rs, ok := mf.Reader.(io.ReadSeeker); ok {
 		_, err := rs.Seek(0, io.SeekStart)
 		return err
 	}
+
 	return nil
 }
 
@@ -193,4 +240,38 @@ func (mpw *multipartProgressWriter) Write(p []byte) (n int, err error) {
 	mpw.pb += int64(n)
 	mpw.f(mpw.pb)
 	return
+}
+
+type BytesReaderFactory struct {
+	data []byte
+}
+
+// NewBytesReaderFactory creates a BytesReaderFactory from a byte slice.
+func NewBytesReaderFactory(data []byte) *BytesReaderFactory {
+	return &BytesReaderFactory{data: data}
+}
+
+func (f *BytesReaderFactory) NewReader() io.Reader {
+	return bytes.NewReader(f.data)
+}
+
+func (f *BytesReaderFactory) Len() int64 {
+	return int64(len(f.data))
+}
+
+type StringReaderFactory struct {
+	data string
+}
+
+// NewStringReaderFactory creates a StringReaderFactory from a string.
+func NewStringReaderFactory(data string) *StringReaderFactory {
+	return &StringReaderFactory{data: data}
+}
+
+func (f *StringReaderFactory) NewReader() io.Reader {
+	return strings.NewReader(f.data)
+}
+
+func (f *StringReaderFactory) Len() int64 {
+	return int64(len(f.data))
 }

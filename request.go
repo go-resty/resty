@@ -1474,6 +1474,12 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	}
 
 	isInvalidRequestErr := false
+
+	// Initialize readers from factory before first attempt.
+	// This only creates the initial reader from factory; it does NOT
+	// try to seek existing readers (which would break bytes.Buffer usage).
+	r.initFileReadersFromFactory()
+
 	// first attempt + retry count = total attempts
 	for i := 0; i <= r.RetryCount; i++ {
 		r.Attempt++
@@ -1829,6 +1835,14 @@ func (r *Request) resetFileReaders() error {
 		}
 	}
 	return nil
+}
+
+func (r *Request) initFileReadersFromFactory() {
+	for _, f := range r.multipartFields {
+		if f.Factory != nil && f.Reader == nil {
+			f.Reader = f.Factory.NewReader()
+		}
+	}
 }
 
 // https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods

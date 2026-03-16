@@ -9,9 +9,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -719,9 +721,225 @@ func TestMultipartCornerCoverage(t *testing.T) {
 	err := mf.resetReader()
 	assertNil(t, err)
 
+	mf = &MultipartField{
+		Name:   "foo",
+		Reader: bytes.NewReader([]byte("I have seek capability")),
+	}
+	err = mf.resetReader()
+	assertNil(t, err)
+
+	mf = &MultipartField{
+		Name:    "foo",
+		Factory: NewBytesReaderFactory([]byte("factory content")),
+	}
+	err = mf.resetReader()
+	assertNil(t, err)
+	assertNotNil(t, mf.Reader)
+
 	// wrap test writer to return 0 written value
 	mpw := multipartProgressWriter{w: &returnValueTestWriter{}}
 	n, err := mpw.Write([]byte("test return value"))
 	assertNil(t, err)
 	assertEqual(t, 0, n)
 }
+
+func TestBytesReaderFactory(t *testing.T) {
+	content := []byte("test content for factory")
+	factory := NewBytesReaderFactory(content)
+
+	reader1 := factory.NewReader()
+	assertNotNil(t, reader1)
+
+	reader2 := factory.NewReader()
+	assertNotNil(t, reader2)
+
+	data1, _ := io.ReadAll(reader1)
+	data2, _ := io.ReadAll(reader2)
+
+	assertEqual(t, content, data1)
+	assertEqual(t, content, data2)
+}
+
+func TestBytesReaderFactoryLen(t *testing.T) {
+	content := []byte("test content")
+	factory := NewBytesReaderFactory(content)
+
+	assertEqual(t, int64(len(content)), factory.Len())
+}
+
+func TestStringReaderFactory(t *testing.T) {
+	content := "test string content"
+	factory := NewStringReaderFactory(content)
+
+	reader1 := factory.NewReader()
+	assertNotNil(t, reader1)
+
+	reader2 := factory.NewReader()
+	assertNotNil(t, reader2)
+
+	data1, _ := io.ReadAll(reader1)
+	data2, _ := io.ReadAll(reader2)
+
+	assertEqual(t, []byte(content), data1)
+	assertEqual(t, []byte(content), data2)
+}
+
+type trackingReader struct {
+	data      []byte
+	readCount int
+	closed    bool
+}
+
+func (r *trackingReader) Read(p []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data)
+	r.readCount++
+	return n, nil
+}
+
+func (r *trackingReader) Close() error {
+	r.closed = true
+	return nil
+}
+
+func TestResetReaderWithFactoryClosesOld(t *testing.T) {
+	original := &trackingReader{data: []byte("original data")}
+	factory := NewBytesReaderFactory([]byte("new data"))
+
+	mf := &MultipartField{
+		Name:    "test",
+		Reader:  original,
+		Factory: factory,
+	}
+
+	err := mf.resetReader()
+	assertNil(t, err)
+	assertTrue(t, original.closed, "original reader should be closed")
+
+	data, _ := io.ReadAll(mf.Reader)
+	assertEqual(t, []byte("new data"), data)
+}
+
+func TestResetReaderNilReader(t *testing.T) {
+	mf := &MultipartField{
+		Name: "test",
+	}
+
+	err := mf.resetReader()
+	assertNil(t, err)
+}
+
+func TestNewMultipartFieldFromFactory(t *testing.T) {
+	factory := NewBytesReaderFactory([]byte("test"))
+	mf := NewMultipartFieldFromFactory("field", "filename.txt", "application/octet-stream", factory)
+
+	assertEqual(t, "field", mf.Name)
+	assertEqual(t, "filename.txt", mf.FileName)
+	assertEqual(t, "application/octet-stream", mf.ContentType)
+	assertEqual(t, factory, mf.Factory)
+	assertNil(t, mf.Reader)
+}
+
+func TestCustomReaderFactory(t *testing.T) {
+	factory := &customFactory{data: "factory data"}
+
+	mf := NewMultipartFieldFromFactory("test", "file.txt", "text/plain", factory)
+	err := mf.resetReader()
+	assertNil(t, err)
+	assertNotNil(t, mf.Reader)
+
+	data, _ := io.ReadAll(mf.Reader)
+	assertEqual(t, []byte("factory data"), data)
+
+	err = mf.resetReader()
+	assertNil(t, err)
+	data2, _ := io.ReadAll(mf.Reader)
+	assertEqual(t, []byte("factory data"), data2)
+}
+
+type customFactory struct {
+	data string
+}
+
+func (f *customFactory) NewReader() io.Reader {
+	return strings.NewReader(f.data)
+}
+
+func TestRetryWithBytesReaderFactory(t *testing.T) {
+	attemptCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attemptCount++
+		body, _ := io.ReadAll(r.Body)
+		assertTrue(t, len(body) > 0, "body should not be empty")
+		if attemptCount == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer srv.Close()
+
+	factory := NewBytesReaderFactory([]byte("factory content"))
+
+	client := dcnl()
+	resp, err := client.R().
+		SetRetryCount(2).
+		SetRetryWaitTime(10 * time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		SetMultipartFields(
+			NewMultipartFieldFromFactory("file", "test.txt", "application/octet-stream", factory),
+		).
+		Post(srv.URL)
+
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, 2, attemptCount)
+}
+
+func TestRetryWithFactoryMiddlewareSeesFreshReader(t *testing.T) {
+	attemptCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attemptCount++
+		if attemptCount == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer srv.Close()
+
+	middlewareCalled := 0
+	factory := NewBytesReaderFactory([]byte("test data"))
+
+	client := dcnl()
+	client.AddRequestMiddleware(func(c *Client, r *Request) error {
+		middlewareCalled++
+		return nil
+	})
+
+	resp, err := client.R().
+		SetRetryCount(1).
+		SetRetryWaitTime(10 * time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		SetMultipartFields(
+			NewMultipartFieldFromFactory("file", "test.txt", "application/octet-stream", factory),
+		).
+		Post(srv.URL)
+
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, 2, middlewareCalled, "middleware should be called for each attempt")
+	assertEqual(t, 2, attemptCount)
+}
+
+func TestStringReaderFactoryLen(t *testing.T) {
+	content := "test content"
+	factory := NewStringReaderFactory(content)
+
+	assertEqual(t, int64(len(content)), factory.Len())
+}
+
