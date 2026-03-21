@@ -67,9 +67,7 @@ func Benchmark_parseRequestHeader(b *testing.B) {
 	})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := parseRequestHeader(c, r); err != nil {
-			b.Errorf("parseRequestHeader() error = %v", err)
-		}
+		parseRequestHeader(c, r)
 	}
 }
 

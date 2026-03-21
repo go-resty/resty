@@ -173,7 +173,11 @@ func (dt *digestTransport) createCredentials(cha *digestChallenge, req *http.Req
 		userHash:      cha.userHash,
 	}
 
-	if cha.isQopSupported(qopAuthInt) {
+	if err := cred.parseQop(cha); err != nil {
+		return nil, err
+	}
+
+	if cred.qop == qopAuthInt {
 		if err := dt.prepareBody(req); err != nil {
 			return nil, fmt.Errorf("resty: digest: failed to prepare body for auth-int: %w", err)
 		}
@@ -181,14 +185,14 @@ func (dt *digestTransport) createCredentials(cha *digestChallenge, req *http.Req
 		if err != nil {
 			return nil, fmt.Errorf("resty: digest: failed to get body for auth-int: %w", err)
 		}
-		if body != http.NoBody {
+		h := newHashFunc(cha.algorithm)
+		if body != nil && body != http.NoBody {
 			defer closeq(body)
-			h := newHashFunc(cha.algorithm)
 			if _, err := ioCopy(h, body); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("resty: digest: failed to hash body for auth-int: %w", err)
 			}
-			cred.bodyHash = hex.EncodeToString(h.Sum(nil))
 		}
+		cred.bodyHash = hex.EncodeToString(h.Sum(nil))
 	}
 
 	return cred, nil
@@ -208,13 +212,15 @@ func (dt *digestTransport) prepareBody(req *http.Request) error {
 
 	b, err := ioReadAll(req.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("resty: digest: failed to read request body: %w", err)
 	}
+
 	closeq(req.Body)
-	req.Body = io.NopCloser(bytes.NewReader(b))
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(b)), nil
 	}
+
+	req.Body = io.NopCloser(bytes.NewReader(b))
 
 	return nil
 }

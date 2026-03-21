@@ -182,7 +182,7 @@ func parseRequestURL(c *Client, r *Request) error {
 	return nil
 }
 
-func parseRequestHeader(c *Client, r *Request) error {
+func parseRequestHeader(c *Client, r *Request) {
 	for k, v := range c.Header() {
 		if _, ok := r.Header[k]; ok {
 			continue
@@ -197,8 +197,6 @@ func parseRequestHeader(c *Client, r *Request) error {
 	if !r.isHeaderExists(hdrAcceptEncodingKey) {
 		r.Header.Set(hdrAcceptEncodingKey, r.client.ContentDecompresserKeys())
 	}
-
-	return nil
 }
 
 func parseRequestBody(c *Client, r *Request) error {
@@ -323,6 +321,10 @@ var multipartSetBoundary = func(w *multipart.Writer, r *Request) error {
 	return w.SetBoundary(r.multipartBoundary)
 }
 
+var multipartPipeWriterClose = func(w *io.PipeWriter) error {
+	return w.Close()
+}
+
 func handleMultipartFormData(r *Request) error {
 	r.bodyBuf = acquireBuffer()
 	mw := multipart.NewWriter(r.bodyBuf)
@@ -385,7 +387,7 @@ func handleMultipart(c *Client, r *Request) error {
 			if err := mw.Close(); err != nil {
 				r.multipartErrChan <- err
 			}
-			if err := bw.Close(); err != nil {
+			if err := multipartPipeWriterClose(bw); err != nil {
 				r.multipartErrChan <- err
 			}
 		}()

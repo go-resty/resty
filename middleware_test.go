@@ -441,9 +441,8 @@ func Test_parseRequestHeader(t *testing.T) {
 			// add common expected headers from client into expectedHeader
 			tt.expectedHeader.Set(hdrAcceptEncodingKey, c.ContentDecompresserKeys())
 
-			if err := parseRequestHeader(c, r); err != nil {
-				t.Errorf("parseRequestHeader() error = %v", err)
-			}
+			parseRequestHeader(c, r)
+
 			if !reflect.DeepEqual(tt.expectedHeader, r.Header) {
 				t.Errorf("r.Header = %#+v does not match expected %#+v", r.Header, tt.expectedHeader)
 			}
@@ -1057,6 +1056,48 @@ func TestMiddleware_multipartCreatePart_WriteError(t *testing.T) {
 	err = <-req.multipartErrChan
 	assertNotNil(t, err)
 	assertEqual(t, "multipart write error", err.Error())
+}
+
+func TestMiddleware_multipartPipeWriterCloseError(t *testing.T) {
+	c := dcnl()
+
+	oldPipeWriterClose := multipartPipeWriterClose
+	errMsg := "test pipe writer close error"
+	multipartPipeWriterClose = func(w *io.PipeWriter) error {
+		_ = w.Close()
+		return errors.New(errMsg)
+	}
+	t.Cleanup(func() {
+		multipartPipeWriterClose = oldPipeWriterClose
+	})
+
+	req := &Request{
+		mu:          new(sync.Mutex),
+		Header:      http.Header{},
+		isMultiPart: true,
+		multipartFields: []*MultipartField{
+			{
+				Name:   "field1",
+				Values: []string{"field1value1", "field1value2"},
+			},
+		},
+	}
+
+	err := handleMultipart(c, req)
+	assertNil(t, err)
+
+	// Drain pipe reader so multipart writer close does not block.
+	done := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(io.Discard, req.Body.(io.Reader))
+		close(done)
+	}()
+
+	err = <-req.multipartErrChan
+	assertNotNil(t, err)
+	assertEqual(t, errMsg, err.Error())
+
+	<-done
 }
 
 func TestMiddlewareCoverage(t *testing.T) {

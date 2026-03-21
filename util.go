@@ -258,12 +258,8 @@ func functionName(i any) string {
 
 func acquireBuffer() *bytes.Buffer {
 	buf := bufPool.Get().(*bytes.Buffer)
-	if buf.Len() == 0 {
-		buf.Reset()
-		return buf
-	}
-	bufPool.Put(buf)
-	return new(bytes.Buffer)
+	buf.Reset()
+	return buf
 }
 
 func releaseBuffer(buf *bytes.Buffer) {
@@ -291,6 +287,8 @@ var sanitizeHeaderToken = []string{
 	"authorization",
 	"auth",
 	"token",
+	"api-key",
+	"secret",
 }
 
 func isSanitizeHeader(k string) bool {
@@ -306,7 +304,7 @@ func isSanitizeHeader(k string) bool {
 func sanitizeHeaders(hdr http.Header) http.Header {
 	for k := range hdr {
 		if isSanitizeHeader(k) {
-			hdr[k] = []string{"********************"}
+			hdr[k] = []string{"*****REDACTED*****"}
 		}
 	}
 	return hdr
@@ -358,11 +356,13 @@ func (e *restyError) Unwrap() error {
 	return e.inner
 }
 
-// cloneURLValues is a helper function to deep copy url.Values.
+// copied from net/http/clone.go
 func cloneURLValues(v url.Values) url.Values {
 	if v == nil {
 		return nil
 	}
+	// http.Header and url.Values have the same representation, so temporarily
+	// treat it like http.Header, which does have a clone:
 	return url.Values(http.Header(v).Clone())
 }
 

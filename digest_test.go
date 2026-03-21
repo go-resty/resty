@@ -236,6 +236,33 @@ func TestClientDigestAuthWithGetBodyError(t *testing.T) {
 	assertEqual(t, 0, resp.StatusCode(), "expected response status code to be zero on error")
 }
 
+func TestClientDigestAuthPrefersAuthWithoutGetBody(t *testing.T) {
+	conf := *defaultDigestServerConf()
+	conf.qop = "auth, auth-int"
+	ts := createDigestServer(t, &conf)
+	defer ts.Close()
+
+	c := dcnl().SetDigestAuth(conf.username, conf.password)
+	c.SetRequestMiddlewares(
+		MiddlewareRequestCreate,
+		func(c *Client, r *Request) error {
+			r.RawRequest.GetBody = func() (_ io.ReadCloser, _ error) {
+				return nil, errors.New("get body test error")
+			}
+			return nil
+		},
+	)
+
+	resp, err := c.R().
+		SetResult(&AuthSuccess{}).
+		SetHeader(hdrContentTypeKey, "application/json").
+		SetBody(map[string]any{"zip_code": "00000", "city": "Los Angeles"}).
+		Post(ts.URL + conf.uri)
+
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+}
+
 func TestClientDigestAuthWithGetBodyNilReadError(t *testing.T) {
 	conf := *defaultDigestServerConf()
 	conf.qop = "auth-int"
@@ -258,7 +285,7 @@ func TestClientDigestAuthWithGetBodyNilReadError(t *testing.T) {
 		Post(ts.URL + conf.uri)
 
 	assertNotNil(t, err)
-	assertTrue(t, strings.Contains(err.Error(), "resty: digest: failed to prepare body for auth-int: read error"),
+	assertTrue(t, strings.Contains(err.Error(), "resty: digest: failed to prepare body for auth-int: resty: digest: failed to read request body: read error"),
 		"expected read error")
 	assertEqual(t, 0, resp.StatusCode(), "expected response status code to be zero on error")
 }
@@ -315,4 +342,22 @@ func TestClientDigestAuthWithIncorrectNcValue(t *testing.T) {
 	assertTrue(t, strings.Contains(err.Error(), `parsing "1234567890": value out of range`),
 		"expected nc value out of range error")
 	assertEqual(t, "", resp.Status(), "expected empty response status on error")
+}
+
+func TestDigestCredentialsDigestParseQopError(t *testing.T) {
+	dc := &digestCredentials{
+		username:  "Mufasa",
+		password:  "Circle Of Life",
+		method:    http.MethodGet,
+		uri:       "/dir/index.html",
+		realm:     "testrealm@host.com",
+		nonce:     "dcd98b7102dd2f0e8b11d0f600bfb0c093",
+		algorithm: "MD5",
+		userHash:  "true",
+	}
+
+	cha := &digestChallenge{qop: []string{"bad-qop"}}
+	_, err := dc.digest(cha)
+
+	assertErrorIs(t, ErrDigestQopNotSupported, err)
 }

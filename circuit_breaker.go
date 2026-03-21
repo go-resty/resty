@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"sync"
@@ -151,6 +152,8 @@ type CircuitBreaker struct {
 	lock         *sync.RWMutex
 	policies     []CircuitBreakerPolicy
 	resetTimeout time.Duration
+	resetCtx     context.Context
+	resetCancel  context.CancelFunc
 	state        atomic.Value // CircuitBreakerState
 	sw           *slidingWindow[totalAndFailures]
 
@@ -194,9 +197,12 @@ func NewCircuitBreakerWithRatio(failureRatio float64, minRequests uint64,
 }
 
 func newCircuitBreaker(resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
+	ctx, cancel := context.WithCancel(context.Background())
 	cb := &CircuitBreaker{
 		lock:         &sync.RWMutex{},
 		resetTimeout: resetTimeout,
+		resetCtx:     ctx,
+		resetCancel:  cancel,
 		policies:     []CircuitBreakerPolicy{CircuitBreaker5xxPolicy},
 	}
 	cb.state.Store(CircuitBreakerStateClosed)
@@ -317,19 +323,38 @@ func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
 
 func (cb *CircuitBreaker) open() {
 	cb.changeState(CircuitBreakerStateOpen)
-	go func() {
-		time.Sleep(cb.resetTimeout)
-		cb.changeState(CircuitBreakerStateHalfOpen)
-	}()
+
+	cb.lock.Lock()
+	// Cancel previous reset goroutine if any
+	cb.resetCancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cb.resetCtx = ctx
+	cb.resetCancel = cancel
+	resetCtx := ctx
+	resetTimeout := cb.resetTimeout
+	cb.lock.Unlock()
+
+	go func(resetCtx context.Context, resetTimeout time.Duration) {
+		select {
+		case <-time.After(resetTimeout):
+			if cb.getState() == CircuitBreakerStateOpen {
+				cb.changeState(CircuitBreakerStateHalfOpen)
+			}
+		case <-resetCtx.Done():
+			// Cancelled, exit gracefully
+		}
+	}(resetCtx, resetTimeout)
 }
 
 func (cb *CircuitBreaker) changeState(state CircuitBreakerState) {
 	oldState := cb.getState()
+	cb.lock.Lock()
 	cb.sw = newSlidingWindow(
 		func() totalAndFailures { return totalAndFailures{} },
 		cb.resetTimeout,
 		10,
 	)
+	cb.lock.Unlock()
 	cb.state.Store(state)
 	if oldState != state {
 		cb.onStateChangeHooks(oldState, state)

@@ -10,17 +10,27 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sort"
 
 	"net/url"
 	"strings"
 )
+
+const unexecutedRequestURL = "http://unexecuted-request"
 
 func buildCurlCmd(req *Request) string {
 	// generate curl raw headers
 	var curl = "curl -X " + req.Method + " "
 	headers := dumpCurlHeaders(req.RawRequest)
 	for _, kv := range *headers {
-		curl += "-H " + cmdQuote(kv[0]+": "+kv[1]) + " "
+		value := kv[1]
+
+		// Check if header should be redacted
+		if isSanitizeHeader(kv[0]) {
+			value = "*****REDACTED*****"
+		}
+
+		curl += "-H " + cmdQuote(kv[0]+": "+value) + " "
 	}
 
 	// generate curl cookies
@@ -31,33 +41,44 @@ func buildCurlCmd(req *Request) string {
 	}
 
 	// generate curl body except for io.Reader and multipart request flow
-	if req.RawRequest.GetBody != nil {
+	// Check content type
+	contentType := req.RawRequest.Header.Get(hdrContentTypeKey)
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		// Multipart: show placeholder
+		curl += "-F '<fields omitted, see original request>'"
+	} else if req.RawRequest.GetBody != nil {
+		// Handle normal body
 		body, err := req.RawRequest.GetBody()
 		if err == nil {
 			buf, _ := io.ReadAll(body)
-			curl += "-d " + cmdQuote(string(bytes.TrimRight(buf, "\n"))) + " "
+			curl += "-d " + cmdQuote(string(bytes.TrimRight(buf, "\r\n"))) + " "
 		} else {
 			req.log.Errorf("curl: %v", err)
 			curl += "-d ''"
 		}
 	}
 
-	urlString := cmdQuote(req.RawRequest.URL.String())
-	if urlString == "''" {
-		urlString = "'http://unexecuted-request'"
+	url := req.RawRequest.URL.String()
+	if isStringEmpty(url) {
+		url = unexecutedRequestURL
 	}
+	urlString := cmdQuote(url)
+
 	curl += urlString
 	return curl
 }
 
-// dumpCurlCookies dumps cookies to curl format
+// dumpCurlCookies dumps cookies for curl format
 func dumpCurlCookies(cookies []*http.Cookie) string {
 	sb := strings.Builder{}
 	sb.WriteString("Cookie: ")
-	for _, cookie := range cookies {
-		sb.WriteString(cookie.Name + "=" + url.QueryEscape(cookie.Value) + "&")
+	for i, cookie := range cookies {
+		if i > 0 {
+			sb.WriteString("; ") // Semicolon per RFC 6265
+		}
+		sb.WriteString(cookie.Name + "=" + url.QueryEscape(cookie.Value))
 	}
-	return strings.TrimRight(sb.String(), "&")
+	return sb.String()
 }
 
 // dumpCurlHeaders dumps headers to curl format
@@ -68,16 +89,11 @@ func dumpCurlHeaders(req *http.Request) *[][2]string {
 			headers = append(headers, [2]string{k, v})
 		}
 	}
-	n := len(headers)
-	for i := 0; i < n; i++ {
-		for j := n - 1; j > i; j-- {
-			jj := j - 1
-			h1, h2 := headers[j], headers[jj]
-			if h1[0] < h2[0] {
-				headers[jj], headers[j] = headers[j], headers[jj]
-			}
-		}
-	}
+
+	sort.Slice(headers, func(i, j int) bool {
+		return headers[i][0] < headers[j][0]
+	})
+
 	return &headers
 }
 

@@ -8,6 +8,7 @@ package resty
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -132,7 +133,7 @@ func TestCurl_buildCurlCmd(t *testing.T) {
 			method:   "GET",
 			url:      "http://example.com",
 			headers:  map[string]string{"Content-Type": "application/json", "Authorization": "Bearer token"},
-			expected: "curl -X GET -H 'Authorization: Bearer token' -H 'Content-Type: application/json' http://example.com",
+			expected: "curl -X GET -H 'Authorization: *****REDACTED*****' -H 'Content-Type: application/json' http://example.com",
 		},
 		{
 			name:     "With Body",
@@ -179,7 +180,7 @@ func TestCurl_buildCurlCmd(t *testing.T) {
 			method:   "GET",
 			url:      "http://example.com",
 			cookies:  []*http.Cookie{{Name: "session_id", Value: "abc123"}, {Name: "user_id", Value: "user456"}},
-			expected: "curl -X GET -H 'Cookie: session_id=abc123&user_id=user456' http://example.com",
+			expected: "curl -X GET -H 'Cookie: session_id=abc123; user_id=user456' http://example.com",
 		},
 		{
 			name:     "With Empty Cookie Jar",
@@ -268,9 +269,135 @@ func TestCurlRequestMiddlewaresError(t *testing.T) {
 	assertEqual(t, "", curlCmdUnexecuted)
 }
 
+func TestCurlMultipleCookies(t *testing.T) {
+	cookies := []*http.Cookie{
+		{Name: "id", Value: "123"},
+		{Name: "token", Value: "abc"},
+		{Name: "pref", Value: "lang=en"},
+	}
+
+	curl := dumpCurlCookies(cookies)
+
+	// Should be semicolon-delimited per RFC 6265
+	expected := "Cookie: id=123; token=abc; pref=lang%3Den"
+	assertEqual(t, expected, curl)
+}
+
 func TestCurlMiscTestCoverage(t *testing.T) {
 	cookieStr := dumpCurlCookies([]*http.Cookie{
 		{Name: "count", Value: "1"},
 	})
 	assertEqual(t, "Cookie: count=1", cookieStr)
+
+	// cmdQuote with empty string
+	assertEqual(t, "''", cmdQuote(""), "Empty string should be quoted as ''")
+}
+
+func TestCurlMultipartFormData(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		method      string
+		url         string
+		hasBody     bool
+		shouldMatch string
+	}{
+		{
+			name:        "Multipart form-data basic",
+			contentType: "multipart/form-data",
+			method:      "POST",
+			url:         "http://example.com/upload",
+			hasBody:     true,
+			shouldMatch: "-F '<fields omitted, see original request>'",
+		},
+		{
+			name:        "Multipart form-data with boundary",
+			contentType: "multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW",
+			method:      "POST",
+			url:         "http://example.com/upload",
+			hasBody:     true,
+			shouldMatch: "-F '<fields omitted, see original request>'",
+		},
+		{
+			name:        "Multipart form-data with charset",
+			contentType: "multipart/form-data; charset=utf-8",
+			method:      "POST",
+			url:         "http://example.com/upload",
+			hasBody:     true,
+			shouldMatch: "-F '<fields omitted, see original request>'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := dcnl()
+			req := c.R().
+				SetMethod(tt.method).
+				SetURL(tt.url).
+				SetHeader(hdrContentTypeKey, tt.contentType)
+
+			if tt.hasBody {
+				req.SetBody(bytes.NewBufferString("multipart body data"))
+			}
+
+			err := createRawRequest(c, req)
+			if err != nil {
+				t.Fatalf("Failed to create raw request: %v", err)
+			}
+
+			curlCmd := buildCurlCmd(req)
+
+			// Verify multipart placeholder is included
+			assertTrue(t, strings.Contains(curlCmd, tt.shouldMatch), fmt.Sprintf("Expected curl command to contain '%s', but got: %s", tt.shouldMatch, curlCmd))
+
+			// Verify -F flag is used (not -d)
+			assertTrue(t, strings.Contains(curlCmd, "-F"), fmt.Sprintf("Expected curl command to contain '-F' flag, but got: %s", curlCmd))
+
+			// Verify method is included
+			assertTrue(t, strings.Contains(curlCmd, "curl -X "+tt.method), fmt.Sprintf("Expected curl command to contain 'curl -X %s'", tt.method))
+
+			// Verify URL is included
+			assertTrue(t, strings.Contains(curlCmd, tt.url), fmt.Sprintf("Expected curl command to contain URL '%s'", tt.url))
+
+			// Verify -d flag is NOT used for multipart
+			assertFalse(t, strings.Contains(curlCmd, "-d '"), "Multipart request should use -F flag, not -d flag")
+		})
+	}
+}
+
+func TestCurlMultipartWithCookies(t *testing.T) {
+	c := dcnl()
+	cookies := []*http.Cookie{
+		{Name: "session", Value: "abc123"},
+		{Name: "user_id", Value: "user456"},
+	}
+
+	req := c.R().
+		SetMethod("POST").
+		SetURL("http://example.com/upload").
+		SetHeader("Content-Type", "multipart/form-data")
+
+	req.SetBody(bytes.NewBufferString("file content"))
+
+	err := createRawRequest(c, req)
+	assertError(t, err, "failed to create raw request")
+
+	// Set cookies in the client's cookie jar
+	cookieJar, _ := cookiejar.New(nil)
+	cookieJar.SetCookies(req.RawRequest.URL, cookies)
+	c.SetCookieJar(cookieJar)
+
+	curlCmd := buildCurlCmd(req)
+
+	// Verify multipart placeholder
+	assertTrue(t, strings.Contains(curlCmd, "-F '<fields omitted, see original request>'"), "expected multipart placeholder in curl command")
+
+	// Verify method
+	assertTrue(t, strings.Contains(curlCmd, "curl -X POST"), "expected POST method to be included in curl command")
+
+	// Verify URL
+	assertTrue(t, strings.Contains(curlCmd, "http://example.com/upload"), "expected URL to be included in curl command")
+
+	// Verify cookies are included
+	assertTrue(t, strings.Contains(curlCmd, "-H 'Cookie:"), "expected cookies to be included in curl command")
 }

@@ -92,9 +92,10 @@ func TestCloneURLValues(t *testing.T) {
 	v.Add("qux", "quux")
 
 	c := cloneURLValues(v)
-	nilUrl := cloneURLValues(nil)
 	assertEqual(t, v, c)
-	assertNil(t, nilUrl)
+
+	nilMap := cloneURLValues(nil)
+	assertNil(t, nilMap)
 }
 
 func TestRestyErrorFuncs(t *testing.T) {

@@ -212,6 +212,37 @@ func TestCircuitBreakerAllowDuringHalfOpen(t *testing.T) {
 	assertNil(t, cb.allow())
 }
 
+func TestCircuitBreakerOpenCancelsPreviousResetTimer(t *testing.T) {
+	resetTimeout := 60 * time.Millisecond
+	cb := NewCircuitBreakerWithCount(1, 1, resetTimeout)
+
+	var halfOpenTransitions int32
+	cb.OnStateChange(func(oldState, newState CircuitBreakerState) {
+		if oldState == CircuitBreakerStateOpen && newState == CircuitBreakerStateHalfOpen {
+			atomic.AddInt32(&halfOpenTransitions, 1)
+		}
+	})
+
+	cb.open()
+	time.Sleep(40 * time.Millisecond)
+	cb.open()
+
+	// If the previous timer was not canceled, it would flip to half-open soon.
+	time.Sleep(30 * time.Millisecond)
+	assertEqual(t, CircuitBreakerStateOpen, cb.getState(), "expected open state while waiting for latest timer")
+
+	deadline := time.Now().Add(300 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if cb.getState() == CircuitBreakerStateHalfOpen {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	assertEqual(t, CircuitBreakerStateHalfOpen, cb.getState(), "expected half-open transition from latest timer")
+	assertEqual(t, int32(1), atomic.LoadInt32(&halfOpenTransitions), "expected exactly one open-to-half-open transition")
+}
+
 func TestCircuitBreakerOnTriggerHooks(t *testing.T) {
 	cb := NewCircuitBreakerWithCount(1, 1, 10*time.Millisecond)
 
