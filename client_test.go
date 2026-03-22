@@ -138,6 +138,96 @@ func TestClientRedirectPolicy(t *testing.T) {
 	assertEqual(t, `<a href="/redirect-2">Temporary Redirect</a>.`, res.String())
 }
 
+func TestRedirectHeaderStripSensitivePolicy(t *testing.T) {
+	t.Run("apply default and custom headers", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+		assertNil(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+		req.Header.Set("X-Api-Key", "secret")
+		req.Header.Set("Cookie", "sid=123")
+		req.Header.Set("X-Internal-Header", "internal")
+		req.Header.Set("X-Keep", "keep")
+
+		policy := RedirectHeaderStripSensitivePolicy(true, "X-Internal-Header")
+		err = policy.Apply(req, nil)
+		assertNil(t, err)
+
+		assertEqual(t, "", req.Header.Get("Authorization"))
+		assertEqual(t, "", req.Header.Get("X-Api-Key"))
+		assertEqual(t, "sid=123", req.Header.Get("Cookie"))
+		assertEqual(t, "", req.Header.Get("X-Internal-Header"))
+		assertEqual(t, "keep", req.Header.Get("X-Keep"))
+	})
+
+	t.Run("apply only custom headers", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "https://example.com", nil)
+		assertNil(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+		req.Header.Set("X-Internal-Header", "internal")
+
+		policy := RedirectHeaderStripSensitivePolicy(false, "X-Internal-Header")
+		err = policy.Apply(req, nil)
+		assertNil(t, err)
+
+		assertEqual(t, "Bearer token", req.Header.Get("Authorization"))
+		assertEqual(t, "", req.Header.Get("X-Internal-Header"))
+	})
+}
+
+func TestRedirectHeaderStripSensitivePolicyRealChainBehavior(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/redirect":
+			http.Redirect(w, r, "/final", http.StatusTemporaryRedirect)
+		case "/final":
+			fmt.Fprintf(w, "auth=%t,internal=%t,keep=%t",
+				r.Header.Get("Authorization") != "",
+				r.Header.Get("X-Internal-Header") != "",
+				r.Header.Get("X-Keep") != "",
+			)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	defer ts.Close()
+
+	t.Run("strip policy last keeps headers stripped", func(t *testing.T) {
+		c := dcnl().
+			SetRedirectPolicy(
+				RedirectFlexiblePolicy(5),
+				RedirectHeaderStripSensitivePolicy(true, "X-Internal-Header"),
+			)
+
+		resp, err := c.R().
+			SetHeader("Authorization", "Bearer token").
+			SetHeader("X-Internal-Header", "internal").
+			SetHeader("X-Keep", "keep").
+			Get(ts.URL + "/redirect")
+
+		assertNil(t, err)
+		assertEqual(t, "auth=false,internal=false,keep=true", resp.String())
+	})
+
+	t.Run("strip policy first can be overridden by later copy policy", func(t *testing.T) {
+		c := dcnl().
+			SetRedirectPolicy(
+				RedirectHeaderStripSensitivePolicy(true, "X-Internal-Header"),
+				RedirectFlexiblePolicy(5),
+			)
+
+		resp, err := c.R().
+			SetHeader("Authorization", "Bearer token").
+			SetHeader("X-Internal-Header", "internal").
+			SetHeader("X-Keep", "keep").
+			Get(ts.URL + "/redirect")
+
+		assertNil(t, err)
+		assertEqual(t, "auth=true,internal=true,keep=true", resp.String())
+	})
+}
+
 func TestClientTimeout(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()

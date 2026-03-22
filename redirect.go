@@ -84,6 +84,45 @@ func RedirectDomainCheckPolicy(hostnames ...string) RedirectPolicy {
 	})
 }
 
+// RedirectHeaderStripSensitivePolicy creates a [RedirectPolicy] that removes
+// selected headers from redirected requests.
+//
+// If applyDefault is true, it also removes headers that match Resty's
+// built-in sensitive-header filter (for example Authorization, auth, token, etc.).
+// Any headers passed via headers are removed as well.
+//
+//	client.SetRedirectPolicy(resty.RedirectHeaderStripSensitivePolicy(
+//		true,
+//		"X-Internal-Header",
+//		"X-Another-Header",
+//	))
+//
+// NOTE:
+//   - Use this policy with caution as stripping headers may cause some redirects to fail
+//     if the server relies on those headers.
+//   - The default sensitive header filter is based on common patterns and may not cover all cases.
+//     Always review which headers are being stripped to avoid unintended consequences.
+//   - If combined with policies that copy headers from previous requests (for example,
+//     [RedirectFlexiblePolicy] and [RedirectDomainCheckPolicy]), register this policy
+//     last in [Client.SetRedirectPolicy] so stripped headers are not reintroduced later.
+func RedirectHeaderStripSensitivePolicy(applyDefault bool, headers ...string) RedirectPolicy {
+	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
+		// Apply default behavior to strip sensitive headers if applyDefault is true
+		if applyDefault {
+			for key := range req.Header {
+				if isSanitizeHeader(key) {
+					req.Header.Del(key)
+				}
+			}
+		}
+		// Strip sensitive headers provided by the user
+		for _, header := range headers {
+			req.Header.Del(header)
+		}
+		return nil
+	})
+}
+
 func getHostname(host string) (hostname string) {
 	if strings.Index(host, ":") > 0 {
 		host, _, _ = net.SplitHostPort(host)
