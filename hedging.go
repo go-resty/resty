@@ -15,26 +15,25 @@ import (
 	"time"
 )
 
-// NewHedging creates a new Hedging instance with default configuration.
-// By default values are:
+// NewHedging creates a new [Hedging] instance with default configuration.
+// Defaults:
 //   - 50ms delay between requests
-//   - Maximum 3 requests
-//   - Maximum 3 requests per second
+//   - Maximum 3 hedged requests
+//   - Maximum 3 hedged requests per second
 //   - Only read-only methods are hedged
 //
-// You can customize these settings using the corresponding setter methods.
+// Customize these values with the corresponding setter methods.
 // For example:
 //
-//	hedging := NewHedging().
+//	hedging := resty.NewHedging().
 //		SetDelay(100 * time.Millisecond).
 //		SetMaxRequest(5).
 //		SetMaxRequestPerSecond(10)
 //
-//	// Assign the hedging instance to the Resty client
 //	client := resty.New().
 //		SetHedging(hedging)
 //
-//	defer c.Close()
+//	defer client.Close()
 func NewHedging() *Hedging {
 	h := &Hedging{
 		lock:                 new(sync.RWMutex),
@@ -47,23 +46,22 @@ func NewHedging() *Hedging {
 	return h
 }
 
-// Hedging struct implements the http.RoundTripper interface to perform hedged HTTP requests.
+// Hedging implements [http.RoundTripper] to perform hedged HTTP requests.
 // It sends multiple requests in parallel with a specified delay and returns the first successful
-// response. Hedging is particularly useful for improving latency and reliability in scenarios
-// where requests may occasionally fail or experience high latency.
+// response. Hedging is particularly useful for improving latency in scenarios where requests
+// may occasionally fail or experience high latency.
 //
-// By default only read-only HTTP methods (GET, HEAD, OPTIONS, TRACE) are hedged to avoid unintended
-// side effects on the server. Unless SetHedgingAllowNonReadOnly is used to allow non-read-only methods,
-// in which case all HTTP methods will be hedged.
+// By default, only read-only HTTP methods (GET, HEAD, OPTIONS, TRACE) are hedged to avoid
+// unintended side effects on the server. Non-read-only methods can be enabled via
+// [Hedging.SetNonReadOnlyAllowed].
 //
 // NOTE:
-//   - Hedging should be used with caution, especially for non-read-only methods, as it can lead to
-//     unintended consequences if multiple requests are processed by the server.
-//   - Ensure that the server can safely handle multiple concurrent requests when using hedging,
-//     as otherwise, hedging requests can overwhelm the server.
+//   - Hedging should be used with caution for non-read-only methods, as multiple requests
+//     may be processed by the server.
+//   - Ensure the server can safely handle concurrent requests; otherwise, hedging can
+//     overwhelm the server.
 //
-// For more information on hedging and its use cases, refer to the following resources:
-//   - [The Tail at Scale]
+// For more information on hedging and its use cases, see [The Tail at Scale].
 //
 // [The Tail at Scale]: https://research.google/pubs/the-tail-at-scale/
 type Hedging struct {
@@ -76,7 +74,7 @@ type Hedging struct {
 	isNonReadOnlyAllowed bool
 }
 
-// Delay method returns the configured hedging delay.
+// Delay method returns the delay between hedged requests.
 func (h *Hedging) Delay() time.Duration {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
@@ -91,14 +89,14 @@ func (h *Hedging) SetDelay(delay time.Duration) *Hedging {
 	return h
 }
 
-// MaxRequest method returns the maximum concurrent requests.
+// MaxRequest method returns the maximum number of concurrent hedged requests.
 func (h *Hedging) MaxRequest() int {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 	return h.maxRequest
 }
 
-// SetMaxRequest method sets maximum concurrent hedged requests.
+// SetMaxRequest method sets the maximum number of concurrent hedged requests.
 func (h *Hedging) SetMaxRequest(count int) *Hedging {
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -106,14 +104,14 @@ func (h *Hedging) SetMaxRequest(count int) *Hedging {
 	return h
 }
 
-// MaxRequestPerSecond method returns the hedging rate limit.
+// MaxRequestPerSecond method returns the maximum number of hedged requests allowed per second.
 func (h *Hedging) MaxRequestPerSecond() float64 {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 	return h.maxRequestPerSecond
 }
 
-// SetMaxRequestPerSecond method sets rate limit for hedged requests.
+// SetMaxRequestPerSecond method sets the maximum number of hedged requests allowed per second.
 func (h *Hedging) SetMaxRequestPerSecond(count float64) *Hedging {
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -122,8 +120,7 @@ func (h *Hedging) SetMaxRequestPerSecond(count float64) *Hedging {
 	return h
 }
 
-// IsNonReadOnlyAllowed method returns true if hedging is enabled for non-read-only
-// HTTP methods.
+// IsNonReadOnlyAllowed method reports whether hedging is enabled for non-read-only HTTP methods.
 func (h *Hedging) IsNonReadOnlyAllowed() bool {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
@@ -142,11 +139,11 @@ func (h *Hedging) SetNonReadOnlyAllowed(allow bool) *Hedging {
 	return h
 }
 
-// calculateRateDelay method calculates the delay between requests based on the maxPerSecond setting.
-// If maxPerSecond is greater than 0, it sets rateDelay to 1 second divided by maxPerSecond.
-// Otherwise, it sets rateDelay to 0 (no delay).
+// calculateRateDelay calculates the inter-request delay from maxRequestPerSecond.
+// If maxRequestPerSecond > 0, rateDelay is set to 1s / maxRequestPerSecond;
+// otherwise rateDelay is 0 (no rate limiting).
 //
-// NOTE: It should be called within lock region.
+// Must be called with the lock held.
 func (h *Hedging) calculateRateDelay() {
 	if h.maxRequestPerSecond > 0 {
 		// Calculate rate delay: if maxPerSecond is 10, delay is 100ms (1s / 10)
@@ -252,7 +249,7 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 	return res.resp, res.err
 }
 
-// isReadOnlyMethod verifies if the HTTP method is read-only (safe for hedging)
+// isReadOnlyMethod reports whether the HTTP method is read-only (safe for hedging).
 func isReadOnlyMethod(method string) bool {
 	switch method {
 	case MethodGet, MethodHead, MethodOptions, MethodTrace:

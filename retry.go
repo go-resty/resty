@@ -23,19 +23,27 @@ const (
 )
 
 type (
-	// RetryConditionFunc type is for the retry condition function
-	// input: non-nil Response OR request execution error
+	// RetryConditionFunc is the function type used to decide whether a request
+	// should be retried. It receives the response and any execution error from the
+	// previous attempt. Either argument may be nil:
+	//   - res is nil when no HTTP response was received (e.g. network error)
+	//   - err is nil when the request completed without a transport error
 	RetryConditionFunc func(*Response, error) bool
 
-	// RetryHookFunc is for side-effecting functions triggered on retry
+	// RetryHookFunc is a side-effecting function called after each failed attempt
+	// and before the next retry. It can be used for logging, metrics, or mutating
+	// request state. It receives the same response and error as [RetryConditionFunc].
 	RetryHookFunc func(*Response, error)
 
-	// RetryDelayStrategyFunc is a type for implementing custom retry delay strategies.
-	// By default, Resty employs the capped exponential backoff with a jitter delay strategy.
+	// RetryDelayStrategyFunc defines a custom retry delay strategy.
+	// It receives the response/error from the previous attempt and returns the
+	// wait duration before the next retry.
+	// By default, Resty uses capped exponential backoff with jitter.
 	RetryDelayStrategyFunc func(*Response, error) (time.Duration, error)
 )
 
-// RetryConstantDelayStrategy returns a RetryDelayStrategyFunc that always returns the specified delay duration.
+// RetryConstantDelayStrategy returns a [RetryDelayStrategyFunc] that always
+// returns the specified delay duration.
 func RetryConstantDelayStrategy(delay time.Duration) RetryDelayStrategyFunc {
 	return func(*Response, error) (time.Duration, error) {
 		return delay, nil
@@ -62,12 +70,12 @@ func RetryConditionStatusTooManyRequests(res *Response, _ error) bool {
 	return res.StatusCode() == http.StatusTooManyRequests
 }
 
-// RetryConditionStatus5XX is a RetryConditionFunc that returns true if the response status code is 500 or above,
-// excluding Status 501 - Not Implemented.
+// RetryConditionStatus5XX is a [RetryConditionFunc] that returns true when the
+// response status code is 500 or above, excluding 501 (Not Implemented).
 //
-//   - 5XX status codes are generally considered temporary server errors that may be resolved on retry
+//   - 5XX status codes are generally considered temporary server errors that may be resolved on retry.
 //   - The rationale for excluding 501 Not Implemented is that it indicates the server does not support the
-//     functionality required to fulfill the request,
+//     functionality required to fulfill the request.
 func RetryConditionStatus5XX(res *Response, _ error) bool {
 	if res == nil {
 		return false
@@ -75,7 +83,8 @@ func RetryConditionStatus5XX(res *Response, _ error) bool {
 	return res.StatusCode() >= 500 && res.StatusCode() != http.StatusNotImplemented
 }
 
-// RetryConditionStatusZero is a RetryConditionFunc that returns true if the response status code is 0.
+// RetryConditionStatusZero is a [RetryConditionFunc] that returns true if the
+// response status code is 0.
 //
 //   - A status code of 0 typically indicates that no response was received from the server, which can occur
 //     due to network errors, timeouts, or other issues that prevent the request from being completed.
@@ -92,7 +101,7 @@ func RetryConditionStatusZero(res *Response, _ error) bool {
 //
 // It returns true only for retryable URL/network errors and false for errors that
 // should not be retried, such as TLS certificate errors, invalid scheme, invalid
-// headers, and too many redirects.
+// headers, and too many redirects. A nil error returns false.
 func isDoNotRetryError(err error) bool {
 	// no retry on TLS error
 	if _, ok := err.(*tls.CertificateVerificationError); ok {
@@ -161,7 +170,7 @@ func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error
 	return res.Request.RetryDelayStrategy(res, err)
 }
 
-// Return capped exponential backoff with jitter
+// defaultDelayStrategy returns capped exponential backoff with jitter.
 // https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
 func (b *backoffWithJitter) defaultDelayStrategy(attempt int) time.Duration {
 	temp := math.Min(float64(b.max), float64(b.min)*math.Exp2(float64(attempt)))
@@ -193,10 +202,11 @@ func (b *backoffWithJitter) balanceMinMax(delay time.Duration) time.Duration {
 
 var timeNow = time.Now
 
-// parseRetryAfterHeader parses the Retry-After header and returns the
-// delay duration according to the spec: https://httpwg.org/specs/rfc7231.html#header.retry-after
-// The bool returned will be true if the header was successfully parsed.
-// Otherwise, the header was either not present, or was not parseable according to the spec.
+// parseRetryAfterHeader parses the Retry-After header and returns the delay
+// duration according to the spec:
+// https://httpwg.org/specs/rfc7231.html#header.retry-after
+// The bool return value is true when the header was successfully parsed.
+// Otherwise, the header was either not present or not parseable.
 //
 // Retry-After headers come in two flavors: Seconds or HTTP-Date
 //

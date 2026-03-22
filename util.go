@@ -33,8 +33,9 @@ import (
 // Logger interface
 //_______________________________________________________________________
 
-// Logger interface is to abstract the logging from Resty. Gives control to
-// the Resty users, choice of the logger.
+// Logger abstracts Resty's internal logging, giving callers control over where
+// and how log output is written. Implement this interface and register it via
+// [Client.SetLogger] to supply a custom logger.
 type Logger interface {
 	Errorf(format string, v ...any)
 	Warnf(format string, v ...any)
@@ -121,7 +122,7 @@ var (
 		return err
 	}
 
-	// InMemoryJSONUnmarshal function performs the XML unmarshalling completely in memory.
+	// InMemoryXMLUnmarshal function performs the XML unmarshalling completely in memory.
 	//
 	//	c := resty.New()
 	//	defer c.Close()
@@ -136,20 +137,20 @@ var (
 	}
 )
 
-// credentials type is to hold an username and password information
+// credentials holds a username and password pair used for HTTP Basic Auth.
 type credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-// Clone method returns clone of c.
+// Clone method returns a copy of the credentials.
 func (c *credentials) Clone() *credentials {
 	cc := new(credentials)
 	*cc = *c
 	return cc
 }
 
-// String method returns masked value of username and password
+// String method returns a masked representation of the username and password.
 func (c credentials) String() string {
 	return "Username: **********, Password: **********"
 }
@@ -473,28 +474,29 @@ func formatAnyToString(value any) string {
 //___________________________________
 
 var (
-	// guidCounter is atomically incremented when generating a new GUID
-	// using UniqueID() function. It's used as a counter part of an id.
+	// guidCounter is atomically incremented on each call to newGUID
+	// to provide the counter component of the generated ID.
 	guidCounter = readRandomUint32()
 
-	// machineID stores machine id generated once and used in subsequent calls
-	// to UniqueId function.
+	// machineID is a 3-byte identifier derived from the hostname hash,
+	// generated once at startup and reused by newGUID.
 	machineID = readMachineID()
 
-	// processID is current Process Id
+	// processID is the current process ID.
 	processID = os.Getpid()
 )
 
-// newGUID method returns a new Globally Unique Identifier (GUID).
+// newGUID returns a new globally unique identifier (GUID) encoded as a hex string.
 //
-// The 12-byte `UniqueId` consists of-
-//   - 4-byte value representing the seconds since the Unix epoch,
-//   - 3-byte machine identifier,
-//   - 2-byte process id, and
-//   - 3-byte counter, starting with a random value.
+// The 12-byte ID consists of:
+//   - 4 bytes: Unix timestamp (big-endian seconds)
+//   - 3 bytes: machine identifier (first 3 bytes of SHA-256 of the hostname)
+//   - 2 bytes: process ID (big-endian)
+//   - 3 bytes: atomically incrementing counter (big-endian), seeded randomly
 //
-// Uses Mongo Object ID algorithm to generate globally unique ids -
-// https://docs.mongodb.com/manual/reference/method/ObjectId/
+// The algorithm is based on the [MongoDB ObjectId] specification.
+//
+// [MongoDB ObjectId]: https://www.mongodb.com/docs/manual/reference/method/ObjectId/
 func newGUID() string {
 	var b [12]byte
 	// Timestamp, 4 bytes, big endian
@@ -515,7 +517,7 @@ func newGUID() string {
 
 var ioReadFull = io.ReadFull
 
-// readRandomUint32 returns a random guidCounter.
+// readRandomUint32 returns a cryptographically random uint32 used to seed guidCounter.
 func readRandomUint32() uint32 {
 	var b [4]byte
 	if _, err := ioReadFull(rand.Reader, b[:]); err == nil {
@@ -529,8 +531,9 @@ func readRandomUint32() uint32 {
 
 var osHostname = os.Hostname
 
-// readMachineID generates and returns a machine id.
-// If this function fails to get the hostname it will cause a runtime error.
+// readMachineID generates and returns a 3-byte machine identifier.
+// It derives the ID from the SHA-256 hash of the hostname, falling back to
+// random bytes. Panics at startup if neither source is available.
 func readMachineID() []byte {
 	const idSize = 3
 	id := make([]byte, idSize)

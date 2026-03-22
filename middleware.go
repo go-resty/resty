@@ -25,8 +25,8 @@ import (
 // Request Middleware(s)
 //_______________________________________________________________________
 
-// MiddlewareRequestCreate method is used to prepare HTTP requests using the
-// user-provided request values. It performs the following operations -
+// MiddlewareRequestCreate prepares the HTTP request from the user-provided [Request] values.
+// It performs the following operations:
 //   - Parse the request URL with path params and query params
 //   - Parse the request headers from client and request level
 //   - Parse the request body based on the content type and body type
@@ -521,10 +521,10 @@ func handleRequestBody(c *Client, r *Request) error {
 // Response Middleware(s)
 //_______________________________________________________________________
 
-// MiddlewareResponseAutoParse method is used to parse the response body automatically
-// based on the registered HTTP response `Content-Type` decoder, see [Client.AddContentTypeDecoder];
-// if [Request.SetResult], [Request.SetResultError], or [Client.SetResultError] is used, it performs
-// the auto unmarshalling into the respective object.
+// MiddlewareResponseAutoParse parses the response body automatically using the
+// Content-Type decoder registered via [Client.AddContentTypeDecoder].
+// When [Request.SetResult], [Request.SetResultError], or [Client.SetResultError]
+// is used, the body is automatically unmarshalled into the provided object.
 func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 	if (res.CascadeError != nil && (res.Request.isMultiPart && res.StatusCode() == 0)) ||
 		res.Request.IsResponseDoNotParse {
@@ -578,11 +578,12 @@ func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 
 var hostnameReplacer = strings.NewReplacer(":", "_", ".", "_")
 
-// MiddlewareResponseSaveToFile method used to write HTTP response body into
-// file. The filename is determined in the following order -
+// MiddlewareResponseSaveToFile writes the HTTP response body to a file.
+// The filename is determined in the following order:
 //   - [Request.SetResponseSaveFileName]
 //   - Content-Disposition header
-//   - Request URL using [path.Base]
+//   - Request URL path using [path.Base]
+//   - Request URL hostname if the path is empty or "/"
 func MiddlewareResponseSaveToFile(c *Client, res *Response) error {
 	if res.CascadeError != nil || !res.Request.IsResponseSaveToFile {
 		return nil

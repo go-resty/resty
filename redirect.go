@@ -14,23 +14,25 @@ import (
 )
 
 type (
-	// RedirectPolicy to regulate the redirects in the Resty client.
-	// Objects implementing the [RedirectPolicy] interface can be registered as
+	// RedirectPolicy controls redirect behaviour in the Resty client.
+	// Implementations can be registered via [Client.SetRedirectPolicy].
 	//
-	// Apply function should return nil to continue the redirect journey; otherwise
-	// return error to stop the redirect.
+	// Apply should return nil to allow the redirect to proceed, or a non-nil
+	// error to stop it.
 	RedirectPolicy interface {
 		Apply(*http.Request, []*http.Request) error
 	}
 
-	// The [RedirectPolicyFunc] type is an adapter to allow the use of ordinary
-	// functions as [RedirectPolicy]. If `f` is a function with the appropriate
-	// signature, RedirectPolicyFunc(f) is a RedirectPolicy object that calls `f`.
+	// RedirectPolicyFunc is an adapter that allows an ordinary function with the
+	// appropriate signature to be used as a [RedirectPolicy].
 	RedirectPolicyFunc func(*http.Request, []*http.Request) error
 
-	// RedirectInfo struct is used to capture the URL and status code for the redirect history
+	// RedirectInfo records the URL and HTTP status code of a single redirect hop,
+	// used to build the redirect history on a [Response].
 	RedirectInfo struct {
-		URL        string
+		// URL is the redirect target URL.
+		URL string
+		// StatusCode is the HTTP status code that triggered the redirect.
 		StatusCode int
 	}
 )
@@ -40,18 +42,19 @@ func (f RedirectPolicyFunc) Apply(req *http.Request, via []*http.Request) error 
 	return f(req, via)
 }
 
-// RedirectNoPolicy is used to disable the redirects in the Resty client
+// RedirectNoPolicy disables all redirects in the Resty client.
 //
-//	resty.SetRedirectPolicy(resty.RedirectNoPolicy())
+//	client.SetRedirectPolicy(resty.RedirectNoPolicy())
 func RedirectNoPolicy() RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	})
 }
 
-// RedirectFlexiblePolicy method is convenient for creating several redirect policies for Resty clients.
+// RedirectFlexiblePolicy creates a [RedirectPolicy] that allows up to noOfRedirect
+// redirects. Once the limit is reached, the redirect is stopped with an error.
 //
-//	resty.SetRedirectPolicy(RedirectFlexiblePolicy(20))
+//	client.SetRedirectPolicy(resty.RedirectFlexiblePolicy(20))
 func RedirectFlexiblePolicy(noOfRedirect int) RedirectPolicy {
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		if len(via) >= noOfRedirect {
@@ -62,10 +65,10 @@ func RedirectFlexiblePolicy(noOfRedirect int) RedirectPolicy {
 	})
 }
 
-// RedirectDomainCheckPolicy method is convenient for defining domain name redirect rules in Resty clients.
-// Redirect is allowed only for the host mentioned in the policy.
+// RedirectDomainCheckPolicy creates a [RedirectPolicy] that only allows redirects
+// to the specified hostnames. Redirects to any other host are stopped with an error.
 //
-//	resty.SetRedirectPolicy(resty.RedirectDomainCheckPolicy("host1.com", "host2.org", "host3.net"))
+//	client.SetRedirectPolicy(resty.RedirectDomainCheckPolicy("host1.com", "host2.org", "host3.net"))
 func RedirectDomainCheckPolicy(hostnames ...string) RedirectPolicy {
 	hosts := make(map[string]bool)
 	for _, h := range hostnames {

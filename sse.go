@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// Spec: https://html.spec.whatwg.org/multipage/server-sent-events.html
+// SSE specification: https://html.spec.whatwg.org/multipage/server-sent-events.html
 
 var (
 	defaultSseMaxBufSize = 1 << 15 // 32kb
@@ -38,32 +38,31 @@ var (
 )
 
 type (
-	// SSEOpenFunc is a callback function type used to receive notification
-	// when Resty establishes a connection with the server for the
-	// Server-Sent Events(SSE)
+	// SSEOpenFunc is a callback type invoked when Resty establishes a
+	// Server-Sent Events (SSE) connection.
 	SSEOpenFunc func(url string, respHdr http.Header)
 
-	// SSEMessageFunc is a callback function type used to receive event details
-	// from the Server-Sent Events(SSE) stream
+	// SSEMessageFunc is a callback type used to receive event values from the
+	// Server-Sent Events (SSE) stream.
 	SSEMessageFunc func(any)
 
-	// SSEErrorFunc is a callback function type used to receive notification
-	// when an error occurs with [SSESource] processing
+	// SSEErrorFunc is a callback type invoked when an error occurs while
+	// processing an [SSESource] stream.
 	SSEErrorFunc func(error)
 
-	// SSERequestFailureFunc is a callback function type used to receive event
-	// details from the Server-Sent Events(SSE) request failure
+	// SSERequestFailureFunc is a callback function type invoked when the HTTP
+	// request to the SSE endpoint fails to establish or maintain a connection.
 	SSERequestFailureFunc func(err error, res *http.Response)
 
-	// SSE struct represents the event details from the Server-Sent Events(SSE) stream
+	// SSE represents one event from a Server-Sent Events (SSE) stream.
 	SSE struct {
 		ID   string
 		Name string
 		Data string
 	}
 
-	// SSESource struct implements the Server-Sent Events(SSE) [specification] to receive
-	// stream from the server
+	// SSESource implements the Server-Sent Events (SSE) [specification] client
+	// and consumes a stream from a server endpoint.
 	//
 	// [specification]: https://html.spec.whatwg.org/multipage/server-sent-events.html
 	SSESource struct {
@@ -94,8 +93,7 @@ type (
 	}
 )
 
-// NewSSESource method creates a new instance of [SSESource]
-// with default values for Server-Sent Events(SSE)
+// NewSSESource creates a new [SSESource] with default SSE settings.
 //
 //	sse := NewSSESource().
 //		SetURL("https://sse.dev/test").
@@ -107,7 +105,7 @@ type (
 //			nil, // see method godoc
 //		)
 //
-//	err := sse.Connect()
+//	err := sse.Get()
 //	fmt.Println(err)
 //
 // See [SSESource.OnMessage], [SSESource.AddEventListener]
@@ -134,7 +132,7 @@ func NewSSESource() *SSESource {
 	return sse
 }
 
-// SetURL method sets a [SSESource] connection URL in the instance
+// SetURL method sets the event-source URL on the [SSESource] instance.
 //
 //	sse.SetURL("https://sse.dev/test")
 func (sse *SSESource) SetURL(url string) *SSESource {
@@ -142,7 +140,7 @@ func (sse *SSESource) SetURL(url string) *SSESource {
 	return sse
 }
 
-// SetMethod method sets a [SSESource] connection HTTP method in the instance
+// SetMethod method sets the HTTP method used for the [SSESource] connection.
 //
 //	sse.SetMethod("POST"), or sse.SetMethod(resty.MethodPost)
 func (sse *SSESource) SetMethod(method string) *SSESource {
@@ -150,7 +148,7 @@ func (sse *SSESource) SetMethod(method string) *SSESource {
 	return sse
 }
 
-// SetHeader method sets a header and its value to the [SSESource] instance.
+// SetHeader method sets a header and its value on the [SSESource] instance.
 // It overwrites the header value if the key already exists. These headers will be sent in
 // the request while establishing a connection to the event source
 //
@@ -163,7 +161,7 @@ func (sse *SSESource) SetHeader(header, value string) *SSESource {
 	return sse
 }
 
-// SetBody method sets body value to the [SSESource] instance
+// SetBody method sets the request body for the [SSESource] connection.
 //
 // Example:
 // sse.SetBody(bytes.NewReader([]byte(`{"test":"put_data"}`)))
@@ -186,8 +184,8 @@ func (sse *SSESource) SetBody(body io.Reader) *SSESource {
 	return sse
 }
 
-// TLSClientConfig method returns the [tls.Config] from underlying client transport
-// otherwise returns nil
+// TLSClientConfig method returns the [tls.Config] from the underlying client
+// transport, or nil when unavailable.
 func (sse *SSESource) TLSClientConfig() *tls.Config {
 	cfg, err := sse.tlsConfig()
 	if err != nil {
@@ -196,7 +194,7 @@ func (sse *SSESource) TLSClientConfig() *tls.Config {
 	return cfg
 }
 
-// SetTLSClientConfig method sets TLSClientConfig for underlying client Transport.
+// SetTLSClientConfig method sets TLS configuration on the underlying client transport.
 //
 // Values supported by https://pkg.go.dev/crypto/tls#Config can be configured.
 //
@@ -246,7 +244,7 @@ func (sse *SSESource) tlsConfig() (*tls.Config, error) {
 	return transport.TLSClientConfig, nil
 }
 
-// AddHeader method adds a header and its value to the [SSESource] instance.
+// AddHeader method appends a header value on the [SSESource] instance.
 // If the header key already exists, it appends. These headers will be sent in
 // the request while establishing a connection to the event source
 //
@@ -259,8 +257,8 @@ func (sse *SSESource) AddHeader(header, value string) *SSESource {
 	return sse
 }
 
-// SetRetryCount method enables retry attempts on the SSE client while establishing
-// connection with the server
+// SetRetryCount method sets the retry count used while establishing an SSE
+// connection with the server.
 //
 //	first attempt + retry count = total attempts
 //
@@ -274,8 +272,8 @@ func (sse *SSESource) SetRetryCount(count int) *SSESource {
 	return sse
 }
 
-// SetRetryWaitTime method sets the default wait time for sleep before retrying
-// the request
+// SetRetryWaitTime method sets the default wait time before retrying the
+// connection request.
 //
 // Default is 100 milliseconds.
 //
@@ -289,8 +287,8 @@ func (sse *SSESource) SetRetryWaitTime(waitTime time.Duration) *SSESource {
 	return sse
 }
 
-// SetRetryMaxWaitTime method sets the max wait time for sleep before retrying
-// the request
+// SetRetryMaxWaitTime method sets the maximum wait time before retrying the
+// connection request.
 //
 // Default is 2 seconds.
 //
@@ -304,7 +302,7 @@ func (sse *SSESource) SetRetryMaxWaitTime(maxWaitTime time.Duration) *SSESource 
 	return sse
 }
 
-// SetSizeMaxBuffer method sets the given buffer size into the SSE client
+// SetSizeMaxBuffer method sets the maximum scanner buffer size for the SSE client.
 //
 // Default is 32kb
 //
@@ -323,9 +321,9 @@ func (sse *SSESource) Logger() Logger {
 	return sse.log
 }
 
-// SetLogger method sets given writer for logging
+// SetLogger method sets the [Logger] used by the SSE client.
 //
-// Compliant to interface [resty.Logger]
+// Compliant to interface [Logger].
 func (sse *SSESource) SetLogger(l Logger) *SSESource {
 	sse.lock.Lock()
 	defer sse.lock.Unlock()
@@ -341,8 +339,8 @@ func (sse *SSESource) outputLogTo(w io.Writer) *SSESource {
 	return sse
 }
 
-// OnOpen registered callback gets triggered when the connection is
-// established with the server
+// OnOpen registers a callback that is triggered when a connection is
+// established with the server.
 //
 //	sse.OnOpen(func(url string, resHdr http.Header) {
 //		fmt.Println("I'm connected:", url, resHdr)
@@ -358,8 +356,7 @@ func (sse *SSESource) OnOpen(ef SSEOpenFunc) *SSESource {
 	return sse
 }
 
-// OnError registered callback gets triggered when the error occurred
-// in the process
+// OnError registers a callback that is triggered when an error occurs.
 //
 //	sse.OnError(func(err error) {
 //		fmt.Println("Error occurred:", err)
@@ -375,8 +372,8 @@ func (sse *SSESource) OnError(ef SSEErrorFunc) *SSESource {
 	return sse
 }
 
-// OnRequestFailure registered callback gets triggered when the HTTP request
-// failure while establishing a SSE connection.
+// OnRequestFailure registers a callback that is triggered when the HTTP request
+// fails while establishing an SSE connection.
 //
 //	sse.OnRequestFailure(func(err error, res *http.Response) {
 //		fmt.Println("Error and response:", err, res)
@@ -421,8 +418,8 @@ func (sse *SSESource) OnMessage(ef SSEMessageFunc, result any) *SSESource {
 	return sse.AddEventListener(defaultEventName, ef, result)
 }
 
-// AddEventListener method registers a callback to consume a specific event type
-// messages from the server. The second result argument is optional; it can be used
+// AddEventListener method registers a callback to consume messages for a specific
+// event type from the server. The second result argument is optional; it can be used
 // to register the data type for JSON data.
 //
 //	sse.AddEventListener(
@@ -461,7 +458,7 @@ func (sse *SSESource) AddEventListener(eventName string, ef SSEMessageFunc, resu
 
 // Get method establishes the connection with the server.
 //
-//	sse := NewSSE().
+//	sse := NewSSESource().
 //		SetURL("https://sse.dev/test").
 //		OnMessage(
 //			func(e any) {
@@ -507,7 +504,7 @@ func (sse *SSESource) Get() error {
 	}
 }
 
-// Close method used to close SSE connection explicitly
+// Close method closes the SSE connection explicitly.
 func (sse *SSESource) Close() {
 	sse.lock.Lock()
 	defer sse.lock.Unlock()

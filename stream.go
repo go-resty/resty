@@ -19,28 +19,37 @@ import (
 )
 
 var (
+	// ErrContentDecompresserNotFound is returned when no decompresser is registered
+	// for the Content-Encoding directive present in the response.
 	ErrContentDecompresserNotFound = errors.New("resty: content decoder not found")
 
-	// It's good to have decode limit; let's start with object size
-	// limit as 1M objects, which should be more than enough for most
-	// use cases if users need more, they can always implement their
-	// own decoder and set it in Client.SetContentDecoder
+	// maxDecodeObjects caps the number of JSON or XML objects decoded from a single
+	// response body. If the limit is exceeded before EOF, decoding returns an error.
+	// Users who need a higher limit can register a custom decoder via
+	// [Client.AddContentTypeDecoder].
 	//
-	// Max 1 million objects, +1 to detect if we exceed the limit without EOF
+	// Set to 1 million objects (+1 to detect overflow before EOF).
 	maxDecodeObjects = 1000001
 )
 
 type (
-	// ContentTypeEncoder type is for encoding the request body based on header Content-Type
+	// ContentTypeEncoder encodes a request body value into the given writer
+	// according to the request Content-Type header.
+	//
+	// See [Client.AddContentTypeEncoder].
 	ContentTypeEncoder func(io.Writer, any) error
 
-	// ContentTypeDecoder type is for decoding the response body based on header Content-Type
+	// ContentTypeDecoder decodes a response body from the given reader
+	// according to the response Content-Type header.
+	//
+	// See [Client.AddContentTypeDecoder].
 	ContentTypeDecoder func(io.Reader, any) error
 
-	// ContentDecompresser type is for decompressing response body based on header Content-Encoding
-	// ([RFC 9110])
-	//
+	// ContentDecompresser wraps an [io.ReadCloser] response body with
+	// decompression based on the Content-Encoding header ([RFC 9110]).
 	// For example, gzip, deflate, etc.
+	//
+	// See [Client.AddContentDecompresser].
 	//
 	// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
 	ContentDecompresser func(io.ReadCloser) (io.ReadCloser, error)
@@ -284,13 +293,14 @@ func (w *deflateReaderWrapper) Close() error {
 	return nil
 }
 
-// ErrReadExceedsThresholdLimit is returned when the read operation exceeds the defined threshold limit.
+// ErrReadExceedsThresholdLimit is returned when the response body read exceeds the
+// limit set by [Client.SetResponseBodyLimit] or [Request.SetResponseBodyLimit].
 var ErrReadExceedsThresholdLimit = errors.New("resty: read exceeds the threshold limit")
 
 var _ io.ReadCloser = (*limitReadCloser)(nil)
 var _ resetter = (*limitReadCloser)(nil)
 
-// resetter is an interface that defines a Reset method for resetting the reader state.
+// resetter is implemented by readers that support resetting their internal read position.
 type resetter interface {
 	Reset() error
 }

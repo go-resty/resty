@@ -14,53 +14,50 @@ import (
 	"time"
 )
 
-// TraceInfo struct is used to provide request trace info such as DNS lookup
-// duration, Connection obtain duration, Server processing duration, etc.
+// TraceInfo holds timing and connection details captured during a request via
+// [httptrace.ClientTrace]. Fields cover DNS lookup, TCP connection, TLS handshake,
+// server processing, and total end-to-end duration.
 type TraceInfo struct {
-	// DNSLookup is the duration that transport took to perform
-	// DNS lookup.
+	// DNSLookup is the duration that the transport took to perform the DNS lookup.
 	DNSLookup time.Duration `json:"dns_lookup_time"`
 
 	// ConnTime is the duration it took to obtain a successful connection.
 	ConnTime time.Duration `json:"connection_time"`
 
-	// TCPConnTime is the duration it took to obtain the TCP connection.
+	// TCPConnTime is the duration it took to establish the TCP connection.
 	TCPConnTime time.Duration `json:"tcp_connection_time"`
 
 	// TLSHandshake is the duration of the TLS handshake.
 	TLSHandshake time.Duration `json:"tls_handshake_time"`
 
-	// ServerTime is the server's duration for responding to the first byte.
+	// ServerTime is the duration from sending the request to receiving the first response byte.
 	ServerTime time.Duration `json:"server_time"`
 
-	// ResponseTime is the duration since the first response byte from the server to
-	// request completion.
+	// ResponseTime is the duration from the first response byte to the completion of reading the body.
 	ResponseTime time.Duration `json:"response_time"`
 
-	// TotalTime is the duration of the total time request taken end-to-end.
+	// TotalTime is the total end-to-end duration of the request.
 	TotalTime time.Duration `json:"total_time"`
 
-	// IsConnReused is whether this connection has been previously
-	// used for another HTTP request.
+	// IsConnReused reports whether this connection was previously used for another HTTP request.
 	IsConnReused bool `json:"is_connection_reused"`
 
-	// IsConnWasIdle is whether this connection was obtained from an
-	// idle pool.
+	// IsConnWasIdle reports whether this connection was obtained from an idle pool.
 	IsConnWasIdle bool `json:"is_connection_was_idle"`
 
-	// ConnIdleTime is the duration how long the connection that was previously
-	// idle, if IsConnWasIdle is true.
+	// ConnIdleTime is the duration that the connection had been idle before being reused,
+	// valid only when IsConnWasIdle is true.
 	ConnIdleTime time.Duration `json:"connection_idle_time"`
 
-	// RequestAttempt is to represent the request attempt made during a Resty
-	// request execution flow, including retry count.
+	// RequestAttempt is the number of the current attempt in the request execution flow,
+	// where 1 is the initial attempt and values greater than 1 indicate retries.
 	RequestAttempt int `json:"request_attempt"`
 
-	// RemoteAddr returns the remote network address.
+	// RemoteAddr is the remote network address of the server.
 	RemoteAddr string `json:"remote_address"`
 }
 
-// String method returns string representation of request trace information.
+// String method returns a string representation of the request trace information.
 func (ti TraceInfo) String() string {
 	return fmt.Sprintf(`TRACE INFO:
   DNSLookupTime : %v
@@ -80,12 +77,12 @@ func (ti TraceInfo) String() string {
 		ti.RemoteAddr)
 }
 
-// JSON method returns the JSON string of request trace information
+// JSON method returns the JSON representation of the request trace information.
 func (ti TraceInfo) JSON() string {
 	return toJSON(ti)
 }
 
-// Clone method returns the clone copy of [TraceInfo]
+// Clone method returns a deep copy of the [TraceInfo].
 func (ti TraceInfo) Clone() *TraceInfo {
 	ti2 := new(TraceInfo)
 	*ti2 = ti

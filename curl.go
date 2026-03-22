@@ -18,6 +18,7 @@ import (
 
 const unexecutedRequestURL = "http://unexecuted-request"
 
+// buildCurlCmd returns an equivalent curl command for the given request.
 func buildCurlCmd(req *Request) string {
 	// generate curl raw headers
 	var curl = "curl -X " + req.Method + " "
@@ -68,20 +69,20 @@ func buildCurlCmd(req *Request) string {
 	return curl
 }
 
-// dumpCurlCookies dumps cookies for curl format
+// dumpCurlCookies returns a Cookie header string formatted for curl.
 func dumpCurlCookies(cookies []*http.Cookie) string {
 	sb := strings.Builder{}
 	sb.WriteString("Cookie: ")
 	for i, cookie := range cookies {
 		if i > 0 {
-			sb.WriteString("; ") // Semicolon per RFC 6265
+			sb.WriteString("; ") // Pairs are delimited by "; " per RFC 6265.
 		}
 		sb.WriteString(cookie.Name + "=" + url.QueryEscape(cookie.Value))
 	}
 	return sb.String()
 }
 
-// dumpCurlHeaders dumps headers to curl format
+// dumpCurlHeaders returns request headers as sorted key/value pairs for curl generation.
 func dumpCurlHeaders(req *http.Request) *[][2]string {
 	headers := [][2]string{}
 	for k, vs := range req.Header {
@@ -99,8 +100,8 @@ func dumpCurlHeaders(req *http.Request) *[][2]string {
 
 var regexCmdQuote = regexp.MustCompile(`[^\w@%+=:,./-]`)
 
-// cmdQuote method to escape arbitrary strings for a safe use as
-// command line arguments in the most common POSIX shells.
+// cmdQuote escapes arbitrary strings for safe use as command-line arguments
+// in common POSIX shells.
 //
 // The original Python package which this work was inspired by can be found
 // at https://pypi.python.org/pypi/shellescape.

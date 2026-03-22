@@ -14,17 +14,23 @@ import (
 	"time"
 )
 
-// ErrCircuitBreakerOpen is returned when the circuit breaker is open.
+// ErrCircuitBreakerOpen is returned by [Client] execute method when the circuit breaker
+// is in the open state and a request is blocked.
 var ErrCircuitBreakerOpen = errors.New("resty: circuit breaker open")
 
 type (
-	// CircuitBreakerTriggerHook type is for reacting to circuit breaker trigger hooks.
+	// CircuitBreakerTriggerHook is called each time the circuit breaker blocks a
+	// request because it is in the open state. The hook receives the blocked
+	// [Request] and [ErrCircuitBreakerOpen] as the error.
 	CircuitBreakerTriggerHook func(*Request, error)
 
-	// CircuitBreakerStateChangeHook type is for reacting to circuit breaker state change hooks.
+	// CircuitBreakerStateChangeHook is called whenever the circuit breaker
+	// transitions between states (Closed → Open, Open → Half-Open, Half-Open → Closed, etc.).
+	// It receives the previous and the new [CircuitBreakerState].
 	CircuitBreakerStateChangeHook func(oldState, newState CircuitBreakerState)
 
-	// CircuitBreakerState type represents the state of the circuit breaker.
+	// CircuitBreakerState is the type for the three circuit breaker states:
+	// [CircuitBreakerStateClosed], [CircuitBreakerStateOpen], and [CircuitBreakerStateHalfOpen].
 	CircuitBreakerState uint32
 )
 
@@ -124,30 +130,38 @@ func (sw *slidingWindow[G]) SetInterval(interval time.Duration) {
 }
 
 const (
-	// CircuitBreakerStateClosed represents the closed state of the circuit breaker.
+	// CircuitBreakerStateClosed is the normal operating state: all requests are
+	// forwarded and failures are tracked against the configured threshold.
 	CircuitBreakerStateClosed CircuitBreakerState = iota
 
-	// CircuitBreakerStateOpen represents the open state of the circuit breaker.
+	// CircuitBreakerStateOpen is the tripped state: all requests are blocked and
+	// return [ErrCircuitBreakerOpen] immediately. After the reset timeout the
+	// breaker transitions to [CircuitBreakerStateHalfOpen].
 	CircuitBreakerStateOpen
 
-	// CircuitBreakerStateHalfOpen represents the half-open state of the circuit breaker.
+	// CircuitBreakerStateHalfOpen is the recovery probe state: a single request
+	// is allowed through. A success transitions to [CircuitBreakerStateClosed];
+	// a failure transitions back to [CircuitBreakerStateOpen].
 	CircuitBreakerStateHalfOpen
 )
 
-// CircuitBreaker struct implements a state machine to monitor and manage the
-// states of circuit breakers. The three states are:
-//   - Closed: requests are allowed
-//   - Open: requests are blocked
-//   - Half-Open: a single request is allowed to determine
+// CircuitBreaker implements a three-state state machine that protects downstream
+// services from cascading failures.
 //
-// Transitions
-//   - To Closed State: when the success count reaches the success threshold.
-//   - To Open State: when the failure count reaches the failure threshold.
-//   - Half-Open Check: when the specified timeout reaches, a single request is allowed
-//     to determine the transition state; if failed, it goes back to the open state.
+// States:
+//   - [CircuitBreakerStateClosed]: requests pass through; failures are recorded.
+//   - [CircuitBreakerStateOpen]: all requests are rejected with [ErrCircuitBreakerOpen].
+//   - [CircuitBreakerStateHalfOpen]: one probe request is allowed to test recovery.
 //
-// Use [NewCircuitBreakerWithCount] or [NewCircuitBreakerWithRatio] to create a new [CircuitBreaker]
-// instance accordingly.
+// State transitions:
+//   - Closed → Open: when the failure count (or ratio) reaches the configured threshold.
+//   - Open → Half-Open: automatically after the reset timeout elapses.
+//   - Half-Open → Closed: when the probe success count reaches the success threshold.
+//   - Half-Open → Open: when the probe request is classified as a failure by any policy.
+//
+// Use [NewCircuitBreakerWithCount] for absolute failure count thresholds, or
+// [NewCircuitBreakerWithRatio] for failure-ratio thresholds.
+// Register the instance via [Client.SetCircuitBreaker].
 type CircuitBreaker struct {
 	lock         *sync.RWMutex
 	policies     []CircuitBreakerPolicy
@@ -171,10 +185,13 @@ type CircuitBreaker struct {
 	minRequests  uint64  // Minimum number of requests to consider failure ratio
 }
 
-// NewCircuitBreakerWithCount method creates a new [CircuitBreaker] instance with Count settings.
+// NewCircuitBreakerWithCount creates a [CircuitBreaker] that trips when the absolute
+// number of request failures within the sliding window reaches failureThreshold.
+// Once open, it recovers after resetTimeout and closes again when successThreshold
+// consecutive probe successes are observed.
 //
-// The default settings are:
-//   - Policies: CircuitBreaker5xxPolicy
+// The optional policies override the detection logic used to classify a response as
+// a failure. When no policies are provided, [CircuitBreaker5xxPolicy] is used by default.
 func NewCircuitBreakerWithCount(failureThreshold uint64, successThreshold uint64,
 	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
 	cb := newCircuitBreaker(resetTimeout, policies...)
@@ -183,10 +200,13 @@ func NewCircuitBreakerWithCount(failureThreshold uint64, successThreshold uint64
 	return cb
 }
 
-// NewCircuitBreakerWithRatio method creates a new [CircuitBreaker] instance with Ratio settings.
+// NewCircuitBreakerWithRatio creates a [CircuitBreaker] that trips when the ratio of
+// failures to total requests within the sliding window reaches failureRatio (0.0–1.0),
+// provided at least minRequests have been observed. Once open, it recovers after
+// resetTimeout. The half-open probe closes the breaker after one successful request.
 //
-// The default settings are:
-//   - Policies: CircuitBreaker5xxPolicy
+// The optional policies override the detection logic used to classify a response as
+// a failure. When no policies are provided, [CircuitBreaker5xxPolicy] is used by default.
 func NewCircuitBreakerWithRatio(failureRatio float64, minRequests uint64,
 	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
 	cb := newCircuitBreaker(resetTimeout, policies...)
@@ -217,7 +237,8 @@ func newCircuitBreaker(resetTimeout time.Duration, policies ...CircuitBreakerPol
 	return cb
 }
 
-// OnTrigger method adds a [CircuitBreakerTriggerHook] to the [CircuitBreaker] instance.
+// OnTrigger registers one or more [CircuitBreakerTriggerHook] functions that are invoked
+// each time the circuit breaker rejects a request in the open state.
 func (cb *CircuitBreaker) OnTrigger(hooks ...CircuitBreakerTriggerHook) *CircuitBreaker {
 	cb.lock.Lock()
 	defer cb.lock.Unlock()
@@ -234,7 +255,8 @@ func (cb *CircuitBreaker) onTriggerHooks(req *Request, err error) {
 	}
 }
 
-// OnStateChange method adds a [CircuitBreakerStateChangeHook] to the [CircuitBreaker] instance.
+// OnStateChange registers one or more [CircuitBreakerStateChangeHook] functions that are
+// invoked whenever the circuit breaker transitions between states.
 func (cb *CircuitBreaker) OnStateChange(hooks ...CircuitBreakerStateChangeHook) *CircuitBreaker {
 	cb.lock.Lock()
 	defer cb.lock.Unlock()
@@ -251,12 +273,14 @@ func (cb *CircuitBreaker) onStateChangeHooks(oldState, newState CircuitBreakerSt
 	}
 }
 
-// CircuitBreakerPolicy is a function type that determines whether a response should
-// trip the [CircuitBreaker].
+// CircuitBreakerPolicy is a function that inspects a raw [http.Response] and returns
+// true when that response should be counted as a failure and potentially trip the
+// [CircuitBreaker]. Multiple policies can be registered; the breaker trips if any
+// policy returns true.
 type CircuitBreakerPolicy func(resp *http.Response) bool
 
-// CircuitBreaker5xxPolicy is a [CircuitBreakerPolicy] that trips the [CircuitBreaker] if
-// the response status code is 500 or greater.
+// CircuitBreaker5xxPolicy is the default [CircuitBreakerPolicy]. It classifies a
+// response as a failure when the HTTP status code is greater than or equal to 500.
 func CircuitBreaker5xxPolicy(resp *http.Response) bool {
 	return resp.StatusCode > 499
 }

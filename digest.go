@@ -24,9 +24,23 @@ import (
 )
 
 var (
-	ErrDigestBadChallenge    = errors.New("resty: digest: challenge is bad")
-	ErrDigestInvalidCharset  = errors.New("resty: digest: invalid charset")
+	// ErrDigestBadChallenge is returned when the server sends a malformed or
+	// unrecognisable Digest challenge in the WWW-Authenticate header.
+	ErrDigestBadChallenge = errors.New("resty: digest: challenge is bad")
+
+	// ErrDigestInvalidCharset is returned when the Digest challenge specifies
+	// a charset other than UTF-8.
+	ErrDigestInvalidCharset = errors.New("resty: digest: invalid charset")
+
+	// ErrDigestAlgNotSupported is returned when the Digest challenge uses a
+	// hash algorithm not supported by Resty (see [RFC 7616 Section 6.1]).
+	//
+	// [RFC 7616 Section 6.1]: https://datatracker.ietf.org/doc/html/rfc7616#section-6.1
 	ErrDigestAlgNotSupported = errors.New("resty: digest: algorithm is not supported")
+
+	// ErrDigestQopNotSupported is returned when none of the quality-of-protection
+	// (qop) directives in the Digest challenge are supported by Resty.
+	// Resty supports auth and auth-int.
 	ErrDigestQopNotSupported = errors.New("resty: digest: qop is not supported")
 )
 
