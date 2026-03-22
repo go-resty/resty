@@ -717,7 +717,7 @@ func TestMultipartCornerCoverage(t *testing.T) {
 		Reader: bytes.NewBufferString("I have no seek capability"),
 	}
 	err := mf.resetReader()
-	assertNil(t, err)
+	assertEqual(t, ErrReaderNotSeekable, err)
 
 	// wrap test writer to return 0 written value
 	mpw := multipartProgressWriter{w: &returnValueTestWriter{}}

@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,11 @@ import (
 )
 
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+var ErrReaderNotSeekable = errors.New(
+	"resty: multipart reader is not seekable and no factory provided; " +
+		"use resty.NewMultipartFieldFromFactory for retry support with non-seekable readers",
+)
 
 func escapeQuotes(s string) string {
 	return quoteEscaper.Replace(s)
@@ -77,7 +83,7 @@ func (mf *MultipartField) resetReader() error {
 		_, err := rs.Seek(0, io.SeekStart)
 		return err
 	}
-	return nil
+	return ErrReaderNotSeekable
 }
 
 func (mf *MultipartField) isValues() bool {
