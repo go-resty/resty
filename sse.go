@@ -76,6 +76,7 @@ type (
 		retryCount       int
 		retryWaitTime    time.Duration
 		retryMaxWaitTime time.Duration
+		retryConditions  []RetryConditionFunc
 		serverSentRetry  time.Duration
 		maxBufSize       int
 		onOpen           SSEOpenFunc
@@ -117,6 +118,7 @@ func NewSSESource() *SSESource {
 		retryCount:       3,
 		retryWaitTime:    defaultWaitTime,
 		retryMaxWaitTime: defaultMaxWaitTime,
+		retryConditions:  make([]RetryConditionFunc, 0),
 		maxBufSize:       defaultSseMaxBufSize,
 		onEvent:          make(map[string]*callback),
 		httpClient: &http.Client{
@@ -124,6 +126,11 @@ func NewSSESource() *SSESource {
 			Transport: createTransport(nil, nil),
 		},
 	}
+	sse.retryConditions = append(sse.retryConditions,
+		RetryConditionStatusZero,
+		RetryConditionStatusTooManyRequests,
+		RetryConditionStatus5XX,
+	)
 	return sse
 }
 
@@ -603,7 +610,14 @@ func (sse *SSESource) connect() (*http.Response, error) {
 		}
 
 		rRes := wrapResponse(resp, req)
-		needsRetry := applyRetryDefaultConditions(rRes, doErr)
+		needsRetry := isDoNotRetryError(doErr)
+		if !needsRetry && resp != nil {
+			for _, retryCondition := range sse.retryConditions {
+				if needsRetry = retryCondition(rRes, doErr); needsRetry {
+					break
+				}
+			}
+		}
 
 		// retry not required stop here
 		if !needsRetry {

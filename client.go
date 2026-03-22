@@ -1363,7 +1363,9 @@ func (c *Client) IsRetryDefaultConditions() bool {
 }
 
 // SetRetryDefaultConditions method is used to enable/disable the Resty's default
-// retry conditions
+// retry conditions that checks transport, headers and URL errors.
+//
+// By default it is enabled.
 //
 // It can be overridden at request level, see [Request.SetRetryDefaultConditions]
 func (c *Client) SetRetryDefaultConditions(b bool) *Client {

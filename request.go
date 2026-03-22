@@ -1171,7 +1171,9 @@ func (r *Request) SetRetryDelayStrategy(rs RetryDelayStrategyFunc) *Request {
 }
 
 // SetRetryDefaultConditions method is used to enable/disable the Resty's default
-// retry conditions on request level
+// retry conditions on request level, that checks transport, headers and URL errors.
+//
+// By default it is enabled.
 //
 // It overrides value set at the client instance level, see [Client.SetRetryDefaultConditions]
 func (r *Request) SetRetryDefaultConditions(b bool) *Request {
@@ -1509,7 +1511,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 
 			// apply default retry conditions
 			if r.IsRetryDefaultConditions {
-				needsRetry = applyRetryDefaultConditions(res, err)
+				needsRetry = isDoNotRetryError(err)
 			}
 
 			// apply user-defined retry conditions if default one

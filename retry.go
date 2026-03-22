@@ -48,7 +48,52 @@ var (
 	regexErrInvalidHeader    = regexp.MustCompile("invalid header")
 )
 
-func applyRetryDefaultConditions(res *Response, err error) bool {
+// RetryConditionStatusTooManyRequests is a RetryConditionFunc that returns true
+// if the response status code is 429 Too Many Requests.
+//
+//   - The 429 status code indicates that the user has sent too many requests in a given amount
+//     of time ("rate limiting").
+//   - Retrying after receiving a 429 status code can be effective, especially if the server includes
+//     a Retry-After header indicating when to retry.
+func RetryConditionStatusTooManyRequests(res *Response, _ error) bool {
+	if res == nil {
+		return false
+	}
+	return res.StatusCode() == http.StatusTooManyRequests
+}
+
+// RetryConditionStatus5XX is a RetryConditionFunc that returns true if the response status code is 500 or above,
+// excluding Status 501 - Not Implemented.
+//
+//   - 5XX status codes are generally considered temporary server errors that may be resolved on retry
+//   - The rationale for excluding 501 Not Implemented is that it indicates the server does not support the
+//     functionality required to fulfill the request,
+func RetryConditionStatus5XX(res *Response, _ error) bool {
+	if res == nil {
+		return false
+	}
+	return res.StatusCode() >= 500 && res.StatusCode() != http.StatusNotImplemented
+}
+
+// RetryConditionStatusZero is a RetryConditionFunc that returns true if the response status code is 0.
+//
+//   - A status code of 0 typically indicates that no response was received from the server, which can occur
+//     due to network errors, timeouts, or other issues that prevent the request from being completed.
+//   - Retrying when a status code of 0 is encountered can be effective, as it may allow the request to succeed
+//     on subsequent attempts if the underlying issue is transient.
+func RetryConditionStatusZero(res *Response, _ error) bool {
+	if res == nil {
+		return false
+	}
+	return res.StatusCode() == 0
+}
+
+// isDoNotRetryError checks whether the given request error should trigger a retry.
+//
+// It returns true only for retryable URL/network errors and false for errors that
+// should not be retried, such as TLS certificate errors, invalid scheme, invalid
+// headers, and too many redirects.
+func isDoNotRetryError(err error) bool {
 	// no retry on TLS error
 	if _, ok := err.(*tls.CertificateVerificationError); ok {
 		return false
@@ -66,20 +111,6 @@ func applyRetryDefaultConditions(res *Response, err error) bool {
 			return false
 		}
 		return u.Temporary() // possible retry if it's true
-	}
-
-	if res == nil {
-		return false
-	}
-
-	// certain HTTP status codes are temporary so that we can retry
-	//	- 429 Too Many Requests
-	//	- 500 or above (it's better to ignore 501 Not Implemented)
-	//	- 0 No status code received
-	if res.StatusCode() == http.StatusTooManyRequests ||
-		(res.StatusCode() >= 500 && res.StatusCode() != http.StatusNotImplemented) ||
-		res.StatusCode() == 0 {
-		return true
 	}
 
 	return false
