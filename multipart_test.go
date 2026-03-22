@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -717,11 +718,40 @@ func TestMultipartCornerCoverage(t *testing.T) {
 		Reader: bytes.NewBufferString("I have no seek capability"),
 	}
 	err := mf.resetReader()
-	assertNil(t, err)
+	assertEqual(t, ErrReaderNotSeekable, err)
 
 	// wrap test writer to return 0 written value
 	mpw := multipartProgressWriter{w: &returnValueTestWriter{}}
 	n, err := mpw.Write([]byte("test return value"))
 	assertNil(t, err)
 	assertEqual(t, 0, n)
+}
+
+func TestRetryNonSeekableReaderWithoutFactoryReturnsError(t *testing.T) {
+	attemptCount := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attemptCount++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	client := dcnl()
+	client.AddRetryConditions(func(r *Response, err error) bool {
+		return r.StatusCode() == http.StatusServiceUnavailable
+	})
+	_, err := client.R().
+		SetRetryCount(2).
+		SetRetryWaitTime(10 * time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		SetMultipartFields(&MultipartField{
+			Name:        "file",
+			FileName:    "test.txt",
+			ContentType: "text/plain",
+			Reader:      bytes.NewBufferString("non-seekable"),
+		}).
+		Post(srv.URL)
+
+	assertErrorIs(t, ErrReaderNotSeekable, err)
+	assertEqual(t, 1, attemptCount)
 }
