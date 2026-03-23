@@ -16,27 +16,27 @@ import (
 	"time"
 )
 
-// ErrNoBaseURLs error returned when no base URLs are found
+// ErrNoBaseURLs is returned when no base URLs are found.
 var ErrNoBaseURLs = errors.New("resty: no base URLs found")
 
-// LoadBalancer is the interface that wraps the HTTP client load-balancing
-// algorithm that returns the "Next" Base URL for the request to target
+// LoadBalancer is the interface that abstracts a load-balancing algorithm.
+// Implementations return the next target base URL for each request and accept
+// feedback about request outcomes so the algorithm can adapt over time.
 type LoadBalancer interface {
 	NextWithContext(ctx context.Context) (string, error)
 	Feedback(*RequestFeedback)
 	Close() error
 }
 
-// RequestFeedback struct is used to send the request feedback to load balancing
-// algorithm
+// RequestFeedback contains request outcome data reported back to a
+// [LoadBalancer] implementation.
 type RequestFeedback struct {
 	BaseURL string
 	Success bool
 	Attempt int
 }
 
-// NewRoundRobin method creates the new Round-Robin(RR) request load balancer
-// instance with given base URLs
+// NewRoundRobin creates a Round-Robin (RR) load balancer with the given base URLs.
 func NewRoundRobin(baseURLs ...string) (*RoundRobin, error) {
 	if len(baseURLs) == 0 {
 		return nil, ErrNoBaseURLs
@@ -51,16 +51,15 @@ func NewRoundRobin(baseURLs ...string) (*RoundRobin, error) {
 
 var _ LoadBalancer = (*RoundRobin)(nil)
 
-// RoundRobin struct used to implement the Round-Robin(RR) request
-// load balancer algorithm
+// RoundRobin implements the Round-Robin (RR) load-balancing algorithm.
 type RoundRobin struct {
 	lock     *sync.Mutex
 	baseURLs []string
 	current  int
 }
 
-// NextWithContext method returns the next Base URL based on the Round-Robin(RR) algorithm
-// with context support for cancellation
+// NextWithContext returns the next base URL using the Round-Robin (RR)
+// algorithm and supports context cancellation.
 func (rr *RoundRobin) NextWithContext(ctx context.Context) (string, error) {
 	select {
 	case <-ctx.Done():
@@ -80,13 +79,13 @@ func (rr *RoundRobin) NextWithContext(ctx context.Context) (string, error) {
 	return baseURL, nil
 }
 
-// Feedback method does nothing in Round-Robin(RR) request load balancer
+// Feedback is a no-op for the Round-Robin (RR) load balancer.
 func (rr *RoundRobin) Feedback(_ *RequestFeedback) {}
 
-// Close method does nothing in Round-Robin(RR) request load balancer
+// Close is a no-op for the Round-Robin (RR) load balancer.
 func (rr *RoundRobin) Close() error { return nil }
 
-// Refresh method reset the existing Base URLs with the given Base URLs slice to refresh it
+// Refresh method replaces the existing base URL list with the given base URLs.
 func (rr *RoundRobin) Refresh(baseURLs ...string) error {
 	rr.lock.Lock()
 	defer rr.lock.Unlock()
@@ -104,8 +103,7 @@ func (rr *RoundRobin) Refresh(baseURLs ...string) error {
 	return nil
 }
 
-// Host struct used to represent the host information and its weight
-// to load balance the requests
+// Host represents a backend target and its load-balancing parameters.
 type Host struct {
 	// BaseURL represents the targeted host base URL
 	//	https://resty.dev
@@ -135,20 +133,21 @@ func (h *Host) resetWeight(totalWeight int) {
 
 type HostState int
 
-// Host transition states
+// Host transition states.
 const (
 	HostStateInActive HostState = iota
 	HostStateActive
 )
 
-// HostStateChangeFunc type provides feedback on host state transitions
+// HostStateChangeFunc is a callback type invoked whenever a host transitions between states.
+// baseURL identifies the host, from is the previous [HostState], and to is the new [HostState].
 type HostStateChangeFunc func(baseURL string, from, to HostState)
 
-// ErrNoActiveHost error returned when all hosts are inactive on the load balancer
+// ErrNoActiveHost is returned when all hosts are inactive in the load balancer.
 var ErrNoActiveHost = errors.New("resty: no active host")
 
-// NewWeightedRoundRobin method creates the new Weighted Round-Robin(WRR)
-// request load balancer instance with given recovery duration and hosts slice
+// NewWeightedRoundRobin creates a Weighted Round-Robin (WRR) load balancer with
+// the given recovery duration and hosts.
 func NewWeightedRoundRobin(recovery time.Duration, hosts ...*Host) (*WeightedRoundRobin, error) {
 	if recovery == 0 {
 		recovery = 120 * time.Second // defaults to 120 seconds
@@ -169,8 +168,8 @@ func NewWeightedRoundRobin(recovery time.Duration, hosts ...*Host) (*WeightedRou
 
 var _ LoadBalancer = (*WeightedRoundRobin)(nil)
 
-// WeightedRoundRobin struct used to represent the host details for
-// Weighted Round-Robin(WRR) algorithm implementation
+// WeightedRoundRobin implements the Weighted Round-Robin (WRR) load-balancing algorithm.
+// Hosts with higher weights receive a proportionally larger share of requests.
 type WeightedRoundRobin struct {
 	lock          *sync.RWMutex
 	hosts         []*Host
@@ -184,8 +183,8 @@ type WeightedRoundRobin struct {
 	recovery time.Duration
 }
 
-// NextWithContext method returns the next Base URL based on Weighted Round-Robin(WRR)
-// with context support for cancellation
+// NextWithContext returns the next base URL using the Weighted Round-Robin (WRR)
+// algorithm and supports context cancellation.
 func (wrr *WeightedRoundRobin) NextWithContext(ctx context.Context) (string, error) {
 	select {
 	case <-ctx.Done():
@@ -219,8 +218,8 @@ func (wrr *WeightedRoundRobin) NextWithContext(ctx context.Context) (string, err
 	return best.BaseURL, nil
 }
 
-// Feedback method process the request feedback for Weighted Round-Robin(WRR)
-// request load balancer
+// Feedback method processes a request outcome report for the Weighted Round-Robin(WRR)
+// load balancer.
 func (wrr *WeightedRoundRobin) Feedback(f *RequestFeedback) {
 	if f == nil {
 		return
@@ -245,8 +244,8 @@ func (wrr *WeightedRoundRobin) Feedback(f *RequestFeedback) {
 	}
 }
 
-// Close method does the cleanup by stopping the [time.Ticker] on
-// Weighted Round-Robin(WRR) request load balancer
+// Close stops the internal recovery ticker used by the Weighted Round-Robin (WRR)
+// load balancer.
 func (wrr *WeightedRoundRobin) Close() error {
 	wrr.lock.Lock()
 	defer wrr.lock.Unlock()
@@ -254,7 +253,7 @@ func (wrr *WeightedRoundRobin) Close() error {
 	return nil
 }
 
-// Refresh method reset the existing values with the given [Host] slice to refresh it
+// Refresh method replaces the existing host list with the given [Host] slice.
 func (wrr *WeightedRoundRobin) Refresh(hosts ...*Host) error {
 	if hosts == nil {
 		return nil
@@ -285,14 +284,14 @@ func (wrr *WeightedRoundRobin) Refresh(hosts ...*Host) error {
 	return nil
 }
 
-// SetOnStateChange method used to set a callback for the host transition state
+// SetOnStateChange sets a callback for host state transitions.
 func (wrr *WeightedRoundRobin) SetOnStateChange(fn HostStateChangeFunc) {
 	wrr.lock.Lock()
 	defer wrr.lock.Unlock()
 	wrr.onStateChange = fn
 }
 
-// SetRecoveryDuration method is used to change the existing recovery duration for the host
+// SetRecoveryDuration updates the host recovery interval used by the WRR ticker.
 func (wrr *WeightedRoundRobin) SetRecoveryDuration(d time.Duration) {
 	wrr.lock.Lock()
 	defer wrr.lock.Unlock()
@@ -320,8 +319,8 @@ func (wrr *WeightedRoundRobin) ticker() {
 	}
 }
 
-// NewSRVWeightedRoundRobin method creates a new Weighted Round-Robin(WRR) load balancer instance
-// with given SRV values
+// NewSRVWeightedRoundRobin creates an SRV-backed Weighted Round-Robin (WRR)
+// load balancer.
 func NewSRVWeightedRoundRobin(service, proto, domainName, httpScheme string) (*SRVWeightedRoundRobin, error) {
 	if isStringEmpty(proto) {
 		proto = "tcp"
@@ -354,7 +353,8 @@ func NewSRVWeightedRoundRobin(service, proto, domainName, httpScheme string) (*S
 
 var _ LoadBalancer = (*SRVWeightedRoundRobin)(nil)
 
-// SRVWeightedRoundRobin struct used to implement SRV Weighted Round-Robin(RR) algorithm
+// SRVWeightedRoundRobin implements an SRV-backed Weighted Round-Robin (WRR)
+// load balancer.
 type SRVWeightedRoundRobin struct {
 	Service    string
 	Proto      string
@@ -367,20 +367,18 @@ type SRVWeightedRoundRobin struct {
 	lookupSRV func() ([]*net.SRV, error)
 }
 
-// NextWithContext method returns the next SRV Base URL based on Weighted Round-Robin(RR)
-// with context support for cancellation
+// NextWithContext returns the next SRV-derived base URL using the underlying
+// Weighted Round-Robin (WRR) algorithm.
 func (swrr *SRVWeightedRoundRobin) NextWithContext(ctx context.Context) (string, error) {
 	return swrr.wrr.NextWithContext(ctx)
 }
 
-// Feedback method does nothing in SRV Base URL based on Weighted Round-Robin(WRR)
-// request load balancer
+// Feedback forwards request feedback to the underlying WRR load balancer.
 func (swrr *SRVWeightedRoundRobin) Feedback(f *RequestFeedback) {
 	swrr.wrr.Feedback(f)
 }
 
-// Close method does the cleanup by stopping the [time.Ticker] SRV Base URL based
-// on Weighted Round-Robin(WRR) request load balancer
+// Close stops the SRV refresh ticker and closes the underlying WRR load balancer.
 func (swrr *SRVWeightedRoundRobin) Close() error {
 	swrr.lock.Lock()
 	defer swrr.lock.Unlock()
@@ -389,7 +387,7 @@ func (swrr *SRVWeightedRoundRobin) Close() error {
 	return nil
 }
 
-// Refresh method reset the values based [net.LookupSRV] values to refresh it
+// Refresh resolves SRV records and replaces the underlying WRR host list.
 func (swrr *SRVWeightedRoundRobin) Refresh() error {
 	swrr.lock.Lock()
 	defer swrr.lock.Unlock()
@@ -408,19 +406,19 @@ func (swrr *SRVWeightedRoundRobin) Refresh() error {
 	return swrr.wrr.Refresh(hosts...)
 }
 
-// SetRefreshDuration method assists in changing the default (180 seconds) refresh duration
+// SetRefreshDuration changes the SRV refresh interval (default: 180 seconds).
 func (swrr *SRVWeightedRoundRobin) SetRefreshDuration(d time.Duration) {
 	swrr.lock.Lock()
 	defer swrr.lock.Unlock()
 	swrr.tick.Reset(d)
 }
 
-// SetOnStateChange method used to set a callback for the host transition state
+// SetOnStateChange sets a callback for host state transitions.
 func (swrr *SRVWeightedRoundRobin) SetOnStateChange(fn HostStateChangeFunc) {
 	swrr.wrr.SetOnStateChange(fn)
 }
 
-// SetRecoveryDuration method is used to change the existing recovery duration for the host
+// SetRecoveryDuration updates the host recovery interval used by the underlying WRR balancer.
 func (swrr *SRVWeightedRoundRobin) SetRecoveryDuration(d time.Duration) {
 	swrr.wrr.SetRecoveryDuration(d)
 }

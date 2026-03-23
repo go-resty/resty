@@ -12,52 +12,74 @@ import (
 )
 
 type (
-	// DebugLogCallbackFunc function type is for request and response debug log callback purposes.
-	// It gets called before Resty logs it
+	// DebugLogCallbackFunc is called with the fully-populated [DebugLog] before
+	// Resty formats or writes the debug output. Use it to inspect or mutate the
+	// log entry, for example to add custom fields.
+	//
+	// See [Client.OnDebugLog].
 	DebugLogCallbackFunc func(*DebugLog)
 
-	// DebugLogFormatterFunc function type is used to implement debug log formatting.
-	// See out of the box [DebugLogStringFormatter], [DebugLogJSONFormatter]
+	// DebugLogFormatterFunc formats a [DebugLog] into a string for debug output.
+	// See the built-in implementations [DebugLogFormatter] and [DebugLogJSONFormatter].
+	//
+	// See [Client.SetDebugLogFormatter].
 	DebugLogFormatterFunc func(*DebugLog) string
 
-	// DebugLog struct is used to collect details from Resty request and response
-	// for debug logging callback purposes.
+	// DebugLog holds the request, response, and optional trace details captured
+	// during a single Resty request execution for debug logging.
 	DebugLog struct {
 		Request   *DebugLogRequest  `json:"request"`
 		Response  *DebugLogResponse `json:"response"`
 		TraceInfo *TraceInfo        `json:"trace_info"`
 	}
 
-	// DebugLogRequest type used to capture debug info about the [Request].
+	// DebugLogRequest captures debug information about a [Request].
 	DebugLogRequest struct {
-		CorrelationID string      `json:"correlation_id"`
-		Host          string      `json:"host"`
-		URI           string      `json:"uri"`
-		Method        string      `json:"method"`
-		Proto         string      `json:"proto"`
-		Header        http.Header `json:"header"`
-		CurlCmd       string      `json:"curl_cmd"`
-		Attempt       int         `json:"attempt"`
-		Body          string      `json:"body"`
+		// CorrelationID is the request correlation ID (see [Request.SetCorrelationID]).
+		CorrelationID string `json:"correlation_id"`
+		// Host is the target host of the request.
+		Host string `json:"host"`
+		// URI is the request URI including path and query string.
+		URI string `json:"uri"`
+		// Method is the HTTP method of the request.
+		Method string `json:"method"`
+		// Proto is the HTTP protocol version, e.g. "HTTP/1.1".
+		Proto string `json:"proto"`
+		// Header contains the outgoing request headers (sensitive values are redacted).
+		Header http.Header `json:"header"`
+		// CurlCmd is the equivalent curl command string, populated when curl command
+		// generation and debug logging are both enabled.
+		CurlCmd string `json:"curl_cmd"`
+		// Attempt is the current attempt number (1 = initial, >1 = retry).
+		Attempt int `json:"attempt"`
+		// Body is the request body as a string, truncated to DebugBodyLimit if set.
+		Body string `json:"body"`
 	}
 
-	// DebugLogResponse type used to capture debug info about the [Response].
+	// DebugLogResponse captures debug information about a [Response].
 	DebugLogResponse struct {
-		StatusCode int           `json:"status_code"`
-		Status     string        `json:"status"`
-		Proto      string        `json:"proto"`
-		ReceivedAt time.Time     `json:"received_at"`
-		Duration   time.Duration `json:"duration"`
-		Size       int64         `json:"size"`
-		Header     http.Header   `json:"header"`
-		Body       string        `json:"body"`
+		// StatusCode is the HTTP response status code.
+		StatusCode int `json:"status_code"`
+		// Status is the HTTP response status text, e.g. "200 OK".
+		Status string `json:"status"`
+		// Proto is the HTTP protocol version, e.g. "HTTP/1.1".
+		Proto string `json:"proto"`
+		// ReceivedAt is the time at which the response was received.
+		ReceivedAt time.Time `json:"received_at"`
+		// Duration is the time elapsed from sending the request to receiving the response.
+		Duration time.Duration `json:"duration"`
+		// Size is the number of bytes in the response body.
+		Size int64 `json:"size"`
+		// Header contains the response headers (sensitive values are redacted).
+		Header http.Header `json:"header"`
+		// Body is the response body as a string, truncated to DebugBodyLimit if set.
+		Body string `json:"body"`
 	}
 )
 
-// DebugLogFormatter function formats the given debug log info in human readable
-// format.
+// DebugLogFormatter formats a [DebugLog] as a human-readable multi-line string.
 //
-// This is the default debug log formatter in the Resty.
+// This is the default debug log formatter used by Resty.
 func DebugLogFormatter(dl *DebugLog) string {
 	debugLog := "\n==============================================================================\n"
 
@@ -93,7 +115,7 @@ func DebugLogFormatter(dl *DebugLog) string {
 	return debugLog
 }
 
-// DebugLogJSONFormatter function formats the given debug log info in JSON format.
+// DebugLogJSONFormatter formats a [DebugLog] as a JSON string.
 func DebugLogJSONFormatter(dl *DebugLog) string {
 	return toJSON(dl)
 }

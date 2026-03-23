@@ -584,7 +584,7 @@ func TestMultipartReaderErrors(t *testing.T) {
 			Post("/upload")
 
 		assertNotNil(t, err)
-		assertEqual(t, errTestErrorReader, err)
+		assertTrue(t, errors.Is(err, errTestErrorReader))
 		assertNil(t, resp)
 	})
 

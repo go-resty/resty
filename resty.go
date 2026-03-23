@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 // SPDX-License-Identifier: MIT
 
-// Package resty provides Simple HTTP, REST, and SSE client library for Go.
+// Package resty provides a simple HTTP, REST, and SSE client library for Go.
 package resty // import "resty.dev/v3"
 
 import (
@@ -19,32 +19,31 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-// Version # of resty
+// Version is the current Resty library version string.
 const Version = "3.0.0-beta.6"
 
-// New method creates a new Resty client.
+// New creates a new Resty client.
 func New() *Client {
 	return NewWithTransportSettings(nil)
 }
 
-// NewWithTransportSettings method creates a new Resty client with provided
-// timeout values.
+// NewWithTransportSettings creates a new Resty client with the provided
+// [TransportSettings].
 func NewWithTransportSettings(transportSettings *TransportSettings) *Client {
 	return NewWithDialerAndTransportSettings(nil, transportSettings)
 }
 
-// NewWithClient method creates a new Resty client with given [http.Client].
+// NewWithClient creates a new Resty client with the given [http.Client].
 func NewWithClient(hc *http.Client) *Client {
 	return createClient(hc)
 }
 
-// NewWithDialer method creates a new Resty client with given Local Address
-// to dial from.
+// NewWithDialer creates a new Resty client with the given [net.Dialer].
 func NewWithDialer(dialer *net.Dialer) *Client {
 	return NewWithDialerAndTransportSettings(dialer, nil)
 }
 
-// NewWithLocalAddr method creates a new Resty client with the given Local Address.
+// NewWithLocalAddr creates a new Resty client with the given local address.
 func NewWithLocalAddr(localAddr net.Addr) *Client {
 	return NewWithDialerAndTransportSettings(
 		&net.Dialer{LocalAddr: localAddr},
@@ -52,8 +51,8 @@ func NewWithLocalAddr(localAddr net.Addr) *Client {
 	)
 }
 
-// NewWithDialerAndTransportSettings method creates a new Resty client with given Local Address
-// to dial from.
+// NewWithDialerAndTransportSettings creates a new Resty client with the given
+// [net.Dialer] and [TransportSettings].
 func NewWithDialerAndTransportSettings(dialer *net.Dialer, transportSettings *TransportSettings) *Client {
 	return createClient(&http.Client{
 		Jar:       createCookieJar(),

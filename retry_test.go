@@ -573,6 +573,7 @@ func TestClientRetryTooManyRequestsAndRecover(t *testing.T) {
 		SetJSONEscapeHTML(false).
 		SetResult(AuthSuccess{}).
 		SetTimeout(10 * time.Millisecond).
+		AddRetryConditions(RetryConditionStatusTooManyRequests).
 		Get(ts.URL + "/set-retry-error-recover")
 
 	assertError(t, err)
@@ -649,7 +650,8 @@ func TestResetMultipartReaderSeekStartError(t *testing.T) {
 
 	c := dcnl().
 		SetRetryCount(2).
-		SetTimeout(200 * time.Millisecond)
+		SetTimeout(200 * time.Millisecond).
+		AddRetryConditions(RetryConditionStatus5XX)
 
 	resp, err := c.R().
 		SetFileReader("name", "filename", testSeeker).
@@ -756,7 +758,8 @@ func TestRequestRetryTooManyRequestsHeaderRetryAfter(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
 
-	c := dcnl()
+	c := dcnl().
+		AddRetryConditions(RetryConditionStatusTooManyRequests)
 
 	resp, err := c.R().
 		SetRetryCount(2).
@@ -823,7 +826,7 @@ func TestRetryDefaultConditions(t *testing.T) {
 	})
 
 	t.Run("nil values", func(t *testing.T) {
-		result := applyRetryDefaultConditions(nil, nil)
+		result := isDoNotRetryError(nil)
 		assertFalse(t, result)
 	})
 }
@@ -1105,9 +1108,20 @@ func TestRetryCoverage(t *testing.T) {
 		assertEqual(t, 2*time.Second, dur2)
 	})
 
+	t.Run("retry condition nil response", func(t *testing.T) {
+		result := RetryConditionStatusTooManyRequests(nil, nil)
+		assertFalse(t, result, "expected no retry for nil response")
+
+		result = RetryConditionStatus5XX(nil, nil)
+		assertFalse(t, result, "expected no retry for nil response")
+
+		result = RetryConditionStatusZero(nil, nil)
+		assertFalse(t, result, "expected no retry for nil response")
+	})
+
 	t.Run("mock tls cert error", func(t *testing.T) {
 		certError := tls.CertificateVerificationError{}
-		result1 := applyRetryDefaultConditions(nil, &certError)
+		result1 := isDoNotRetryError(&certError)
 		assertFalse(t, result1, "expected no retry for tls.CertificateVerificationError")
 	})
 }

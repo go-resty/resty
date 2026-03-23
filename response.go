@@ -19,7 +19,7 @@ import (
 // Response struct and methods
 //_______________________________________________________________________
 
-// Response struct holds response values of executed requests.
+// Response holds response values for an executed request.
 type Response struct {
 	Request     *Request
 	Body        io.ReadCloser
@@ -111,7 +111,7 @@ func (r *Response) ResultError() any {
 	return r.Request.ResultError
 }
 
-// Header method returns the response headers
+// Header method returns the response headers.
 func (r *Response) Header() http.Header {
 	if r.RawResponse == nil {
 		return http.Header{}
@@ -119,7 +119,7 @@ func (r *Response) Header() http.Header {
 	return r.RawResponse.Header
 }
 
-// Cookies method to returns all the response cookies
+// Cookies method returns all response cookies.
 func (r *Response) Cookies() []*http.Cookie {
 	if r.RawResponse == nil {
 		return make([]*http.Cookie, 0)
@@ -132,8 +132,8 @@ func (r *Response) Cookies() []*http.Cookie {
 //
 // NOTE:
 //   - Returns an empty string on auto-unmarshal scenarios, unless
-//     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
-//   - Returns an empty string when [Client.SetResponseDoNotParse] or [Request.SetResponseDoNotParse] set.
+//     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] is enabled.
+//   - Returns an empty string when [Client.SetResponseDoNotParse] or [Request.SetResponseDoNotParse] is enabled.
 func (r *Response) String() string {
 	r.readIfRequired()
 	return strings.TrimSpace(string(r.bodyBytes))
@@ -144,18 +144,17 @@ func (r *Response) String() string {
 //
 // NOTE:
 //   - Returns an empty byte slice on auto-unmarshal scenarios, unless
-//     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] set.
-//   - Returns an empty byte slice when [Client.SetResponseDoNotParse] or [Request.SetResponseDoNotParse] set.
+//     [Client.SetResponseBodyUnlimitedReads] or [Request.SetResponseBodyUnlimitedReads] is enabled.
+//   - Returns an empty byte slice when [Client.SetResponseDoNotParse] or [Request.SetResponseDoNotParse] is enabled.
 func (r *Response) Bytes() []byte {
 	r.readIfRequired()
 	return r.bodyBytes
 }
 
-// Duration method returns the duration of HTTP response time from the request we sent
-// and received a request.
+// Duration method returns the end-to-end duration from request start to response completion.
 //
 // See [Response.ReceivedAt] to know when the client received a response and see
-// `Response.Request.Time` to know when the client sent a request.
+// [Request.StartTime] to know when the client sent the request.
 func (r *Response) Duration() time.Duration {
 	if r.Request.trace != nil {
 		return r.Request.TraceInfo().TotalTime
@@ -168,10 +167,11 @@ func (r *Response) ReceivedAt() time.Time {
 	return r.receivedAt
 }
 
-// Size method returns the HTTP response size in bytes. Yeah, you can rely on HTTP `Content-Length`
-// header, however it won't be available for chucked transfer/compressed response.
-// Since Resty captures response size details when processing the response body
-// when possible. So that users get the actual size of response bytes.
+// Size method returns the HTTP response size in bytes.
+//
+// The HTTP Content-Length header can be unavailable or inaccurate for chunked
+// transfer and compressed responses. Resty captures response size while reading
+// the response body so callers can retrieve the actual processed byte count.
 func (r *Response) Size() int64 {
 	r.readIfRequired()
 	return r.size
@@ -191,7 +191,7 @@ func (r *Response) IsStatusFailure() bool {
 	return r.StatusCode() > 399
 }
 
-// RedirectHistory method returns a redirect history slice with the URL and status code
+// RedirectHistory method returns redirect history entries with URL and status code.
 func (r *Response) RedirectHistory() []*RedirectInfo {
 	if r.RawResponse == nil {
 		return nil

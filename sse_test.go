@@ -20,8 +20,8 @@ import (
 	"time"
 )
 
-func TestEventSourceSimpleFlow(t *testing.T) {
-	es := createEventSource(t, "", nil, nil)
+func TestSSESourceSimpleFlow(t *testing.T) {
+	es := createSSESource(t, "", nil, nil)
 
 	messageCounter := 0
 	messageFunc := func(e any) {
@@ -57,7 +57,7 @@ func TestEventSourceSimpleFlow(t *testing.T) {
 	assertEqual(t, counter, messageCounter)
 }
 
-func TestEventSourceMultipleEventTypes(t *testing.T) {
+func TestSSESourceMultipleEventTypes(t *testing.T) {
 	type userEvent struct {
 		UserName string    `json:"username"`
 		Message  string    `json:"msg"`
@@ -83,7 +83,7 @@ func TestEventSourceMultipleEventTypes(t *testing.T) {
 	}
 
 	counter := 0
-	es := createEventSource(t, "", func(any) {}, nil)
+	es := createSSESource(t, "", func(any) {}, nil)
 	ts := createSSETestServer(
 		t,
 		10*time.Millisecond,
@@ -130,11 +130,11 @@ func TestEventSourceMultipleEventTypes(t *testing.T) {
 	assertEqual(t, userConnectCounter, userMessageCounter)
 }
 
-func TestEventSourceOverwriteFuncs(t *testing.T) {
+func TestSSESourceOverwriteFuncs(t *testing.T) {
 	messageFunc1 := func(e any) {
 		assertNotNil(t, e)
 	}
-	es := createEventSource(t, "", messageFunc1, nil)
+	es := createSSESource(t, "", messageFunc1, nil)
 
 	message2Counter := 0
 	messageFunc2 := func(e any) {
@@ -184,8 +184,8 @@ func TestEventSourceOverwriteFuncs(t *testing.T) {
 	assertTrue(t, strings.Contains(logLines, "Overwriting an existing OnError callback"))
 }
 
-func TestEventSourceRetry(t *testing.T) {
-	es := createEventSource(t, "", nil, nil)
+func TestSSESourceRetry(t *testing.T) {
+	es := createSSESource(t, "", nil, nil)
 
 	messageCounter := 2 // 0 & 1 connection failure
 	messageFunc := func(e any) {
@@ -265,10 +265,51 @@ func TestEventSourceRetry(t *testing.T) {
 	assertNotNil(t, err2)
 }
 
-func TestEventSourceTLSConfigerInterface(t *testing.T) {
+func TestSSESourceRetryReusesRequestBody(t *testing.T) {
+	const payload = `{"test":"retry-body"}`
+
+	attempt := 0
+	bodies := make([]string, 0, 2)
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		assertNil(t, err)
+		bodies = append(bodies, string(body))
+
+		attempt++
+		if attempt == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	es := NewSSESource().
+		SetURL(ts.URL).
+		SetMethod(MethodPost).
+		SetRetryCount(1).
+		SetRetryWaitTime(1 * time.Millisecond).
+		SetRetryMaxWaitTime(1 * time.Millisecond)
+	es.SetBody(bytes.NewBufferString(payload))
+
+	resp, err := es.connect()
+	assertNil(t, err)
+	assertNotNil(t, resp)
+	if resp != nil {
+		closeq(resp.Body)
+	}
+
+	assertEqual(t, 2, attempt, "expected one retry attempt")
+	assertEqual(t, 2, len(bodies), "expected request body on both attempts")
+	assertEqual(t, payload, bodies[0], "expected first attempt body to match")
+	assertEqual(t, payload, bodies[1], "expected retry attempt body to match")
+}
+
+func TestSSESourceTLSConfigerInterface(t *testing.T) {
 
 	t.Run("set and get tls config", func(t *testing.T) {
-		es := createEventSource(t, "", func(any) {}, nil)
+		es := createSSESource(t, "", func(any) {}, nil)
 
 		tc, err := es.tlsConfig()
 		assertNil(t, err)
@@ -280,7 +321,7 @@ func TestEventSourceTLSConfigerInterface(t *testing.T) {
 	})
 
 	t.Run("get tls config error", func(t *testing.T) {
-		es := createEventSource(t, "", func(any) {}, nil)
+		es := createSSESource(t, "", func(any) {}, nil)
 
 		ct := &CustomRoundTripper1{}
 		es.httpClient.Transport = ct
@@ -288,7 +329,7 @@ func TestEventSourceTLSConfigerInterface(t *testing.T) {
 	})
 
 	t.Run("set tls config", func(t *testing.T) {
-		es := createEventSource(t, "", func(any) {}, nil)
+		es := createSSESource(t, "", func(any) {}, nil)
 
 		ct := &CustomRoundTripper2{}
 		es.httpClient.Transport = ct
@@ -299,7 +340,7 @@ func TestEventSourceTLSConfigerInterface(t *testing.T) {
 	})
 
 	t.Run("set tls config error", func(t *testing.T) {
-		es := createEventSource(t, "", func(any) {}, nil)
+		es := createSSESource(t, "", func(any) {}, nil)
 
 		ct := &CustomRoundTripper2{returnErr: true}
 		es.httpClient.Transport = ct
@@ -310,8 +351,8 @@ func TestEventSourceTLSConfigerInterface(t *testing.T) {
 	})
 }
 
-func TestEventSourceNoRetryRequired(t *testing.T) {
-	es := createEventSource(t, "", func(any) {}, nil)
+func TestSSESourceNoRetryRequired(t *testing.T) {
+	es := createSSESource(t, "", func(any) {}, nil)
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	})
@@ -343,7 +384,7 @@ func TestGH1044TrimHeader(t *testing.T) {
 }
 
 func TestGH1041RequestFailureWithResponseBody(t *testing.T) {
-	es := createEventSource(t, "", func(any) {}, nil)
+	es := createSSESource(t, "", func(any) {}, nil)
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(hdrContentTypeKey, jsonContentType)
 		w.WriteHeader(http.StatusBadRequest)
@@ -367,8 +408,8 @@ func TestGH1041RequestFailureWithResponseBody(t *testing.T) {
 	assertEqual(t, "resty:sse: 400 Bad Request", err.Error())
 }
 
-func TestEventSourceHTTPError(t *testing.T) {
-	es := createEventSource(t, "", func(any) {}, nil)
+func TestSSESourceHTTPError(t *testing.T) {
+	es := createSSESource(t, "", func(any) {}, nil)
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://local host", http.StatusTemporaryRedirect)
 	})
@@ -379,10 +420,10 @@ func TestEventSourceHTTPError(t *testing.T) {
 	assertTrue(t, strings.Contains(err.Error(), `invalid character " " in host name`))
 }
 
-func TestEventSourceParseAndReadError(t *testing.T) {
+func TestSSESourceParseAndReadError(t *testing.T) {
 	type data struct{}
 	counter := 0
-	es := createEventSource(t, "", func(any) {}, data{})
+	es := createSSESource(t, "", func(any) {}, data{})
 	ts := createSSETestServer(
 		t,
 		5*time.Millisecond,
@@ -415,8 +456,8 @@ func TestEventSourceParseAndReadError(t *testing.T) {
 	})
 }
 
-func TestEventSourceReadError(t *testing.T) {
-	es := createEventSource(t, "", func(any) {}, nil)
+func TestSSESourceReadError(t *testing.T) {
+	es := createSSESource(t, "", func(any) {}, nil)
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -436,7 +477,7 @@ func TestEventSourceReadError(t *testing.T) {
 	assertTrue(t, strings.Contains(err.Error(), "read event test error"))
 }
 
-func TestEventSourceWithDifferentMethods(t *testing.T) {
+func TestSSESourceWithDifferentMethods(t *testing.T) {
 	testCases := []struct {
 		name   string
 		method string
@@ -471,7 +512,7 @@ func TestEventSourceWithDifferentMethods(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			es := createEventSource(t, "", nil, nil)
+			es := createSSESource(t, "", nil, nil)
 
 			messageCounter := 0
 			messageFunc := func(e any) {
@@ -530,7 +571,7 @@ func TestEventSourceWithDifferentMethods(t *testing.T) {
 	}
 }
 
-func TestEventSource_readEventFunc(t *testing.T) {
+func TestSSESource_readEventFunc(t *testing.T) {
 	t.Run("successful scan", func(t *testing.T) {
 		input := "event: test\ndata: test data\n\n"
 		scanner := bufio.NewScanner(strings.NewReader(input))
@@ -589,7 +630,7 @@ func TestEventSource_readEventFunc(t *testing.T) {
 	})
 }
 
-func TestEventSourceCoverage(t *testing.T) {
+func TestSSESourceCoverage(t *testing.T) {
 	es := NewSSESource()
 	err1 := es.Get()
 	assertEqual(t, "resty:sse: event source URL is required", err1.Error())
@@ -608,7 +649,23 @@ func TestEventSourceCoverage(t *testing.T) {
 	parseEvent([]byte{})
 }
 
-func createEventSource(t *testing.T, url string, fn SSEMessageFunc, rt any) *SSESource {
+func TestSSESetBody(t *testing.T) {
+	t.Run("nil input", func(t *testing.T) {
+		es := createSSESource(t, "", nil, nil)
+
+		es.SetBody(nil)
+		assertNil(t, es.bodyBytes)
+	})
+
+	t.Run("read error", func(t *testing.T) {
+		es := createSSESource(t, "", nil, nil)
+
+		es.SetBody(&errorReader{})
+		assertNil(t, es.bodyBytes)
+	})
+}
+
+func createSSESource(t *testing.T, url string, fn SSEMessageFunc, rt any) *SSESource {
 	es := NewSSESource().
 		SetURL(url).
 		SetMethod(MethodGet).

@@ -25,8 +25,8 @@ import (
 // Request Middleware(s)
 //_______________________________________________________________________
 
-// MiddlewareRequestCreate method is used to prepare HTTP requests using the
-// user-provided request values. It performs the following operations -
+// MiddlewareRequestCreate prepares the HTTP request from the user-provided [Request] values.
+// It performs the following operations:
 //   - Parse the request URL with path params and query params
 //   - Parse the request headers from client and request level
 //   - Parse the request body based on the content type and body type
@@ -182,7 +182,7 @@ func parseRequestURL(c *Client, r *Request) error {
 	return nil
 }
 
-func parseRequestHeader(c *Client, r *Request) error {
+func parseRequestHeader(c *Client, r *Request) {
 	for k, v := range c.Header() {
 		if _, ok := r.Header[k]; ok {
 			continue
@@ -197,8 +197,6 @@ func parseRequestHeader(c *Client, r *Request) error {
 	if !r.isHeaderExists(hdrAcceptEncodingKey) {
 		r.Header.Set(hdrAcceptEncodingKey, r.client.ContentDecompresserKeys())
 	}
-
-	return nil
 }
 
 func parseRequestBody(c *Client, r *Request) error {
@@ -323,6 +321,10 @@ var multipartSetBoundary = func(w *multipart.Writer, r *Request) error {
 	return w.SetBoundary(r.multipartBoundary)
 }
 
+var multipartPipeWriterClose = func(w *io.PipeWriter) error {
+	return w.Close()
+}
+
 func handleMultipartFormData(r *Request) error {
 	r.bodyBuf = acquireBuffer()
 	mw := multipart.NewWriter(r.bodyBuf)
@@ -385,7 +387,7 @@ func handleMultipart(c *Client, r *Request) error {
 			if err := mw.Close(); err != nil {
 				r.multipartErrChan <- err
 			}
-			if err := bw.Close(); err != nil {
+			if err := multipartPipeWriterClose(bw); err != nil {
 				r.multipartErrChan <- err
 			}
 		}()
@@ -519,10 +521,10 @@ func handleRequestBody(c *Client, r *Request) error {
 // Response Middleware(s)
 //_______________________________________________________________________
 
-// MiddlewareResponseAutoParse method is used to parse the response body automatically
-// based on the registered HTTP response `Content-Type` decoder, see [Client.AddContentTypeDecoder];
-// if [Request.SetResult], [Request.SetResultError], or [Client.SetResultError] is used, it performs
-// the auto unmarshalling into the respective object.
+// MiddlewareResponseAutoParse parses the response body automatically using the
+// Content-Type decoder registered via [Client.AddContentTypeDecoder].
+// When [Request.SetResult], [Request.SetResultError], or [Client.SetResultError]
+// is used, the body is automatically unmarshalled into the provided object.
 func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 	if (res.CascadeError != nil && (res.Request.isMultiPart && res.StatusCode() == 0)) ||
 		res.Request.IsResponseDoNotParse {
@@ -576,11 +578,12 @@ func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 
 var hostnameReplacer = strings.NewReplacer(":", "_", ".", "_")
 
-// MiddlewareResponseSaveToFile method used to write HTTP response body into
-// file. The filename is determined in the following order -
+// MiddlewareResponseSaveToFile writes the HTTP response body to a file.
+// The filename is determined in the following order:
 //   - [Request.SetResponseSaveFileName]
 //   - Content-Disposition header
-//   - Request URL using [path.Base]
+//   - Request URL path using [path.Base]
+//   - Request URL hostname if the path is empty or "/"
 func MiddlewareResponseSaveToFile(c *Client, res *Response) error {
 	if res.CascadeError != nil || !res.Request.IsResponseSaveToFile {
 		return nil

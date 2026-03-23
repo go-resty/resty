@@ -21,43 +21,41 @@ func escapeQuotes(s string) string {
 	return quoteEscaper.Replace(s)
 }
 
-// MultipartField struct represents the multipart field to compose
-// all [io.Reader] capable input for multipart form request
+// MultipartField describes a multipart/form-data field and its optional file
+// upload metadata.
 type MultipartField struct {
-	// Name of the multipart field name that the server expects it
+	// Name is the multipart field name expected by the server.
 	Name string
 
-	// FileName is used to set the file name we have to send to the server
+	// FileName is the filename sent to the server.
 	FileName string
 
-	// ContentType is a multipart file content-type value. It is highly
-	// recommended setting it if you know the content-type so that Resty
-	// don't have to do additional computing to auto-detect (Optional)
+	// ContentType is the multipart file content type. It is recommended to set
+	// this explicitly when known to avoid auto-detection.
 	ContentType string
 
-	// Reader is an input of [io.Reader] for multipart upload. It
-	// is optional if you set the FilePath value
+	// Reader is the [io.Reader] source for multipart upload. It is optional if
+	// [MultipartField.FilePath] is set.
 	Reader io.Reader
 
-	// FilePath is a file path for multipart upload. It
-	// is optional if you set the Reader value
+	// FilePath is the file path used for multipart upload. It is optional if
+	// [MultipartField.Reader] is set.
 	FilePath string
 
-	// FileSize in bytes is used just for the information purpose of
-	// sharing via [MultipartFieldCallbackFunc] (Optional)
+	// FileSize is the file size in bytes, reported via
+	// [MultipartFieldCallbackFunc].
 	FileSize int64
 
-	// ProgressCallback function is used to provide live progress details
-	// during a multipart upload (Optional)
+	// ProgressCallback receives live upload progress details for this field.
 	//
-	// NOTE: It is recommended to set the FileSize value when using `MultipartField.Reader`
-	// with `ProgressCallback` feature so that Resty sends the FileSize
-	// value via [MultipartFieldProgress]
+	// NOTE: When using [MultipartField.Reader] with this callback, set
+	// [MultipartField.FileSize] if known so [MultipartFieldProgress] includes a
+	// meaningful total size.
 	ProgressCallback MultipartFieldCallbackFunc
 
-	// Values field is used to provide form field value. (Optional, unless it's a form-data field)
+	// Values is used to provide ordered multipart form-data values for a field.
 	//
-	// It is primarily added for ordered multipart form-data field use cases
+	// It is primarily intended for ordered form field use cases.
 	Values []string
 
 	// tempBuf is used to preserve the byte(s) read from the file to detect the content type.
@@ -65,7 +63,7 @@ type MultipartField struct {
 	tempBuf []byte
 }
 
-// Clone method returns the deep copy of m except [io.Reader].
+// Clone returns a copy of m, except [MultipartField.Reader] which is shared.
 func (mf *MultipartField) Clone() *MultipartField {
 	mf2 := new(MultipartField)
 	*mf2 = *mf
@@ -160,12 +158,10 @@ func (mf *MultipartField) wrapProgressCallbackIfPresent(pw io.Writer) io.Writer 
 	}
 }
 
-// MultipartFieldCallbackFunc function used to transmit live multipart upload
-// progress in bytes count
+// MultipartFieldCallbackFunc receives live multipart upload progress updates.
 type MultipartFieldCallbackFunc func(MultipartFieldProgress)
 
-// MultipartFieldProgress struct used to provide multipart field upload progress
-// details via callback function
+// MultipartFieldProgress contains upload progress details for a multipart field.
 type MultipartFieldProgress struct {
 	Name     string
 	FileName string
@@ -173,7 +169,7 @@ type MultipartFieldProgress struct {
 	Written  int64
 }
 
-// String method creates the string representation of [MultipartFieldProgress]
+// String returns the string representation of [MultipartFieldProgress].
 func (mfp MultipartFieldProgress) String() string {
 	return fmt.Sprintf("FieldName: %s, FileName: %s, FileSize: %v, Written: %v",
 		mfp.Name, mfp.FileName, mfp.FileSize, mfp.Written)

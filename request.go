@@ -144,12 +144,12 @@ func (r *Request) Context() context.Context {
 	return r.ctx
 }
 
-// SetContext method sets the [context.Context] for current [Request].
+// SetContext method sets the [context.Context] for the current [Request].
 // It overwrites the current context in the Request instance; it does not
 // affect the [Request].RawRequest that was already created.
 //
 // If you want this method to take effect, use this method before invoking
-// [Request.Send] or [Request].HTTPVerb methods.
+// [Request.Send], [Request.Execute], or one of the HTTP verb methods.
 //
 // See [Request.WithContext], [Request.Clone]
 func (r *Request) SetContext(ctx context.Context) *Request {
@@ -164,7 +164,7 @@ func (r *Request) SetContext(ctx context.Context) *Request {
 // affect the [Request].RawRequest that was already created.
 //
 // If you want this method to take effect, use this method before invoking
-// [Request.Send] or [Request].HTTPVerb methods.
+// [Request.Send], [Request.Execute], or one of the HTTP verb methods.
 //
 // See [Request.SetContext], [Request.Clone]
 func (r *Request) WithContext(ctx context.Context) *Request {
@@ -574,8 +574,8 @@ func (r *Request) SetFileReader(fieldName, fileName string, reader io.Reader) *R
 	return r
 }
 
-// SetMultipartFormData method allows simple form data to be attached to the request
-// as `multipart:form-data`
+// SetMultipartFormData method sets simple form fields on the request and sends
+// them as multipart/form-data.
 func (r *Request) SetMultipartFormData(data map[string]string) *Request {
 	r.isMultiPart = true
 	for k, v := range data {
@@ -584,8 +584,8 @@ func (r *Request) SetMultipartFormData(data map[string]string) *Request {
 	return r
 }
 
-// SetMultipartOrderedFormData method allows add ordered form data to be attached to the request
-// as `multipart:form-data`
+// SetMultipartOrderedFormData method appends ordered multipart/form-data values
+// for the same field name.
 func (r *Request) SetMultipartOrderedFormData(name string, values []string) *Request {
 	r.isMultiPart = true
 	r.multipartFields = append(r.multipartFields, &MultipartField{
@@ -753,7 +753,7 @@ func (r *Request) SetHeaderAuthorizationKey(k string) *Request {
 //
 // NOTE: In this scenario
 //   - [Response.BodyBytes] might be nil.
-//   - [Response].Body might have been already read.
+//   - [Response.Body] might have already been read.
 func (r *Request) SetResponseSaveFileName(file string) *Request {
 	r.ResponseSaveFileName = file
 	r.SetResponseSaveToFile(true)
@@ -801,7 +801,7 @@ func (r *Request) SetResponseDoNotParse(notParse bool) *Request {
 // SetResponseBodyLimit method sets a maximum body size limit in bytes on response,
 // avoid reading too much data to memory.
 //
-// Client will return [resty.ErrResponseBodyTooLarge] if the body size of the body
+// Client will return [ErrResponseBodyTooLarge] if the body size
 // in the uncompressed response is larger than the limit.
 // Body size limit will not be enforced in the following cases:
 //   - ResponseBodyLimit <= 0, which is the default behavior.
@@ -1049,7 +1049,7 @@ func (r *Request) SetTimeout(timeout time.Duration) *Request {
 	return r
 }
 
-// SetLogger method sets given writer for logging Resty request and response details.
+// SetLogger method sets the [Logger] used for request and response logging.
 // By default, requests and responses inherit their logger from the client.
 //
 // Compliant to interface [resty.Logger].
@@ -1061,7 +1061,7 @@ func (r *Request) SetLogger(l Logger) *Request {
 }
 
 // SetDebug method enables the debug mode on the current request. It logs
-// the details current request and response.
+// details of the current request and response.
 //
 //	client.R().SetDebug(true)
 //
@@ -1129,7 +1129,7 @@ func (r *Request) SetRetryHooks(hooks ...RetryHookFunc) *Request {
 }
 
 // SetRetryCount method enables retry on Resty client and allows you
-// to set no. of retry count.
+// to set the retry count.
 //
 //	first attempt + retry count = total attempts
 //
@@ -1172,7 +1172,9 @@ func (r *Request) SetRetryDelayStrategy(rs RetryDelayStrategyFunc) *Request {
 }
 
 // SetRetryDefaultConditions method is used to enable/disable the Resty's default
-// retry conditions on request level
+// retry conditions on request level, that checks transport, headers and URL errors.
+//
+// By default it is enabled.
 //
 // It overrides value set at the client instance level, see [Client.SetRetryDefaultConditions]
 func (r *Request) SetRetryDefaultConditions(b bool) *Request {
@@ -1307,8 +1309,8 @@ func (r *Request) SetLabel(label string) *Request {
 	return r
 }
 
-// TraceInfo method returns the trace info for the request.
-// If either the [Client.EnableTrace] or [Request.EnableTrace] function has not been called
+// TraceInfo method returns trace information for the request.
+// If either [Client.SetTrace] or [Request.SetTrace] has not been enabled
 // before the request is made, an empty [resty.TraceInfo] object is returned.
 func (r *Request) TraceInfo() TraceInfo {
 	ct := r.trace
@@ -1522,7 +1524,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 
 			// apply default retry conditions
 			if r.IsRetryDefaultConditions {
-				needsRetry = applyRetryDefaultConditions(res, err)
+				needsRetry = isDoNotRetryError(err)
 			}
 
 			// apply user-defined retry conditions if default one

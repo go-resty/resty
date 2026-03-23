@@ -883,10 +883,7 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 	r.Body.Close()
 	r.Body = io.NopCloser(bytes.NewReader(body))
 	assertError(t, err)
-	bodyHash := ""
-	if len(body) > 0 {
-		bodyHash = h(string(body))
-	}
+	bodyHash := h(string(body))
 
 	ha2 = h(fmt.Sprintf("%s:%s:%s", r.Method, conf.uri, bodyHash))
 	kd := h(fmt.Sprintf("%s:%s", ha1, fmt.Sprintf("%s:%08x:%s:%s:%s",

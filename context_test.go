@@ -75,8 +75,13 @@ func TestSetContextCancel(t *testing.T) {
 		t.Logf("Server: %v %v", r.Method, r.URL.Path)
 		ch <- struct{}{}
 		<-ch // wait for client to finish request
+		select {
+		case <-r.Context().Done():
+			t.Log("Server: context cancelled, aborting write")
+			return
+		default:
+		}
 		n, err := w.Write([]byte("TestSetContextCancel: response"))
-		// FIXME? test server doesn't handle request cancellation
 		t.Logf("Server: wrote %d bytes", n)
 		t.Logf("Server: err is %v ", err)
 	})
@@ -114,8 +119,13 @@ func TestSetContextCancelRetry(t *testing.T) {
 		t.Logf("Server: %v %v", r.Method, r.URL.Path)
 		ch <- struct{}{}
 		<-ch // wait for client to finish request
+		select {
+		case <-r.Context().Done():
+			t.Log("Server: context cancelled, aborting write")
+			return
+		default:
+		}
 		n, err := w.Write([]byte("TestSetContextCancel: response"))
-		// FIXME? test server doesn't handle request cancellation
 		t.Logf("Server: wrote %d bytes", n)
 		t.Logf("Server: err is %v ", err)
 	})
@@ -161,8 +171,13 @@ func TestSetContextCancelWithError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 		ch <- struct{}{}
 		<-ch // wait for client to finish request
+		select {
+		case <-r.Context().Done():
+			t.Log("Server: context cancelled, aborting write")
+			return
+		default:
+		}
 		n, err := w.Write([]byte("TestSetContextCancelWithError: response"))
-		// FIXME? test server doesn't handle request cancellation
 		t.Logf("Server: wrote %d bytes", n)
 		t.Logf("Server: err is %v ", err)
 	})
