@@ -1300,7 +1300,7 @@ func (r *Request) SetMethodDeleteAllowPayload(allow bool) *Request {
 // SetLabel method sets the label for the request, which can be used for logging and debugging purposes.
 // By default, the label is empty.
 //
-//  client.R().SetLabel("GetUserDetails").Get("/users/12345")
+//	client.R().SetLabel("GetUserDetails").Get("/users/12345")
 //
 // In Response middlewares, you can access the label using [Response.Request.Label]
 // Then log the label along with time duration and method to get better insights into the request lifecycle.

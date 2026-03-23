@@ -2665,4 +2665,3 @@ func TestRequestSetLabel(t *testing.T) {
 
 	assertEqual(t, "AddUser", r.Label)
 }
-
