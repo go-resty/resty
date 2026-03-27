@@ -136,12 +136,26 @@ func getHostname(host string) (hostname string) {
 // https://github.com/golang/go/issues/4800
 // Resty will add all the headers during a redirect for the same host and
 // adds library user-agent if the Host is different.
+//
+// For cross-domain redirects, sensitive headers (matching [isSanitizeHeader])
+// are stripped from the redirected request. Go's net/http only strips standard
+// headers such as Authorization and Cookie; custom authentication headers
+// (e.g. those set via [Client.SetHeaderAuthorizationKey]) are forwarded
+// verbatim unless explicitly removed. See https://github.com/go-resty/resty/issues/1128.
 func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {
 	curHostname := getHostname(cur.URL.Host)
 	preHostname := getHostname(pre.URL.Host)
 	if strings.EqualFold(curHostname, preHostname) {
 		for key, val := range pre.Header {
 			cur.Header[key] = val
+		}
+	} else {
+		// Cross-domain redirect: strip sensitive headers that Go's
+		// net/http does not know about (custom auth, token, api-key, etc.).
+		for key := range cur.Header {
+			if isSanitizeHeader(key) {
+				cur.Header.Del(key)
+			}
 		}
 	}
 }

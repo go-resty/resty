@@ -228,6 +228,82 @@ func TestRedirectHeaderStripSensitivePolicyRealChainBehavior(t *testing.T) {
 	})
 }
 
+func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
+	t.Run("same host copies all headers", func(t *testing.T) {
+		pre, _ := http.NewRequest(http.MethodGet, "https://example.com/api", nil)
+		pre.Header.Set("Authorization", "Bearer secret")
+		pre.Header.Set("X-Api-Key", "my-api-key")
+		pre.Header.Set("X-Safe-Header", "safe")
+
+		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
+
+		checkHostAndAddHeaders(cur, pre)
+
+		assertEqual(t, "Bearer secret", cur.Header.Get("Authorization"))
+		assertEqual(t, "my-api-key", cur.Header.Get("X-Api-Key"))
+		assertEqual(t, "safe", cur.Header.Get("X-Safe-Header"))
+	})
+
+	t.Run("cross domain strips sensitive headers", func(t *testing.T) {
+		pre, _ := http.NewRequest(http.MethodGet, "https://example.com/api", nil)
+		pre.Header.Set("X-Api-Key", "my-api-key")
+		pre.Header.Set("X-Custom-Auth-Token", "custom-token")
+		pre.Header.Set("X-My-Secret", "secret-value")
+		pre.Header.Set("X-Safe-Header", "safe")
+
+		// Simulate Go's net/http forwarding all custom headers on cross-domain
+		// redirect (Go only strips standard Authorization/Cookie headers).
+		cur, _ := http.NewRequest(http.MethodGet, "https://evil.com/steal", nil)
+		cur.Header.Set("X-Api-Key", "my-api-key")
+		cur.Header.Set("X-Custom-Auth-Token", "custom-token")
+		cur.Header.Set("X-My-Secret", "secret-value")
+		cur.Header.Set("X-Safe-Header", "safe")
+
+		checkHostAndAddHeaders(cur, pre)
+
+		// Sensitive headers must be stripped
+		assertEqual(t, "", cur.Header.Get("X-Api-Key"))
+		assertEqual(t, "", cur.Header.Get("X-Custom-Auth-Token"))
+		assertEqual(t, "", cur.Header.Get("X-My-Secret"))
+		// Non-sensitive headers must remain
+		assertEqual(t, "safe", cur.Header.Get("X-Safe-Header"))
+	})
+
+	t.Run("cross domain with SetHeaderAuthorizationKey pattern", func(t *testing.T) {
+		// Simulates the exact vulnerability: user sets a custom authorization
+		// header name via SetHeaderAuthorizationKey("X-Corp-Access"), which
+		// addCredentials() places on the request. On cross-domain redirect,
+		// Go's net/http does NOT strip it because it only knows about
+		// the standard "Authorization" header.
+		pre, _ := http.NewRequest(http.MethodGet, "https://api.corp.com/data", nil)
+		pre.Header.Set("X-Corp-Access-Token", "Bearer CORP_SECRET_123")
+		pre.Header.Set("Content-Type", "application/json")
+
+		cur, _ := http.NewRequest(http.MethodGet, "https://attacker.com/collect", nil)
+		cur.Header.Set("X-Corp-Access-Token", "Bearer CORP_SECRET_123")
+		cur.Header.Set("Content-Type", "application/json")
+
+		checkHostAndAddHeaders(cur, pre)
+
+		// Custom auth header must be stripped (contains "token")
+		assertEqual(t, "", cur.Header.Get("X-Corp-Access-Token"))
+		// Safe headers must remain
+		assertEqual(t, "application/json", cur.Header.Get("Content-Type"))
+	})
+
+	t.Run("cross domain case insensitive hostname comparison", func(t *testing.T) {
+		pre, _ := http.NewRequest(http.MethodGet, "https://Example.COM/api", nil)
+		pre.Header.Set("X-Api-Key", "key")
+
+		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
+
+		checkHostAndAddHeaders(cur, pre)
+
+		// Same host (case insensitive) → headers copied, not stripped
+		assertEqual(t, "key", cur.Header.Get("X-Api-Key"))
+	})
+}
+
 func TestClientTimeout(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
