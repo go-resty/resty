@@ -407,7 +407,9 @@ func (dc *digestCredentials) String() string {
 		sl = append(sl, fmt.Sprintf("nc=%08x", dc.nc))
 		sl = append(sl, fmt.Sprintf(`cnonce="%s"`, dc.cnonce))
 	}
-	sl = append(sl, fmt.Sprintf(`userhash=%s`, dc.userHash))
+	if dc.userHash == "true" {
+		sl = append(sl, fmt.Sprintf(`userhash=%s`, dc.userHash))
+	}
 	sl = append(sl, fmt.Sprintf(`response="%s"`, dc.response))
 
 	return strings.Join(sl, ", ")

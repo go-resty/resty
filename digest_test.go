@@ -15,6 +15,7 @@ import (
 
 type digestServerConfig struct {
 	realm, qop, nonce, opaque, algo, uri, charset, username, password, nc string
+	userhash                                                              bool
 }
 
 func defaultDigestServerConf() *digestServerConfig {
@@ -29,6 +30,7 @@ func defaultDigestServerConf() *digestServerConfig {
 		username: "Mufasa",
 		password: "Circle Of Life",
 		nc:       "00000001",
+		userhash: true,
 	}
 }
 
@@ -360,4 +362,21 @@ func TestDigestCredentialsDigestParseQopError(t *testing.T) {
 	_, err := dc.digest(cha)
 
 	assertErrorIs(t, ErrDigestQopNotSupported, err)
+}
+
+func TestClientDigestAuthNoUserhash(t *testing.T) {
+	conf := *defaultDigestServerConf()
+	conf.userhash = false
+	ts := createDigestServer(t, &conf)
+	defer ts.Close()
+
+	c := dcnl().
+		SetBaseURL(ts.URL+"/").
+		SetDigestAuth(conf.username, conf.password)
+
+	resp, err := c.R().
+		SetResult(&AuthSuccess{}).
+		Get(conf.uri)
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
 }

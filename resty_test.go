@@ -804,6 +804,7 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 
 		w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
+		fmt.Println(r.Header["Authorization"])
 		if authorizationHeaderValid(t, r, conf) {
 			if r.URL.Path == "/dir/index.html" && r.Method == MethodPost {
 				body, err := io.ReadAll(r.Body)
@@ -814,9 +815,13 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{ "id": "success", "message": "login successful" }`))
 		} else {
+			userhashStr := ""
+			if conf.userhash {
+				userhashStr = "userhash=true,"
+			}
 			setWWWAuthHeader(w,
-				fmt.Sprintf(`Digest realm="%s", domain="%s", qop="%s", algorithm=%s, nonce="%s", opaque="%s", userhash=true, charset=%s, stale=FALSE, nc=%s`,
-					conf.realm, conf.uri, conf.qop, conf.algo, conf.nonce, conf.opaque, conf.charset, conf.nc))
+				fmt.Sprintf(`Digest realm="%s", domain="%s", qop="%s", algorithm=%s, nonce="%s", opaque="%s", %scharset=%s, stale=FALSE, nc=%s`,
+					conf.realm, conf.uri, conf.qop, conf.algo, conf.nonce, conf.opaque, userhashStr, conf.charset, conf.nc))
 			_, _ = w.Write([]byte(`{ "id": "unauthorized", "message": "Invalid credentials" }`))
 		}
 	})
@@ -851,10 +856,19 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 	}
 
 	assertEqual(t, conf.opaque, pairs["opaque"])
-	assertEqual(t, "true", pairs["userhash"])
 
-	userHash := h(fmt.Sprintf("%s:%s", conf.username, conf.realm))
-	assertEqual(t, userHash, pairs["username"])
+	userhash, userhashReceived := pairs["userhash"]
+	if userhashReceived {
+		assertTrue(t, userhash == "true", "userhash should be 'true' or 'false'")
+	} else {
+		userhash = "false"
+	}
+	if userhash == "true" {
+		userHash := h(fmt.Sprintf("%s:%s", conf.username, conf.realm))
+		assertEqual(t, userHash, pairs["username"])
+	} else {
+		assertEqual(t, conf.username, pairs["username"])
+	}
 
 	ha1 := h(fmt.Sprintf("%s:%s:%s", conf.username, conf.realm, conf.password))
 	if strings.HasSuffix(conf.algo, "-sess") {
