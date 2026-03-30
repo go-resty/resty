@@ -804,7 +804,6 @@ func createDigestServer(t *testing.T, conf *digestServerConfig) *httptest.Server
 
 		w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
 
-		fmt.Println(r.Header["Authorization"])
 		if authorizationHeaderValid(t, r, conf) {
 			if r.URL.Path == "/dir/index.html" && r.Method == MethodPost {
 				body, err := io.ReadAll(r.Body)
