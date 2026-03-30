@@ -258,7 +258,7 @@ type Client struct {
 	contentDecompresserKeys    []string
 	contentDecompressers       map[string]ContentDecompresser
 	certWatcherStopChan        chan bool
-	circuitBreaker             *CircuitBreaker
+	circuitBreaker             CircuitBreaker
 	hedging                    *Hedging
 }
 
@@ -1084,13 +1084,14 @@ func (c *Client) SetContentDecompresserKeys(keys []string) *Client {
 
 // SetCircuitBreaker method sets the [CircuitBreaker] on the client to prevent
 // sending requests that are likely to fail.
-// For Example: To use the default Circuit Breaker:
 //
-//	client.SetCircuitBreaker(NewCircuitBreaker())
-func (c *Client) SetCircuitBreaker(b *CircuitBreaker) *Client {
+// For example, to use a count-based circuit breaker:
+//
+//	client.SetCircuitBreaker(NewCircuitBreakerCount(5, 1, 30*time.Second))
+func (c *Client) SetCircuitBreaker(cb CircuitBreaker) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.circuitBreaker = b
+	c.circuitBreaker = cb
 	return c
 }
 
@@ -2401,17 +2402,28 @@ func (c *Client) executeRequestMiddlewares(req *Request) (err error) {
 	return nil
 }
 
+func (c *Client) cbRequestError() {
+	if c.circuitBreaker != nil {
+		if cbe, ok := c.circuitBreaker.(cbRequestErrorObserver); ok {
+			cbe.onRequestError()
+		}
+	}
+}
+
 // Executes method executes the given `Request` object and returns
 // response or error.
 func (c *Client) execute(req *Request) (*Response, error) {
 	if c.circuitBreaker != nil {
-		if err := c.circuitBreaker.allow(); err != nil {
-			c.circuitBreaker.onTriggerHooks(req, err)
+		if err := c.circuitBreaker.Allow(); err != nil {
+			if cbo, ok := c.circuitBreaker.(CircuitBreakerObserver); ok {
+				cbo.RunOnTriggerHooks(req, err)
+			}
 			return nil, err
 		}
 	}
 
 	if err := c.executeRequestMiddlewares(req); err != nil {
+		c.cbRequestError()
 		return nil, err
 	}
 
@@ -2431,6 +2443,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	response := &Response{Request: req, RawResponse: resp}
 	response.setReceivedAt()
 	if err != nil {
+		c.cbRequestError()
 		return response, err
 	}
 	if req.isMultiPart && req.multipartErrChan != nil {
@@ -2442,7 +2455,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	if resp != nil {
 		if c.circuitBreaker != nil {
-			c.circuitBreaker.applyPolicies(resp)
+			c.circuitBreaker.ApplyPolicies(response)
 		}
 
 		response.Body = resp.Body

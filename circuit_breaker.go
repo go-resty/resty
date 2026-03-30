@@ -6,9 +6,7 @@
 package resty
 
 import (
-	"context"
 	"errors"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,7 +16,57 @@ import (
 // is in the open state and a request is blocked.
 var ErrCircuitBreakerOpen = errors.New("resty: circuit breaker open")
 
+const (
+	// CircuitBreakerStateClosed is the normal operating state: all requests are
+	// forwarded and failures are tracked against the configured threshold.
+	CircuitBreakerStateClosed CircuitBreakerState = iota
+
+	// CircuitBreakerStateOpen is the tripped state: all requests are blocked and
+	// return [ErrCircuitBreakerOpen] immediately. After the reset timeout the
+	// breaker transitions to [CircuitBreakerStateHalfOpen].
+	CircuitBreakerStateOpen
+
+	// CircuitBreakerStateHalfOpen is the recovery probe state: a single request
+	// is allowed through. A success transitions to [CircuitBreakerStateClosed];
+	// a failure transitions back to [CircuitBreakerStateOpen].
+	CircuitBreakerStateHalfOpen
+)
+
 type (
+	// CircuitBreaker is an interface for implementing a circuit breaker pattern to protect
+	// downstream services from cascading failures. It provides methods to check if a request is allowed
+	// and apply policies to classify responses as failures.
+	CircuitBreaker interface {
+		// Allow checks if a request is allowed to proceed based on the current state of the circuit breaker.
+		// It returns [ErrCircuitBreakerOpen] when the breaker is open or when a half-open
+		// probe request is already in flight.
+		Allow() error
+
+		// ApplyPolicies inspects the given HTTP response against the registered policies to determine
+		// if it should be classified as a failure. It updates the sliding window counts and
+		// manages state transitions accordingly.
+		ApplyPolicies(*Response)
+	}
+
+	// CircuitBreakerObserver is an interface for observing circuit breaker events via hooks.
+	// It provides methods to register hooks for trigger and state change events, and to
+	// execute those hooks.
+	CircuitBreakerObserver interface {
+		// OnTrigger registers one or more [CircuitBreakerTriggerHook] functions that are invoked
+		// each time the circuit breaker rejects a request in the open state.
+		OnTrigger(...CircuitBreakerTriggerHook) CircuitBreakerObserver
+
+		// RunOnTriggerHooks executes all registered trigger hooks with the given request and error.
+		RunOnTriggerHooks(*Request, error)
+
+		// OnStateChange registers one or more [CircuitBreakerStateChangeHook] functions that are
+		// invoked whenever the circuit breaker transitions between states.
+		OnStateChange(...CircuitBreakerStateChangeHook) CircuitBreakerObserver
+
+		// RunOnStateChangeHooks executes all registered state change hooks with the given old and new states.
+		RunOnStateChangeHooks(oldState, newState CircuitBreakerState)
+	}
+
 	// CircuitBreakerTriggerHook is called each time the circuit breaker blocks a
 	// request because it is in the open state. The hook receives the blocked
 	// [Request] and [ErrCircuitBreakerOpen] as the error.
@@ -32,7 +80,78 @@ type (
 	// CircuitBreakerState is the type for the three circuit breaker states:
 	// [CircuitBreakerStateClosed], [CircuitBreakerStateOpen], and [CircuitBreakerStateHalfOpen].
 	CircuitBreakerState uint32
+
+	circuitBreakerMode interface {
+		shouldOpenOnClosed(totalAndFailures) bool
+		halfOpenSuccessThreshold() uint64
+	}
 )
+
+var _ CircuitBreakerObserver = (*CircuitBreakerCount)(nil)
+var _ CircuitBreaker = (*CircuitBreakerCount)(nil)
+
+// CircuitBreakerCount implements a count-based circuit breaker. It trips when the
+// absolute number of request failures within the sliding window reaches the
+// configured failureThreshold. Once open, it recovers after resetTimeout and closes
+// again when successThreshold consecutive probe successes are observed.
+//
+// Create via [NewCircuitBreakerCount] and register via [Client.SetCircuitBreaker].
+type CircuitBreakerCount struct {
+	*circuitBreakerBase
+	failureThreshold uint64
+	successThreshold uint64
+}
+
+func (cb *CircuitBreakerCount) shouldOpenOnClosed(tf totalAndFailures) bool {
+	return tf.failures >= int(cb.failureThreshold)
+}
+
+func (cb *CircuitBreakerCount) halfOpenSuccessThreshold() uint64 {
+	return cb.successThreshold
+}
+
+// ApplyPolicies inspects the given HTTP response against the registered policies to
+// determine if it should be classified as a failure. It updates the sliding window
+// counts and manages state transitions accordingly.
+func (cb *CircuitBreakerCount) ApplyPolicies(resp *Response) {
+	cb.applyPolicies(resp, cb)
+}
+
+var _ CircuitBreakerObserver = (*CircuitBreakerRatio)(nil)
+var _ CircuitBreaker = (*CircuitBreakerRatio)(nil)
+
+// CircuitBreakerRatio implements a ratio-based circuit breaker. It trips when the
+// ratio of failures to total requests within the sliding window reaches the configured
+// failureRatio, provided at least minRequests have been observed. Once open, it
+// recovers after resetTimeout. The half-open probe closes the breaker after one
+// successful request.
+//
+// Create via [NewCircuitBreakerRatio] and register via [Client.SetCircuitBreaker].
+type CircuitBreakerRatio struct {
+	*circuitBreakerBase
+	failureRatio float64
+	minRequests  uint64
+}
+
+func (cb *CircuitBreakerRatio) shouldOpenOnClosed(tf totalAndFailures) bool {
+	if tf.total < int(cb.minRequests) {
+		return false
+	}
+	currentFailureRatio := float64(tf.failures) / float64(tf.total)
+	return currentFailureRatio >= cb.failureRatio
+}
+
+func (cb *CircuitBreakerRatio) halfOpenSuccessThreshold() uint64 {
+	// Ratio mode intentionally uses a single probe request to recover.
+	return 1
+}
+
+// ApplyPolicies inspects the given HTTP response against the registered policies to
+// determine if it should be classified as a failure. It updates the sliding window
+// counts and manages state transitions accordingly.
+func (cb *CircuitBreakerRatio) ApplyPolicies(resp *Response) {
+	cb.applyPolicies(resp, cb)
+}
 
 // group is an interface for types that can be combined and inverted
 type group[T any] interface {
@@ -73,17 +192,21 @@ type slidingWindow[G group[G]] struct {
 	interval  time.Duration
 }
 
-func newSlidingWindow[G group[G]](empty func() G, interval time.Duration, buckets int) *slidingWindow[G] {
+func newSlidingWindow[G group[G]](interval time.Duration, buckets int) *slidingWindow[G] {
+	var zero G
 	return &slidingWindow[G]{
-		total:     empty(),
+		total:     zero.empty(),
 		values:    make([]G, buckets),
-		idx:       0,
 		lastStart: time.Now(),
 		interval:  interval,
 	}
 }
 
 func (sw *slidingWindow[G]) Add(val G) {
+	_ = sw.AddAndGet(val)
+}
+
+func (sw *slidingWindow[G]) AddAndGet(val G) G {
 	sw.mutex.Lock()
 	defer sw.mutex.Unlock()
 
@@ -103,18 +226,20 @@ func (sw *slidingWindow[G]) Add(val G) {
 			sw.idx = 0
 		} else {
 			// Remove old buckets
-			for i := 0; i < bucketsToAdvance; i++ {
+			for range bucketsToAdvance {
 				sw.idx = (sw.idx + 1) % len(sw.values)
 				sw.total = sw.total.op(sw.values[sw.idx].inverse())
 				sw.values[sw.idx] = sw.total.empty()
 			}
 		}
-		sw.lastStart = now
+		sw.lastStart = sw.lastStart.Add(time.Duration(bucketsToAdvance) * bucketDuration)
 	}
 
 	// Add to current bucket
 	sw.values[sw.idx] = sw.values[sw.idx].op(val)
 	sw.total = sw.total.op(val)
+
+	return sw.total
 }
 
 func (sw *slidingWindow[G]) Get() G {
@@ -129,125 +254,142 @@ func (sw *slidingWindow[G]) SetInterval(interval time.Duration) {
 	sw.interval = interval
 }
 
-const (
-	// CircuitBreakerStateClosed is the normal operating state: all requests are
-	// forwarded and failures are tracked against the configured threshold.
-	CircuitBreakerStateClosed CircuitBreakerState = iota
+type cbRequestErrorObserver interface {
+	onRequestError()
+}
 
-	// CircuitBreakerStateOpen is the tripped state: all requests are blocked and
-	// return [ErrCircuitBreakerOpen] immediately. After the reset timeout the
-	// breaker transitions to [CircuitBreakerStateHalfOpen].
-	CircuitBreakerStateOpen
+var _ cbRequestErrorObserver = (*circuitBreakerBase)(nil)
 
-	// CircuitBreakerStateHalfOpen is the recovery probe state: a single request
-	// is allowed through. A success transitions to [CircuitBreakerStateClosed];
-	// a failure transitions back to [CircuitBreakerStateOpen].
-	CircuitBreakerStateHalfOpen
-)
-
-// CircuitBreaker implements a three-state state machine that protects downstream
-// services from cascading failures.
-//
-// States:
-//   - [CircuitBreakerStateClosed]: requests pass through; failures are recorded.
-//   - [CircuitBreakerStateOpen]: all requests are rejected with [ErrCircuitBreakerOpen].
-//   - [CircuitBreakerStateHalfOpen]: one probe request is allowed to test recovery.
-//
-// State transitions:
-//   - Closed → Open: when the failure count (or ratio) reaches the configured threshold.
-//   - Open → Half-Open: automatically after the reset timeout elapses.
-//   - Half-Open → Closed: when the probe success count reaches the success threshold.
-//   - Half-Open → Open: when the probe request is classified as a failure by any policy.
-//
-// Use [NewCircuitBreakerWithCount] for absolute failure count thresholds, or
-// [NewCircuitBreakerWithRatio] for failure-ratio thresholds.
-// Register the instance via [Client.SetCircuitBreaker].
-type CircuitBreaker struct {
-	lock         *sync.RWMutex
-	policies     []CircuitBreakerPolicy
-	resetTimeout time.Duration
-	resetCtx     context.Context
-	resetCancel  context.CancelFunc
-	state        atomic.Value // CircuitBreakerState
-	sw           *slidingWindow[totalAndFailures]
+// circuitBreakerBase holds the common state and logic shared by [CircuitBreakerCount]
+// and [CircuitBreakerRatio]. It is embedded by pointer in each concrete type.
+type circuitBreakerBase struct {
+	lock                  sync.RWMutex
+	policies              []CircuitBreakerPolicy
+	resetTimeout          time.Duration
+	resetTimerMu          sync.Mutex
+	resetTimer            *time.Timer
+	resetDeadlineUnixNano atomic.Int64
+	state                 atomic.Value // CircuitBreakerState
+	halfOpenProbeInFlight atomic.Uint32
+	sw                    atomic.Pointer[slidingWindow[totalAndFailures]]
 
 	// Hooks
 	triggerHooks     []CircuitBreakerTriggerHook
 	stateChangeHooks []CircuitBreakerStateChangeHook
-
-	// Count-based
-	failureThreshold uint64
-	successThreshold uint64
-
-	// Ratio-based
-	isRatioBased bool
-	failureRatio float64 // Threshold, e.g., 0.5 for 50% failure
-	minRequests  uint64  // Minimum number of requests to consider failure ratio
 }
 
-// NewCircuitBreakerWithCount creates a [CircuitBreaker] that trips when the absolute
+// NewCircuitBreakerCount creates a circuit breaker that trips when the absolute
 // number of request failures within the sliding window reaches failureThreshold.
 // Once open, it recovers after resetTimeout and closes again when successThreshold
 // consecutive probe successes are observed.
 //
 // The optional policies override the detection logic used to classify a response as
 // a failure. When no policies are provided, [CircuitBreaker5xxPolicy] is used by default.
-func NewCircuitBreakerWithCount(failureThreshold uint64, successThreshold uint64,
-	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
-	cb := newCircuitBreaker(resetTimeout, policies...)
-	cb.failureThreshold = failureThreshold
-	cb.successThreshold = successThreshold
-	return cb
+func NewCircuitBreakerCount(failureThreshold uint64, successThreshold uint64,
+	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) CircuitBreaker {
+	return &CircuitBreakerCount{
+		circuitBreakerBase: newCircuitBreakerBase(resetTimeout, policies...),
+		failureThreshold:   failureThreshold,
+		successThreshold:   successThreshold,
+	}
 }
 
-// NewCircuitBreakerWithRatio creates a [CircuitBreaker] that trips when the ratio of
+// NewCircuitBreakerRatio creates a circuit breaker that trips when the ratio of
 // failures to total requests within the sliding window reaches failureRatio (0.0–1.0),
 // provided at least minRequests have been observed. Once open, it recovers after
 // resetTimeout. The half-open probe closes the breaker after one successful request.
 //
 // The optional policies override the detection logic used to classify a response as
 // a failure. When no policies are provided, [CircuitBreaker5xxPolicy] is used by default.
-func NewCircuitBreakerWithRatio(failureRatio float64, minRequests uint64,
-	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
-	cb := newCircuitBreaker(resetTimeout, policies...)
-	cb.failureRatio = failureRatio
-	cb.minRequests = minRequests
-	cb.isRatioBased = true
-	return cb
+func NewCircuitBreakerRatio(failureRatio float64, minRequests uint64,
+	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) CircuitBreaker {
+	return &CircuitBreakerRatio{
+		circuitBreakerBase: newCircuitBreakerBase(resetTimeout, policies...),
+		failureRatio:       failureRatio,
+		minRequests:        minRequests,
+	}
 }
 
-func newCircuitBreaker(resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreaker {
-	ctx, cancel := context.WithCancel(context.Background())
-	cb := &CircuitBreaker{
-		lock:         &sync.RWMutex{},
+func newCircuitBreakerBase(resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *circuitBreakerBase {
+	cb := &circuitBreakerBase{
 		resetTimeout: resetTimeout,
-		resetCtx:     ctx,
-		resetCancel:  cancel,
 		policies:     []CircuitBreakerPolicy{CircuitBreaker5xxPolicy},
 	}
 	cb.state.Store(CircuitBreakerStateClosed)
-	cb.sw = newSlidingWindow(
-		func() totalAndFailures { return totalAndFailures{} },
-		resetTimeout,
-		10,
-	)
+	cb.sw.Store(newSlidingWindow[totalAndFailures](resetTimeout, 10))
 	if len(policies) > 0 {
 		cb.policies = policies
 	}
 	return cb
 }
 
+// Allow checks if a request is allowed to proceed based on the current
+// state of the circuit breaker.
+func (cb *circuitBreakerBase) Allow() error {
+	switch cb.getState() {
+	case CircuitBreakerStateOpen:
+		return ErrCircuitBreakerOpen
+	case CircuitBreakerStateHalfOpen:
+		if !cb.halfOpenProbeInFlight.CompareAndSwap(0, 1) {
+			return ErrCircuitBreakerOpen
+		}
+	}
+
+	return nil
+}
+
+// applyPolicies is the shared implementation used by [CircuitBreakerCount.ApplyPolicies]
+// and [CircuitBreakerRatio.ApplyPolicies].
+func (cb *circuitBreakerBase) applyPolicies(resp *Response, mode circuitBreakerMode) {
+	failed := false
+	for _, policy := range cb.policies {
+		if policy(resp) {
+			failed = true
+			break
+		}
+	}
+
+	sw := cb.sw.Load()
+	if failed {
+		tf := sw.AddAndGet(totalAndFailures{total: 1, failures: 1})
+
+		switch cb.getState() {
+		case CircuitBreakerStateClosed:
+			if mode.shouldOpenOnClosed(tf) {
+				cb.open()
+			}
+		case CircuitBreakerStateHalfOpen:
+			cb.halfOpenProbeInFlight.Store(0)
+			cb.open()
+		}
+
+		return
+	}
+
+	tf := sw.AddAndGet(totalAndFailures{total: 1, failures: 0})
+
+	switch cb.getState() {
+	case CircuitBreakerStateClosed:
+		return
+	case CircuitBreakerStateHalfOpen:
+		cb.halfOpenProbeInFlight.Store(0)
+		if tf.total-tf.failures >= int(mode.halfOpenSuccessThreshold()) {
+			cb.changeState(CircuitBreakerStateClosed)
+		}
+	}
+}
+
 // OnTrigger registers one or more [CircuitBreakerTriggerHook] functions that are invoked
 // each time the circuit breaker rejects a request in the open state.
-func (cb *CircuitBreaker) OnTrigger(hooks ...CircuitBreakerTriggerHook) *CircuitBreaker {
+func (cb *circuitBreakerBase) OnTrigger(hooks ...CircuitBreakerTriggerHook) CircuitBreakerObserver {
 	cb.lock.Lock()
 	defer cb.lock.Unlock()
 	cb.triggerHooks = append(cb.triggerHooks, hooks...)
 	return cb
 }
 
-// onTriggerHooks method executes all registered trigger hooks.
-func (cb *CircuitBreaker) onTriggerHooks(req *Request, err error) {
+// RunOnTriggerHooks method executes all registered trigger hooks with the given request and error.
+func (cb *circuitBreakerBase) RunOnTriggerHooks(req *Request, err error) {
 	cb.lock.RLock()
 	defer cb.lock.RUnlock()
 	for _, h := range cb.triggerHooks {
@@ -257,15 +399,15 @@ func (cb *CircuitBreaker) onTriggerHooks(req *Request, err error) {
 
 // OnStateChange registers one or more [CircuitBreakerStateChangeHook] functions that are
 // invoked whenever the circuit breaker transitions between states.
-func (cb *CircuitBreaker) OnStateChange(hooks ...CircuitBreakerStateChangeHook) *CircuitBreaker {
+func (cb *circuitBreakerBase) OnStateChange(hooks ...CircuitBreakerStateChangeHook) CircuitBreakerObserver {
 	cb.lock.Lock()
 	defer cb.lock.Unlock()
 	cb.stateChangeHooks = append(cb.stateChangeHooks, hooks...)
 	return cb
 }
 
-// onStateChangeHooks method executes all registered state change hooks.
-func (cb *CircuitBreaker) onStateChangeHooks(oldState, newState CircuitBreakerState) {
+// RunOnStateChangeHooks method executes all registered state change hooks with the given old and new states.
+func (cb *circuitBreakerBase) RunOnStateChangeHooks(oldState, newState CircuitBreakerState) {
 	cb.lock.RLock()
 	defer cb.lock.RUnlock()
 	for _, h := range cb.stateChangeHooks {
@@ -273,114 +415,70 @@ func (cb *CircuitBreaker) onStateChangeHooks(oldState, newState CircuitBreakerSt
 	}
 }
 
-// CircuitBreakerPolicy is a function that inspects a raw [http.Response] and returns
+// CircuitBreakerPolicy is a function that inspects a [Response] and returns
 // true when that response should be counted as a failure and potentially trip the
-// [CircuitBreaker]. Multiple policies can be registered; the breaker trips if any
+// circuit breaker. Multiple policies can be registered; the breaker trips if any
 // policy returns true.
-type CircuitBreakerPolicy func(resp *http.Response) bool
+type CircuitBreakerPolicy func(resp *Response) bool
 
 // CircuitBreaker5xxPolicy is the default [CircuitBreakerPolicy]. It classifies a
 // response as a failure when the HTTP status code is greater than or equal to 500.
-func CircuitBreaker5xxPolicy(resp *http.Response) bool {
-	return resp.StatusCode > 499
+func CircuitBreaker5xxPolicy(resp *Response) bool {
+	return resp.StatusCode() > 499
 }
 
-func (cb *CircuitBreaker) getState() CircuitBreakerState {
+func (cb *circuitBreakerBase) getState() CircuitBreakerState {
 	return cb.state.Load().(CircuitBreakerState)
 }
 
-func (cb *CircuitBreaker) allow() error {
-	if cb.getState() == CircuitBreakerStateOpen {
-		return ErrCircuitBreakerOpen
-	}
-
-	return nil
-}
-
-func (cb *CircuitBreaker) applyPolicies(resp *http.Response) {
-	failed := false
-	for _, policy := range cb.policies {
-		if policy(resp) {
-			failed = true
-			break
-		}
-	}
-
-	if failed {
-		cb.sw.Add(totalAndFailures{total: 1, failures: 1})
-
-		switch cb.getState() {
-		case CircuitBreakerStateClosed:
-			tf := cb.sw.Get()
-
-			if cb.isRatioBased {
-				if tf.total >= int(cb.minRequests) {
-					currentFailureRatio := float64(tf.failures) / float64(tf.total)
-					if currentFailureRatio >= cb.failureRatio {
-						cb.open()
-					}
-				}
-			} else {
-				if tf.failures >= int(cb.failureThreshold) {
-					cb.open()
-				}
-			}
-		case CircuitBreakerStateHalfOpen:
-			cb.open()
-		}
-
-		return
-	}
-
-	cb.sw.Add(totalAndFailures{total: 1, failures: 0})
-
-	switch cb.getState() {
-	case CircuitBreakerStateClosed:
-		return
-	case CircuitBreakerStateHalfOpen:
-		tf := cb.sw.Get()
-		if tf.total-tf.failures >= int(cb.successThreshold) {
-			cb.changeState(CircuitBreakerStateClosed)
-		}
-	}
-}
-
-func (cb *CircuitBreaker) open() {
+func (cb *circuitBreakerBase) open() {
 	cb.changeState(CircuitBreakerStateOpen)
+	cb.resetDeadlineUnixNano.Store(time.Now().Add(cb.resetTimeout).UnixNano())
 
-	cb.lock.Lock()
-	// Cancel previous reset goroutine if any
-	cb.resetCancel()
-	ctx, cancel := context.WithCancel(context.Background())
-	cb.resetCtx = ctx
-	cb.resetCancel = cancel
-	resetCtx := ctx
-	resetTimeout := cb.resetTimeout
-	cb.lock.Unlock()
+	cb.resetTimerMu.Lock()
+	defer cb.resetTimerMu.Unlock()
 
-	go func(resetCtx context.Context, resetTimeout time.Duration) {
-		select {
-		case <-time.After(resetTimeout):
-			if cb.getState() == CircuitBreakerStateOpen {
-				cb.changeState(CircuitBreakerStateHalfOpen)
-			}
-		case <-resetCtx.Done():
-			// Cancelled, exit gracefully
-		}
-	}(resetCtx, resetTimeout)
+	if cb.resetTimer == nil {
+		cb.resetTimer = time.AfterFunc(cb.resetTimeout, cb.onResetTimeout)
+		return
+	}
+
+	cb.resetTimer.Stop()
+	cb.resetTimer.Reset(cb.resetTimeout)
 }
 
-func (cb *CircuitBreaker) changeState(state CircuitBreakerState) {
+func (cb *circuitBreakerBase) onResetTimeout() {
+	if cb.getState() != CircuitBreakerStateOpen {
+		return
+	}
+
+	deadline := cb.resetDeadlineUnixNano.Load()
+	remaining := time.Until(time.Unix(0, deadline))
+	if remaining > 0 {
+		cb.resetTimerMu.Lock()
+		if cb.resetTimer != nil {
+			cb.resetTimer.Reset(remaining)
+		}
+		cb.resetTimerMu.Unlock()
+		return
+	}
+
+	cb.changeState(CircuitBreakerStateHalfOpen)
+}
+
+func (cb *circuitBreakerBase) changeState(state CircuitBreakerState) {
 	oldState := cb.getState()
-	cb.lock.Lock()
-	cb.sw = newSlidingWindow(
-		func() totalAndFailures { return totalAndFailures{} },
-		cb.resetTimeout,
-		10,
-	)
-	cb.lock.Unlock()
 	cb.state.Store(state)
+	cb.halfOpenProbeInFlight.Store(0)
+	cb.sw.Store(newSlidingWindow[totalAndFailures](cb.resetTimeout, 10))
 	if oldState != state {
-		cb.onStateChangeHooks(oldState, state)
+		cb.RunOnStateChangeHooks(oldState, state)
+	}
+}
+
+func (cb *circuitBreakerBase) onRequestError() {
+	if cb.getState() == CircuitBreakerStateHalfOpen {
+		cb.halfOpenProbeInFlight.Store(0)
+		cb.open()
 	}
 }

@@ -7,6 +7,7 @@ package resty
 
 import (
 	"bytes"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -211,6 +212,38 @@ func (s benchmarkStringer) String() string {
 	return s.value
 }
 
+func benchmarkCircuitBreakerAllow(cb any) error {
+	switch breaker := cb.(type) {
+	case interface{ Allow() error }:
+		return breaker.Allow()
+	case interface{ allow() error }:
+		return breaker.allow()
+	default:
+		return ErrCircuitBreakerOpen
+	}
+}
+
+func benchmarkCircuitBreakerApplyPolicies(cb any, statusCode int) {
+	rawResp := &http.Response{StatusCode: statusCode}
+
+	switch breaker := cb.(type) {
+	case interface{ ApplyPolicies(*Response) }:
+		breaker.ApplyPolicies(&Response{RawResponse: rawResp})
+	case interface{ applyPolicies(*http.Response) }:
+		breaker.applyPolicies(rawResp)
+	}
+}
+
+func benchmarkCircuitBreakerOpen(cb any) bool {
+	opener, ok := cb.(interface{ open() })
+	if !ok {
+		return false
+	}
+
+	opener.open()
+	return true
+}
+
 // Tier 1: most common URL types
 func Benchmark_formatAnyToString_string(b *testing.B) {
 	v := "hello world"
@@ -346,5 +379,41 @@ func Benchmark_formatAnyToString_default(b *testing.B) {
 	v := struct{ Name string }{Name: "test"}
 	for i := 0; i < b.N; i++ {
 		_ = formatAnyToString(v)
+	}
+}
+
+func Benchmark_circuitBreakerAllow_Closed(b *testing.B) {
+	cb := NewCircuitBreakerCount(1000, 1, 10*time.Second)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := benchmarkCircuitBreakerAllow(cb); err != nil {
+			b.Fatalf("Allow() error = %v", err)
+		}
+	}
+}
+
+func Benchmark_circuitBreakerApplyPolicies_SuccessClosed(b *testing.B) {
+	cb := NewCircuitBreakerCount(1000, 1, 10*time.Second)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchmarkCircuitBreakerApplyPolicies(cb, http.StatusOK)
+	}
+}
+
+func Benchmark_circuitBreakerApplyPolicies_FailureClosed(b *testing.B) {
+	cb := NewCircuitBreakerCount(^uint64(0), 1, 10*time.Second)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchmarkCircuitBreakerApplyPolicies(cb, http.StatusInternalServerError)
+	}
+}
+
+func Benchmark_circuitBreakerOpen_Reopen(b *testing.B) {
+	cb := NewCircuitBreakerCount(1, 1, 10*time.Second)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if !benchmarkCircuitBreakerOpen(cb) {
+			b.Fatal("circuit breaker does not expose open()")
+		}
 	}
 }
