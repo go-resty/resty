@@ -286,7 +286,7 @@ type circuitBreakerBase struct {
 // The optional policies override the detection logic used to classify a response as
 // a failure. When no policies are provided, [CircuitBreaker5xxPolicy] is used by default.
 func NewCircuitBreakerCount(failureThreshold uint64, successThreshold uint64,
-	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) CircuitBreaker {
+	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreakerCount {
 	return &CircuitBreakerCount{
 		circuitBreakerBase: newCircuitBreakerBase(resetTimeout, policies...),
 		failureThreshold:   failureThreshold,
@@ -302,7 +302,7 @@ func NewCircuitBreakerCount(failureThreshold uint64, successThreshold uint64,
 // The optional policies override the detection logic used to classify a response as
 // a failure. When no policies are provided, [CircuitBreaker5xxPolicy] is used by default.
 func NewCircuitBreakerRatio(failureRatio float64, minRequests uint64,
-	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) CircuitBreaker {
+	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreakerRatio {
 	return &CircuitBreakerRatio{
 		circuitBreakerBase: newCircuitBreakerBase(resetTimeout, policies...),
 		failureRatio:       failureRatio,
