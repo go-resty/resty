@@ -858,7 +858,8 @@ func authorizationHeaderValid(t *testing.T, r *http.Request, conf *digestServerC
 
 	userhash, userhashReceived := pairs["userhash"]
 	if userhashReceived {
-		assertTrue(t, userhash == "true", "userhash should be 'true' or 'false'")
+		// RFC allows for "false", but resty either sends "true" or omits the field
+		assertTrue(t, userhash == "true", "when userhash is set, it should be 'true'")
 	} else {
 		userhash = "false"
 	}
