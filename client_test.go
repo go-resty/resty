@@ -17,7 +17,7 @@ import (
 	"io"
 	"log"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
@@ -1469,9 +1469,6 @@ func TestPostRedirectWithBody(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()
 
-	mu := sync.Mutex{}
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	c := dcnl().SetBaseURL(ts.URL)
 
 	totalRequests := 4000
@@ -1483,9 +1480,7 @@ func TestPostRedirectWithBody(t *testing.T) {
 		}
 		go func() {
 			defer wg.Done()
-			mu.Lock()
-			randNumber := rnd.Int()
-			mu.Unlock()
+			randNumber := rand.Int()
 			resp, err := c.R().
 				SetBody([]byte(strconv.Itoa(randNumber))).
 				Post("/redirect-with-body")

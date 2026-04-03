@@ -17,12 +17,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"reflect"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -313,19 +314,11 @@ func sanitizeHeaders(hdr http.Header) http.Header {
 
 func composeHeaders(hdr http.Header) string {
 	str := make([]string, 0, len(hdr))
-	for _, k := range sortHeaderKeys(hdr) {
+	headerKeys := slices.Sorted(maps.Keys(hdr))
+	for _, k := range headerKeys {
 		str = append(str, "\t"+strings.TrimSpace(fmt.Sprintf("%25s: %s", k, strings.Join(hdr[k], ", "))))
 	}
 	return strings.Join(str, "\n")
-}
-
-func sortHeaderKeys(hdr http.Header) []string {
-	keys := make([]string, 0, len(hdr))
-	for key := range hdr {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 func wrapErrors(n error, inner error) error {

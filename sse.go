@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -649,7 +648,7 @@ func (sse *SSESource) listenStream(res *http.Response) error {
 	defer closeq(res.Body)
 
 	scanner := bufio.NewScanner(res.Body)
-	scanner.Buffer(make([]byte, slices.Min([]int{4096, sse.maxBufSize})), sse.maxBufSize)
+	scanner.Buffer(make([]byte, min(4096, sse.maxBufSize)), sse.maxBufSize)
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if atEOF && len(data) == 0 {
 			return 0, nil, nil

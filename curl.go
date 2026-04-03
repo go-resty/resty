@@ -10,7 +10,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"sort"
+	"slices"
 
 	"net/url"
 	"strings"
@@ -91,8 +91,8 @@ func dumpCurlHeaders(req *http.Request) *[][2]string {
 		}
 	}
 
-	sort.Slice(headers, func(i, j int) bool {
-		return headers[i][0] < headers[j][0]
+	slices.SortFunc(headers, func(a, b [2]string) int {
+		return strings.Compare(a[0], b[0])
 	})
 
 	return &headers

@@ -8,12 +8,11 @@ package resty
 import (
 	"crypto/tls"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -134,18 +133,16 @@ func newBackoffWithJitter(min, max time.Duration) *backoffWithJitter {
 	}
 
 	return &backoffWithJitter{
-		lock: new(sync.Mutex),
-		rnd:  rand.New(rand.NewSource(time.Now().UnixNano())),
-		min:  min,
-		max:  max,
+		rnd: rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
+		min: min,
+		max: max,
 	}
 }
 
 type backoffWithJitter struct {
-	lock *sync.Mutex
-	rnd  *rand.Rand
-	min  time.Duration
-	max  time.Duration
+	rnd *rand.Rand
+	min time.Duration
+	max time.Duration
 }
 
 func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error, attempt int) (time.Duration, error) {
@@ -182,11 +179,8 @@ func (b *backoffWithJitter) defaultDelayStrategy(attempt int) time.Duration {
 }
 
 func (b *backoffWithJitter) randDuration(center time.Duration) time.Duration {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
 	var ri = int64(center)
-	var jitter = b.rnd.Int63n(ri)
+	var jitter = b.rnd.Int64N(ri)
 	return time.Duration(math.Abs(float64(ri + jitter)))
 }
 
