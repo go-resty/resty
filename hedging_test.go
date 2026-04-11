@@ -313,19 +313,19 @@ func TestHedgingConfigurationViaClient(t *testing.T) {
 	c.SetHedging(h)
 
 	assertEqual(t, true, c.isHedgingEnabled())
-	assertEqual(t, 50*time.Millisecond, c.Hedging().Delay())
-	assertEqual(t, 3, c.Hedging().MaxRequest())
-	assertEqual(t, 10.0, c.Hedging().MaxRequestPerSecond())
+	assertEqual(t, 50*time.Millisecond, c.Hedging().(*Hedging).Delay())
+	assertEqual(t, 3, c.Hedging().(*Hedging).MaxRequest())
+	assertEqual(t, 10.0, c.Hedging().(*Hedging).MaxRequestPerSecond())
 
 	// Now we can update individual settings
-	c.Hedging().SetDelay(100 * time.Millisecond)
-	assertEqual(t, 100*time.Millisecond, c.Hedging().Delay())
+	c.Hedging().(*Hedging).SetDelay(100 * time.Millisecond)
+	assertEqual(t, 100*time.Millisecond, c.Hedging().(*Hedging).Delay())
 
-	c.Hedging().SetMaxRequest(5)
-	assertEqual(t, 5, c.Hedging().MaxRequest())
+	c.Hedging().(*Hedging).SetMaxRequest(5)
+	assertEqual(t, 5, c.Hedging().(*Hedging).MaxRequest())
 
-	c.Hedging().SetMaxRequestPerSecond(20.0)
-	assertEqual(t, 20.0, c.Hedging().MaxRequestPerSecond())
+	c.Hedging().(*Hedging).SetMaxRequestPerSecond(20.0)
+	assertEqual(t, 20.0, c.Hedging().(*Hedging).MaxRequestPerSecond())
 }
 
 func TestHedgingWithCustomTransport(t *testing.T) {
@@ -384,7 +384,7 @@ func TestHedgingAllowNonReadOnly(t *testing.T) {
 	c := dcnl().SetHedging(h)
 
 	// By default, non-read-only methods should not be hedged
-	assertEqual(t, false, c.Hedging().IsNonReadOnlyAllowed())
+	assertEqual(t, false, c.Hedging().(*Hedging).IsNonReadOnlyAllowed())
 
 	// Test POST without allowing non-read-only
 	atomic.StoreInt32(&attemptCount, 0)
@@ -394,8 +394,8 @@ func TestHedgingAllowNonReadOnly(t *testing.T) {
 	assertEqual(t, int32(1), atomic.LoadInt32(&attemptCount), "no hedging for POST without allow flag")
 
 	// Enable non-read-only methods
-	c.Hedging().SetNonReadOnlyAllowed(true)
-	assertEqual(t, true, c.Hedging().IsNonReadOnlyAllowed())
+	c.Hedging().(*Hedging).SetNonReadOnlyAllowed(true)
+	assertEqual(t, true, c.Hedging().(*Hedging).IsNonReadOnlyAllowed())
 
 	// Test POST with allowing non-read-only
 	atomic.StoreInt32(&attemptCount, 0)
@@ -447,10 +447,12 @@ func TestHedgingEnableMultipleTimes(t *testing.T) {
 		SetMaxRequest(5).
 		SetMaxRequestPerSecond(10.0)
 	c.SetHedging(nh)
+
+	hedging := c.Hedging().(*Hedging)
 	assertEqual(t, true, c.isHedgingEnabled())
-	assertEqual(t, 30*time.Millisecond, c.Hedging().Delay())
-	assertEqual(t, 5, c.Hedging().MaxRequest())
-	assertEqual(t, 10.0, c.Hedging().MaxRequestPerSecond())
+	assertEqual(t, 30*time.Millisecond, hedging.Delay())
+	assertEqual(t, 5, hedging.MaxRequest())
+	assertEqual(t, 10.0, hedging.MaxRequestPerSecond())
 
 	// Verify hedging still works
 	resp, err := c.R().Get(ts.URL)
@@ -551,12 +553,12 @@ func TestHedgingNoDoubleWrap(t *testing.T) {
 	assertTrue(t, ok, "Hedging transport")
 
 	// The wrapped transport should NOT be another Hedging
-	_, isHedging := hedging2.transport.(*Hedging)
+	_, isHedging := hedging2.Transport().(Hedger)
 	assertFalse(t, isHedging, "Double-wrapped hedging detected - transport should be unwrapped")
 
 	// Verify transport chain depth, should only have one Hedging layer
 	if hedging, ok := c.httpClient.Transport.(*Hedging); ok {
-		_, isHedging := hedging.transport.(*Hedging)
+		_, isHedging := hedging.Transport().(Hedger)
 		assertFalse(t, isHedging, "Double-wrapped hedging detected")
 	}
 

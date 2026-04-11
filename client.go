@@ -259,7 +259,7 @@ type Client struct {
 	contentDecompressers       map[string]ContentDecompresser
 	certWatcherStopChan        chan bool
 	circuitBreaker             CircuitBreaker
-	hedging                    *Hedging
+	hedging                    Hedger
 }
 
 // CertWatcherOptions configures the certificate file watcher that reloads TLS
@@ -1506,27 +1506,27 @@ func (c *Client) isHedgingEnabled() bool {
 	return c.hedging != nil
 }
 
-// Hedging method returns the [Hedging] configuration set on the client,
+// Hedging method returns the [Hedger] implementation set on the client,
 // or nil if hedging is disabled.
-func (c *Client) Hedging() *Hedging {
+func (c *Client) Hedging() Hedger {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.hedging
 }
 
-// SetHedging method sets the [Hedging] configuration on the client. Passing nil disables hedging.
+// SetHedging method sets the [Hedger] implementation on the client. Passing nil disables hedging.
 //
-// See [NewHedging] for more details about the Hedging configuration.
-func (c *Client) SetHedging(h *Hedging) *Client {
+// See [NewHedging] for more details about the default [Hedging] implementation.
+func (c *Client) SetHedging(h Hedger) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	// if nil is passed, we disable hedging
 	// by reverting the transport instance
 	if h == nil {
-		if ht, ok := c.httpClient.Transport.(*Hedging); ok {
-			c.httpClient.Transport = ht.transport
-			c.hedging = h
+		if ht, ok := c.httpClient.Transport.(Hedger); ok {
+			c.httpClient.Transport = ht.Transport()
+			c.hedging = nil
 		}
 		return c
 	}
@@ -1538,10 +1538,10 @@ func (c *Client) SetHedging(h *Hedging) *Client {
 		currentTransport = createTransport(nil, nil)
 	}
 
-	// If current transport is already a Hedging instance, unwrap it
+	// If current transport is already a Hedger instance, unwrap it
 	// to avoid double-wrapping (e.g., when SetHedging is called multiple times)
-	if hedging, ok := currentTransport.(*Hedging); ok {
-		currentTransport = hedging.transport
+	if hedging, ok := currentTransport.(Hedger); ok {
+		currentTransport = hedging.Transport()
 	}
 
 	// Disable retry by default when hedging is enabled.
@@ -1553,7 +1553,7 @@ func (c *Client) SetHedging(h *Hedging) *Client {
 		c.retryCount = 0
 	}
 
-	h.transport = currentTransport
+	h.SetTransport(currentTransport)
 	c.httpClient.Transport = h
 	c.hedging = h
 

@@ -15,6 +15,27 @@ import (
 	"time"
 )
 
+// Hedger is the interface for implementing a hedging strategy for HTTP requests.
+// Implementations must also implement [http.RoundTripper] so they can be installed
+// as the HTTP transport on a [Client].
+//
+// The [SetTransport] and [Transport] methods allow [Client.SetHedging] to wrap
+// and unwrap the underlying transport when hedging is enabled or disabled.
+//
+// Use [NewHedging] to create the default implementation ([Hedging]).
+type Hedger interface {
+	http.RoundTripper
+
+	// SetTransport sets the underlying HTTP transport that this hedging
+	// implementation delegates individual requests to.
+	SetTransport(http.RoundTripper)
+
+	// Transport returns the underlying HTTP transport.
+	Transport() http.RoundTripper
+}
+
+var _ Hedger = (*Hedging)(nil)
+
 // NewHedging creates a new [Hedging] instance with default configuration.
 // Defaults:
 //   - 50ms delay between requests
@@ -46,7 +67,7 @@ func NewHedging() *Hedging {
 	return h
 }
 
-// Hedging implements [http.RoundTripper] to perform hedged HTTP requests.
+// Hedging implements [Hedger] and [http.RoundTripper] to perform hedged HTTP requests.
 // It sends multiple requests in parallel with a specified delay and returns the first successful
 // response. Hedging is particularly useful for improving latency in scenarios where requests
 // may occasionally fail or experience high latency.
@@ -66,12 +87,27 @@ func NewHedging() *Hedging {
 // [The Tail at Scale]: https://research.google/pubs/the-tail-at-scale/
 type Hedging struct {
 	lock                 *sync.RWMutex
-	transport            http.RoundTripper
+	underlying           http.RoundTripper
 	delay                time.Duration
 	maxRequest           int
 	maxRequestPerSecond  float64
 	rateDelay            time.Duration // delay between requests based on maxPerSecond
 	isNonReadOnlyAllowed bool
+}
+
+// SetTransport sets the underlying HTTP transport that [Hedging] delegates
+// individual requests to.
+func (h *Hedging) SetTransport(t http.RoundTripper) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	h.underlying = t
+}
+
+// Transport returns the underlying HTTP transport.
+func (h *Hedging) Transport() http.RoundTripper {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	return h.underlying
 }
 
 // Delay method returns the delay between hedged requests.
@@ -154,12 +190,8 @@ func (h *Hedging) calculateRateDelay() {
 }
 
 func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
-	if !ht.isNonReadOnlyAllowed && !isReadOnlyMethod(req.Method) {
-		return ht.transport.RoundTrip(req)
-	}
-
-	if ht.MaxRequest() <= 1 {
-		return ht.transport.RoundTrip(req)
+	if (!ht.isNonReadOnlyAllowed && !isReadOnlyMethod(req.Method)) || ht.MaxRequest() <= 1 {
+		return ht.underlying.RoundTrip(req)
 	}
 
 	ctx := req.Context()
@@ -226,7 +258,7 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		go func() {
 			hedgedReq := req.Clone(hedgeCtx)
-			resp, err := ht.transport.RoundTrip(hedgedReq)
+			resp, err := ht.underlying.RoundTrip(hedgedReq)
 
 			won := false
 			once.Do(func() {
