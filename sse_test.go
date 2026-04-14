@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -349,6 +350,25 @@ func TestSSESourceTLSConfigerInterface(t *testing.T) {
 		es.SetTLSClientConfig(tlsConfig)
 		assertNil(t, es.TLSClientConfig())
 	})
+}
+
+func TestSSESourceSetTransport(t *testing.T) {
+	es := createSSESource(t, "", func(any) {}, nil)
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	})
+	defer ts.Close()
+
+	transport := &http.Transport{
+		// something like Proxying to httptest.Server, etc...
+		Proxy: func(req *http.Request) (*url.URL, error) {
+			return url.Parse(ts.URL)
+		},
+	}
+	es.SetTransport(transport)
+	transportInUse := es.httpClient.Transport
+
+	assertTrue(t, transport == transportInUse, "HTTP Transport should be of same type")
 }
 
 func TestSSESourceNoRetryRequired(t *testing.T) {

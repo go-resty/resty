@@ -243,6 +243,31 @@ func (sse *SSESource) tlsConfig() (*tls.Config, error) {
 	return transport.TLSClientConfig, nil
 }
 
+// SetTransport method sets custom [http.Transport] or any [http.RoundTripper]
+// on the underlying client transport.
+//
+//	transport := &http.Transport{
+//		// something like Proxying to httptest.Server, etc...
+//		Proxy: func(req *http.Request) (*url.URL, error) {
+//			return url.Parse(server.URL)
+//		},
+//	}
+//	sse.SetTransport(transport)
+//
+// NOTE:
+//   - If transport is not the type of [http.Transport], you may lose the
+//     ability to set a few Resty client settings. However, if you implement
+//     [TLSClientConfiger] interface, then TLS client config is possible to set.
+//   - It overwrites the Resty client transport instance and its configurations.
+func (sse *SSESource) SetTransport(transport http.RoundTripper) *SSESource {
+	sse.lock.Lock()
+	defer sse.lock.Unlock()
+	if transport != nil {
+		sse.httpClient.Transport = transport
+	}
+	return sse
+}
+
 // AddHeader method appends a header value on the [SSESource] instance.
 // If the header key already exists, it appends. These headers will be sent in
 // the request while establishing a connection to the event source
