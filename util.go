@@ -346,8 +346,8 @@ func (e *restyError) Error() string {
 	return e.err.Error()
 }
 
-func (e *restyError) Unwrap() error {
-	return e.inner
+func (e *restyError) Unwrap() []error {
+	return []error{e.err, e.inner}
 }
 
 // copied from net/http/clone.go
