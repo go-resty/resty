@@ -260,6 +260,7 @@ type Client struct {
 	certWatcherStopChan        chan bool
 	circuitBreaker             CircuitBreaker
 	hedging                    Hedger
+	rateLimiter                RateLimiter
 }
 
 // CertWatcherOptions configures the certificate file watcher that reloads TLS
@@ -1092,6 +1093,32 @@ func (c *Client) SetCircuitBreaker(cb CircuitBreaker) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.circuitBreaker = cb
+	return c
+}
+
+// RateLimiter method returns the [RateLimiter] configured on the client, or nil if none is set.
+func (c *Client) RateLimiter() RateLimiter {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.rateLimiter
+}
+
+// SetRateLimiter method sets the [RateLimiter] on the client. The rate limiter is consulted
+// before every request; if it returns an error the request is aborted with that error.
+//
+// Use [NewRateLimitTokenBucket] to create a standard token-bucket limiter,
+// [NewRateLimitSlidingWindow] for sliding-window semantics, or supply any
+// implementation of the [RateLimiter] interface for custom strategies.
+//
+// For example, to allow at most 100 requests per second with a burst of 10:
+//
+//	client.SetRateLimiter(resty.NewRateLimitTokenBucket(100, 10))
+//
+// Pass nil to remove a previously configured rate limiter.
+func (c *Client) SetRateLimiter(l RateLimiter) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.rateLimiter = l
 	return c
 }
 
@@ -2413,6 +2440,12 @@ func (c *Client) cbRequestError() {
 // Executes method executes the given `Request` object and returns
 // response or error.
 func (c *Client) execute(req *Request) (*Response, error) {
+	if c.RateLimiter() != nil {
+		if err := c.RateLimiter().Allow(req.Context()); err != nil {
+			return nil, err
+		}
+	}
+
 	if c.circuitBreaker != nil {
 		if err := c.circuitBreaker.Allow(); err != nil {
 			if cbo, ok := c.circuitBreaker.(CircuitBreakerObserver); ok {
