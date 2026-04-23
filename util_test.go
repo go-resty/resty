@@ -106,7 +106,10 @@ func TestRestyErrorFuncs(t *testing.T) {
 
 	e := wrapErrors(ne1, nie1)
 	assertEqual(t, "new error 1", e.Error())
-	assertEqual(t, "inner error 1", errors.Unwrap(e).Error())
+
+	// Unwrap should expose both errors so errors.Is can traverse them.
+	assertEqual(t, true, errors.Is(e, ne1))
+	assertEqual(t, true, errors.Is(e, nie1))
 
 	e = wrapErrors(ne1, nil)
 	assertEqual(t, "new error 1", e.Error())
