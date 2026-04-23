@@ -475,10 +475,15 @@ func handleRequestBody(c *Client, r *Request) error {
 		}
 
 		// do seek start for retry attempt if io.ReadSeeker
-		// interface supported
+		// interface supported; otherwise fail loudly rather than
+		// silently retrying the request with an empty body.
 		if r.Attempt > 1 {
-			if rs, ok := r.Body.(io.ReadSeeker); ok {
-				_, _ = rs.Seek(0, io.SeekStart)
+			rs, ok := r.Body.(io.ReadSeeker)
+			if !ok {
+				return ErrReaderNotSeekable
+			}
+			if _, err := rs.Seek(0, io.SeekStart); err != nil {
+				return err
 			}
 		}
 		return nil

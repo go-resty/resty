@@ -60,6 +60,11 @@ var (
 	// ErrUnsupportedRequestBodyKind is returned when the request body is of an unsupported kind.
 	ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body kind")
 
+	// ErrReaderNotSeekable is returned when a non-seekable request body reader is
+	// used on a retry attempt. This applies to both generic [io.Reader] request
+	// bodies (see [Request.SetBody]) and to [MultipartField.Reader] when retrying.
+	ErrReaderNotSeekable = errors.New("resty: reader is not seekable on request retry")
+
 	hdrUserAgentKey       = http.CanonicalHeaderKey("User-Agent")
 	hdrAcceptKey          = http.CanonicalHeaderKey("Accept")
 	hdrAcceptEncodingKey  = http.CanonicalHeaderKey("Accept-Encoding")
