@@ -18,6 +18,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -892,6 +893,53 @@ func TestRequestRetryPostIoReadSeeker(t *testing.T) {
 	assertEqual(t, 4, resp.Request.Attempt)
 	assertEqual(t, http.StatusInternalServerError, resp.StatusCode())
 	assertEqual(t, "", resp.String())
+}
+
+// TestRequestRetryNonSeekableReaderReturnsError ensures that when the request
+// body is a non-seekable io.Reader (e.g. a streaming reader, a pipe, or any
+// reader that cannot rewind), Resty stops after the first attempt and returns
+// ErrReaderNotSeekable instead of silently retrying the request with an empty
+// body.
+//
+// This mirrors TestRetryNonSeekableReaderWithoutFactoryReturnsError which
+// covers the same guarantee for multipart bodies (see PR #1133).
+func TestRequestRetryNonSeekableReaderReturnsError(t *testing.T) {
+	var attempts int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	payload := "the-original-request-body"
+	// bytes.Buffer implements io.Reader but not io.Seeker. We wrap it to be
+	// explicit about the test intent: this is a non-seekable streaming body.
+	body := &nonSeekableReader{r: bytes.NewBufferString(payload)}
+
+	c := dcnl().AddRetryConditions(func(r *Response, err error) bool {
+		return r != nil && r.StatusCode() == http.StatusServiceUnavailable
+	})
+
+	_, err := c.R().
+		SetRetryCount(2).
+		SetRetryWaitTime(10 * time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		SetBody(body).
+		Post(srv.URL)
+
+	assertErrorIs(t, ErrReaderNotSeekable, err)
+	assertEqual(t, int32(1), atomic.LoadInt32(&attempts))
+}
+
+// nonSeekableReader hides any seek/rewind capability of the underlying reader,
+// simulating a user-provided streaming body (pipe, network stream, decompressing
+// reader, etc.).
+type nonSeekableReader struct {
+	r io.Reader
+}
+
+func (n *nonSeekableReader) Read(p []byte) (int, error) {
+	return n.r.Read(p)
 }
 
 func TestRequestRetryHooks(t *testing.T) {
