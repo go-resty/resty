@@ -8,6 +8,7 @@ package resty
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -82,6 +83,7 @@ type (
 		onRequestFailure SSERequestFailureFunc
 		onEvent          map[string]*callback
 		log              Logger
+		ctx              context.Context
 		closed           bool
 		httpClient       *http.Client
 	}
@@ -157,6 +159,31 @@ func (sse *SSESource) SetHeader(header, value string) *SSESource {
 	sse.lock.Lock()
 	defer sse.lock.Unlock()
 	sse.header.Set(header, value)
+	return sse
+}
+
+// Context method returns the [context.Context] from the SSE source instance.
+//
+// The returned context is always non-nil; it defaults to the
+// background context.
+func (sse *SSESource) Context() context.Context {
+	sse.lock.RLock()
+	defer sse.lock.RUnlock()
+	if sse.ctx == nil {
+		return context.Background()
+	}
+	return sse.ctx
+}
+
+// SetContext method sets the [context.Context] for the current [SSESource].
+// It overwrites the current context in the SSESource instance.
+//
+// If you want this method to take effect, use this method before invoking
+// [SSESource.Get].
+func (sse *SSESource) SetContext(ctx context.Context) *SSESource {
+	sse.lock.Lock()
+	defer sse.lock.Unlock()
+	sse.ctx = ctx
 	return sse
 }
 
@@ -514,9 +541,16 @@ func (sse *SSESource) Get() error {
 	sse.enableConnect()
 
 	for {
-		if sse.isClosed() {
-			return nil
+		ctx := sse.Context()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			if sse.isClosed() {
+				return nil
+			}
 		}
+
 		res, err := sse.connect()
 		if err != nil {
 			return err
@@ -578,7 +612,7 @@ func (sse *SSESource) createRequest() (*http.Request, error) {
 		reqBody = bytes.NewReader(sse.bodyBytes)
 	}
 
-	req, err := http.NewRequest(sse.method, sse.url, reqBody)
+	req, err := http.NewRequestWithContext(sse.Context(), sse.method, sse.url, reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -691,8 +725,14 @@ func (sse *SSESource) listenStream(res *http.Response) error {
 	})
 
 	for {
-		if sse.isClosed() {
-			return nil
+		ctx := sse.Context()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			if sse.isClosed() {
+				return nil
+			}
 		}
 
 		if err := sse.processEvent(scanner); err != nil {

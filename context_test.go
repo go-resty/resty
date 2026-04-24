@@ -234,8 +234,87 @@ func TestRequestContext(t *testing.T) {
 	r := client.NewRequest()
 	assertNotNil(t, r.Context(), "expected default context to be non-nil")
 
-	r.SetContext(context.Background())
-	assertNotNil(t, r.Context(), "expected context to be set")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r.SetContext(ctx)
+	assertEqual(t, ctx, r.Context(), "expected context to be set")
+}
+
+func TestSSESourceContext(t *testing.T) {
+	es := NewSSESource()
+	assertNotNil(t, es.Context(), "expected default context to be non-nil")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	es.SetContext(ctx)
+	assertEqual(t, ctx, es.Context(), "expected context to be set")
+}
+
+func TestSSESourceSetContextCancelBeforeConnect(t *testing.T) {
+	var count int32
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&count, 1)
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := NewSSESource().
+		SetURL(ts.URL).
+		SetContext(ctx).
+		OnMessage(func(any) {}, nil).
+		Get()
+
+	assertErrorIs(t, context.Canceled, err, "expected canceled context to stop before connect")
+	assertEqual(t, int32(0), atomic.LoadInt32(&count), "expected no request to be sent")
+}
+
+func TestSSESourceSetContextCancel(t *testing.T) {
+	canceled := make(chan struct{}, 1)
+	var count int32
+
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&count, 1)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		_, err := w.Write([]byte("id: 1\ndata: test\n\n"))
+		assertNil(t, err)
+		assertNil(t, http.NewResponseController(w).Flush())
+
+		<-r.Context().Done()
+		canceled <- struct{}{}
+	})
+	defer ts.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	received := 0
+
+	err := NewSSESource().
+		SetURL(ts.URL).
+		SetRetryCount(0).
+		SetContext(ctx).
+		OnMessage(func(any) {
+			received++
+			cancel()
+		}, nil).
+		Get()
+
+	assertErrorIs(t, context.Canceled, err, "expected canceled context while listening to stream")
+	assertEqual(t, 1, received, "expected one event before cancellation")
+	assertEqual(t, int32(1), atomic.LoadInt32(&count), "expected a single request")
+
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("expected request context to be canceled on the server")
+	}
 }
 
 func errIsContextCanceled(err error) bool {
