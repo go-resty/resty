@@ -578,12 +578,71 @@ func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 
 var hostnameReplacer = strings.NewReplacer(":", "_", ".", "_")
 
+func sanitizeResponseSaveFileNameFromHeader(file string) (string, error) {
+	file = strings.TrimSpace(file)
+	if isStringEmpty(file) {
+		return "", nil
+	}
+
+	normalized := strings.ReplaceAll(file, "\\", "/")
+	if strings.HasPrefix(normalized, "/") || isWindowsAbsPath(normalized) {
+		return "", fmt.Errorf("resty: invalid Content-Disposition filename: absolute path is not allowed")
+	}
+	for _, s := range strings.Split(normalized, "/") {
+		if s == ".." {
+			return "", fmt.Errorf("resty: invalid Content-Disposition filename: parent directory traversal is not allowed")
+		}
+	}
+
+	base := path.Base(normalized)
+	if isStringEmpty(base) || base == "." {
+		return "", fmt.Errorf("resty: invalid Content-Disposition filename")
+	}
+
+	return base, nil
+}
+
+func isWindowsAbsPath(file string) bool {
+	if len(file) < 3 || file[1] != ':' {
+		return false
+	}
+
+	drive := file[0]
+	if (drive < 'A' || drive > 'Z') && (drive < 'a' || drive > 'z') {
+		return false
+	}
+
+	return file[2] == '/'
+}
+
+func isPathWithinBaseDirectory(baseDir, target string) bool {
+	rel, err := filepath.Rel(baseDir, target)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	if rel == ".." {
+		return false
+	}
+	return !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // MiddlewareResponseSaveToFile writes the HTTP response body to a file.
 // The filename is determined in the following order:
 //   - [Request.SetResponseSaveFileName]
 //   - Content-Disposition header
 //   - Request URL path using [path.Base]
 //   - Request URL hostname if the path is empty or "/"
+//
+// Content-Disposition filename values are sanitized before use. Absolute paths
+// and parent-directory traversal segments are rejected.
+//
+// If [Client.SetResponseSaveDirectory] is set and
+// [Request.SetResponseSaveFileName] provides a relative path, the final path
+// must remain within the configured response save directory after cleaning,
+// otherwise this middleware returns an error.
 func MiddlewareResponseSaveToFile(c *Client, res *Response) error {
 	if res.CascadeError != nil || !res.Request.IsResponseSaveToFile {
 		return nil
@@ -594,7 +653,10 @@ func MiddlewareResponseSaveToFile(c *Client, res *Response) error {
 		cntDispositionValue := res.Header().Get(hdrContentDisposition)
 		if len(cntDispositionValue) > 0 {
 			if _, params, err := mime.ParseMediaType(cntDispositionValue); err == nil {
-				file = params["filename"]
+				file, err = sanitizeResponseSaveFileNameFromHeader(params["filename"])
+				if err != nil {
+					return err
+				}
 			}
 		}
 		if isStringEmpty(file) {
@@ -607,11 +669,23 @@ func MiddlewareResponseSaveToFile(c *Client, res *Response) error {
 		}
 	}
 
-	if len(c.ResponseSaveDirectory()) > 0 && !filepath.IsAbs(file) {
-		file = filepath.Join(c.ResponseSaveDirectory(), string(filepath.Separator), file)
+	baseDirRaw := c.ResponseSaveDirectory()
+	hasBaseDir := !isStringEmpty(strings.TrimSpace(baseDirRaw))
+	baseDir := ""
+	if hasBaseDir {
+		baseDir = filepath.Clean(baseDirRaw)
+	}
+	constrainToBaseDir := hasBaseDir && !isStringEmpty(res.Request.ResponseSaveFileName) && !filepath.IsAbs(file)
+
+	if hasBaseDir && !filepath.IsAbs(file) {
+		file = filepath.Join(baseDir, file)
 	}
 
 	file = filepath.Clean(file)
+	if constrainToBaseDir && !isPathWithinBaseDirectory(baseDir, file) {
+		return fmt.Errorf("resty: invalid save file path outside response save directory")
+	}
+
 	if err := createDirectory(filepath.Dir(file)); err != nil {
 		return err
 	}

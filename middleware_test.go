@@ -909,6 +909,160 @@ func TestMiddlewareSaveToFileCopyError(t *testing.T) {
 	assertEqual(t, errCopyMsg, err1.Error())
 }
 
+func TestMiddlewareSaveToFile_ContentDisposition(t *testing.T) {
+	tempDir := t.TempDir()
+
+	t.Run("path traversal", func(t *testing.T) {
+		c := dcnl().SetResponseSaveDirectory(tempDir)
+		req := c.R().
+			SetResponseSaveToFile(true)
+		req.URL = "https://example.com/download"
+
+		res := &Response{
+			Request: req,
+			Body:    io.NopCloser(bytes.NewBufferString("test")),
+			RawResponse: &http.Response{Header: http.Header{
+				hdrContentDisposition: []string{`attachment; filename="../../../../tmp/pwned.txt"`},
+			}},
+		}
+
+		err := MiddlewareResponseSaveToFile(c, res)
+		assertNotNil(t, err)
+		assertTrue(t, strings.Contains(err.Error(), "invalid Content-Disposition filename"))
+	})
+
+	t.Run("rejects path outside base directory", func(t *testing.T) {
+		outsideFile := filepath.Join(tempDir, "..", "outside.txt")
+
+		c := dcnl().SetResponseSaveDirectory(tempDir)
+		req := c.R().
+			SetResponseSaveFileName("../outside.txt")
+		req.URL = "https://example.com/download"
+
+		res := &Response{
+			Request: req,
+			Body:    io.NopCloser(bytes.NewBufferString("test")),
+		}
+
+		err := MiddlewareResponseSaveToFile(c, res)
+		assertNotNil(t, err)
+		assertTrue(t, strings.Contains(err.Error(), "outside response save directory"))
+
+		_, statErr := os.Stat(outsideFile)
+		assertTrue(t, os.IsNotExist(statErr))
+	})
+
+	t.Run("windows abs path", func(t *testing.T) {
+		c := dcnl().SetResponseSaveDirectory(tempDir)
+		req := c.R().
+			SetResponseSaveToFile(true)
+		req.URL = "https://example.com/download"
+
+		res := &Response{
+			Request: req,
+			Body:    io.NopCloser(bytes.NewBufferString("test")),
+			RawResponse: &http.Response{Header: http.Header{
+				hdrContentDisposition: []string{`attachment; filename="C:\\temp\\pwned.txt"`},
+			}},
+		}
+
+		err := MiddlewareResponseSaveToFile(c, res)
+		assertNotNil(t, err)
+		assertTrue(t, strings.Contains(err.Error(), "absolute path is not allowed"))
+	})
+
+	t.Run("allow explicit absolute path with base directory", func(t *testing.T) {
+		absoluteFile := filepath.Join(tempDir, "absolute-target.txt")
+
+		c := dcnl().SetResponseSaveDirectory(filepath.Join(tempDir, "base-dir"))
+		req := c.R().
+			SetResponseSaveFileName(absoluteFile)
+		req.URL = "https://example.com/download"
+
+		res := &Response{
+			Request: req,
+			Body:    io.NopCloser(bytes.NewBufferString("test")),
+		}
+
+		err := MiddlewareResponseSaveToFile(c, res)
+		assertNil(t, err)
+
+		content, readErr := os.ReadFile(absoluteFile)
+		assertNil(t, readErr)
+		assertEqual(t, "test", string(content))
+	})
+
+	t.Run("method edge cases", func(t *testing.T) {
+		// sanitizeResponseSaveFileNameFromHeader
+		r, err := sanitizeResponseSaveFileNameFromHeader("")
+		assertNil(t, err)
+		assertEqual(t, "", r)
+
+		r, err = sanitizeResponseSaveFileNameFromHeader("../../../tmp/pwned.txt")
+		assertNotNil(t, err)
+		assertTrue(t, strings.Contains(err.Error(), "parent directory traversal is not allowed"))
+		assertEqual(t, "", r)
+
+		r, err = sanitizeResponseSaveFileNameFromHeader("..\\..\\..\\windows\\system32\\cmd.exe")
+		assertNotNil(t, err)
+		assertTrue(t, strings.Contains(err.Error(), "parent directory traversal is not allowed"))
+		assertEqual(t, "", r)
+
+		r, err = sanitizeResponseSaveFileNameFromHeader("tmp/welcome/.")
+		assertNotNil(t, err)
+		assertTrue(t, strings.Contains(err.Error(), "invalid Content-Disposition filename"))
+		assertEqual(t, "", r)
+
+		// isWindowsAbsPath
+		r2 := isWindowsAbsPath(`0:/temp/file.txt`)
+		assertFalse(t, r2)
+	})
+
+}
+
+func TestIsPathWithinBaseDirectory(t *testing.T) {
+	baseDir := t.TempDir()
+
+	tests := []struct {
+		name     string
+		target   string
+		expected bool
+	}{
+		{
+			name:     "same directory",
+			target:   baseDir,
+			expected: true,
+		},
+		{
+			name:     "child path",
+			target:   filepath.Join(baseDir, "downloads", "file.txt"),
+			expected: true,
+		},
+		{
+			name:     "parent directory",
+			target:   filepath.Dir(baseDir),
+			expected: false,
+		},
+		{
+			name:     "outside using traversal",
+			target:   filepath.Join(baseDir, "..", "outside", "file.txt"),
+			expected: false,
+		},
+		{
+			name:     "unrelated relative path",
+			target:   filepath.Join("usr", "local", "subdir", "file.txt"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := isPathWithinBaseDirectory(baseDir, tt.target)
+			assertEqual(t, tt.expected, actual)
+		})
+	}
+}
+
 func TestRequestURL_GH797(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
