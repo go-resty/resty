@@ -52,6 +52,13 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 	defer ts.Close()
 
 	poolingInterval := 100 * time.Millisecond
+	waitForWatcher := func() {
+		// Wait long enough for both root and client-root watchers to observe
+		// the file change and reload the TLS config before the next request.
+		// Otherwise the request can race with the watcher goroutine or use the
+		// previous CA, making this test flaky under -race and -shuffle.
+		time.Sleep(3 * poolingInterval)
+	}
 
 	client := NewWithTransportSettings(&TransportSettings{
 		// Make sure that TLS handshake happens for all request
@@ -78,9 +85,9 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 			assertEqual(t, res.StatusCode(), http.StatusOK)
 
 			if i%2 == 1 {
-				// Re-generate certs to simulate renewal scenario
+				// Re-generate certs to simulate renewal scenario.
 				generateCerts(t, paths)
-				time.Sleep(50 * time.Millisecond)
+				waitForWatcher()
 			}
 
 		}
@@ -101,15 +108,15 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 		tr.TLSClientConfig = nil
 		client.SetTransport(tr)
 
-		time.Sleep(50 * time.Millisecond)
+		waitForWatcher()
 
 		_, err = client.R().Get(url)
 		// We expect an error since root cert has been deleted
 		assertNotNil(t, err)
 
-		// Re-generate certs. We except cert watcher to reload the new root cert.
+		// Re-generate certs. We expect cert watcher to reload the new root cert.
 		generateCerts(t, paths)
-		time.Sleep(50 * time.Millisecond)
+		waitForWatcher()
 		_, err = client.R().Get(url)
 		assertNil(t, err)
 	})
