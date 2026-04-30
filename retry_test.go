@@ -931,6 +931,35 @@ func TestRequestRetryNonSeekableReaderReturnsError(t *testing.T) {
 	assertEqual(t, int32(1), atomic.LoadInt32(&attempts))
 }
 
+func TestRequestRetryReadSeekerReturnsSeekError(t *testing.T) {
+	var attempts int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempts, 1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	seekErr := errors.New("seek failed")
+	body := &seekErrorReader{
+		r:   strings.NewReader("the-original-request-body"),
+		err: seekErr,
+	}
+
+	c := dcnl().AddRetryConditions(func(r *Response, err error) bool {
+		return r != nil && r.StatusCode() == http.StatusServiceUnavailable
+	})
+
+	_, err := c.R().
+		SetRetryCount(2).
+		SetRetryWaitTime(10 * time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		SetBody(body).
+		Post(srv.URL)
+
+	assertErrorIs(t, seekErr, err)
+	assertEqual(t, int32(1), atomic.LoadInt32(&attempts))
+}
+
 // nonSeekableReader hides any seek/rewind capability of the underlying reader,
 // simulating a user-provided streaming body (pipe, network stream, decompressing
 // reader, etc.).
@@ -940,6 +969,19 @@ type nonSeekableReader struct {
 
 func (n *nonSeekableReader) Read(p []byte) (int, error) {
 	return n.r.Read(p)
+}
+
+type seekErrorReader struct {
+	r   io.Reader
+	err error
+}
+
+func (s *seekErrorReader) Read(p []byte) (int, error) {
+	return s.r.Read(p)
+}
+
+func (s *seekErrorReader) Seek(int64, int) (int64, error) {
+	return 0, s.err
 }
 
 func TestRequestRetryHooks(t *testing.T) {
