@@ -8,7 +8,7 @@ package resty
 import (
 	"errors"
 	"fmt"
-	"net"
+	"maps"
 	"net/http"
 	"strings"
 )
@@ -76,8 +76,8 @@ func RedirectDomainCheckPolicy(hostnames ...string) RedirectPolicy {
 	}
 
 	return RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
-		if ok := hosts[getHostname(req.URL.Host)]; !ok {
-			return errors.New("redirect is not allowed as per DomainCheckRedirectPolicy")
+		if ok := hosts[strings.ToLower(req.URL.Host)]; !ok {
+			return errors.New("resty: redirect is not allowed as per DomainCheckRedirectPolicy")
 		}
 		checkHostAndAddHeaders(req, via[0])
 		return nil
@@ -123,14 +123,6 @@ func RedirectHeaderStripSensitivePolicy(applyDefault bool, headers ...string) Re
 	})
 }
 
-func getHostname(host string) (hostname string) {
-	if strings.Index(host, ":") > 0 {
-		host, _, _ = net.SplitHostPort(host)
-	}
-	hostname = strings.ToLower(host)
-	return
-}
-
 // By default, Golang will not redirect request headers.
 // After reading through the various discussion comments from the thread -
 // https://github.com/golang/go/issues/4800
@@ -143,12 +135,10 @@ func getHostname(host string) (hostname string) {
 // (e.g. those set via [Client.SetHeaderAuthorizationKey]) are forwarded
 // verbatim unless explicitly removed. See https://github.com/go-resty/resty/issues/1128.
 func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {
-	curHostname := getHostname(cur.URL.Host)
-	preHostname := getHostname(pre.URL.Host)
+	curHostname := strings.ToLower(cur.URL.Host)
+	preHostname := strings.ToLower(pre.URL.Host)
 	if strings.EqualFold(curHostname, preHostname) {
-		for key, val := range pre.Header {
-			cur.Header[key] = val
-		}
+		maps.Copy(cur.Header, pre.Header)
 	} else {
 		// Cross-domain redirect: strip sensitive headers that Go's
 		// net/http does not know about (custom auth, token, api-key, etc.).

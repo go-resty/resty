@@ -975,7 +975,7 @@ func TestHostCheckRedirectPolicy(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl().
-		SetRedirectPolicy(RedirectDomainCheckPolicy("127.0.0.1"))
+		SetRedirectPolicy(RedirectDomainCheckPolicy(ts.URL[len("http://"):]))
 
 	_, err := c.R().Get(ts.URL + "/redirect-host-check-1")
 

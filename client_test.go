@@ -115,7 +115,7 @@ func TestClientRedirectPolicy(t *testing.T) {
 	ts := createRedirectServer(t)
 	defer ts.Close()
 
-	c := dcnl().SetRedirectPolicy(RedirectFlexiblePolicy(20), RedirectDomainCheckPolicy("127.0.0.1"))
+	c := dcnl().SetRedirectPolicy(RedirectFlexiblePolicy(20), RedirectDomainCheckPolicy(ts.URL[len("http://"):]))
 	res, err := c.R().
 		SetHeader("Name1", "Value1").
 		SetHeader("Name2", "Value2").
