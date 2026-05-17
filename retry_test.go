@@ -1187,7 +1187,7 @@ func TestRetryConstantDelayUsingStrategy(t *testing.T) {
 
 func TestRetryCoverage(t *testing.T) {
 	t.Run("apply retry default min and max value", func(t *testing.T) {
-		backoff := newBackoffWithJitter(0, 0)
+		backoff := newBackoffWithJitter(0, defaultMaxWaitTime)
 		assertEqual(t, defaultWaitTime, backoff.min)
 		assertEqual(t, defaultMaxWaitTime, backoff.max)
 
@@ -1196,6 +1196,13 @@ func TestRetryCoverage(t *testing.T) {
 
 		dur2 := backoff.balanceMinMax(4 * time.Second)
 		assertEqual(t, 2*time.Second, dur2)
+	})
+
+	t.Run("explicit zero min and max yields zero delay", func(t *testing.T) {
+		backoff := newBackoffWithJitter(0, 0)
+		assertEqual(t, time.Duration(0), backoff.min)
+		assertEqual(t, time.Duration(0), backoff.max)
+		assertEqual(t, time.Duration(0), backoff.balanceMinMax(0))
 	})
 
 	t.Run("retry condition nil response", func(t *testing.T) {
@@ -1232,4 +1239,29 @@ func testStaticTime(t *testing.T) {
 	t.Cleanup(func() {
 		timeNow = time.Now
 	})
+}
+
+func TestTraceInfoTotalTimeIncludesRetryWait(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	retryWaitTime := 100 * time.Millisecond
+
+	c := dcnl().
+		SetTrace(true).
+		SetRetryCount(2).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryWaitTime).
+		AddRetryConditions(func(*Response, error) bool { return true })
+
+	resp, err := c.R().Get(ts.URL + "/set-retrywaittime-test")
+	assertNil(t, err)
+	assertNotNil(t, resp)
+	assertEqual(t, 3, resp.Request.Attempt)
+
+	tr := resp.Request.TraceInfo()
+	if tr.TotalTime < 2*retryWaitTime-retryWaitTime/2 {
+		t.Fatalf("TotalTime should include retry backoff, got %v", tr.TotalTime)
+	}
+	assertTrue(t, tr.TotalTime == resp.Duration())
 }
