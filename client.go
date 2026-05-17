@@ -2471,7 +2471,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	prepareRequestDebugInfo(c, req)
 
-	req.StartTime = time.Now()
+	if req.StartTime.IsZero() {
+		req.StartTime = time.Now()
+	}
 	resp, err := c.Client().Do(req.withTimeout())
 	// Cancel multipart context for io.Copy to stop reading/writing further
 	if req.isMultiPart && req.multipartCancelFunc != nil {

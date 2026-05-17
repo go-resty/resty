@@ -1233,3 +1233,28 @@ func testStaticTime(t *testing.T) {
 		timeNow = time.Now
 	})
 }
+
+func TestTraceInfoTotalTimeIncludesRetryWait(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	retryWaitTime := 100 * time.Millisecond
+
+	c := dcnl().
+		SetTrace(true).
+		SetRetryCount(2).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryWaitTime).
+		AddRetryConditions(func(*Response, error) bool { return true })
+
+	resp, err := c.R().Get(ts.URL + "/set-retrywaittime-test")
+	assertNil(t, err)
+	assertNotNil(t, resp)
+	assertEqual(t, 3, resp.Request.Attempt)
+
+	tr := resp.Request.TraceInfo()
+	if tr.TotalTime < 2*retryWaitTime-retryWaitTime/2 {
+		t.Fatalf("TotalTime should include retry backoff, got %v", tr.TotalTime)
+	}
+	assertTrue(t, tr.TotalTime == resp.Duration())
+}

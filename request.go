@@ -1344,14 +1344,15 @@ func (r *Request) TraceInfo() TraceInfo {
 		ti.ServerTime = ct.gotFirstResponseByte.Sub(ct.gotConn)
 	}
 
-	// Calculate the total time accordingly when connection is reused,
-	// and DNS start and get conn time may be zero if the request is invalid.
-	// See issue #1016.
+	// Wall-clock from the first attempt (includes retry backoff). See issue #1142.
+	// For invalid requests without StartTime, fall back to trace timestamps (#1016).
 	requestStartTime := r.StartTime
-	if ct.gotConnInfo.Reused && !ct.getConn.IsZero() {
-		requestStartTime = ct.getConn
-	} else if !ct.dnsStart.IsZero() {
-		requestStartTime = ct.dnsStart
+	if requestStartTime.IsZero() {
+		if ct.gotConnInfo.Reused && !ct.getConn.IsZero() {
+			requestStartTime = ct.getConn
+		} else if !ct.dnsStart.IsZero() {
+			requestStartTime = ct.dnsStart
+		}
 	}
 	ti.TotalTime = ct.endTime.Sub(requestStartTime)
 
