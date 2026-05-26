@@ -1519,6 +1519,11 @@ func TestUnixSocket(t *testing.T) {
 	assertEqual(t, "Hello resty client from a server running on endpoint /hello!", res.String())
 }
 
+func TestSetBaseURLPreservesTrailingSlash(t *testing.T) {
+	c := dcnl().SetBaseURL("http://example.com/")
+	assertEqual(t, "http://example.com/", c.BaseURL())
+}
+
 func TestClientClone(t *testing.T) {
 	parent := New()
 
