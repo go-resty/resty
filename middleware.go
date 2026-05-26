@@ -460,13 +460,12 @@ func handleRequestBody(c *Client, r *Request) error {
 		r.Header.Set(hdrContentTypeKey, contentType)
 	}
 
-	r.bodyBuf = acquireBuffer()
-
-	switch body := r.Body.(type) {
+	switch r.Body.(type) {
 	case io.Reader:
-		// Resty v3 onwards io.Reader used as-is with the request body.
-		releaseBuffer(r.bodyBuf)
-		r.bodyBuf = nil
+		if r.bodyBuf != nil {
+			releaseBuffer(r.bodyBuf)
+			r.bodyBuf = nil
+		}
 
 		// enable multiple reads if body is *bytes.Buffer
 		if b, ok := r.Body.(*bytes.Buffer); ok {
@@ -487,6 +486,24 @@ func handleRequestBody(c *Client, r *Request) error {
 			}
 		}
 		return nil
+	}
+
+	if len(r.encodedBody) > 0 {
+		if r.bodyBuf == nil {
+			r.bodyBuf = acquireBuffer()
+		} else {
+			r.bodyBuf.Reset()
+		}
+		r.bodyBuf.Write(r.encodedBody)
+		return nil
+	}
+
+	if r.bodyBuf != nil {
+		releaseBuffer(r.bodyBuf)
+	}
+	r.bodyBuf = acquireBuffer()
+
+	switch body := r.Body.(type) {
 	case []byte:
 		r.bodyBuf.Write(body)
 	case string:
@@ -495,7 +512,10 @@ func handleRequestBody(c *Client, r *Request) error {
 		encKey := inferContentTypeMapKey(contentType)
 		if jsonKey == encKey {
 			if !r.jsonEscapeHTML {
-				return encodeJSONEscapeHTML(r.bodyBuf, r.Body, r.jsonEscapeHTML)
+				if err := encodeJSONEscapeHTML(r.bodyBuf, r.Body, r.jsonEscapeHTML); err != nil {
+					return err
+				}
+				break
 			}
 		} else if xmlKey == encKey {
 			if inferKind(r.Body) != reflect.Struct {
@@ -517,6 +537,10 @@ func handleRequestBody(c *Client, r *Request) error {
 			r.bodyBuf = nil
 			return err
 		}
+	}
+
+	if r.bodyBuf != nil && r.bodyBuf.Len() > 0 {
+		r.encodedBody = append(r.encodedBody[:0], r.bodyBuf.Bytes()...)
 	}
 
 	return nil

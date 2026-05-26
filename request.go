@@ -108,6 +108,7 @@ type Request struct {
 	unescapeQueryParams  bool
 	multipartErrChan     chan error
 	multipartCancelFunc  context.CancelFunc
+	encodedBody          []byte
 }
 
 // SetCorrelationID method is used to set the correlation ID for the request
@@ -1669,6 +1670,9 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	if r.bodyBuf != nil {
 		rr.bodyBuf = acquireBuffer()
 		rr.bodyBuf.Write(r.bodyBuf.Bytes())
+	}
+	if len(r.encodedBody) > 0 {
+		rr.encodedBody = append([]byte(nil), r.encodedBody...)
 	}
 
 	return rr
