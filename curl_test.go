@@ -248,7 +248,7 @@ func TestCurlRequestGetBodyError(t *testing.T) {
 
 	if !strings.Contains(curlCmdUnexecuted, "Cookie: count=1") ||
 		!strings.Contains(curlCmdUnexecuted, "curl -X POST") ||
-		!strings.Contains(curlCmdUnexecuted, `-d ''`) {
+		!strings.Contains(curlCmdUnexecuted, `-d '' http`) {
 		t.Fatal("Incomplete curl:", curlCmdUnexecuted)
 	} else {
 		t.Log("curlCmdUnexecuted: \n", curlCmdUnexecuted)
@@ -356,8 +356,8 @@ func TestCurlMultipartFormData(t *testing.T) {
 			// Verify method is included
 			assertTrue(t, strings.Contains(curlCmd, "curl -X "+tt.method), fmt.Sprintf("Expected curl command to contain 'curl -X %s'", tt.method))
 
-			// Verify URL is included
-			assertTrue(t, strings.Contains(curlCmd, tt.url), fmt.Sprintf("Expected curl command to contain URL '%s'", tt.url))
+			// Verify URL is included and separated from the -F placeholder by a space
+			assertTrue(t, strings.Contains(curlCmd, " "+tt.url), fmt.Sprintf("Expected curl command to contain URL '%s' preceded by a space, got: %s", tt.url, curlCmd))
 
 			// Verify -d flag is NOT used for multipart
 			assertFalse(t, strings.Contains(curlCmd, "-d '"), "Multipart request should use -F flag, not -d flag")

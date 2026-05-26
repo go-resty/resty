@@ -46,7 +46,7 @@ func buildCurlCmd(req *Request) string {
 	contentType := req.RawRequest.Header.Get(hdrContentTypeKey)
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		// Multipart: show placeholder
-		curl += "-F '<fields omitted, see original request>'"
+		curl += "-F '<fields omitted, see original request>' "
 	} else if req.RawRequest.GetBody != nil {
 		// Handle normal body
 		body, err := req.RawRequest.GetBody()
@@ -55,7 +55,7 @@ func buildCurlCmd(req *Request) string {
 			curl += "-d " + cmdQuote(string(bytes.TrimRight(buf, "\r\n"))) + " "
 		} else {
 			req.log.Errorf("curl: %v", err)
-			curl += "-d ''"
+			curl += "-d '' "
 		}
 	}
 
