@@ -125,12 +125,9 @@ func isDoNotRetryError(err error) bool {
 }
 
 func newBackoffWithJitter(min, max time.Duration) *backoffWithJitter {
-	// Explicit zero min and max yields constant zero delay between retries (#992).
-	if min == 0 && max == 0 {
+	if min == 0 && max == 0 { // GH#992
 		return &backoffWithJitter{
 			rnd: rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
-			min: 0,
-			max: 0,
 		}
 	}
 	if min <= 0 {
