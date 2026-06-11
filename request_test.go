@@ -2234,6 +2234,62 @@ func TestRequestClone(t *testing.T) {
 	assertNotEqual(t, parent.RawRequest, clone.RawRequest)
 }
 
+func TestRequestCloneCookiesAndInternalState(t *testing.T) {
+	c := dcnl()
+	parent := c.R().
+		SetCookie(&http.Cookie{Name: "go-resty-1", Value: "parent value"}).
+		SetCookie(&http.Cookie{Name: "go-resty-2", Value: "parent value 2"})
+	parent.initValuesMap()
+	parent.values["key-1"] = "value-1"
+	parent.multipartErrChan = make(chan error, 1)
+	parent.ctxCancelFunc = func() {}
+
+	clone := parent.Clone(context.Background())
+
+	// cookies are deep copied without nil entries
+	assertEqual(t, 2, len(clone.Cookies))
+	assertNotNil(t, clone.Cookies[0])
+	assertNotNil(t, clone.Cookies[1])
+	assertEqual(t, "go-resty-1", clone.Cookies[0].Name)
+	assertEqual(t, "go-resty-2", clone.Cookies[1].Name)
+
+	// mutating the clone's cookie does not affect the parent
+	clone.Cookies[0].Value = "clone value"
+	assertEqual(t, "parent value", parent.Cookies[0].Value)
+
+	// Clone does not reset the parent's internal state
+	assertEqual(t, "value-1", parent.values["key-1"])
+	assertNotNil(t, parent.multipartErrChan)
+	assertNotNil(t, parent.ctxCancelFunc)
+
+	// the clone gets a fresh values map and reset execution state
+	_, found := clone.values["key-1"]
+	assertFalse(t, found)
+	assertNil(t, clone.multipartErrChan)
+	assertNil(t, clone.ctxCancelFunc)
+	clone.values["key-2"] = "value-2"
+	_, found = parent.values["key-2"]
+	assertFalse(t, found)
+}
+
+func TestRequestInvalidMethod(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	var hookErr error
+	c := dcnl()
+	c.OnInvalid(func(r *Request, err error) {
+		hookErr = err
+	})
+
+	res, err := c.R().Execute("INVALID METHOD", ts.URL)
+
+	assertNotNil(t, err)
+	assertTrue(t, strings.Contains(err.Error(), "invalid method"))
+	assertNotNil(t, hookErr)
+	assertNil(t, res)
+}
+
 func TestResponseBodyUnlimitedReads(t *testing.T) {
 	ts := createPostServer(t)
 	defer ts.Close()

@@ -46,9 +46,11 @@ func MiddlewareRequestCreate(c *Client, r *Request) (err error) {
 		return err
 	}
 
-	// at this point, possible error from `http.NewRequestWithContext`
-	// is URL-related, and those get caught up in the `parseRequestURL`
-	createRawRequest(c, r)
+	// possible error from `http.NewRequestWithContext` is an invalid
+	// HTTP method since URL-related errors get caught up in the `parseRequestURL`
+	if err = createRawRequest(c, r); err != nil {
+		return err
+	}
 
 	addCredentials(c, r)
 

@@ -1698,6 +1698,27 @@ func TestClientOnCloseMultipleHooks(t *testing.T) {
 	assertEqual(t, []string{"first", "second", "third"}, executionOrder)
 }
 
+func TestClientCloseIdempotent(t *testing.T) {
+	closeCounter := 0
+	c := dcnl()
+	c.OnClose(func() {
+		closeCounter++
+	})
+
+	assertNil(t, c.Close())
+	assertNil(t, c.Close()) // subsequent close is a no-op, no panic
+	assertEqual(t, 1, closeCounter)
+}
+
+func TestClientCloneClose(t *testing.T) {
+	c := dcnl()
+	cc := c.Clone(context.Background())
+
+	// the clone has its own lifecycle; closing both must not panic
+	assertNil(t, c.Close())
+	assertNil(t, cc.Close())
+}
+
 func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	c := dcnl()
 

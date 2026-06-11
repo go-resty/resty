@@ -120,6 +120,7 @@ func NewSSESource() *SSESource {
 		retryConditions:  make([]RetryConditionFunc, 0),
 		maxBufSize:       defaultSseMaxBufSize,
 		onEvent:          make(map[string]*callback),
+		log:              createLogger(),
 		httpClient: &http.Client{
 			Jar:       createCookieJar(),
 			Transport: createTransport(nil, nil),

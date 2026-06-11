@@ -263,6 +263,7 @@ type Client struct {
 	contentDecompresserKeys    []string
 	contentDecompressers       map[string]ContentDecompresser
 	certWatcherStopChan        chan bool
+	isClosed                   bool
 	circuitBreaker             CircuitBreaker
 	hedging                    Hedger
 	rateLimiter                RateLimiter
@@ -2409,11 +2410,22 @@ func (c *Client) Clone(ctx context.Context) *Client {
 
 	// certain values need to be reset
 	cc.lock = &sync.RWMutex{}
+	cc.certWatcherStopChan = make(chan bool)
+	cc.isClosed = false
 	return cc
 }
 
 // Close method executes all registered [CloseHook] callbacks and releases client resources.
+// It is safe to call Close multiple times; subsequent calls are no-op.
 func (c *Client) Close() error {
+	c.lock.Lock()
+	alreadyClosed := c.isClosed
+	c.isClosed = true
+	c.lock.Unlock()
+	if alreadyClosed {
+		return nil
+	}
+
 	// Execute close hooks first
 	c.onCloseHooks()
 

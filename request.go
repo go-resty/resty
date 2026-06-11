@@ -1639,7 +1639,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 
 	// clone cookies
 	if l := len(r.Cookies); l > 0 {
-		rr.Cookies = make([]*http.Cookie, l)
+		rr.Cookies = make([]*http.Cookie, 0, l)
 		for _, cookie := range r.Cookies {
 			rr.Cookies = append(rr.Cookies, cloneCookie(cookie))
 		}
@@ -1661,9 +1661,9 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.StartTime = time.Time{}
 	rr.Attempt = 0
 	rr.initTraceIfEnabled()
-	r.values = make(map[string]any)
-	r.multipartErrChan = nil
-	r.ctxCancelFunc = nil
+	rr.values = make(map[string]any)
+	rr.multipartErrChan = nil
+	rr.ctxCancelFunc = nil
 
 	// copy bodyBuf
 	if r.bodyBuf != nil {

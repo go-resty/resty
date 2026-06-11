@@ -669,6 +669,24 @@ func TestSSESourceCoverage(t *testing.T) {
 	parseEvent([]byte{})
 }
 
+func TestSSESourceDefaultLogger(t *testing.T) {
+	es := NewSSESource()
+	assertNotNil(t, es.Logger())
+
+	lb := new(bytes.Buffer)
+	es.outputLogTo(lb)
+
+	// overwriting callbacks logs a warning; it must not panic
+	// when the user has not provided a logger
+	es.OnMessage(func(any) {}, nil)
+	es.OnMessage(func(any) {}, nil)
+	assertTrue(t, strings.Contains(lb.String(), "Overwriting an existing OnEvent callback"))
+
+	// body read failures are logged; it must not panic either
+	es.SetBody(&errorReader{})
+	assertNil(t, es.bodyBytes)
+}
+
 func TestSSESetBody(t *testing.T) {
 	t.Run("nil input", func(t *testing.T) {
 		es := createSSESource(t, "", nil, nil)
