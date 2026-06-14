@@ -70,6 +70,10 @@ func createGetServer(t *testing.T) *httptest.Server {
 			case "/long-json":
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"TestGet": "JSON response with size > 30"}`))
+			case "/do-not-parse-and-save-to-file":
+				w.Header().Set("Content-Type", "application/octet-stream")
+				w.Header().Set("Content-Encoding", "binary")
+				_, _ = w.Write([]byte(`This is octet-stream response`))
 			case "/mypage":
 				w.WriteHeader(http.StatusBadRequest)
 			case "/mypage2":

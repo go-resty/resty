@@ -1547,6 +1547,23 @@ func TestRequestDoNotParseResponse(t *testing.T) {
 		assertEqual(t, 0, resp.StatusCode())
 		assertEqual(t, "", resp.String())
 	})
+
+	t.Run("no error when DoNotParse is enabled and content decompressor is not found", func(t *testing.T) {
+		testFileBin := filepath.Join(getTestDataPath(), "test-octet-stream.bin")
+		defer cleanupFiles(testFileBin)
+
+		resp, err := dcnl().R().
+			SetResponseDoNotParse(true).
+			SetResponseSaveFileName(testFileBin).
+			Get(ts.URL + "/do-not-parse-and-save-to-file")
+
+		assertError(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+
+		testFileBinInfo, err := os.Stat(testFileBin)
+		assertError(t, err)
+		assertTrue(t, testFileBinInfo.Size() > 0)
+	})
 }
 
 func TestRequestDoNotParseResponseDebugLog(t *testing.T) {

@@ -329,6 +329,14 @@ func (r *Response) wrapContentDecompresser() error {
 		r.Header().Del(hdrContentEncodingKey)
 		r.Header().Del(hdrContentLengthKey)
 		r.RawResponse.ContentLength = -1
+	} else if r.Request.IsResponseDoNotParse {
+		// GH#1168 Don't return an error if DoNotParse is enabled and the content
+		// decompresser is not found. Possibly the user is handling content decompression
+		// in their own way, so instead of returning an error and breaking the response
+		// processing, just log it and let the caller handle it when they try to read the body.
+		r.Request.log.Warnf("Response.wrapContentDecompresser: DoNotParse is enabled and the content"+
+			" decompresser is not found for encoding '%s', just log it and let the caller handle it", ce)
+		return nil
 	} else {
 		return ErrContentDecompresserNotFound
 	}
