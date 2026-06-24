@@ -2490,10 +2490,21 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		req.multipartCancelFunc()
 	}
 
+	// Take ownership of the per-attempt timeout cancel func set by
+	// withTimeout. It must fire once the response body is fully consumed,
+	// so it is attached to the body's Close below. On a transport error
+	// there is no body to read, so release it right away to avoid leaking
+	// the context (and its timer) until the deadline elapses.
+	cancel := req.ctxCancelFunc
+	req.ctxCancelFunc = nil
+
 	response := &Response{Request: req, RawResponse: resp}
 	response.setReceivedAt()
 	if err != nil {
 		c.cbRequestError()
+		if cancel != nil {
+			cancel()
+		}
 		return response, err
 	}
 	if req.isMultiPart && req.multipartErrChan != nil {
@@ -2509,6 +2520,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 
 		response.Body = resp.Body
+		// Release the request timeout context once the body is closed,
+		// whether by the caller (do-not-parse) or by Resty while parsing
+		// or draining the body. Wrapping innermost ensures cancel runs no
+		// matter which outer reader closes the chain.
+		if cancel != nil {
+			response.Body = &cancelReadCloser{r: response.Body, cancel: cancel}
+			cancel = nil
+		}
 		if err = response.wrapContentDecompresser(); err != nil {
 			return response, response.wrapError(err, false)
 		}
@@ -2524,6 +2543,12 @@ func (c *Client) execute(req *Request) (*Response, error) {
 				}
 			}
 		}
+	}
+
+	// No response body was available to attach the cancel to (e.g. resp is
+	// nil); release the timeout context now so it does not leak.
+	if cancel != nil {
+		cancel()
 	}
 
 	debugLogger(c, response)

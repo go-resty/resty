@@ -1501,11 +1501,10 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 				isInvalidRequestErr = true
 				break
 			}
+			// The per-attempt timeout context cancel func is owned and
+			// released by Client.execute (on transport error, or when the
+			// response body is closed), so there is nothing to cancel here.
 			if r.Context().Err() != nil {
-				if r.ctxCancelFunc != nil {
-					r.ctxCancelFunc()
-					r.ctxCancelFunc = nil
-				}
 				if !errors.Is(err, context.DeadlineExceeded) {
 					err = wrapErrors(r.Context().Err(), err)
 					break

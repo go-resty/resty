@@ -378,6 +378,33 @@ func (r *copyReadCloser) Close() error {
 	return nil
 }
 
+var _ io.ReadCloser = (*cancelReadCloser)(nil)
+
+// cancelReadCloser wraps the response body so that closing it also invokes
+// cancel, releasing the per-request timeout context created by
+// [Request.withTimeout].
+//
+// The cancel must not run before the body is fully consumed; otherwise an
+// in-flight body read would be aborted with a context error. Closing the body
+// (directly by the caller for do-not-parse responses, or by Resty while
+// parsing/draining otherwise) is therefore the correct moment to release it.
+// context cancel funcs are safe to call more than once, so repeated Close
+// calls are harmless.
+type cancelReadCloser struct {
+	r      io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (c *cancelReadCloser) Read(p []byte) (int, error) {
+	return c.r.Read(p)
+}
+
+func (c *cancelReadCloser) Close() error {
+	err := c.r.Close()
+	c.cancel()
+	return err
+}
+
 var _ io.ReadCloser = (*nopReadCloser)(nil)
 
 type nopReadCloser struct {
