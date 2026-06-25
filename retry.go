@@ -222,6 +222,9 @@ func parseRetryAfterHeader(v string) (time.Duration, bool) {
 		if delay < 0 { // a negative delay doesn't make sense
 			return 0, false
 		}
+		if delay > int64(math.MaxInt64/time.Second) {
+			return time.Duration(math.MaxInt64), true
+		}
 		return time.Second * time.Duration(delay), true
 	}
 
@@ -230,10 +233,13 @@ func parseRetryAfterHeader(v string) (time.Duration, bool) {
 	if err != nil {
 		return 0, false
 	}
-	if until := retryTime.Sub(timeNow()); until > 0 {
-		return until, true
+	if retryTime.Before(timeNow()) {
+		return 0, true // date is in the past
 	}
 
-	// date is in the past
-	return 0, true
+	duration := retryTime.Sub(timeNow())
+	if duration < 0 { // overflow wrapped to negative
+		duration = time.Duration(math.MaxInt64)
+	}
+	return duration, true
 }
