@@ -317,6 +317,85 @@ func TestSSESourceSetContextCancel(t *testing.T) {
 	}
 }
 
+func TestRequestTimeoutContextReleasedAfterBodyRead(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
+	defer ts.Close()
+
+	tr := &ctxCaptureTransport{rt: http.DefaultTransport}
+	c := dcnl().SetTransport(tr)
+
+	resp, err := c.R().
+		SetTimeout(5 * time.Second).
+		Get(ts.URL + "/")
+
+	assertNil(t, err)
+	_ = resp.String() // reads and closes the body
+
+	assertNotNil(t, tr.ctx, "expected transport to have captured a context")
+	assertNotNil(t, tr.ctx.Err(), "expected timeout context to be cancelled after body is closed")
+}
+
+func TestRequestTimeoutContextReleasedOnTransportError(t *testing.T) {
+	transportErr := errors.New("simulated transport error")
+	tr := &ctxCaptureTransport{
+		rt: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return nil, transportErr
+		}),
+	}
+	c := dcnl().SetTransport(tr)
+
+	_, err := c.R().
+		SetTimeout(5 * time.Second).
+		Get("http://127.0.0.1:1/unreachable")
+
+	assertNotNil(t, err)
+	assertNotNil(t, tr.ctx, "expected transport to have captured a context")
+	assertNotNil(t, tr.ctx.Err(), "expected timeout context to be cancelled after transport error")
+}
+
+func TestRequestTimeoutContextReleasedOnDoNotParseResponse(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
+	defer ts.Close()
+
+	tr := &ctxCaptureTransport{rt: http.DefaultTransport}
+	c := dcnl().SetTransport(tr)
+
+	resp, err := c.R().
+		SetTimeout(5 * time.Second).
+		SetResponseDoNotParse(true).
+		Get(ts.URL + "/")
+
+	assertNil(t, err)
+	assertNotNil(t, resp.Body, "expected response body to be non-nil")
+
+	// Before closing, context should still be live.
+	assertNil(t, tr.ctx.Err(), "expected timeout context to still be active before body is closed")
+
+	_ = resp.Body.Close()
+
+	assertNotNil(t, tr.ctx.Err(), "expected timeout context to be cancelled after body is closed")
+}
+
+// ctxCaptureTransport records the context of the outgoing request.
+type ctxCaptureTransport struct {
+	rt  http.RoundTripper
+	ctx context.Context
+}
+
+func (t *ctxCaptureTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	t.ctx = r.Context()
+	return t.rt.RoundTrip(r)
+}
+
+// roundTripFunc is an http.RoundTripper backed by a plain function.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 func errIsContextCanceled(err error) bool {
 	return errors.Is(err, context.Canceled)
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -597,6 +598,52 @@ func TestDecodeXML(t *testing.T) {
 		assertEqual(t, "resty: XML decode exceeded 51 objects without EOF", err.Error())
 	})
 }
+
+func TestCancelReadCloser(t *testing.T) {
+	t.Run("read delegates to inner reader", func(t *testing.T) {
+		data := []byte("hello resty")
+		rc := &cancelReadCloser{
+			r:      io.NopCloser(bytes.NewReader(data)),
+			cancel: func() {},
+		}
+		buf := make([]byte, len(data))
+		n, err := rc.Read(buf)
+		assertNil(t, err)
+		assertEqual(t, len(data), n)
+		assertEqual(t, string(data), string(buf))
+	})
+
+	t.Run("close calls cancel", func(t *testing.T) {
+		canceled := false
+		rc := &cancelReadCloser{
+			r:      io.NopCloser(strings.NewReader("")),
+			cancel: func() { canceled = true },
+		}
+		err := rc.Close()
+		assertNil(t, err)
+		assertTrue(t, canceled, "expected cancel to be called on Close")
+	})
+
+	t.Run("close returns inner error", func(t *testing.T) {
+		closeErr := errors.New("inner close error")
+		canceled := false
+		rc := &cancelReadCloser{
+			r: &errReadCloser{closeErr: closeErr},
+			cancel: func() { canceled = true },
+		}
+		err := rc.Close()
+		assertEqual(t, closeErr, err)
+		assertTrue(t, canceled, "expected cancel to be called even when inner Close errors")
+	})
+}
+
+// errReadCloser is a ReadCloser whose Close returns a fixed error.
+type errReadCloser struct {
+	closeErr error
+}
+
+func (e *errReadCloser) Read(p []byte) (int, error) { return 0, io.EOF }
+func (e *errReadCloser) Close() error               { return e.closeErr }
 
 func TestStreamMisc(t *testing.T) {
 	t.Run("wrapper gzip reader is nil", func(t *testing.T) {
