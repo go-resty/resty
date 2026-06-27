@@ -628,7 +628,7 @@ func TestCancelReadCloser(t *testing.T) {
 		closeErr := errors.New("inner close error")
 		canceled := false
 		rc := &cancelReadCloser{
-			r: &errReadCloser{closeErr: closeErr},
+			r:      &errReadCloser{closeErr: closeErr},
 			cancel: func() { canceled = true },
 		}
 		err := rc.Close()
