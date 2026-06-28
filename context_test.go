@@ -355,6 +355,22 @@ func TestRequestTimeoutContextReleasedOnTransportError(t *testing.T) {
 	assertNotNil(t, tr.ctx.Err(), "expected timeout context to be cancelled after transport error")
 }
 
+func TestRequestTimeoutContextReleasedOnNilResponse(t *testing.T) {
+	tr := &ctxCaptureTransport{
+		rt: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return nil, nil
+		}),
+	}
+	c := dcnl().SetTransport(tr)
+
+	_, _ = c.R().
+		SetTimeout(5 * time.Second).
+		Get("http://127.0.0.1:1/")
+
+	assertNotNil(t, tr.ctx, "expected transport to have captured a context")
+	assertNotNil(t, tr.ctx.Err(), "expected timeout context to be cancelled when response and error are both nil")
+}
+
 func TestRequestTimeoutContextReleasedOnDoNotParseResponse(t *testing.T) {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
