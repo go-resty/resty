@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -741,6 +742,8 @@ func TestParseRetryAfterHeader(t *testing.T) {
 		{"negative", "-2", 0, false},
 		{"bad-date", "Fri, 32 Dec 1999 23:59:59 GMT", 0, false},
 		{"bad-date-format", "badbadbad", 0, false},
+		{"overflow-seconds", "9223372037", time.Duration(math.MaxInt64), true},
+		{"overflow-date", "Fri, 31 Dec 2293 23:59:59 GMT", time.Duration(math.MaxInt64), true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
