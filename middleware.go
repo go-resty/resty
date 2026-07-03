@@ -492,7 +492,7 @@ func handleRequestBody(c *Client, r *Request) error {
 	case []byte:
 		r.bodyBuf.Write(body)
 	case string:
-		r.bodyBuf.Write([]byte(body))
+		r.bodyBuf.WriteString(body)
 	default:
 		encKey := inferContentTypeMapKey(contentType)
 		if jsonKey == encKey {
