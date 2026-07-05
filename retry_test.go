@@ -758,6 +758,29 @@ func TestParseRetryAfterHeader(t *testing.T) {
 	}
 }
 
+func TestParseRetryAfterHeaderDateNowMovesForward(t *testing.T) {
+	retryAt, err := time.Parse(time.RFC1123, "Fri, 31 Dec 1999 23:59:59 GMT")
+	assertNil(t, err)
+
+	callCount := 0
+	// Simulate the clock moving forward between the past-check and Sub call.
+	timeNow = func() time.Time {
+		callCount++
+		if callCount == 1 {
+			return retryAt.Add(-1 * time.Second)
+		}
+		return retryAt.Add(1 * time.Second)
+	}
+	t.Cleanup(func() {
+		timeNow = time.Now
+	})
+
+	sleep, ok := parseRetryAfterHeader("Fri, 31 Dec 1999 23:59:59 GMT")
+	assertTrue(t, ok)
+	assertEqual(t, time.Duration(math.MaxInt64), sleep)
+	assertEqual(t, 2, callCount)
+}
+
 func TestRequestRetryTooManyRequestsHeaderRetryAfter(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
