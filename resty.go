@@ -20,7 +20,7 @@ import (
 )
 
 // Version is the current Resty library version string.
-const Version = "3.0.0-rc.3"
+const Version = "3.0.0-rc.3+devrc4"
 
 // New creates a new Resty client.
 func New() *Client {
