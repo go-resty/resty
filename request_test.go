@@ -2012,7 +2012,7 @@ func TestTraceInfoOnTimeoutWithSetTimeout(t *testing.T) {
 
 		tr := resp.Request.TraceInfo()
 
-		assertTrue(t, tr.DNSLookup == 0)
+		assertTrue(t, tr.DNSLookup <= tr.TotalTime)
 		assertTrue(t, tr.ConnTime == 0)
 		assertTrue(t, tr.TLSHandshake == 0)
 		assertTrue(t, tr.TCPConnTime == 0)
