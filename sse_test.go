@@ -655,7 +655,7 @@ func TestSSESourceCoverage(t *testing.T) {
 	err1 := es.Get()
 	assertEqual(t, "resty:sse: event source URL is required", err1.Error())
 
-	es.SetURL("https://sse.dev/test")
+	es.SetURL("https://streaming.dexpaprika.com/sse/prices?method=token_price&chain=ethereum&address=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2")
 	err2 := es.Get()
 	assertEqual(t, "resty:sse: At least one OnMessage/AddEventListener func is required", err2.Error())
 

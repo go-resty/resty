@@ -97,8 +97,8 @@ type (
 // NewSSESource creates a new [SSESource] with default SSE settings.
 //
 //	sse := NewSSESource().
-//		SetURL("https://sse.dev/test").
-//		OnMessage(
+//		SetURL("https://streaming.dexpaprika.com/sse/prices?method=token_price&chain=ethereum&address=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2").
+//		AddEventListener("token_price",
 //			func(e any) {
 //				event := e.(*resty.SSE)
 //				fmt.Println(event)
@@ -136,7 +136,7 @@ func NewSSESource() *SSESource {
 
 // SetURL method sets the event-source URL on the [SSESource] instance.
 //
-//	sse.SetURL("https://sse.dev/test")
+//	sse.SetURL("https://streaming.dexpaprika.com/sse/prices?method=token_price&chain=ethereum&address=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2")
 func (sse *SSESource) SetURL(url string) *SSESource {
 	sse.url = url
 	return sse
@@ -511,8 +511,8 @@ func (sse *SSESource) AddEventListener(eventName string, ef SSEMessageFunc, resu
 // Get method establishes the connection with the server.
 //
 //	sse := NewSSESource().
-//		SetURL("https://sse.dev/test").
-//		OnMessage(
+//		SetURL("https://streaming.dexpaprika.com/sse/prices?method=token_price&chain=ethereum&address=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2").
+//		AddEventListener("token_price",
 //			func(e any) {
 //				event := e.(*resty.SSE)
 //				fmt.Println(event)
