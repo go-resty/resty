@@ -7,6 +7,7 @@ package resty
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
@@ -544,4 +545,18 @@ func readMachineID() []byte {
 	// To initialize package unexported variable 'machineID'.
 	// This panic would happen at program startup, so no worries at runtime panic.
 	panic(errors.New("resty - guid: unable to get hostname and random bytes"))
+}
+
+func isMultipartStopError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.ErrClosedPipe) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	// multipart.Writer.Close can surface closed-pipe as a plain error string
+	// depending on Go version / close path.
+	msg := err.Error()
+	return strings.Contains(msg, "io: read/write on closed pipe") ||
+		strings.Contains(msg, "context canceled")
 }

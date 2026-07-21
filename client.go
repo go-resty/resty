@@ -2485,9 +2485,12 @@ func (c *Client) execute(req *Request) (*Response, error) {
 
 	req.StartTime = time.Now()
 	resp, err := c.Client().Do(req.withTimeout())
-	// Cancel multipart context for io.Copy to stop reading/writing further
-	if req.isMultiPart && req.multipartCancelFunc != nil {
-		req.multipartCancelFunc()
+	// Stop multipart production once the transport has returned. Cancel alone
+	// is not enough when a source Reader is already blocked inside Read; also
+	// close closable field readers so the writer goroutine can finish and
+	// multipartErrChan can close (see #1186).
+	if req.isMultiPart {
+		req.stopMultipart()
 	}
 
 	// Take ownership of the per-attempt timeout cancel func set by
@@ -2509,8 +2512,14 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 	if req.isMultiPart && req.multipartErrChan != nil {
 		// read all multipart errors from channel
-		for err = range req.multipartErrChan {
-			response.CascadeError = wrapErrors(err, response.CascadeError)
+		for merr := range req.multipartErrChan {
+			// stopMultipart intentionally closes the pipe/readers after the
+			// transport returns. Those shutdown signals are not request failures
+			// when an HTTP response was already obtained.
+			if resp != nil && isMultipartStopError(merr) {
+				continue
+			}
+			response.CascadeError = wrapErrors(merr, response.CascadeError)
 		}
 	}
 

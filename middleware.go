@@ -373,6 +373,7 @@ func handleMultipart(c *Client, r *Request) error {
 	br, bw := io.Pipe()
 	mw := multipart.NewWriter(bw)
 	r.Body = br
+	r.multipartPipeWriter = bw
 
 	// set custom multipart boundary if exists
 	if err := multipartSetBoundary(mw, r); err != nil {
@@ -382,6 +383,10 @@ func handleMultipart(c *Client, r *Request) error {
 
 	r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
 
+	// Create cancel before the writer goroutine so Client.execute can stop
+	// production without racing on multipartCancelFunc publication.
+	ctx, cancel := context.WithCancel(r.Context())
+	r.multipartCancelFunc = cancel
 	r.multipartErrChan = make(chan error, 1)
 	go func() {
 		defer close(r.multipartErrChan)
@@ -399,8 +404,6 @@ func handleMultipart(c *Client, r *Request) error {
 			return
 		}
 
-		ctx, cancel := context.WithCancel(r.Context())
-		r.multipartCancelFunc = cancel
 		for _, mf := range r.multipartFields {
 			if mf.isValues() {
 				for _, v := range mf.Values {

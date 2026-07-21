@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func Test_parseRequestURL(t *testing.T) {
@@ -1096,6 +1097,7 @@ func TestMiddleware_multipartWriteFormData(t *testing.T) {
 	})
 
 	req := &Request{
+		mu:          new(sync.Mutex),
 		Header:      http.Header{},
 		isMultiPart: true,
 		multipartFields: []*MultipartField{
@@ -1261,4 +1263,106 @@ func TestMiddlewareCoverage(t *testing.T) {
 	req1.URL = "//invalid-url  .local"
 	err1 := createRawRequest(c, req1)
 	assertTrue(t, strings.Contains(err1.Error(), "invalid character"), "invalid URL error expected")
+}
+
+func TestMultipartEarlyResponseRace(t *testing.T) {
+	client := NewWithClient(&http.Client{
+		Transport: earlyResponseTransport{},
+	})
+
+	for range 200 {
+		_, _ = client.R().
+			SetMultipartFields(&MultipartField{
+				Name:        "audio",
+				FileName:    "audio.wav",
+				ContentType: "audio/wav",
+				Reader:      bytes.NewReader(make([]byte, 1<<20)),
+			}).
+			Post("http://resty.test/upload")
+	}
+}
+
+type earlyResponseTransport struct{}
+
+func (earlyResponseTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// net/http allows a RoundTripper to consume and close the request body
+	// asynchronously after RoundTrip returns.
+	go func() {
+		_, _ = io.Copy(io.Discard, req.Body)
+		_ = req.Body.Close()
+	}()
+
+	return &http.Response{
+		StatusCode: http.StatusUnprocessableEntity,
+		Status:     "422 Unprocessable Entity",
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("rejected")),
+		Request:    req,
+	}, nil
+}
+
+type blockingReadCloser struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func newBlockingReadCloser() *blockingReadCloser {
+	return &blockingReadCloser{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (r *blockingReadCloser) Read([]byte) (int, error) {
+	select {
+	case <-r.started:
+	default:
+		close(r.started)
+	}
+
+	<-r.release
+
+	return 0, io.EOF
+}
+
+func (r *blockingReadCloser) Close() error {
+	r.once.Do(func() {
+		close(r.release)
+	})
+
+	return nil
+}
+
+func TestMultipartReturnsAfterEarlyResponse(t *testing.T) {
+	// RoundTrip returns before the request body is fully written, leaving the
+	// multipart producer blocked inside Reader.Read. stopMultipart must cancel
+	// production and close closable field readers so execute does not hang on
+	// multipartErrChan (see #1186).
+	reader := newBlockingReadCloser()
+	client := NewWithClient(&http.Client{
+		Transport: earlyResponseTransport{},
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.R().
+			SetMultipartFields(&MultipartField{
+				Name:        "audio",
+				FileName:    "audio.wav",
+				ContentType: "audio/wav",
+				Reader:      reader,
+			}).
+			Post("http://resty.test/upload")
+		done <- err
+	}()
+
+	select {
+	case <-done:
+		// returned after early response without caller unblocking the reader
+	case <-time.After(2 * time.Second):
+		_ = reader.Close()
+		<-done
+		t.Fatal("multipart request did not return after the transport responded")
+	}
 }
