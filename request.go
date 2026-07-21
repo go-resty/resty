@@ -1438,6 +1438,14 @@ func (r *Request) Trace(url string) (*Response, error) {
 	return r.Execute(MethodTrace, url)
 }
 
+// Query method does QUERY HTTP request. QUERY is a safe, idempotent method that
+// carries the query as request content; it's defined in section 2 of [RFC 10008].
+//
+// [RFC 10008]: https://datatracker.ietf.org/doc/html/rfc10008.html#section-2
+func (r *Request) Query(url string) (*Response, error) {
+	return r.Execute(MethodQuery, url)
+}
+
 // Send method performs the HTTP request using the method and URL already defined
 // for current [Request].
 //
@@ -1800,7 +1808,8 @@ func (r *Request) isPayloadSupported() bool {
 		return true
 	}
 
-	if r.Method == MethodPost || r.Method == MethodPut || r.Method == MethodPatch {
+	// QUERY (RFC 10008) always carries the query as request content.
+	if r.Method == MethodPost || r.Method == MethodPut || r.Method == MethodPatch || r.Method == MethodQuery {
 		return true
 	}
 
@@ -1853,6 +1862,7 @@ var idempotentMethods = map[string]struct{}{
 	MethodHead:    {},
 	MethodOptions: {},
 	MethodPut:     {},
+	MethodQuery:   {},
 	MethodTrace:   {},
 }
 

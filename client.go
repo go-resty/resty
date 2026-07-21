@@ -47,6 +47,9 @@ const (
 
 	// MethodTrace is the HTTP TRACE method.
 	MethodTrace = "TRACE"
+
+	// MethodQuery is the HTTP QUERY method.
+	MethodQuery = "QUERY"
 )
 
 const (

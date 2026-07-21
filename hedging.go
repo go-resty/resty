@@ -284,7 +284,7 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 // isReadOnlyMethod reports whether the HTTP method is read-only (safe for hedging).
 func isReadOnlyMethod(method string) bool {
 	switch method {
-	case MethodGet, MethodHead, MethodOptions, MethodTrace:
+	case MethodGet, MethodHead, MethodOptions, MethodTrace, MethodQuery:
 		return true
 	default:
 		return false
