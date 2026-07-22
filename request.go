@@ -1441,6 +1441,10 @@ func (r *Request) Trace(url string) (*Response, error) {
 // Query method does QUERY HTTP request. QUERY is a safe, idempotent method that
 // carries the query as request content; it's defined in section 2 of [RFC 10008].
 //
+// NOTE:
+//   - RFC is in the early stage of adoption in the industry; server side and browsers
+//     are yet to add support. You may run into unexpected failures due to infrastructure/environment.
+//
 // [RFC 10008]: https://datatracker.ietf.org/doc/html/rfc10008.html#section-2
 func (r *Request) Query(url string) (*Response, error) {
 	return r.Execute(MethodQuery, url)
