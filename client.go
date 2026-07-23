@@ -1302,6 +1302,9 @@ func (c *Client) RetryCount() int {
 func (c *Client) SetRetryCount(count int) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	if count < 0 {
+		count = 0
+	}
 	c.retryCount = count
 	return c
 }
@@ -1320,6 +1323,9 @@ func (c *Client) RetryWaitTime() time.Duration {
 func (c *Client) SetRetryWaitTime(waitTime time.Duration) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	if waitTime < 0 {
+		waitTime = 0
+	}
 	c.retryWaitTime = waitTime
 	return c
 }
@@ -1338,6 +1344,9 @@ func (c *Client) RetryMaxWaitTime() time.Duration {
 func (c *Client) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	if maxWaitTime < 0 {
+		maxWaitTime = 0
+	}
 	c.retryMaxWaitTime = maxWaitTime
 	return c
 }

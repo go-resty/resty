@@ -1145,6 +1145,9 @@ func (r *Request) SetRetryHooks(hooks ...RetryHookFunc) *Request {
 // [RFC 9110 Section 9.2.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-idempotent-methods
 // [RFC 9110 Section 18.2]: https://datatracker.ietf.org/doc/html/rfc9110.html#name-method-registration
 func (r *Request) SetRetryCount(count int) *Request {
+	if count < 0 {
+		count = 0
+	}
 	r.RetryCount = count
 	return r
 }
@@ -1153,6 +1156,9 @@ func (r *Request) SetRetryCount(count int) *Request {
 //
 // Default is 100 milliseconds.
 func (r *Request) SetRetryWaitTime(waitTime time.Duration) *Request {
+	if waitTime < 0 {
+		waitTime = 0
+	}
 	r.RetryWaitTime = waitTime
 	return r
 }
@@ -1161,6 +1167,9 @@ func (r *Request) SetRetryWaitTime(waitTime time.Duration) *Request {
 //
 // Default is 2 seconds.
 func (r *Request) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Request {
+	if maxWaitTime < 0 {
+		maxWaitTime = 0
+	}
 	r.RetryMaxWaitTime = maxWaitTime
 	return r
 }
