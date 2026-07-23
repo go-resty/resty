@@ -973,7 +973,7 @@ func (r *Request) SetPathRawParams(params map[string]string) *Request {
 	return r
 }
 
-// SetResponseExpectContentType method allows to provide fallback `Content-Type`
+// SetResponseExpectContentType method allows providing a fallback `Content-Type`
 // for automatic unmarshalling when the `Content-Type` response header is unavailable.
 func (r *Request) SetResponseExpectContentType(contentType string) *Request {
 	r.ResponseExpectContentType = contentType
