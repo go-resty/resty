@@ -1366,3 +1366,12 @@ func TestMultipartReturnsAfterEarlyResponse(t *testing.T) {
 		t.Fatal("multipart request did not return after the transport responded")
 	}
 }
+
+func TestStopMultipartNilReceiver(t *testing.T) {
+	// nil receiver must be a no-op and must not panic.
+	var r *Request
+	r.stopMultipart()
+
+	// A request with no cancel func / pipe writer / fields must also be safe.
+	(&Request{}).stopMultipart()
+}

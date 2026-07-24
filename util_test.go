@@ -7,6 +7,7 @@ package resty
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -408,3 +409,25 @@ func TestFormatAnyToString(t *testing.T) {
 		})
 	}
 }
+
+func TestIsMultipartStopError(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		err    error
+		expect bool
+	}{
+		{"nil", nil, false},
+		{"closed pipe", io.ErrClosedPipe, true},
+		{"context canceled", context.Canceled, true},
+		{"deadline exceeded", context.DeadlineExceeded, true},
+		{"wrapped closed pipe", fmt.Errorf("write: %w", io.ErrClosedPipe), true},
+		{"closed pipe string", errors.New("io: read/write on closed pipe"), true},
+		{"context canceled string", errors.New("context canceled"), true},
+		{"unrelated", errors.New("boom"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertEqual(t, tc.expect, isMultipartStopError(tc.err))
+		})
+	}
+}
+
