@@ -139,7 +139,13 @@ func parseRequestURL(c *Client, r *Request) error {
 			}
 		}
 
-		reqURL, err = url.Parse(r.baseURL + r.URL)
+		var composed string
+		if r.URL == "" || r.URL == "/" {
+			composed = r.baseURL
+		} else {
+			composed = strings.TrimRight(r.baseURL, "/") + r.URL
+		}
+		reqURL, err = url.Parse(composed)
 		if err != nil {
 			return &invalidRequestError{Err: err}
 		}

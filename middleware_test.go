@@ -319,7 +319,7 @@ func Test_parseRequestURL(t *testing.T) {
 					},
 				)
 			},
-			expectedURL: "https://example.com?initone=cáfe&fromclient=hey+unescape&registry=nacos://test:6801",
+			expectedURL: "https://example.com/?initone=cáfe&fromclient=hey+unescape&registry=nacos://test:6801",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
