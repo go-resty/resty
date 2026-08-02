@@ -600,6 +600,23 @@ func TestLoadBalancerRequestFailures(t *testing.T) {
 	assertEqual(t, 7, ts2URL)
 }
 
+func TestLoadBalancerConnectionRefusedMarksHostInactive(t *testing.T) {
+	ts := createGetServer(t)
+	ts.Close()
+
+	wrr, err := NewWeightedRoundRobin(time.Second, &Host{BaseURL: ts.URL, Weight: 1, MaxFailures: 1})
+	assertNil(t, err)
+	defer wrr.Close()
+
+	c := dcnl()
+	defer c.Close()
+	c.SetLoadBalancer(wrr)
+
+	_, _ = c.R().Get("/")
+
+	assertEqual(t, HostStateInActive, wrr.hosts[0].state)
+}
+
 type mockTimeoutErr struct{}
 
 func (e *mockTimeoutErr) Error() string { return "i/o timeout" }
