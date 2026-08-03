@@ -8,6 +8,9 @@ on:
       - '**.bazel'
       - 'WORKSPACE'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     strategy:
