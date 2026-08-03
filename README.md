@@ -3,7 +3,7 @@
 </p>
 <p align="center"><strong>Simple HTTP, REST, and SSE client library for Go</strong></p>
 
-<p align="center" style="margin-top:3rem"><a href="https://github.com/go-resty/resty/actions/workflows/ci.yml?query=branch%3Av3" target="_blank"><img src="https://github.com/go-resty/resty/actions/workflows/ci.yml/badge.svg?branch=v3" alt="Resty Build Status">
+<p align="center" style="margin-top:3rem"><a href="https://github.com/go-resty/resty/actions/workflows/ci.yml?query=branch%3Av3" target="_blank"><img src="https://github.com/go-resty/resty/actions/workflows/ci.yml/badge.svg?branch=v3" alt="Resty Build Status"></a> <a href="https://score.getplumber.io/github.com/go-resty/resty" target="_blank"><img src="https://score.getplumber.io/github.com/go-resty/resty.svg" alt="Plumber Score">
 </a><a href="https://app.codecov.io/gh/go-resty/resty/tree/v3" target="_blank"><img src="https://codecov.io/gh/go-resty/resty/branch/v3/graph/badge.svg" alt="Resty Code Coverage">
 </a><a href="https://goreportcard.com/report/resty.dev/v3" target="_blank"><img src="https://goreportcard.com/badge/resty.dev/v3" alt="Go Report Card">
 </a><a href="https://pkg.go.dev/resty.dev/v3" target="_blank"><img src="https://pkg.go.dev/badge/resty.dev/v3" alt="Resty GoDoc">
