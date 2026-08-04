@@ -126,7 +126,7 @@ func debugLogger(c *Client, res *Response) {
 		return
 	}
 
-	rdl := &DebugLogResponse{
+	respdl := &DebugLogResponse{
 		StatusCode: res.StatusCode(),
 		Status:     res.Status(),
 		Proto:      res.Proto(),
@@ -137,9 +137,12 @@ func debugLogger(c *Client, res *Response) {
 		Body:       res.fmtBodyString(res.Request.DebugBodyLimit),
 	}
 
+	reqdl := req.values[debugRequestLogKey].(*DebugLogRequest)
+	reqdl.Header = sanitizeHeaders(res.RawResponse.Request.Header.Clone())
+
 	dl := &DebugLog{
-		Request:  req.values[debugRequestLogKey].(*DebugLogRequest),
-		Response: rdl,
+		Request:  reqdl,
+		Response: respdl,
 	}
 
 	if res.Request.IsTrace {
@@ -185,7 +188,6 @@ func prepareRequestDebugInfo(c *Client, r *Request) {
 		URI:           rr.URL.RequestURI(),
 		Method:        r.Method,
 		Proto:         rr.Proto,
-		Header:        sanitizeHeaders(rh),
 		Attempt:       r.Attempt,
 		Body:          r.fmtBodyString(r.DebugBodyLimit),
 	}
