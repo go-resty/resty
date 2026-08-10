@@ -2576,6 +2576,10 @@ func (c *Client) Client() *http.Client {
 // NOTE: Use with care:
 //   - Interface values are not deeply cloned. Thus, both the original and the
 //     clone will use the same value.
+//   - The underlying [http.Client] is shared with the original. Therefore
+//     [Client.SetTransport], [Client.SetRedirectPolicy], [Client.SetTLSClientConfig],
+//     [Client.SetCookieJar], [Client.SetProxy], and [Client.SetHedging] on the clone
+//     also affect the original, and vice versa.
 //   - It is not safe for concurrent use. You should only use this method
 //     when you are sure that any other concurrent process is not using the client
 //     or client instance is protected by a mutex.
@@ -2597,7 +2601,20 @@ func (c *Client) Clone(ctx context.Context) *Client {
 	cc.contentTypeEncoders = maps.Clone(c.contentTypeEncoders)
 	cc.contentTypeDecoders = maps.Clone(c.contentTypeDecoders)
 	cc.contentDecompressors = maps.Clone(c.contentDecompressors)
-	copy(cc.contentDecompressorKeys, c.contentDecompressorKeys)
+	cc.contentDecompressorKeys = slices.Clone(c.contentDecompressorKeys)
+
+	// The struct copy above shares every slice's backing array with the original,
+	// so an Add* call on either side could write into the other's array. Give the
+	// clone its own copies.
+	cc.retryConditions = slices.Clone(c.retryConditions)
+	cc.retryHooks = slices.Clone(c.retryHooks)
+	cc.beforeRequest = slices.Clone(c.beforeRequest)
+	cc.afterResponse = slices.Clone(c.afterResponse)
+	cc.errorHooks = slices.Clone(c.errorHooks)
+	cc.invalidHooks = slices.Clone(c.invalidHooks)
+	cc.panicHooks = slices.Clone(c.panicHooks)
+	cc.successHooks = slices.Clone(c.successHooks)
+	cc.closeHooks = slices.Clone(c.closeHooks)
 
 	if c.proxyURL != nil {
 		cc.proxyURL, _ = url.Parse(c.proxyURL.String())
@@ -2634,7 +2651,18 @@ func (c *Client) Close() error {
 	if c.LoadBalancer() != nil {
 		silently(c.LoadBalancer().Close())
 	}
+
+	// Stop the circuit breaker reset timer, otherwise an open breaker keeps a
+	// runtime timer alive past Close.
+	if cb, ok := c.CircuitBreaker().(cbStopper); ok {
+		cb.stop()
+	}
+
 	close(c.certWatcherStopChan)
+
+	// Release keep-alive connections held by the transport. Callers that share an
+	// [http.Client] across Resty clients should not call Close on more than one.
+	c.Client().CloseIdleConnections()
 
 	return nil
 }
@@ -2741,6 +2769,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			cancel = nil
 		}
 		if err = response.wrapContentDecompressor(); err != nil {
+			// The body is never handed to the caller on this path, so release it
+			// here; otherwise the connection is held until the finalizer runs.
+			drainBody(response)
 			return response, response.wrapError(err, false)
 		}
 

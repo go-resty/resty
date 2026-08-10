@@ -2069,3 +2069,95 @@ func TestClientCircuitBreakerConcurrentSet(t *testing.T) {
 	close(stop)
 	wg.Wait()
 }
+
+// Clone shares every slice's backing array with the original after the struct
+// copy, so Add* on either side could write into the other's array.
+func TestClientCloneDoesNotShareSlices(t *testing.T) {
+	parent := dcnl()
+	defer parent.Close()
+
+	parent.AddRetryConditions(func(*Response, error) bool { return false })
+	parent.AddRetryHooks(func(*Response, error) {})
+	parent.OnError(func(*Request, error) {})
+	parent.AddContentDecompressor("br", func(r io.ReadCloser) (io.ReadCloser, error) { return r, nil })
+
+	clone := parent.Clone(context.Background())
+
+	parentConditions := len(parent.RetryConditions())
+	parentHooks := len(parent.RetryHooks())
+	parentKeys := parent.ContentDecompressorKeys()
+
+	// grow every slice on the clone
+	clone.AddRetryConditions(func(*Response, error) bool { return true })
+	clone.AddRetryHooks(func(*Response, error) {})
+	clone.AddRequestMiddlewares(func(*Client, *Request) error { return nil })
+	clone.AddResponseMiddlewares(func(*Client, *Response) error { return nil })
+	clone.AddContentDecompressor("zstd", func(r io.ReadCloser) (io.ReadCloser, error) { return r, nil })
+
+	assertEqual(t, parentConditions, len(parent.RetryConditions()))
+	assertEqual(t, parentHooks, len(parent.RetryHooks()))
+	assertEqual(t, parentKeys, parent.ContentDecompressorKeys())
+	assertEqual(t, parentConditions+1, len(clone.RetryConditions()))
+
+	// contentDecompressorKeys was copied onto itself, so the clone used to share it
+	assertTrue(t, strings.Contains(clone.ContentDecompressorKeys(), "zstd"))
+	assertTrue(t, !strings.Contains(parent.ContentDecompressorKeys(), "zstd"),
+		"parent keys leaked the clone's decompressor: "+parent.ContentDecompressorKeys())
+}
+
+// Close must release the transport's idle connections and stop the circuit
+// breaker reset timer.
+func TestClientCloseReleasesResources(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl().SetCircuitBreaker(NewCircuitBreakerCount(1, 1, time.Hour))
+
+	res, err := c.R().Get(ts.URL + "/")
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+
+	cb := c.CircuitBreaker().(*CircuitBreakerCount)
+	cb.open()
+
+	assertNil(t, c.Close())
+	assertNil(t, c.Close()) // still idempotent
+
+	cb.resetTimerMu.Lock()
+	stopped := !cb.resetTimer.Stop() // already stopped by Close
+	cb.resetTimerMu.Unlock()
+	assertTrue(t, stopped, "Close did not stop the circuit breaker reset timer")
+}
+
+// When no decompressor matches the Content-Encoding, the body is never handed to
+// the caller, so Resty has to release it. If it does not, the connection is
+// abandoned instead of returned to the keep-alive pool.
+func TestClientDecompressorNotFoundReleasesConnection(t *testing.T) {
+	var (
+		mu      sync.Mutex
+		remotes []string
+	)
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		remotes = append(remotes, r.RemoteAddr)
+		mu.Unlock()
+		w.Header().Set(hdrContentEncodingKey, "br") // no decompressor registered
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("payload the client cannot decode"))
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	for range 3 {
+		_, err := c.R().Get(ts.URL + "/")
+		assertErrorIs(t, ErrContentDecompressorNotFound, err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertEqual(t, 3, len(remotes))
+	assertEqual(t, remotes[0], remotes[1])
+	assertEqual(t, remotes[0], remotes[2])
+}

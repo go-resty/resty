@@ -310,7 +310,14 @@ type cbRequestErrorObserver interface {
 	onRequestError()
 }
 
+// cbStopper is implemented by circuit breakers that own background resources
+// [Client.Close] should release.
+type cbStopper interface {
+	stop()
+}
+
 var _ cbRequestErrorObserver = (*circuitBreakerBase)(nil)
+var _ cbStopper = (*circuitBreakerBase)(nil)
 
 // circuitBreakerBase holds the common state and logic shared by [CircuitBreakerCount]
 // and [CircuitBreakerRatio]. It is embedded by pointer in each concrete type.
@@ -551,6 +558,16 @@ func (cb *circuitBreakerBase) changeState(state CircuitBreakerState) {
 	cb.sw.Store(newSlidingWindow[totalAndFailures](cb.resetTimeout, 10))
 	if oldState != state {
 		cb.runOnStateChangeHooks(oldState, state)
+	}
+}
+
+// stop releases the reset timer. The breaker stays usable afterwards; it simply
+// will not transition from open to half-open on its own again.
+func (cb *circuitBreakerBase) stop() {
+	cb.resetTimerMu.Lock()
+	defer cb.resetTimerMu.Unlock()
+	if cb.resetTimer != nil {
+		cb.resetTimer.Stop()
 	}
 }
 

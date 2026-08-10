@@ -162,7 +162,11 @@ func acquireGzipReader(r io.ReadCloser) (*gzipReaderWrapper, error) {
 		w.gr = cached.(*gzip.Reader)
 		// Reset the pooled reader for the new stream
 		if err := w.gr.Reset(r); err != nil {
-			gzipReaderPool.Put(w.gr) // Return to pool on reset error
+			// Drop the reference to r before pooling, otherwise the pool keeps
+			// the response body alive until this reader is reused.
+			w.gr.Reset(nopReader{})
+			gzipReaderPool.Put(w.gr)
+			w.gr = nil
 			return nil, err
 		}
 	} else {
