@@ -169,6 +169,13 @@ func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error
 		}
 	}
 
+	// nonce is REQUIRED by RFC 7616 section 3.3. Unrecognized directives are
+	// ignored, so this is what distinguishes a usable challenge from one that
+	// carried nothing we understand.
+	if isStringEmpty(c.nonce) {
+		return nil, ErrDigestBadChallenge
+	}
+
 	return c, nil
 }
 
@@ -276,7 +283,12 @@ func (dc *digestChallenge) setValue(k, v string) error {
 		dc.algorithm = v
 	case "qop":
 		if !isStringEmpty(v) {
+			// Servers commonly send `qop="auth, auth-int"`; the directive is a
+			// comma-separated list and each token may carry surrounding space.
 			dc.qop = strings.Split(v, ",")
+			for i := range dc.qop {
+				dc.qop[i] = strings.TrimSpace(dc.qop[i])
+			}
 		}
 	case "charset":
 		if strings.ToUpper(v) != "UTF-8" {
@@ -291,7 +303,8 @@ func (dc *digestChallenge) setValue(k, v string) error {
 	case "userhash":
 		dc.userHash = v
 	default:
-		return ErrDigestBadChallenge
+		// RFC 7616 section 3.3 requires unrecognized auth-param directives to be
+		// ignored, so a server sending an extension parameter still works.
 	}
 	return nil
 }
