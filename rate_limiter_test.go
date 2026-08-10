@@ -252,3 +252,42 @@ func TestRateLimiterSlidingWindowConfig(t *testing.T) {
 		assertEqual(t, time.Second, l.WindowSize(), "expected default window of 1s")
 	})
 }
+
+// Both limiters collapsed cancellation and deadline expiry into the bare
+// sentinel, so callers could not tell them apart.
+func TestRateLimiterErrorWrapsContextCause(t *testing.T) {
+	limiters := map[string]RateLimiter{
+		"token bucket":   NewRateLimitTokenBucket(1, 1),
+		"sliding window": NewRateLimitSlidingWindow(1, time.Hour),
+	}
+
+	for name, l := range limiters {
+		t.Run(name, func(t *testing.T) {
+			assertNil(t, l.Allow(context.Background())) // consume the only slot
+
+			t.Run("cancelled", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				err := l.Allow(ctx)
+				assertErrorIs(t, ErrRateLimitExceeded, err)
+				assertErrorIs(t, context.Canceled, err)
+			})
+
+			t.Run("deadline exceeded", func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+				defer cancel()
+				err := l.Allow(ctx)
+				assertErrorIs(t, ErrRateLimitExceeded, err)
+				assertErrorIs(t, context.DeadlineExceeded, err)
+			})
+		})
+	}
+}
+
+// A context that is not done has no cause to join, so the caller still gets the
+// bare sentinel back.
+func TestRateLimiterErrorWithoutContextCause(t *testing.T) {
+	err := rateLimitError(context.Background())
+	assertEqual(t, ErrRateLimitExceeded, err)
+	assertErrorIs(t, ErrRateLimitExceeded, err)
+}

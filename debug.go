@@ -137,8 +137,15 @@ func debugLogger(c *Client, res *Response) {
 		Body:       res.fmtBodyString(res.Request.DebugBodyLimit),
 	}
 
+	// prepareRequestDebugInfo populates this before the request is sent. Guard the
+	// assertion anyway so a logging path can never panic.
+	rql, _ := req.values[debugRequestLogKey].(*DebugLogRequest)
+	if rql == nil {
+		rql = &DebugLogRequest{}
+	}
+
 	dl := &DebugLog{
-		Request:  req.values[debugRequestLogKey].(*DebugLogRequest),
+		Request:  rql,
 		Response: rdl,
 	}
 

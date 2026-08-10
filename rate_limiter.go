@@ -8,6 +8,7 @@ package resty
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -16,7 +17,22 @@ import (
 // rejects a request. This occurs when the context is cancelled or the deadline
 // expires before a token becomes available, or immediately if the rate limiter
 // implementation rejects the request for any other reason.
+//
+// The limiters shipped with Resty wrap the context error alongside this sentinel,
+// so both [errors.Is] checks succeed:
+//
+//	errors.Is(err, resty.ErrRateLimitExceeded)
+//	errors.Is(err, context.DeadlineExceeded)
 var ErrRateLimitExceeded = errors.New("resty: rate limit exceeded")
+
+// rateLimitError joins ErrRateLimitExceeded with the context error that caused
+// the wait to be abandoned, so callers can tell cancellation from a deadline.
+func rateLimitError(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("%w: %w", ErrRateLimitExceeded, err)
+	}
+	return ErrRateLimitExceeded
+}
 
 // RateLimiter is the interface that wraps the rate limiting behavior used by
 // [Client]. Implement this interface to provide custom rate limiting strategies.
@@ -117,7 +133,7 @@ func (l *RateLimitTokenBucket) Allow(ctx context.Context) error {
 		// Check context first to avoid acquiring the lock unnecessarily.
 		select {
 		case <-ctx.Done():
-			return ErrRateLimitExceeded
+			return rateLimitError(ctx)
 		default:
 		}
 
@@ -138,7 +154,7 @@ func (l *RateLimitTokenBucket) Allow(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return ErrRateLimitExceeded
+			return rateLimitError(ctx)
 		case <-timer.C:
 		}
 	}
@@ -232,7 +248,7 @@ func (l *RateLimitSlidingWindow) Allow(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ErrRateLimitExceeded
+			return rateLimitError(ctx)
 		default:
 		}
 
@@ -268,7 +284,7 @@ func (l *RateLimitSlidingWindow) Allow(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return ErrRateLimitExceeded
+			return rateLimitError(ctx)
 		case <-timer.C:
 		}
 	}
