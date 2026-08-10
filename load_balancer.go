@@ -157,13 +157,17 @@ func NewWeightedRoundRobin(recovery time.Duration, hosts ...*Host) (*WeightedRou
 		hosts:    make([]*Host, 0),
 		tick:     time.NewTicker(recovery),
 		recovery: recovery,
+		done:     make(chan struct{}),
 	}
 
-	err := wrr.Refresh(hosts...)
+	if err := wrr.Refresh(hosts...); err != nil {
+		wrr.tick.Stop()
+		return wrr, err
+	}
 
 	go wrr.ticker()
 
-	return wrr, err
+	return wrr, nil
 }
 
 var _ LoadBalancer = (*WeightedRoundRobin)(nil)
@@ -173,9 +177,14 @@ var _ LoadBalancer = (*WeightedRoundRobin)(nil)
 type WeightedRoundRobin struct {
 	lock          *sync.RWMutex
 	hosts         []*Host
-	totalWeight   int
 	tick          *time.Ticker
 	onStateChange HostStateChangeFunc
+
+	// done is closed by Close to stop the recovery ticker goroutine.
+	// Ticker.Stop does not close its channel, so the goroutine needs
+	// a separate shutdown signal.
+	done      chan struct{}
+	closeOnce sync.Once
 
 	// Recovery duration is used to set the timer to put
 	// the host back in the pool for the next turn and
@@ -226,27 +235,37 @@ func (wrr *WeightedRoundRobin) Feedback(f *RequestFeedback) {
 	}
 
 	wrr.lock.Lock()
-	defer wrr.lock.Unlock()
-
+	deactivated := ""
+	onStateChange := wrr.onStateChange
 	for _, host := range wrr.hosts {
-		if host.BaseURL == f.BaseURL {
-			if !f.Success {
-				host.failedRequests++
-			}
-			if host.failedRequests >= host.MaxFailures {
-				host.state = HostStateInActive
-				if wrr.onStateChange != nil {
-					wrr.onStateChange(host.BaseURL, HostStateActive, HostStateInActive)
-				}
-			}
-			break
+		if host.BaseURL != f.BaseURL {
+			continue
 		}
+		if !f.Success {
+			host.failedRequests++
+		}
+		// Report the transition only on the crossing from active to inactive.
+		// Feedback for a host that is already inactive (in-flight requests that
+		// were dispatched before it was taken out) must not re-fire the hook.
+		if host.state == HostStateActive && host.failedRequests >= host.MaxFailures {
+			host.state = HostStateInActive
+			deactivated = host.BaseURL
+		}
+		break
+	}
+	wrr.lock.Unlock()
+
+	if onStateChange != nil && deactivated != "" {
+		onStateChange(deactivated, HostStateActive, HostStateInActive)
 	}
 }
 
 // Close stops the internal recovery ticker used by the Weighted Round-Robin (WRR)
-// load balancer.
+// load balancer. It is safe to call Close more than once.
 func (wrr *WeightedRoundRobin) Close() error {
+	wrr.closeOnce.Do(func() {
+		close(wrr.done)
+	})
 	wrr.lock.Lock()
 	defer wrr.lock.Unlock()
 	wrr.tick.Stop()
@@ -254,33 +273,46 @@ func (wrr *WeightedRoundRobin) Close() error {
 }
 
 // Refresh method replaces the existing host list with the given [Host] slice.
+//
+// The [Host] values are copied, so the balancer does not observe later changes
+// the caller makes to them and the caller does not observe the balancer's
+// internal bookkeeping.
 func (wrr *WeightedRoundRobin) Refresh(hosts ...*Host) error {
 	if hosts == nil {
 		return nil
 	}
 
-	wrr.lock.Lock()
-	defer wrr.lock.Unlock()
-	newTotalWeight := 0
+	updated := make([]*Host, 0, len(hosts))
 	for _, h := range hosts {
 		baseURL, err := extractBaseURL(h.BaseURL)
 		if err != nil {
 			return err
 		}
 
-		h.BaseURL = baseURL
-		h.state = HostStateActive
-		newTotalWeight += h.Weight
+		hc := new(Host)
+		*hc = *h
+		hc.BaseURL = baseURL
+		hc.state = HostStateActive
+		hc.currentWeight = 0
+		hc.failedRequests = 0
 
 		// assign defaults if not provided
-		if h.MaxFailures == 0 {
-			h.MaxFailures = 5 // default value is 5
+		if hc.MaxFailures == 0 {
+			hc.MaxFailures = 5 // default value is 5
 		}
+		if hc.Weight <= 0 {
+			// A non-positive weight never raises currentWeight, so such a host
+			// would only ever be picked as the fallback first entry.
+			hc.Weight = 1
+		}
+
+		updated = append(updated, hc)
 	}
 
 	// after processing, assign the updates
-	wrr.hosts = hosts
-	wrr.totalWeight = newTotalWeight
+	wrr.lock.Lock()
+	defer wrr.lock.Unlock()
+	wrr.hosts = updated
 	return nil
 }
 
@@ -300,22 +332,38 @@ func (wrr *WeightedRoundRobin) SetRecoveryDuration(d time.Duration) {
 }
 
 func (wrr *WeightedRoundRobin) ticker() {
-	for range wrr.tick.C {
-		wrr.lock.Lock()
-		hosts := make([]*Host, len(wrr.hosts))
-		copy(hosts, wrr.hosts)
-		wrr.lock.Unlock()
-
-		for _, host := range hosts {
-			if host.state == HostStateInActive {
-				host.state = HostStateActive
-				host.failedRequests = 0
-
-				if wrr.onStateChange != nil {
-					wrr.onStateChange(host.BaseURL, HostStateInActive, HostStateActive)
-				}
-			}
+	for {
+		select {
+		case <-wrr.done:
+			return
+		case <-wrr.tick.C:
+			wrr.recoverHosts()
 		}
+	}
+}
+
+// recoverHosts returns inactive hosts to the pool and resets their failure
+// counters. The [Host] values are shared with NextWithContext and Feedback, so
+// they are mutated under the write lock; the state change hooks run after the
+// lock is released so a hook is free to call back into the balancer.
+func (wrr *WeightedRoundRobin) recoverHosts() {
+	wrr.lock.Lock()
+	recovered := make([]string, 0, len(wrr.hosts))
+	for _, host := range wrr.hosts {
+		if host.state == HostStateInActive {
+			host.state = HostStateActive
+			host.failedRequests = 0
+			recovered = append(recovered, host.BaseURL)
+		}
+	}
+	onStateChange := wrr.onStateChange
+	wrr.lock.Unlock()
+
+	if onStateChange == nil {
+		return
+	}
+	for _, baseURL := range recovered {
+		onStateChange(baseURL, HostStateInActive, HostStateActive)
 	}
 }
 
@@ -329,6 +377,17 @@ func NewSRVWeightedRoundRobin(service, proto, domainName, httpScheme string) (*S
 		httpScheme = "https"
 	}
 
+	return newSRVWeightedRoundRobin(service, proto, domainName, httpScheme,
+		func() ([]*net.SRV, error) {
+			_, addrs, err := net.LookupSRV(service, proto, domainName)
+			return addrs, err
+		})
+}
+
+// newSRVWeightedRoundRobin builds the balancer around the given SRV resolver so
+// it can be replaced in tests.
+func newSRVWeightedRoundRobin(service, proto, domainName, httpScheme string,
+	lookupSRV func() ([]*net.SRV, error)) (*SRVWeightedRoundRobin, error) {
 	wrr, _ := NewWeightedRoundRobin(0) // with this input error will not occur
 	swrr := &SRVWeightedRoundRobin{
 		Service:    service,
@@ -338,17 +397,20 @@ func NewSRVWeightedRoundRobin(service, proto, domainName, httpScheme string) (*S
 		wrr:        wrr,
 		tick:       time.NewTicker(180 * time.Second), // default is 180 seconds
 		lock:       new(sync.Mutex),
-		lookupSRV: func() ([]*net.SRV, error) {
-			_, addrs, err := net.LookupSRV(service, proto, domainName)
-			return addrs, err
-		},
+		done:       make(chan struct{}),
+		log:        createLogger(),
+		lookupSRV:  lookupSRV,
 	}
 
-	err := swrr.Refresh()
+	if err := swrr.Refresh(); err != nil {
+		swrr.tick.Stop()
+		silently(swrr.wrr.Close())
+		return swrr, err
+	}
 
 	go swrr.ticker()
 
-	return swrr, err
+	return swrr, nil
 }
 
 var _ LoadBalancer = (*SRVWeightedRoundRobin)(nil)
@@ -365,6 +427,12 @@ type SRVWeightedRoundRobin struct {
 	tick      *time.Ticker
 	lock      *sync.Mutex
 	lookupSRV func() ([]*net.SRV, error)
+	log       Logger
+
+	// done is closed by Close to stop the SRV refresh goroutine; see the same
+	// field on [WeightedRoundRobin].
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // NextWithContext returns the next SRV-derived base URL using the underlying
@@ -379,10 +447,14 @@ func (swrr *SRVWeightedRoundRobin) Feedback(f *RequestFeedback) {
 }
 
 // Close stops the SRV refresh ticker and closes the underlying WRR load balancer.
+// It is safe to call Close more than once.
 func (swrr *SRVWeightedRoundRobin) Close() error {
+	swrr.closeOnce.Do(func() {
+		close(swrr.done)
+	})
 	swrr.lock.Lock()
 	defer swrr.lock.Unlock()
-	swrr.wrr.Close()
+	silently(swrr.wrr.Close())
 	swrr.tick.Stop()
 	return nil
 }
@@ -424,8 +496,17 @@ func (swrr *SRVWeightedRoundRobin) SetRecoveryDuration(d time.Duration) {
 }
 
 func (swrr *SRVWeightedRoundRobin) ticker() {
-	for range swrr.tick.C {
-		swrr.Refresh()
+	for {
+		select {
+		case <-swrr.done:
+			return
+		case <-swrr.tick.C:
+			// A failed periodic refresh keeps the previous host list; surface it
+			// rather than dropping it, otherwise a broken SRV record is silent.
+			if err := swrr.Refresh(); err != nil {
+				swrr.log.Errorf("resty: SRV load balancer refresh: %v", err)
+			}
+		}
 	}
 }
 
