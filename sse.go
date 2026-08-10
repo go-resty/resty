@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -138,6 +139,8 @@ func NewSSESource() *SSESource {
 //
 //	sse.SetURL("https://example.com/events")
 func (sse *SSESource) SetURL(url string) *SSESource {
+	sse.lock.Lock()
+	defer sse.lock.Unlock()
 	sse.url = url
 	return sse
 }
@@ -146,6 +149,8 @@ func (sse *SSESource) SetURL(url string) *SSESource {
 //
 //	sse.SetMethod("POST"), or sse.SetMethod(resty.MethodPost)
 func (sse *SSESource) SetMethod(method string) *SSESource {
+	sse.lock.Lock()
+	defer sse.lock.Unlock()
 	sse.method = method
 	return sse
 }
@@ -522,9 +527,23 @@ func (sse *SSESource) AddEventListener(eventName string, ef SSEMessageFunc, resu
 //
 //	err := sse.Get()
 //	fmt.Println(err)
+//
+// Get blocks until the stream ends, the context is done, or [SSESource.Close] is
+// called.
+//
+// NOTE: Get does not reconnect. The retry settings ([SSESource.SetRetryCount],
+// [SSESource.SetRetryWaitTime], [SSESource.SetRetryMaxWaitTime]) apply only while
+// establishing the initial connection. Once connected, a stream that ends returns
+// [io.EOF] to the caller; call Get again to reconnect. Resty tracks the last event
+// ID and any server-sent `retry:` value, and sends `Last-Event-ID` on the next
+// connect, so calling Get again resumes where the stream left off.
+//
+// Get returns nil only when [SSESource.Close] was called.
 func (sse *SSESource) Get() error {
-	// Validate required values
+	// Validate required values and reset to begin, all under one write lock
+	sse.lock.Lock()
 	if isStringEmpty(sse.url) {
+		sse.lock.Unlock()
 		return fmt.Errorf("resty:sse: event source URL is required")
 	}
 
@@ -535,11 +554,12 @@ func (sse *SSESource) Get() error {
 	}
 
 	if len(sse.onEvent) == 0 {
+		sse.lock.Unlock()
 		return fmt.Errorf("resty:sse: At least one OnMessage/AddEventListener func is required")
 	}
 
-	// reset to begin
-	sse.enableConnect()
+	sse.closed = false
+	sse.lock.Unlock()
 
 	for {
 		ctx := sse.Context()
@@ -568,12 +588,6 @@ func (sse *SSESource) Close() {
 	sse.lock.Lock()
 	defer sse.lock.Unlock()
 	sse.closed = true
-}
-
-func (sse *SSESource) enableConnect() {
-	sse.lock.Lock()
-	defer sse.lock.Unlock()
-	sse.closed = false
 }
 
 func (sse *SSESource) isClosed() bool {
@@ -607,44 +621,72 @@ func (sse *SSESource) triggerOnRequestFailure(err error, res *http.Response) {
 }
 
 func (sse *SSESource) createRequest() (*http.Request, error) {
+	// Resolve the context before taking the read lock; Context also acquires it
+	// and sync.RWMutex read locks are not reentrant.
+	ctx := sse.Context()
+
+	sse.lock.RLock()
+	method, url := sse.method, sse.url
+	hdr := sse.header.Clone()
+	lastEventID := sse.lastEventID
 	var reqBody io.Reader
 	if sse.bodyBytes != nil {
 		// create reader from bytes on each request
 		reqBody = bytes.NewReader(sse.bodyBytes)
 	}
+	sse.lock.RUnlock()
 
-	req, err := http.NewRequestWithContext(sse.Context(), sse.method, sse.url, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header = sse.header.Clone()
+	req.Header = hdr
 	req.Header.Set(hdrAcceptKey, "text/event-stream")
 	req.Header.Set(hdrCacheControlKey, "no-cache")
 	req.Header.Set(hdrConnectionKey, "keep-alive")
-	if len(sse.lastEventID) > 0 {
-		req.Header.Set(hdrLastEvevntID, sse.lastEventID)
+	if len(lastEventID) > 0 {
+		req.Header.Set(hdrLastEvevntID, lastEventID)
 	}
 
 	return req, nil
 }
 
+// sseConnectError describes a non-OK connect response, or nil when no response
+// was received.
+func sseConnectError(res *Response) error {
+	if res == nil {
+		return nil
+	}
+	return fmt.Errorf("resty:sse: %v", res.Status())
+}
+
 func (sse *SSESource) connect() (*http.Response, error) {
+	// Snapshot the settings this attempt needs, then release the lock. Holding
+	// it across httpClient.Do, the retry wait, and the nested read locks taken
+	// by createRequest and triggerOnRequestFailure would deadlock against any
+	// concurrent Close or setter call, since read locks are not reentrant.
 	sse.lock.RLock()
-	defer sse.lock.RUnlock()
+	serverSentRetry := sse.serverSentRetry
+	retryWaitTime := sse.retryWaitTime
+	retryMaxWaitTime := sse.retryMaxWaitTime
+	retryCount := sse.retryCount
+	retryConditions := slices.Clone(sse.retryConditions)
+	httpClient := sse.httpClient
+	sse.lock.RUnlock()
 
 	var backoff *backoffWithJitter
-	if sse.serverSentRetry > 0 {
-		backoff = newBackoffWithJitter(sse.serverSentRetry, sse.serverSentRetry)
+	if serverSentRetry > 0 {
+		backoff = newBackoffWithJitter(serverSentRetry, serverSentRetry)
 	} else {
-		backoff = newBackoffWithJitter(sse.retryWaitTime, sse.retryMaxWaitTime)
+		backoff = newBackoffWithJitter(retryWaitTime, retryMaxWaitTime)
 	}
 
 	var (
 		err     error
 		attempt int
 	)
-	for i := 0; i <= sse.retryCount; i++ {
+	for i := 0; i <= retryCount; i++ {
 		attempt++
 		req, reqErr := sse.createRequest()
 		if reqErr != nil {
@@ -652,23 +694,26 @@ func (sse *SSESource) connect() (*http.Response, error) {
 			break
 		}
 
-		resp, doErr := sse.httpClient.Do(req)
+		resp, doErr := httpClient.Do(req)
 		if resp != nil && resp.StatusCode == http.StatusOK {
 			// successful connection, return response to listenStream
 			return resp, nil
 		}
 
+		rRes := wrapResponse(resp, req)
+
 		// we have reached the maximum no. of requests
 		// first attempt + retry count = total attempts
-		if attempt-1 == sse.retryCount {
-			err = doErr
+		if attempt-1 == retryCount {
+			err = wrapErrors(sseConnectError(rRes), doErr)
+			// nothing is returned to the caller, so this body is ours to release
+			drainBody(rRes)
 			break
 		}
 
-		rRes := wrapResponse(resp, req)
 		needsRetry := isDoNotRetryError(doErr)
-		if !needsRetry && resp != nil {
-			for _, retryCondition := range sse.retryConditions {
+		if !needsRetry && rRes != nil {
+			for _, retryCondition := range retryConditions {
 				if needsRetry = retryCondition(rRes, doErr); needsRetry {
 					break
 				}
@@ -677,14 +722,13 @@ func (sse *SSESource) connect() (*http.Response, error) {
 
 		// retry not required stop here
 		if !needsRetry {
-			if rRes != nil {
-				err = wrapErrors(fmt.Errorf("resty:sse: %v", rRes.Status()), doErr)
-			} else {
-				err = doErr
-			}
+			err = wrapErrors(sseConnectError(rRes), doErr)
 			if err != nil {
+				// the callback is documented to own the body, so hand it over
+				// first and only then release whatever is left of it
 				sse.triggerOnRequestFailure(err, resp)
 			}
+			drainBody(rRes)
 			break
 		}
 
@@ -693,7 +737,12 @@ func (sse *SSESource) connect() (*http.Response, error) {
 
 		waitDuration, _ := backoff.NextWaitDuration(nil, rRes, doErr, attempt)
 		timer := time.NewTimer(waitDuration)
-		<-timer.C
+		select {
+		case <-sse.Context().Done():
+			timer.Stop()
+			return nil, sse.Context().Err()
+		case <-timer.C:
+		}
 		timer.Stop()
 	}
 
@@ -745,7 +794,7 @@ func (sse *SSESource) listenStream(res *http.Response) error {
 func (sse *SSESource) processEvent(scanner *bufio.Scanner) error {
 	e, err := readEvent(scanner)
 	if err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return err
 		}
 		sse.triggerOnError(err)
@@ -854,8 +903,12 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 		case bytes.HasPrefix(line, headerID):
 			e.ID = append([]byte(nil), trimHeader(len(headerID), line)...)
 		case bytes.HasPrefix(line, headerData):
-			// The spec allows for multiple data fields per event, concatenated them with "\n"
-			e.Data = append(e.Data[:], append(trimHeader(len(headerData), line), byte('\n'))...)
+			// The spec allows for multiple data fields per event, concatenated them with "\n".
+			// Append into e.Data rather than onto the trimmed slice: that slice aliases
+			// bufio.Scanner's buffer, so appending to it can write over bytes the
+			// scanner has not handed out yet.
+			e.Data = append(e.Data, trimHeader(len(headerData), line)...)
+			e.Data = append(e.Data, '\n')
 		// The spec says that a line that simply contains the string "data" should be treated as a data field with an empty body.
 		case bytes.Equal(line, bytes.TrimSuffix(headerData, []byte(":"))):
 			e.Data = append(e.Data, byte('\n'))

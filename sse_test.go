@@ -8,6 +8,7 @@ package resty
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -819,4 +821,154 @@ func createMethodVerifyingSSETestServer(
 			}
 		}
 	})
+}
+
+// The data field used to be appended onto a slice aliasing the scanner buffer.
+func TestSSEParseEventDoesNotCorruptScannerBuffer(t *testing.T) {
+	raw := "id: 1\ndata: first\ndata: second\n\nid: 2\ndata: third\n\n"
+	scanner := bufio.NewScanner(strings.NewReader(raw))
+	scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+		if i := bytes.Index(data, []byte{'\n', '\n'}); i >= 0 {
+			return i + 1, data[0:i], nil
+		}
+		if atEOF {
+			return len(data), data, nil
+		}
+		return 0, nil, nil
+	})
+
+	var got []string
+	for {
+		ev, err := readEvent(scanner)
+		if err != nil {
+			break
+		}
+		parsed, err := parseEvent(ev)
+		if err != nil {
+			continue
+		}
+		if len(parsed.Data) > 0 {
+			// the splitter leaves the second newline of each "\n\n" pair in the
+			// stream, which yields a trailing data-less token
+			got = append(got, string(parsed.Data))
+		}
+		putRawEvent(parsed)
+	}
+
+	assertEqual(t, 2, len(got))
+	assertEqual(t, "first\nsecond", got[0])
+	assertEqual(t, "third", got[1])
+}
+
+// connect must not hold the read lock across httpClient.Do, the retry wait, or
+// the nested read locks taken by createRequest and the failure callback: a
+// concurrent Close taking the write lock in between would deadlock both.
+func TestSSESourceConcurrentCloseDoesNotDeadlock(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	defer ts.Close()
+
+	es := NewSSESource().
+		SetURL(ts.URL).
+		SetRetryCount(5).
+		SetRetryWaitTime(20 * time.Millisecond).
+		SetRetryMaxWaitTime(40 * time.Millisecond)
+	es.OnMessage(func(any) {}, nil)
+
+	done := make(chan error, 1)
+	go func() { done <- es.Get() }()
+
+	// Hammer the write lock while connect is retrying, from its own goroutine:
+	// under the old code SetHeader itself blocks, so doing this on the test
+	// goroutine would hang the whole binary instead of reporting a failure.
+	stopProbe := make(chan struct{})
+	probeDone := make(chan struct{})
+	go func() {
+		defer close(probeDone)
+		for {
+			select {
+			case <-stopProbe:
+				return
+			default:
+				es.SetHeader("X-Probe", "1")
+				time.Sleep(time.Millisecond)
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("SSESource.Get did not return; connect deadlocked against a concurrent setter")
+	}
+
+	close(stopProbe)
+	select {
+	case <-probeDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("SSESource.SetHeader is blocked; connect is holding the read lock")
+	}
+	es.Close()
+}
+
+// A connect attempt that is not returned to the caller must not leak its body,
+// and the resulting error must carry the status code.
+func TestSSESourceConnectFailureReportsStatus(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	defer ts.Close()
+
+	es := NewSSESource().
+		SetURL(ts.URL).
+		SetRetryCount(1).
+		SetRetryWaitTime(time.Millisecond).
+		SetRetryMaxWaitTime(2 * time.Millisecond)
+	es.OnMessage(func(any) {}, nil)
+
+	err := es.Get()
+	assertNotNil(t, err)
+	assertTrue(t, strings.Contains(err.Error(), "429 Too Many Requests"),
+		"error should name the status, got: "+err.Error())
+}
+
+// The retry backoff between connect attempts must observe the source context.
+// Without it, Get sits out the whole wait after the caller has given up, and
+// then goes on to make another connection attempt.
+func TestSSESourceConnectContextDoneDuringRetryWait(t *testing.T) {
+	var attempts atomic.Int32
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusInternalServerError) // retryable, per the defaults
+	})
+	defer ts.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	es := createSSESource(t, ts.URL, func(any) {}, nil).
+		SetContext(ctx).
+		SetRetryCount(5).
+		SetRetryWaitTime(3 * time.Second).
+		SetRetryMaxWaitTime(5 * time.Second)
+
+	go func() {
+		for attempts.Load() == 0 {
+			time.Sleep(time.Millisecond)
+		}
+		// the first attempt has failed, so connect is now in the retry wait
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	err := es.Get()
+	assertErrorIs(t, context.Canceled, err)
+	assertTrue(t, time.Since(start) < 2*time.Second,
+		"expected the retry wait to be abandoned when the context is done")
+	assertEqual(t, int32(1), attempts.Load(), "expected no further connect attempts")
 }
