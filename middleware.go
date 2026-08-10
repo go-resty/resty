@@ -18,6 +18,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -156,7 +157,7 @@ func parseRequestURL(c *Client, r *Request) error {
 			if _, ok := r.QueryParams[k]; ok {
 				continue
 			}
-			r.QueryParams[k] = v[:]
+			r.QueryParams[k] = slices.Clone(v)
 		}
 
 		// GitHub #123 Preserve query string order partially.
@@ -189,7 +190,7 @@ func parseRequestHeader(c *Client, r *Request) {
 		if _, ok := r.Header[k]; ok {
 			continue
 		}
-		r.Header[k] = v[:]
+		r.Header[k] = slices.Clone(v)
 	}
 
 	if !r.isHeaderExists(hdrUserAgentKey) {
@@ -347,7 +348,7 @@ func handleMultipart(c *Client, r *Request) error {
 		if _, ok := r.FormData[k]; ok {
 			continue
 		}
-		r.FormData[k] = v[:]
+		r.FormData[k] = slices.Clone(v)
 	}
 
 	if len(r.multipartFields) == 0 {
@@ -445,7 +446,7 @@ func handleFormData(c *Client, r *Request) {
 		if _, ok := r.FormData[k]; ok {
 			continue
 		}
-		r.FormData[k] = v[:]
+		r.FormData[k] = slices.Clone(v)
 	}
 
 	r.bodyBuf = acquireBuffer()

@@ -1375,3 +1375,43 @@ func TestStopMultipartNilReceiver(t *testing.T) {
 	// A request with no cancel func / pipe writer / fields must also be safe.
 	(&Request{}).stopMultipart()
 }
+
+// Client-level values were assigned into the request with v[:], so the request
+// shared the client's backing array. Two requests then grew into the same spare
+// slot and silently overwrote each other's value.
+func TestClientValuesAreNotAliasedIntoRequests(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	// Set then two Adds leaves len 3 in a cap 4 array: one spare slot, which is
+	// where a request's own Add would write.
+	c.SetHeader("X-Multi", "one")
+	c.Header().Add("X-Multi", "two")
+	c.Header().Add("X-Multi", "three")
+	c.SetQueryParam("tag", "a")
+	c.QueryParams().Add("tag", "b")
+	c.QueryParams().Add("tag", "c")
+
+	newRequest := func(path, marker string) *Request {
+		r := c.R()
+		r.URL = path
+		assertNil(t, parseRequestURL(c, r))
+		parseRequestHeader(c, r)
+		r.Header.Add("X-Multi", marker)
+		r.QueryParams.Add("tag", marker)
+		return r
+	}
+
+	first := newRequest("/first", "first")
+	second := newRequest("/second", "second")
+
+	// each request must keep its own marker
+	assertEqual(t, "first", first.Header["X-Multi"][3])
+	assertEqual(t, "second", second.Header["X-Multi"][3])
+	assertEqual(t, "first", first.QueryParams["tag"][3])
+	assertEqual(t, "second", second.QueryParams["tag"][3])
+
+	// and the client itself must be untouched
+	assertEqual(t, 3, len(c.Header()["X-Multi"]))
+	assertEqual(t, 3, len(c.QueryParams()["tag"]))
+}

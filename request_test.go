@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -2242,7 +2243,9 @@ func TestRequestClone(t *testing.T) {
 	// assert interface type
 	assertEqual(t, "parent", parent.credentials.Username)
 	assertEqual(t, "clone", clone.credentials.Username)
-	assertEqual(t, "", parent.bodyBuf.String())
+	// Execute releases the parent's buffer back to bufPool and drops the pointer,
+	// so it must not be readable through the Request afterwards.
+	assertNil(t, parent.bodyBuf)
 	assertEqual(t, "clone", clone.bodyBuf.String())
 
 	// parent request should have raw request while clone should not
@@ -2737,4 +2740,51 @@ func TestRequestSetLabel(t *testing.T) {
 		SetLabel("AddUser")
 
 	assertEqual(t, "AddUser", r.Label)
+}
+
+// Execute returns bodyBuf to bufPool. If the Request keeps pointing at it, a
+// later read through the Request can observe a buffer another goroutine owns.
+func TestRequestBodyBufReleasedAfterExecute(t *testing.T) {
+	ts := createPostServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	req := c.R().SetBody(map[string]string{"username": "testuser"})
+	res, err := req.Post(ts.URL + "/json")
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+
+	assertNil(t, req.bodyBuf)
+}
+
+// The merged retry slices must not be written into the Request's own spare
+// capacity, which every clone of that Request shares.
+func TestRequestExecuteDoesNotAliasRetryConditions(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+	c.AddRetryConditions(func(*Response, error) bool { return false })
+
+	req := c.R()
+	// spare capacity beyond len is what append would scribble into
+	req.retryConditions = make([]RetryConditionFunc, 0, 8)
+	req.AddRetryConditions(func(*Response, error) bool { return false })
+
+	// the clone shares that array; give it a second condition of its own
+	clone := req.Clone(context.Background())
+	clone.AddRetryConditions(func(*Response, error) bool { return true })
+	assertEqual(t, 2, len(clone.retryConditions))
+	before := reflect.ValueOf(clone.retryConditions[1]).Pointer()
+
+	// executing req merges the client-level conditions; that must not land in the
+	// shared array where the clone's own condition lives
+	_, err := req.Get(ts.URL + "/")
+	assertNil(t, err)
+
+	after := reflect.ValueOf(clone.retryConditions[1]).Pointer()
+	assertEqual(t, before, after)
 }
