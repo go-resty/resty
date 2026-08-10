@@ -2012,3 +2012,60 @@ func TestRequestWithContextDoesNotShareState(t *testing.T) {
 	assertEqual(t, "yes", r2.Header.Get("X-Original"))
 	assertEqual(t, "two", r2.QueryParams.Get("q"))
 }
+
+// AddRequestMiddlewares inserts before the last entry, which underflowed to -1
+// once the chain had been emptied.
+func TestAddRequestMiddlewareOnEmptyChain(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	called := false
+	c := dcnl()
+	defer c.Close()
+
+	c.SetRequestMiddlewares()
+	c.AddRequestMiddlewares(func(_ *Client, r *Request) error {
+		called = true
+		return MiddlewareRequestCreate(c, r)
+	})
+
+	res, err := c.R().Get(ts.URL + "/")
+	assertNil(t, err)
+	assertTrue(t, called)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+}
+
+// Client.execute and cbRequestError read c.circuitBreaker directly while
+// SetCircuitBreaker writes it under the write lock. Run under -race.
+func TestClientCircuitBreakerConcurrentSet(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				c.SetCircuitBreaker(NewCircuitBreakerCount(100, 1, time.Minute))
+				c.SetCircuitBreaker(nil)
+			}
+		}
+	}()
+
+	for range 30 {
+		_, err := c.R().Get(ts.URL + "/")
+		assertNil(t, err)
+	}
+
+	close(stop)
+	wg.Wait()
+}

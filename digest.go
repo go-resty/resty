@@ -203,6 +203,12 @@ func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error
 }
 
 func (dt *digestTransport) createCredentials(cha *digestChallenge, req *http.Request) (*digestCredentials, error) {
+	// Validate the challenge algorithm before it is used to build a hash below;
+	// an unsupported value has no entry in digestHashFuncs.
+	if _, ok := digestHashFuncs[cha.algorithm]; !ok {
+		return nil, ErrDigestAlgNotSupported
+	}
+
 	cred := &digestCredentials{
 		username:      dt.Username,
 		password:      dt.Password,
@@ -452,7 +458,12 @@ func (dc *digestCredentials) String() string {
 }
 
 func newHashFunc(algorithm string) hash.Hash {
-	hf := digestHashFuncs[algorithm]
+	// Callers validate the algorithm against digestHashFuncs before reaching
+	// here; fall back to the RFC 7616 default rather than calling a nil func.
+	hf, found := digestHashFuncs[algorithm]
+	if !found {
+		hf = md5.New
+	}
 	h := hf()
 	h.Reset()
 	return h

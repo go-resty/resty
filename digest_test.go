@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"crypto/md5"
 	"errors"
 	"io"
 	"net/http"
@@ -495,4 +496,29 @@ func TestOriginatingURL(t *testing.T) {
 
 	assertEqual(t, "https://origin.example/start", originatingURL(second).String())
 	assertEqual(t, "https://origin.example/start", originatingURL(first).String())
+}
+
+// An unsupported algorithm combined with qop=auth-int reached newHashFunc before
+// the algorithm was validated, and the nil map entry panicked.
+func TestDigestUnsupportedAlgorithmWithAuthInt(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("WWW-Authenticate",
+			`Digest realm="test", nonce="abc123", qop="auth-int", algorithm=NOT-A-HASH`)
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetDigestAuth("user", "pass")
+	defer c.Close()
+
+	_, err := c.R().SetBody(`{"a":1}`).Post(ts.URL)
+	assertErrorIs(t, ErrDigestAlgNotSupported, err)
+}
+
+// Callers validate the algorithm against digestHashFuncs before reaching
+// newHashFunc, so an unknown one must fall back rather than call a nil func.
+func TestDigestNewHashFuncUnsupportedAlgorithm(t *testing.T) {
+	h := newHashFunc("SHA-1")
+	assertNotNil(t, h)
+	assertEqual(t, md5.Size, h.Size(), "expected the RFC 7616 default hash")
 }

@@ -16,6 +16,10 @@ import (
 // is in the open state and a request is blocked.
 var ErrCircuitBreakerOpen = errors.New("resty: circuit breaker open")
 
+// defaultCircuitBreakerResetTimeout is applied when a circuit breaker is created
+// with a non-positive resetTimeout.
+const defaultCircuitBreakerResetTimeout = 30 * time.Second
+
 const (
 	// CircuitBreakerStateClosed is the normal operating state: all requests are
 	// forwarded and failures are tracked against the configured threshold.
@@ -254,6 +258,14 @@ func (sw *slidingWindow[G]) AddAndGet(val G) G {
 	elapsed := now.Sub(sw.lastStart)
 	bucketDuration := sw.interval / time.Duration(len(sw.values))
 
+	// A zero bucket duration would make the advance arithmetic below divide by
+	// zero. Treat the window as a single bucket that never advances instead.
+	if bucketDuration <= 0 {
+		sw.values[sw.idx] = sw.values[sw.idx].op(val)
+		sw.total = sw.total.op(val)
+		return sw.total
+	}
+
 	// Advance window if needed
 	if elapsed >= bucketDuration {
 		bucketsToAdvance := int(elapsed / bucketDuration)
@@ -325,8 +337,17 @@ type circuitBreakerBase struct {
 //
 // The optional policies override the detection logic used to classify a response as
 // a failure. When no policies are provided, [CircuitBreaker5xxPolicy] is used by default.
+//
+// Non-positive values are replaced with usable defaults: failureThreshold and
+// successThreshold become 1, and resetTimeout becomes 30 seconds.
 func NewCircuitBreakerCount(failureThreshold uint64, successThreshold uint64,
 	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreakerCount {
+	if failureThreshold == 0 {
+		failureThreshold = 1
+	}
+	if successThreshold == 0 {
+		successThreshold = 1
+	}
 	return &CircuitBreakerCount{
 		circuitBreakerBase: newCircuitBreakerBase(resetTimeout, policies...),
 		failureThreshold:   failureThreshold,
@@ -341,8 +362,18 @@ func NewCircuitBreakerCount(failureThreshold uint64, successThreshold uint64,
 //
 // The optional policies override the detection logic used to classify a response as
 // a failure. When no policies are provided, [CircuitBreaker5xxPolicy] is used by default.
+//
+// Out-of-range values are replaced with usable defaults: a failureRatio above 1.0
+// is unreachable and becomes 1.0, minRequests becomes 1, and a non-positive
+// resetTimeout becomes 30 seconds.
 func NewCircuitBreakerRatio(failureRatio float64, minRequests uint64,
 	resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *CircuitBreakerRatio {
+	if failureRatio > 1 {
+		failureRatio = 1
+	}
+	if minRequests == 0 {
+		minRequests = 1
+	}
 	return &CircuitBreakerRatio{
 		circuitBreakerBase: newCircuitBreakerBase(resetTimeout, policies...),
 		failureRatio:       failureRatio,
@@ -351,6 +382,9 @@ func NewCircuitBreakerRatio(failureRatio float64, minRequests uint64,
 }
 
 func newCircuitBreakerBase(resetTimeout time.Duration, policies ...CircuitBreakerPolicy) *circuitBreakerBase {
+	if resetTimeout <= 0 {
+		resetTimeout = defaultCircuitBreakerResetTimeout
+	}
 	cb := &circuitBreakerBase{
 		resetTimeout: resetTimeout,
 		policies:     []CircuitBreakerPolicy{CircuitBreaker5xxPolicy},

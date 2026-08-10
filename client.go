@@ -922,9 +922,15 @@ func (c *Client) NewRequest() *Request {
 	return c.R()
 }
 
-// AddRequestMiddlewares method appends a request middleware to the request chain.
+// AddRequestMiddlewares method adds one or more request middlewares to the request chain.
 // Method accepts a function of type [RequestMiddleware]. All the request middlewares are applied;
 // before sending the request to the server.
+//
+// The middleware is inserted immediately before the last entry in the chain, so
+// with the default chain it runs ahead of [MiddlewareRequestCreate] and therefore
+// before `Request.RawRequest` exists. To append after the final middleware, or to
+// control ordering exactly, use [Client.SetRequestMiddlewares] instead. When the
+// chain is empty the middleware simply becomes its only entry.
 //
 // It is ideal for:
 //   - Intercept Request instance for manipulation
@@ -1250,6 +1256,14 @@ func (c *Client) SetCircuitBreaker(cb CircuitBreaker) *Client {
 	defer c.lock.Unlock()
 	c.circuitBreaker = cb
 	return c
+}
+
+// CircuitBreaker method returns the [CircuitBreaker] configured on the client,
+// or nil if none is set.
+func (c *Client) CircuitBreaker() CircuitBreaker {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.circuitBreaker
 }
 
 // RateLimiter method returns the [RateLimiter] configured on the client, or nil if none is set.
@@ -2635,8 +2649,8 @@ func (c *Client) executeRequestMiddlewares(req *Request) (err error) {
 }
 
 func (c *Client) cbRequestError() {
-	if c.circuitBreaker != nil {
-		if cbe, ok := c.circuitBreaker.(cbRequestErrorObserver); ok {
+	if cb := c.CircuitBreaker(); cb != nil {
+		if cbe, ok := cb.(cbRequestErrorObserver); ok {
 			cbe.onRequestError()
 		}
 	}
@@ -2651,9 +2665,10 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	if c.circuitBreaker != nil {
-		if err := c.circuitBreaker.Allow(); err != nil {
-			if cbo, ok := c.circuitBreaker.(circuitBreakerHookRunner); ok {
+	circuitBreaker := c.CircuitBreaker()
+	if circuitBreaker != nil {
+		if err := circuitBreaker.Allow(); err != nil {
+			if cbo, ok := circuitBreaker.(circuitBreakerHookRunner); ok {
 				cbo.runOnTriggerHooks(req, err)
 			}
 			return nil, err
@@ -2712,8 +2727,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if resp != nil {
-		if c.circuitBreaker != nil {
-			c.circuitBreaker.ApplyPolicies(response)
+		if circuitBreaker != nil {
+			circuitBreaker.ApplyPolicies(response)
 		}
 
 		response.Body = resp.Body

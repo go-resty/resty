@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -865,4 +866,37 @@ func TestMultipartFileNameCannotInjectParts(t *testing.T) {
 	assertNil(t, parseErr)
 	assertEqual(t, 1, partCount)
 	assertEqual(t, "", gotRole)
+}
+
+// A field carrying only Values has no reader to rewind, so it must not make the
+// retry fail with ErrReaderNotSeekable.
+func TestMultipartRetryWithOrderedFormData(t *testing.T) {
+	var attempts int32
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&attempts, 1)
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "pending") {
+			t.Errorf("attempt %d did not carry the ordered values: %q", n, body)
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	res, err := c.R().
+		SetRetryCount(2).
+		SetRetryWaitTime(time.Millisecond).
+		SetRetryMaxWaitTime(2*time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		AddRetryConditions(func(res *Response, _ error) bool {
+			return res != nil && res.StatusCode() == http.StatusInternalServerError
+		}).
+		SetMultipartOrderedFormData("status", []string{"pending", "approved"}).
+		Post(ts.URL)
+
+	assertNil(t, err)
+	assertEqual(t, http.StatusInternalServerError, res.StatusCode())
+	assertEqual(t, int32(3), atomic.LoadInt32(&attempts))
 }

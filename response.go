@@ -213,8 +213,8 @@ func (r *Response) RedirectHistory() []*RedirectInfo {
 
 func (r *Response) setReceivedAt() {
 	r.receivedAt = time.Now()
-	if r.Request.trace != nil {
-		r.Request.trace.endTime = r.receivedAt
+	if ct := r.Request.trace; ct != nil {
+		ct.setEndTime(r.receivedAt)
 	}
 }
 

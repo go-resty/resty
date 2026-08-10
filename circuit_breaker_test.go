@@ -7,6 +7,7 @@ package resty
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -269,35 +270,57 @@ func TestCircuitBreakerHalfOpenToOpenOnError(t *testing.T) {
 }
 
 func TestCircuitBreakerOpenCancelsPreviousResetTimer(t *testing.T) {
-	resetTimeout := 60 * time.Millisecond
+	const resetTimeout = 300 * time.Millisecond
 	cb := NewCircuitBreakerCount(1, 1, resetTimeout)
 	cbc := cb.circuitBreakerBase
 
-	var halfOpenTransitions int32
+	var (
+		mu          sync.Mutex
+		transitions int
+		halfOpenAt  time.Time
+	)
 	cbc.addStateChangeHooks(func(oldState, newState CircuitBreakerState) {
 		if oldState == CircuitBreakerStateOpen && newState == CircuitBreakerStateHalfOpen {
-			atomic.AddInt32(&halfOpenTransitions, 1)
+			mu.Lock()
+			transitions++
+			halfOpenAt = time.Now()
+			mu.Unlock()
 		}
 	})
 
 	cbc.open()
-	time.Sleep(40 * time.Millisecond)
+	time.Sleep(resetTimeout / 3)
+
+	// Re-opening must restart the countdown rather than leave the first timer
+	// armed, so half-open is due resetTimeout after this point, not before.
+	secondOpen := time.Now()
 	cbc.open()
 
-	// If the previous timer was not canceled, it would flip to half-open soon.
-	time.Sleep(30 * time.Millisecond)
-	assertEqual(t, CircuitBreakerStateOpen, cbc.getState(), "expected open state while waiting for latest timer")
-
-	deadline := time.Now().Add(300 * time.Millisecond)
+	deadline := time.Now().Add(10 * resetTimeout)
 	for time.Now().Before(deadline) {
-		if cbc.getState() == CircuitBreakerStateHalfOpen {
+		mu.Lock()
+		seen := transitions
+		mu.Unlock()
+		if seen > 0 {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 
+	mu.Lock()
+	seen, at := transitions, halfOpenAt
+	mu.Unlock()
+
 	assertEqual(t, CircuitBreakerStateHalfOpen, cbc.getState(), "expected half-open transition from latest timer")
-	assertEqual(t, int32(1), atomic.LoadInt32(&halfOpenTransitions), "expected exactly one open-to-half-open transition")
+	assertEqual(t, 1, seen, "expected exactly one open-to-half-open transition")
+
+	// Only a lower bound is asserted. Timers and sleeps may fire late but never
+	// early, so this holds no matter how loaded the machine is; sampling the state
+	// at a fixed instant shortly before the transition was due did not.
+	elapsed := at.Sub(secondOpen)
+	assertTrue(t, elapsed >= resetTimeout, fmt.Sprintf(
+		"half-open came %v after the second open(), sooner than the %v reset timeout,"+
+			" so the first timer was still armed", elapsed, resetTimeout))
 }
 
 func TestCircuitBreakerOnResetTimeout(t *testing.T) {
@@ -560,5 +583,58 @@ func TestCircuitBreakerStateAccessor(t *testing.T) {
 
 	cb.open()
 	assertEqual(t, CircuitBreakerStateOpen, cb.State())
+	assertErrorIs(t, ErrCircuitBreakerOpen, cb.Allow())
+}
+
+// A non-positive resetTimeout used to make the sliding window divide by zero on
+// the first recorded request.
+func TestCircuitBreakerZeroResetTimeout(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer ts.Close()
+
+	for _, cb := range []CircuitBreaker{
+		NewCircuitBreakerCount(0, 0, 0),
+		NewCircuitBreakerRatio(0.5, 0, 0),
+	} {
+		c := dcnl().SetCircuitBreaker(cb)
+		res, err := c.R().Get(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusInternalServerError, res.StatusCode())
+
+		// the breaker tripped on that failure, so the next call is rejected
+		_, err = c.R().Get(ts.URL)
+		assertErrorIs(t, ErrCircuitBreakerOpen, err)
+		assertNil(t, c.Close())
+	}
+}
+
+// An interval shorter than the bucket count leaves every bucket zero-length,
+// which used to divide by zero while advancing the window.
+func TestCircuitBreakerSlidingWindowSubBucketInterval(t *testing.T) {
+	sw := newSlidingWindow[totalAndFailures](5*time.Nanosecond, 10) // 0ns per bucket
+
+	got := sw.AddAndGet(totalAndFailures{total: 1, failures: 1})
+	assertEqual(t, 1, got.total, "expected the first value to be recorded")
+	assertEqual(t, 1, got.failures, "expected the first failure to be recorded")
+
+	// the window never advances, so values simply accumulate
+	got = sw.AddAndGet(totalAndFailures{total: 1, failures: 0})
+	assertEqual(t, 2, got.total, "expected totals to accumulate in the single bucket")
+	assertEqual(t, 1, got.failures, "expected failures to accumulate in the single bucket")
+	assertEqual(t, 0, sw.idx, "expected the window to stay on the same bucket")
+}
+
+// A failure ratio above 1.0 is unreachable, so such a breaker would never open.
+func TestNewCircuitBreakerRatioClampsFailureRatio(t *testing.T) {
+	cb := NewCircuitBreakerRatio(1.5, 4, time.Second)
+	assertEqual(t, 1.0, cb.failureRatio, "expected the failure ratio to be clamped to 1.0")
+
+	// every request fails, which is the only thing a ratio of 1.0 can trigger on
+	for range 4 {
+		cb.ApplyPolicies(&Response{RawResponse: &http.Response{StatusCode: http.StatusInternalServerError}})
+	}
+	assertEqual(t, CircuitBreakerStateOpen, cb.getState(), "expected the breaker to open")
 	assertErrorIs(t, ErrCircuitBreakerOpen, cb.Allow())
 }
