@@ -97,7 +97,7 @@ type (
 // NewSSESource creates a new [SSESource] with default SSE settings.
 //
 //	sse := NewSSESource().
-//		SetURL("https://sse.dev/test").
+//		SetURL("https://example.com/events").
 //		OnMessage(
 //			func(e any) {
 //				event := e.(*resty.SSE)
@@ -136,7 +136,7 @@ func NewSSESource() *SSESource {
 
 // SetURL method sets the event-source URL on the [SSESource] instance.
 //
-//	sse.SetURL("https://sse.dev/test")
+//	sse.SetURL("https://example.com/events")
 func (sse *SSESource) SetURL(url string) *SSESource {
 	sse.url = url
 	return sse
@@ -511,7 +511,7 @@ func (sse *SSESource) AddEventListener(eventName string, ef SSEMessageFunc, resu
 // Get method establishes the connection with the server.
 //
 //	sse := NewSSESource().
-//		SetURL("https://sse.dev/test").
+//		SetURL("https://example.com/events").
 //		OnMessage(
 //			func(e any) {
 //				event := e.(*resty.SSE)
