@@ -272,12 +272,6 @@ func releaseBuffer(buf *bytes.Buffer) {
 	}
 }
 
-func backToBufPool(buf *bytes.Buffer) {
-	if buf != nil {
-		bufPool.Put(buf)
-	}
-}
-
 func closeq(v any) {
 	if c, ok := v.(io.Closer); ok {
 		silently(c.Close())

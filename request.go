@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -1491,12 +1492,15 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		r.SetCorrelationID(newGUID())
 	}
 
-	retryConditions := append(r.retryConditions, r.client.retryConditions...)
+	// slices.Concat allocates a fresh slice; appending to r.retryConditions
+	// directly would write into its spare capacity, which is shared with every
+	// clone of this Request.
+	retryConditions := slices.Concat(r.retryConditions, r.client.RetryConditions())
 	if r.isSetRetryConditions {
 		retryConditions = r.retryConditions
 	}
 
-	retryHooks := append(r.retryHooks, r.client.retryHooks...)
+	retryHooks := slices.Concat(r.retryHooks, r.client.RetryHooks())
 	if r.isSetRetryHooks {
 		retryHooks = r.retryHooks
 	}
@@ -1606,7 +1610,12 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	}
 
 	r.sendLoadBalancerFeedback(res, err)
-	backToBufPool(r.bodyBuf)
+
+	// The buffer goes back to bufPool, so this Request must stop pointing at it;
+	// another goroutine may own it by the time anyone touches r again.
+	releaseBuffer(r.bodyBuf)
+	r.bodyBuf = nil
+
 	return
 }
 
