@@ -380,3 +380,49 @@ func TestClientDigestAuthNoUserhash(t *testing.T) {
 	assertError(t, err)
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 }
+
+// qop is a comma-separated list whose tokens may carry space, and unrecognized
+// challenge directives must be ignored rather than rejected (RFC 7616 3.3).
+func TestDigestChallengeParsing(t *testing.T) {
+	dt := &digestTransport{credentials: &credentials{"u", "p"}}
+
+	t.Run("qop tokens are trimmed", func(t *testing.T) {
+		cha, err := dt.parseChallenge(`Digest realm="r", nonce="n", qop="foo, auth"`)
+		assertNil(t, err)
+		assertTrue(t, cha.isQopSupported(qopAuth))
+
+		cred := &digestCredentials{}
+		assertNil(t, cred.parseQop(cha))
+		assertEqual(t, qopAuth, cred.qop)
+	})
+
+	t.Run("unknown directives are ignored", func(t *testing.T) {
+		cha, err := dt.parseChallenge(`Digest realm="r", nonce="n", extension="x", userhash=false`)
+		assertNil(t, err)
+		assertEqual(t, "r", cha.realm)
+		assertEqual(t, "n", cha.nonce)
+	})
+
+	t.Run("a challenge without nonce is rejected", func(t *testing.T) {
+		_, err := dt.parseChallenge(`Digest extension="x"`)
+		assertErrorIs(t, ErrDigestBadChallenge, err)
+	})
+}
+
+// A server offering an unsupported qop alongside a supported one must still
+// authenticate rather than fail with ErrDigestQopNotSupported.
+func TestClientDigestAuthQopListWithSpaces(t *testing.T) {
+	conf := *defaultDigestServerConf()
+	conf.qop = "some-future-qop, auth"
+	ts := createDigestServer(t, &conf)
+	defer ts.Close()
+
+	c := dcnl().
+		SetBaseURL(ts.URL+"/").
+		SetDigestAuth(conf.username, conf.password)
+	defer c.Close()
+
+	res, err := c.R().SetResult(&AuthSuccess{}).Get(conf.uri)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+}
