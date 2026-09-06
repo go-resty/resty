@@ -6,6 +6,7 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"compress/zlib"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -735,4 +736,22 @@ func TestDecompressDeflateZlibHeaderError(t *testing.T) {
 
 	_, err := decompressDeflate(io.NopCloser(bytes.NewReader(body)))
 	assertNotNil(t, err)
+}
+
+// gracefulStopReader turns a cancelled context into io.EOF so io.Copy stops
+// without reporting an error.
+func TestGracefulStopReader(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	gsr := &gracefulStopReader{ctx: ctx, r: strings.NewReader("hello")}
+
+	p := make([]byte, 5)
+	n, err := gsr.Read(p)
+	assertNil(t, err)
+	assertEqual(t, 5, n)
+	assertEqual(t, "hello", string(p))
+
+	cancel()
+	n, err = gsr.Read(p)
+	assertEqual(t, 0, n)
+	assertErrorIs(t, io.EOF, err)
 }
