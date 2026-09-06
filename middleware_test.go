@@ -354,6 +354,37 @@ func Test_parseRequestURL(t *testing.T) {
 	}
 }
 
+func Test_parseRequestBaseURLTrailingSlashRegression(t *testing.T) {
+	var gotURI string
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		gotURI = r.RequestURI
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	tests := []struct {
+		baseURL string
+		reqPath string
+		wantURI string
+	}{
+		{ts.URL + "/api/", "", "/api/"},
+		{ts.URL + "/api/", "/resource", "/api/resource"},
+		{ts.URL + "/api", "/resource", "/api/resource"},
+		{ts.URL + "/", "", "/"},
+		{ts.URL, "/resource", "/resource"},
+	}
+	for _, tt := range tests {
+		c := dcnl().SetBaseURL(tt.baseURL)
+		_, err := c.R().Get(tt.reqPath)
+		if err != nil {
+			t.Fatalf("baseURL=%q path=%q: %v", tt.baseURL, tt.reqPath, err)
+		}
+		if gotURI != tt.wantURI {
+			t.Errorf("baseURL=%q path=%q: got URI %q, want %q", tt.baseURL, tt.reqPath, gotURI, tt.wantURI)
+		}
+	}
+}
+
 func Test_parseRequestHeader(t *testing.T) {
 	for _, tt := range []struct {
 		name           string
