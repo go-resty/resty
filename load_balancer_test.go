@@ -6,11 +6,15 @@
 package resty
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -624,4 +628,228 @@ func TestLoadBalancerCoverage(t *testing.T) {
 			StatusCode: http.StatusInternalServerError,
 		}}, nil)
 	})
+}
+
+// Ticker.Stop does not close its channel, so the recovery goroutines needed a
+// separate shutdown signal.
+func TestLoadBalancerCloseStopsTickerGoroutines(t *testing.T) {
+	before := runtime.NumGoroutine()
+
+	for range 20 {
+		wrr, err := NewWeightedRoundRobin(10*time.Millisecond,
+			&Host{BaseURL: "https://example1.com", Weight: 1},
+			&Host{BaseURL: "https://example2.com", Weight: 1},
+		)
+		assertNil(t, err)
+		assertNil(t, wrr.Close())
+		assertNil(t, wrr.Close()) // Close is idempotent
+	}
+
+	// give the goroutines a moment to observe the closed done channel
+	deadline := time.Now().Add(2 * time.Second)
+	for runtime.NumGoroutine() > before+2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	assertTrue(t, runtime.NumGoroutine() <= before+2,
+		"recovery goroutines did not exit after Close")
+}
+
+// Feedback must report the active -> inactive transition once, not on every
+// report that arrives while the host is already out of the pool.
+func TestWeightedRoundRobinStateChangeFiresOnce(t *testing.T) {
+	wrr, err := NewWeightedRoundRobin(time.Hour,
+		&Host{BaseURL: "https://example1.com", Weight: 1, MaxFailures: 2},
+	)
+	assertNil(t, err)
+	defer func() { assertNil(t, wrr.Close()) }()
+
+	var changes int32
+	wrr.SetOnStateChange(func(_ string, from, to HostState) {
+		atomic.AddInt32(&changes, 1)
+		assertEqual(t, HostStateActive, from)
+		assertEqual(t, HostStateInActive, to)
+	})
+
+	for range 5 {
+		wrr.Feedback(&RequestFeedback{BaseURL: "https://example1.com", Success: false, Attempt: 1})
+	}
+	assertEqual(t, int32(1), atomic.LoadInt32(&changes))
+}
+
+// Refresh must not hand the balancer's bookkeeping back to the caller, nor read
+// the caller's later edits.
+func TestWeightedRoundRobinRefreshCopiesHosts(t *testing.T) {
+	h := &Host{BaseURL: "https://example.com/some/path", Weight: 1}
+	wrr, err := NewWeightedRoundRobin(time.Hour, h)
+	assertNil(t, err)
+	defer func() { assertNil(t, wrr.Close()) }()
+
+	// the caller's value is untouched
+	assertEqual(t, "https://example.com/some/path", h.BaseURL)
+
+	// and mutating it afterwards does not reach the balancer
+	h.BaseURL = "https://elsewhere.example"
+	got, err := wrr.NextWithContext(context.Background())
+	assertNil(t, err)
+	assertEqual(t, "https://example.com", got)
+}
+
+// A zero SRV weight never raises currentWeight, which left WRR always returning
+// the first host.
+func TestWeightedRoundRobinZeroWeightRotates(t *testing.T) {
+	wrr, err := NewWeightedRoundRobin(time.Hour,
+		&Host{BaseURL: "https://example1.com"},
+		&Host{BaseURL: "https://example2.com"},
+	)
+	assertNil(t, err)
+	defer func() { assertNil(t, wrr.Close()) }()
+
+	seen := make(map[string]int)
+	for range 4 {
+		got, err := wrr.NextWithContext(context.Background())
+		assertNil(t, err)
+		seen[got]++
+	}
+	assertEqual(t, 2, len(seen))
+}
+
+// The recovery ticker puts inactive hosts back into rotation, resets their
+// failure counters and reports the transition once the lock has been released,
+// so a hook is free to call back into the balancer.
+func TestWeightedRoundRobinHostRecovery(t *testing.T) {
+	const host1, host2 = "https://example1.com", "https://example2.com"
+
+	wrr, err := NewWeightedRoundRobin(50*time.Millisecond,
+		&Host{BaseURL: host1, Weight: 10, MaxFailures: 1},
+		&Host{BaseURL: host2, Weight: 10, MaxFailures: 1},
+	)
+	assertNil(t, err)
+	defer func() { assertNil(t, wrr.Close()) }()
+
+	recovered := make(chan string, 4)
+	wrr.SetOnStateChange(func(baseURL string, from, to HostState) {
+		if from == HostStateInActive && to == HostStateActive {
+			// calling back in has to be safe: the hook runs without the lock held
+			_, _ = wrr.NextWithContext(context.Background())
+			recovered <- baseURL
+		}
+	})
+
+	wrr.Feedback(&RequestFeedback{BaseURL: host1, Success: false})
+
+	// only the healthy host is handed out while the other one is out of the pool
+	for range 3 {
+		baseURL, err := wrr.NextWithContext(context.Background())
+		assertNil(t, err)
+		assertEqual(t, host2, baseURL)
+	}
+
+	select {
+	case baseURL := <-recovered:
+		assertEqual(t, host1, baseURL)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the inactive host was never returned to the pool")
+	}
+
+	wrr.lock.RLock()
+	defer wrr.lock.RUnlock()
+	for _, h := range wrr.hosts {
+		assertEqual(t, HostStateActive, h.state, "expected every host to be active again")
+		assertEqual(t, 0, h.failedRequests, "expected the failure count to be reset")
+	}
+}
+
+// Recovery must still work when no state change hook is registered.
+func TestWeightedRoundRobinHostRecoveryWithoutHook(t *testing.T) {
+	const host1 = "https://example1.com"
+
+	wrr, err := NewWeightedRoundRobin(50*time.Millisecond,
+		&Host{BaseURL: host1, Weight: 10, MaxFailures: 1},
+	)
+	assertNil(t, err)
+	defer func() { assertNil(t, wrr.Close()) }()
+
+	wrr.Feedback(&RequestFeedback{BaseURL: host1, Success: false})
+	_, err = wrr.NextWithContext(context.Background())
+	assertErrorIs(t, ErrNoActiveHost, err)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		baseURL, err := wrr.NextWithContext(context.Background())
+		if err == nil {
+			assertEqual(t, host1, baseURL)
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the inactive host was never returned to the pool")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// The SRV refresh goroutine keeps running across a failed lookup, logs it rather
+// than dropping it, and stops when Close is called.
+func TestSRVWeightedRoundRobinTickerRefresh(t *testing.T) {
+	srv, err := NewSRVWeightedRoundRobin("_sample-server", "", "example.com", "")
+	assertNotNil(t, err) // example.com has no such SRV record, so no ticker was started
+	assertNotNil(t, srv)
+
+	var logBuf bytes.Buffer
+	srv.log = &logger{l: log.New(&logBuf, "", 0)}
+
+	var lookups atomic.Int32
+	errLookup := errors.New("srv lookup failed")
+	srv.lookupSRV = func() ([]*net.SRV, error) {
+		if lookups.Add(1) == 1 {
+			return nil, errLookup // the first refresh fails
+		}
+		return []*net.SRV{
+			{Target: "service1.example.com.", Port: 443, Priority: 10, Weight: 50},
+		}, nil
+	}
+
+	srv.SetRefreshDuration(20 * time.Millisecond)
+	go srv.ticker()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for lookups.Load() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("the SRV refresh ticker did not run")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	assertTrue(t, strings.Contains(logBuf.String(), errLookup.Error()),
+		"expected the failed refresh to be logged, got: "+logBuf.String())
+
+	baseURL, err := srv.NextWithContext(context.Background())
+	assertNil(t, err)
+	assertEqual(t, "https://service1.example.com:443", baseURL)
+
+	assertNil(t, srv.Close())
+	assertNil(t, srv.Close()) // Close is documented to be idempotent
+
+	// the goroutine is gone, so no further lookups happen
+	settled := lookups.Load()
+	time.Sleep(100 * time.Millisecond)
+	assertEqual(t, settled, lookups.Load(), "expected the refresh goroutine to have stopped")
+}
+
+// The successful construction path starts the SRV refresh goroutine, which Close
+// then has to shut down.
+func TestSRVWeightedRoundRobinResolvedAtConstruction(t *testing.T) {
+	srv, err := newSRVWeightedRoundRobin("_sample-server", "tcp", "example.com", "https",
+		func() ([]*net.SRV, error) {
+			return []*net.SRV{
+				{Target: "service1.example.com.", Port: 8443, Priority: 10, Weight: 50},
+			}, nil
+		})
+	assertNil(t, err)
+	assertNotNil(t, srv)
+
+	baseURL, err := srv.NextWithContext(context.Background())
+	assertNil(t, err)
+	assertEqual(t, "https://service1.example.com:8443", baseURL)
+
+	assertNil(t, srv.Close())
 }
