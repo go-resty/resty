@@ -1794,3 +1794,123 @@ func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	assertEqual(t, false, c.isHedgingEnabled())
 	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
 }
+
+// Client.Header, QueryParams, FormData, PathParams and Cookies used to return the
+// live maps and slices, so request middleware iterated them after the read lock
+// had been released. Mutating the client concurrently was then a data race that
+// could escalate to an uncatchable "concurrent map read and map write".
+func TestClientAccessorsReturnSnapshots(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	c.SetHeader("X-Snap", "one")
+	c.SetQueryParam("q", "one")
+	c.SetFormData(map[string]string{"f": "one"})
+	c.SetPathParam("p", "one")
+	c.SetCookie(&http.Cookie{Name: "c", Value: "one"})
+
+	// mutating what the accessors hand back must not reach the client
+	c.Header().Set("X-Snap", "mutated")
+	c.Header().Set("X-Added", "nope")
+	c.QueryParams().Set("q", "mutated")
+	c.FormData().Set("f", "mutated")
+	c.PathParams()["p"] = "mutated"
+	cookies := c.Cookies()
+	cookies = append(cookies, &http.Cookie{Name: "extra", Value: "nope"})
+	_ = cookies
+
+	assertEqual(t, "one", c.Header().Get("X-Snap"))
+	assertEqual(t, "", c.Header().Get("X-Added"))
+	assertEqual(t, "one", c.QueryParams().Get("q"))
+	assertEqual(t, "one", c.FormData().Get("f"))
+	assertEqual(t, "one", c.PathParams()["p"])
+	assertEqual(t, 1, len(c.Cookies()))
+
+	// the slice-returning accessors are snapshots too
+	assertEqual(t, 0, len(c.RetryConditions()))
+	c.AddRetryConditions(func(_ *Response, _ error) bool { return false })
+	rc := c.RetryConditions()
+	assertEqual(t, 1, len(rc))
+	rc = append(rc, func(_ *Response, _ error) bool { return true })
+	assertEqual(t, 2, len(rc))
+	assertEqual(t, 1, len(c.RetryConditions()))
+
+	assertEqual(t, 0, len(c.RetryHooks()))
+	c.AddRetryHooks(func(_ *Response, _ error) {})
+	assertEqual(t, 1, len(c.RetryHooks()))
+
+	decompressers := c.ContentDecompressers()
+	decompressers["bogus"] = nil
+	_, found := c.ContentDecompressers()["bogus"]
+	assertEqual(t, false, found)
+}
+
+// Mutating a client while requests are in flight is documented as safe. It used
+// to race against the middleware that merges client values into each request.
+func TestClientMutationDuringRequestsIsRaceFree(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl().SetBaseURL(ts.URL)
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	wg.Add(1)
+	go func() { // e.g. a token-refresh goroutine
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			c.SetHeader("Authorization", fmt.Sprintf("Bearer %d", i))
+			c.SetQueryParam("v", strconv.Itoa(i))
+			c.SetPathParam("p", strconv.Itoa(i))
+			c.SetFormData(map[string]string{"f": strconv.Itoa(i)})
+		}
+	}()
+
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 25; j++ {
+				res, err := c.R().Get("/")
+				if err == nil {
+					_ = res.StatusCode()
+				}
+			}
+		}()
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// Client had no multi-value setters, so Header().Add() on the live map was the
+// only way to reach them. The accessors now return snapshots, so these exist.
+func TestClientMultiValueSetters(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	c.AddHeader("X-Multi", "one").AddHeader("X-Multi", "two")
+	assertEqual(t, 2, len(c.Header()["X-Multi"]))
+
+	c.SetHeaderMultiValues(map[string][]string{
+		"Accept": {"text/html", "application/json"},
+	})
+	assertEqual(t, "text/html, application/json", c.Header().Get("Accept"))
+
+	c.AddQueryParam("status", "pending").AddQueryParam("status", "approved")
+	assertEqual(t, 2, len(c.QueryParams()["status"]))
+
+	c.SetQueryParamsFromValues(url.Values{"tag": {"a", "b", "c"}})
+	assertEqual(t, 3, len(c.QueryParams()["tag"]))
+
+	c.SetFormDataFromValues(url.Values{"criteria": {"book", "glass"}})
+	assertEqual(t, 2, len(c.FormData()["criteria"]))
+}

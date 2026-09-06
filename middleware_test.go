@@ -12,7 +12,9 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/textproto"
 	"net/url"
 	"os"
@@ -20,6 +22,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -1417,11 +1420,11 @@ func TestClientValuesAreNotAliasedIntoRequests(t *testing.T) {
 	// Set then two Adds leaves len 3 in a cap 4 array: one spare slot, which is
 	// where a request's own Add would write.
 	c.SetHeader("X-Multi", "one")
-	c.Header().Add("X-Multi", "two")
-	c.Header().Add("X-Multi", "three")
+	c.AddHeader("X-Multi", "two")
+	c.AddHeader("X-Multi", "three")
 	c.SetQueryParam("tag", "a")
-	c.QueryParams().Add("tag", "b")
-	c.QueryParams().Add("tag", "c")
+	c.AddQueryParam("tag", "b")
+	c.AddQueryParam("tag", "c")
 
 	newRequest := func(path, marker string) *Request {
 		r := c.R()
@@ -1445,4 +1448,89 @@ func TestClientValuesAreNotAliasedIntoRequests(t *testing.T) {
 	// and the client itself must be untouched
 	assertEqual(t, 3, len(c.Header()["X-Multi"]))
 	assertEqual(t, 3, len(c.QueryParams()["tag"]))
+}
+
+// MiddlewareResponseAutoParse used to return without reading or closing the body
+// when a content-type decoder matched but the caller registered no Result (2xx)
+// or ResultError (4xx/5xx). The connection was then never returned to the
+// keep-alive pool, so every such request opened a fresh one.
+func TestAutoParseReleasesBodyWithoutResult(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		contentType string
+		body        string
+		statusCode  int
+		setResult   bool
+		setErr      bool
+	}{
+		{"json 200 without result", "application/json", `{"a":1}`, http.StatusOK, false, false},
+		{"json 200 with result", "application/json", `{"a":1}`, http.StatusOK, true, false},
+		{"json 500 without result error", "application/json", `{"a":1}`, http.StatusInternalServerError, false, false},
+		{"xml 200 without result", "application/xml", `<r><a>1</a></r>`, http.StatusOK, false, false},
+		{"no decoder for content type", "text/plain", `hello`, http.StatusOK, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var conns int32
+			ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set(hdrContentTypeKey, tc.contentType)
+				w.WriteHeader(tc.statusCode)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			ts.Config.ConnState = func(_ net.Conn, s http.ConnState) {
+				if s == http.StateNew {
+					atomic.AddInt32(&conns, 1)
+				}
+			}
+			ts.Start()
+			defer ts.Close()
+
+			c := dcnl().SetBaseURL(ts.URL)
+			defer c.Close()
+
+			for i := 0; i < 5; i++ {
+				req := c.R()
+				if tc.setResult {
+					req.SetResult(&map[string]any{})
+				}
+				if tc.setErr {
+					req.SetResultError(&map[string]any{})
+				}
+				res, err := req.Get("/")
+				assertError(t, err)
+				assertEqual(t, tc.statusCode, res.StatusCode())
+				if !tc.setResult && !tc.setErr {
+					// nothing decoded it, so the body must still reach the caller
+					assertEqual(t, tc.body, res.String())
+				}
+			}
+
+			// one connection, reused for all five requests
+			assertEqual(t, int32(1), atomic.LoadInt32(&conns))
+		})
+	}
+}
+
+// A save-to-file response body belongs to MiddlewareResponseSaveToFile, so
+// AutoParse must not buffer it even though a decoder matches its content type.
+func TestAutoParseDoesNotBufferSaveToFileBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(hdrContentTypeKey, "application/json")
+		_, _ = w.Write([]byte(`{"a":1}`))
+	}))
+	defer ts.Close()
+
+	outputFile := filepath.Join(getTestDataPath(), "auto-parse-save.json")
+	defer cleanupFiles(outputFile)
+
+	c := dcnl().SetBaseURL(ts.URL)
+	defer c.Close()
+
+	res, err := c.R().SetResponseSaveFileName(outputFile).Get("/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+	assertEqual(t, false, res.IsRead)
+
+	b, err := os.ReadFile(outputFile)
+	assertError(t, err)
+	assertEqual(t, `{"a":1}`, string(b))
 }
