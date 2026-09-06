@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -1076,4 +1077,24 @@ func createBinFile(fileName string, size int64) string {
 	_ = f.Truncate(size)
 	_ = f.Close()
 	return fp
+}
+
+// debugLogger asserted req.values[debugRequestLogKey] unconditionally, so a
+// debug-enabled request whose values map has no entry panicked in a logging path.
+func TestDebugLoggerWithoutPreparedRequestLog(t *testing.T) {
+	var logBuf bytes.Buffer
+	c := New().SetLogger(&logger{l: log.New(&logBuf, "", 0)})
+	defer c.Close()
+
+	req := c.R()
+	req.IsDebug = true
+	req.initValuesMap() // deliberately empty: no debugRequestLogKey
+
+	res := &Response{Request: req}
+	res.setReceivedAt()
+
+	debugLogger(c, res) // must not panic
+
+	assertTrue(t, strings.Contains(logBuf.String(), "RESPONSE"),
+		"expected the debug log to be written, got: "+logBuf.String())
 }
