@@ -303,7 +303,7 @@ func (c *Client) BaseURL() string {
 func (c *Client) SetBaseURL(url string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.baseURL = strings.TrimRight(url, "/")
+	c.baseURL = url
 	return c
 }
 
