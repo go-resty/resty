@@ -474,7 +474,7 @@ func Test_parseRequestHeader(t *testing.T) {
 			tt.init(c, r)
 
 			// add common expected headers from client into expectedHeader
-			tt.expectedHeader.Set(hdrAcceptEncodingKey, c.ContentDecompresserKeys())
+			tt.expectedHeader.Set(hdrAcceptEncodingKey, c.ContentDecompressorKeys())
 
 			parseRequestHeader(c, r)
 

@@ -95,7 +95,7 @@ func TestClientResponseMiddleware(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl()
-	c.AddResponseMiddleware(func(c *Client, res *Response) error {
+	c.AddResponseMiddlewares(func(c *Client, res *Response) error {
 		t.Logf("Request sent at: %v", res.Request.StartTime)
 		t.Logf("Response Received at: %v", res.ReceivedAt())
 
@@ -563,7 +563,7 @@ func TestClientSetClientRootCertificateWatcher(t *testing.T) {
 	t.Run("Cert exists", func(t *testing.T) {
 		client := dcnl()
 		client.SetClientRootCertificatesWatcher(
-			&CertWatcherOptions{PoolInterval: time.Second * 1},
+			&CertWatcherOptions{PollInterval: time.Second * 1},
 			filepath.Join(getTestDataPath(), "sample-root.pem"),
 		)
 
@@ -599,7 +599,7 @@ func TestClientSetClientRootCertificateFromString(t *testing.T) {
 
 func TestClientRequestMiddlewareModification(t *testing.T) {
 	tc := dcnl()
-	tc.AddRequestMiddleware(func(c *Client, r *Request) error {
+	tc.AddRequestMiddlewares(func(c *Client, r *Request) error {
 		r.SetAuthToken("This is test auth token")
 		return nil
 	})
@@ -761,7 +761,7 @@ func TestClientSettingsCoverage(t *testing.T) {
 	ct.SetTransport(&CustomRoundTripper1{})
 	_, err := ct.HTTPTransport()
 	assertNotNil(t, err)
-	assertEqual(t, ErrNotHttpTransportType, err)
+	assertEqual(t, ErrNotHTTPTransportType, err)
 
 	ct.SetProxy("http://localhost:8080")
 	ct.RemoveProxy()
@@ -964,7 +964,7 @@ func TestClientRoundTripper(t *testing.T) {
 	ct, err := c.HTTPTransport()
 	assertNotNil(t, err)
 	assertNil(t, ct)
-	assertEqual(t, ErrNotHttpTransportType, err)
+	assertEqual(t, ErrNotHTTPTransportType, err)
 }
 
 func TestClientNewRequest(t *testing.T) {
@@ -1075,17 +1075,17 @@ func TestLzwCompress(t *testing.T) {
 	// Not found scenario
 	_, err := c.R().Get(ts.URL + "/lzw-test")
 	assertNotNil(t, err)
-	assertEqual(t, ErrContentDecompresserNotFound, err)
+	assertEqual(t, ErrContentDecompressorNotFound, err)
 
 	// Register LZW content decoder
-	c.AddContentDecompresser("ComPreSs", func(r io.ReadCloser) (io.ReadCloser, error) {
+	c.AddContentDecompressor("ComPreSs", func(r io.ReadCloser) (io.ReadCloser, error) {
 		l := &lzwReader{
 			s: r,
 			r: lzw.NewReader(r, lzw.LSB, 8),
 		}
 		return l, nil
 	})
-	c.SetContentDecompresserKeys([]string{"compress"})
+	c.SetContentDecompressorKeys([]string{"compress"})
 
 	testcases := []struct{ url, want string }{
 		{ts.URL + "/lzw-test", "This is LZW response testing"},
@@ -1269,7 +1269,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "before_request_failure",
 			setup: func(client *Client) {
-				client.AddRequestMiddleware(func(client *Client, request *Request) error {
+				client.AddRequestMiddlewares(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
 				})
 			},
@@ -1278,7 +1278,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "before_request_failure_retry",
 			setup: func(client *Client) {
-				client.SetRetryCount(3).AddRequestMiddleware(func(client *Client, request *Request) error {
+				client.SetRetryCount(3).AddRequestMiddlewares(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
 				})
 			},
@@ -1287,7 +1287,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "after_response_failure",
 			setup: func(client *Client) {
-				client.AddResponseMiddleware(func(client *Client, response *Response) error {
+				client.AddResponseMiddlewares(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
 				})
 			},
@@ -1297,7 +1297,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "after_response_failure_retry",
 			setup: func(client *Client) {
-				client.SetRetryCount(3).AddResponseMiddleware(func(client *Client, response *Response) error {
+				client.SetRetryCount(3).AddResponseMiddlewares(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
 				})
 			},
@@ -1307,7 +1307,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "panic with error",
 			setup: func(client *Client) {
-				client.AddRequestMiddleware(func(client *Client, request *Request) error {
+				client.AddRequestMiddlewares(func(client *Client, request *Request) error {
 					panic(fmt.Errorf("before request"))
 				})
 			},
@@ -1318,7 +1318,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "panic with string",
 			setup: func(client *Client) {
-				client.AddRequestMiddleware(func(client *Client, request *Request) error {
+				client.AddRequestMiddlewares(func(client *Client, request *Request) error {
 					panic("before request")
 				})
 			},
@@ -1839,9 +1839,9 @@ func TestClientAccessorsReturnSnapshots(t *testing.T) {
 	c.AddRetryHooks(func(_ *Response, _ error) {})
 	assertEqual(t, 1, len(c.RetryHooks()))
 
-	decompressers := c.ContentDecompressers()
-	decompressers["bogus"] = nil
-	_, found := c.ContentDecompressers()["bogus"]
+	decompressors := c.ContentDecompressors()
+	decompressors["bogus"] = nil
+	_, found := c.ContentDecompressors()["bogus"]
 	assertEqual(t, false, found)
 }
 
@@ -1960,12 +1960,55 @@ func (s *selfWrappingTransport) unwrap() http.RoundTripper { return s }
 func TestHTTPTransportOfBoundsWrapperChain(t *testing.T) {
 	// a wrapper that returns itself must terminate rather than spin
 	_, err := httpTransportOf(&selfWrappingTransport{})
-	assertErrorIs(t, ErrNotHttpTransportType, err)
+	assertErrorIs(t, ErrNotHTTPTransportType, err)
 
 	// a plain non-wrapper round tripper is also an error
 	_, err = httpTransportOf(http.NewFileTransport(http.Dir(".")))
-	assertErrorIs(t, ErrNotHttpTransportType, err)
+	assertErrorIs(t, ErrNotHTTPTransportType, err)
 
 	_, err = httpTransportOf(nil)
-	assertErrorIs(t, ErrNotHttpTransportType, err)
+	assertErrorIs(t, ErrNotHTTPTransportType, err)
+}
+
+// AddRequestMiddlewares/AddResponseMiddlewares are variadic, matching every
+// other Add* in the package, and tolerate an emptied chain.
+func TestAddMiddlewaresVariadic(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	before := len(c.requestMiddlewares())
+	c.AddRequestMiddlewares(
+		func(*Client, *Request) error { return nil },
+		func(*Client, *Request) error { return nil },
+	)
+	assertEqual(t, before+2, len(c.requestMiddlewares()))
+
+	afterBefore := len(c.responseMiddlewares())
+	c.AddResponseMiddlewares(
+		func(*Client, *Response) error { return nil },
+		func(*Client, *Response) error { return nil },
+	)
+	assertEqual(t, afterBefore+2, len(c.responseMiddlewares()))
+
+	// clearing the chain then adding must not panic on a negative index
+	c.SetRequestMiddlewares()
+	c.AddRequestMiddlewares(func(*Client, *Request) error { return nil })
+	assertEqual(t, 1, len(c.requestMiddlewares()))
+}
+
+// Request.WithContext shared Header, QueryParams, FormData and PathParams with
+// the source, so configuring the copy mutated the original.
+func TestRequestWithContextDoesNotShareState(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	r := c.R().SetHeader("X-Original", "yes").SetQueryParam("q", "one")
+	r2 := r.WithContext(context.Background())
+
+	r2.SetHeader("X-Only-On-Copy", "yes").SetQueryParam("q", "two")
+
+	assertEqual(t, "", r.Header.Get("X-Only-On-Copy"))
+	assertEqual(t, "one", r.QueryParams.Get("q"))
+	assertEqual(t, "yes", r2.Header.Get("X-Original"))
+	assertEqual(t, "two", r2.QueryParams.Get("q"))
 }

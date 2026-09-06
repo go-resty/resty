@@ -21,9 +21,9 @@ import (
 )
 
 var (
-	// ErrContentDecompresserNotFound is returned when no decompresser is registered
+	// ErrContentDecompressorNotFound is returned when no decompressor is registered
 	// for the Content-Encoding directive present in the response.
-	ErrContentDecompresserNotFound = errors.New("resty: content decoder not found")
+	ErrContentDecompressorNotFound = errors.New("resty: content decompressor not found")
 
 	// maxDecodeObjects caps the number of JSON or XML objects decoded from a single
 	// response body. If the limit is exceeded before EOF, decoding returns an error.
@@ -47,14 +47,14 @@ type (
 	// See [Client.AddContentTypeDecoder].
 	ContentTypeDecoder func(io.Reader, any) error
 
-	// ContentDecompresser wraps an [io.ReadCloser] response body with
+	// ContentDecompressor wraps an [io.ReadCloser] response body with
 	// decompression based on the Content-Encoding header ([RFC 9110]).
 	// For example, gzip, deflate, etc.
 	//
-	// See [Client.AddContentDecompresser].
+	// See [Client.AddContentDecompressor].
 	//
 	// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
-	ContentDecompresser func(io.ReadCloser) (io.ReadCloser, error)
+	ContentDecompressor func(io.ReadCloser) (io.ReadCloser, error)
 )
 
 func encodeJSON(w io.Writer, v any) error {

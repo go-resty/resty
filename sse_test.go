@@ -715,7 +715,7 @@ func createSSESource(t *testing.T, url string, fn SSEMessageFunc, rt any) *SSESo
 		SetRetryCount(2).
 		SetRetryWaitTime(200 * time.Millisecond).
 		SetRetryMaxWaitTime(1000 * time.Millisecond).
-		SetSizeMaxBuffer(1 << 14). // 16kb
+		SetMaxBufferSize(1 << 14). // 16kb
 		SetLogger(createLogger()).
 		OnOpen(func(url string, respHdr http.Header) {
 			t.Log("I'm connected:", url, respHdr)

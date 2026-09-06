@@ -267,7 +267,7 @@ func (sse *SSESource) tlsConfig() (*tls.Config, error) {
 
 	transport, ok := sse.httpClient.Transport.(*http.Transport)
 	if !ok {
-		return nil, ErrNotHttpTransportType
+		return nil, ErrNotHTTPTransportType
 	}
 
 	if transport.TLSClientConfig == nil {
@@ -359,12 +359,12 @@ func (sse *SSESource) SetRetryMaxWaitTime(maxWaitTime time.Duration) *SSESource 
 	return sse
 }
 
-// SetSizeMaxBuffer method sets the maximum scanner buffer size for the SSE client.
+// SetMaxBufferSize method sets the maximum scanner buffer size for the SSE client.
 //
 // Default is 32kb
 //
-//	sse.SetSizeMaxBuffer(64 * 1024) // 64kb
-func (sse *SSESource) SetSizeMaxBuffer(bufSize int) *SSESource {
+//	sse.SetMaxBufferSize(64 * 1024) // 64kb
+func (sse *SSESource) SetMaxBufferSize(bufSize int) *SSESource {
 	sse.lock.Lock()
 	defer sse.lock.Unlock()
 	sse.maxBufSize = bufSize
@@ -744,7 +744,7 @@ func (sse *SSESource) connect() (*http.Response, error) {
 		// let's drain the response body, before retry wait
 		drainBody(rRes)
 
-		waitDuration, _ := backoff.NextWaitDuration(nil, rRes, doErr, attempt)
+		waitDuration, _ := backoff.NextWaitDuration(nil, nil, rRes, doErr, attempt)
 		timer := time.NewTimer(waitDuration)
 		select {
 		case <-sse.Context().Done():
