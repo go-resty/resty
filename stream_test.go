@@ -1,9 +1,11 @@
 package resty
 
 import (
+	"bufio"
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"errors"
 	"io"
 	"net/http"
@@ -475,7 +477,7 @@ func TestDeflateReaderPanicOnConcurrentCorruptedBody(t *testing.T) {
 func TestDeflateReaderPoolAcquireAndRead(t *testing.T) {
 	// Test successful creation and read with valid deflate data
 	validData := io.NopCloser(bytes.NewReader(createDeflateValidData()))
-	wrapper, err := acquireDeflateReader(validData)
+	wrapper, err := acquireDeflateReader(validData, validData)
 	assertNil(t, err)
 	assertNotNil(t, wrapper)
 
@@ -507,7 +509,7 @@ func TestDeflateReaderPoolConcurrentAccess(t *testing.T) {
 			for range numOperations {
 				// Create fresh data for each operation
 				validData := io.NopCloser(bytes.NewReader(createDeflateValidData()))
-				wrapper, err := acquireDeflateReader(validData)
+				wrapper, err := acquireDeflateReader(validData, validData)
 				assertNil(t, err)
 				assertNotNil(t, wrapper)
 
@@ -657,4 +659,68 @@ func TestStreamMisc(t *testing.T) {
 		assertEqual(t, 0, n)
 
 	})
+}
+
+// RFC 9110 section 8.4.1.2 defines the "deflate" content coding as a zlib
+// stream (RFC 1950) wrapping deflate-compressed data (RFC 1951). Resty
+// advertises deflate but decoded with compress/flate, so a conforming server's
+// response failed to decode -- and readAll mapped the resulting
+// io.ErrUnexpectedEOF to nil, surfacing a 200 with an empty body.
+func TestDecompressDeflateAcceptsZlibAndRawStreams(t *testing.T) {
+	const payload = `{"hello":"world"}`
+
+	var zlibFramed bytes.Buffer
+	zw := zlib.NewWriter(&zlibFramed)
+	_, _ = zw.Write([]byte(payload))
+	assertNil(t, zw.Close())
+
+	var rawFramed bytes.Buffer
+	fw, err := flate.NewWriter(&rawFramed, flate.DefaultCompression)
+	assertNil(t, err)
+	_, _ = fw.Write([]byte(payload))
+	assertNil(t, fw.Close())
+
+	for _, tc := range []struct {
+		name string
+		body []byte
+	}{
+		{"zlib framed, per RFC 9110", zlibFramed.Bytes()},
+		{"raw deflate, as many servers send", rawFramed.Bytes()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Encoding", "deflate")
+				w.Header().Set(hdrContentTypeKey, "application/json")
+				_, _ = w.Write(tc.body)
+			}))
+			defer ts.Close()
+
+			c := dcnl().SetBaseURL(ts.URL)
+			defer c.Close()
+
+			res, err := c.R().Get("/")
+			assertError(t, err)
+			assertEqual(t, http.StatusOK, res.StatusCode())
+			assertEqual(t, payload, res.String())
+		})
+	}
+}
+
+func TestIsZlibWrapped(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		in     []byte
+		expect bool
+	}{
+		{"zlib default compression", []byte{0x78, 0x9c}, true},
+		{"zlib best compression", []byte{0x78, 0xda}, true},
+		{"raw deflate block", []byte{0x00, 0x01}, false},
+		{"wrong compression method", []byte{0x71, 0x9c}, false},
+		{"too short to tell", []byte{0x78}, false},
+		{"empty", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertEqual(t, tc.expect, isZlibWrapped(bufio.NewReader(bytes.NewReader(tc.in))))
+		})
+	}
 }
