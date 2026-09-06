@@ -19,7 +19,7 @@ import (
 // Implementations must also implement [http.RoundTripper] so they can be installed
 // as the HTTP transport on a [Client].
 //
-// The [SetTransport] and [Transport] methods allow [Client.SetHedging] to wrap
+// The [Hedger.SetTransport] and [Hedger.Transport] methods allow [Client.SetHedging] to wrap
 // and unwrap the underlying transport when hedging is enabled or disabled.
 //
 // Use [NewHedging] to create the default implementation ([Hedging]).
@@ -189,59 +189,78 @@ func (h *Hedging) calculateRateDelay() {
 	}
 }
 
+// RoundTrip races up to [Hedging.MaxRequest] copies of req against each other and
+// returns the result of whichever attempt finishes first.
+//
+// Each attempt gets its own context derived from the request context, so the
+// losers can be cancelled the moment a winner is known without disturbing the
+// winner. The winning attempt's context is released when its response body is
+// closed — cancelling it any earlier would abort the caller's read of that body.
+// Losing responses are drained so their connections can be reused.
 func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
-	if (!ht.isNonReadOnlyAllowed && !isReadOnlyMethod(req.Method)) || ht.MaxRequest() <= 1 {
-		return ht.underlying.RoundTrip(req)
+	ht.lock.RLock()
+	underlying := ht.underlying
+	maxReq := ht.maxRequest
+	delay := ht.delay
+	rateDelay := ht.rateDelay
+	nonReadOnlyAllowed := ht.isNonReadOnlyAllowed
+	ht.lock.RUnlock()
+
+	if (!nonReadOnlyAllowed && !isReadOnlyMethod(req.Method)) || maxReq <= 1 {
+		return underlying.RoundTrip(req)
 	}
 
-	ctx := req.Context()
-	deadline, hasDeadline := ctx.Deadline()
-
-	// Derive hedgeCtx from the original request context to respect cancellations
-	var (
-		hedgeCtx context.Context
-		cancel   context.CancelFunc
-	)
-	if hasDeadline {
-		// Use original deadline for the race (first to complete wins)
-		remaining := time.Until(deadline)
-		if remaining > 0 {
-			hedgeCtx, cancel = context.WithTimeout(ctx, remaining)
-		} else {
-			// Deadline already expired, use context with cancel
-			hedgeCtx, cancel = context.WithCancel(ctx)
-		}
-	} else {
-		// No deadline in original context, create cancellable context from it
-		hedgeCtx, cancel = context.WithCancel(ctx)
-	}
-
-	// defer cancel() ensures cleanup on all paths (timeout, cancellation, or normal return)
-	// cancel() may also be called inside once.Do() when a request wins, but calling it
-	// multiple times is safe and ensures the context is canceled as soon as any goroutine completes
-	defer cancel()
+	reqCtx := req.Context()
 
 	type result struct {
 		resp *http.Response
 		err  error
 	}
+	resultCh := make(chan result, 1)
+	decidedCh := make(chan struct{})
 
-	ht.lock.RLock()
-	maxReq := ht.maxRequest
-	delay := ht.delay
-	rateDelay := ht.rateDelay
-	ht.lock.RUnlock()
+	var (
+		mu       sync.Mutex
+		decided  bool
+		inflight = make(map[int]context.CancelFunc, maxReq)
+	)
 
-	resultCh := make(chan result, maxReq)
-	var once sync.Once
+	// decide records attempt i as the winner. It reports false when another
+	// attempt already won. The winner's own cancel func is left untouched; every
+	// other in-flight attempt is cancelled right away.
+	decide := func(i int) bool {
+		mu.Lock()
+		if decided {
+			mu.Unlock()
+			return false
+		}
+		decided = true
+		losers := make([]context.CancelFunc, 0, len(inflight))
+		for idx, cancel := range inflight {
+			if idx != i {
+				losers = append(losers, cancel)
+			}
+		}
+		clear(inflight)
+		mu.Unlock()
 
+		for _, cancel := range losers {
+			cancel()
+		}
+		close(decidedCh)
+		return true
+	}
+
+spawn:
 	for i := range maxReq {
 		if i > 0 {
 			if delay > 0 {
 				select {
 				case <-time.After(delay):
-				case <-hedgeCtx.Done():
-					break
+				case <-decidedCh:
+					break spawn
+				case <-reqCtx.Done():
+					break spawn
 				}
 			}
 
@@ -250,34 +269,48 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 			if rateDelay > 0 {
 				select {
 				case <-time.After(rateDelay):
-				case <-hedgeCtx.Done():
-					break
+				case <-decidedCh:
+					break spawn
+				case <-reqCtx.Done():
+					break spawn
 				}
 			}
 		}
 
-		go func() {
-			hedgedReq := req.Clone(hedgeCtx)
-			resp, err := ht.underlying.RoundTrip(hedgedReq)
+		attemptCtx, attemptCancel := context.WithCancel(reqCtx)
 
-			won := false
-			once.Do(func() {
-				won = true
-				resultCh <- result{resp: resp, err: err}
+		mu.Lock()
+		if decided {
+			mu.Unlock()
+			attemptCancel()
+			break spawn
+		}
+		inflight[i] = attemptCancel
+		mu.Unlock()
 
-				// Cancel inside once.Do() to stop other goroutines immediately when a request wins
-				// defer cancel() ensures cleanup even if no request completes successfully
-				cancel()
-			})
+		go func(i int, attemptCancel context.CancelFunc) {
+			resp, err := underlying.RoundTrip(req.Clone(attemptCtx))
 
-			if !won && resp != nil && resp.Body != nil {
-				drainReadCloser(resp.Body)
+			if !decide(i) {
+				attemptCancel()
+				if resp != nil && resp.Body != nil {
+					drainReadCloser(resp.Body)
+				}
+				return
 			}
-		}()
+
+			// Winner: the caller still has to read this body, so hand the cancel
+			// func over to it instead of firing it here.
+			if resp != nil && resp.Body != nil {
+				resp.Body = &cancelReadCloser{r: resp.Body, cancel: attemptCancel}
+			} else {
+				attemptCancel()
+			}
+			resultCh <- result{resp: resp, err: err}
+		}(i, attemptCancel)
 	}
 
 	res := <-resultCh
-	close(resultCh)
 	return res.resp, res.err
 }
 

@@ -8,8 +8,10 @@ package resty
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -586,4 +588,219 @@ func TestHedgingRoundTripDeadlineExpired(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 	assertEqual(t, int32(0), atomic.LoadInt32(&attemptCount))
+}
+
+// TestHedgingLargeResponseBody guards against the hedge context being cancelled
+// before the caller has read the winning response body. A body larger than the
+// transport read buffer cannot already be buffered when RoundTrip returns, so any
+// early cancel truncates it or fails the read outright.
+func TestHedgingLargeResponseBody(t *testing.T) {
+	const bodySize = 512 * 1024
+
+	payload := make([]byte, bodySize)
+	for i := range payload {
+		payload[i] = byte('a' + i%26)
+	}
+
+	var attemptCount int32
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		attempt := atomic.AddInt32(&attemptCount, 1)
+		if attempt == 1 {
+			// lose the race so a hedged attempt wins and returns this body
+			time.Sleep(500 * time.Millisecond)
+		}
+		w.Header().Set(hdrContentTypeKey, "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(payload)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetHedging(NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(2).
+		SetMaxRequestPerSecond(0))
+
+	resp, err := c.R().Get(ts.URL)
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, bodySize, len(resp.Bytes()))
+	assertEqual(t, string(payload), string(resp.Bytes()))
+}
+
+// TestHedgingDoNotParseResponseLargeBody covers the same hazard on the path where
+// the caller owns the body and reads it after RoundTrip has long returned.
+func TestHedgingDoNotParseResponseLargeBody(t *testing.T) {
+	const bodySize = 512 * 1024
+	payload := make([]byte, bodySize)
+
+	var attemptCount int32
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&attemptCount, 1) == 1 {
+			time.Sleep(500 * time.Millisecond)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(payload)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetHedging(NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(2).
+		SetMaxRequestPerSecond(0))
+
+	resp, err := c.R().SetResponseDoNotParse(true).Get(ts.URL)
+	assertError(t, err)
+	defer func() { assertNil(t, resp.Body.Close()) }()
+
+	// simulate a caller that takes its time before reading
+	time.Sleep(100 * time.Millisecond)
+
+	read, err := io.Copy(io.Discard, resp.Body)
+	assertError(t, err)
+	assertEqual(t, int64(bodySize), read)
+}
+
+// trackedBody records whether a response body was read to completion and closed.
+type trackedBody struct {
+	r      *strings.Reader
+	closed chan struct{}
+	once   sync.Once
+	read   atomic.Int64
+}
+
+func newTrackedBody(payload string) *trackedBody {
+	return &trackedBody{r: strings.NewReader(payload), closed: make(chan struct{})}
+}
+
+func (b *trackedBody) Read(p []byte) (int, error) {
+	n, err := b.r.Read(p)
+	b.read.Add(int64(n))
+	return n, err
+}
+
+func (b *trackedBody) Close() error {
+	b.once.Do(func() { close(b.closed) })
+	return nil
+}
+
+// The spawn loop waits out the per-second rate delay before starting the next
+// hedged attempt; that wait has to give up when the caller's context is done,
+// otherwise a cancelled request keeps the loop parked for up to a second.
+func TestHedgingRoundTripContextDoneDuringRateDelay(t *testing.T) {
+	var attempts atomic.Int32
+	release := make(chan struct{})
+
+	h := NewHedging().
+		SetDelay(0). // no inter-attempt delay, only the rate delay
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(1) // one second between attempts
+	h.SetTransport(roundTripFunc(func(*http.Request) (*http.Response, error) {
+		attempts.Add(1)
+		<-release // hold the first attempt open so no winner is decided
+		return nil, context.Canceled
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // done before the loop reaches the rate delay
+	req, err := http.NewRequestWithContext(ctx, MethodGet, "http://127.0.0.1:65535/", nil)
+	assertNil(t, err)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		close(release)
+	}()
+
+	start := time.Now()
+	resp, err := h.RoundTrip(req)
+	assertNil(t, resp)
+	assertErrorIs(t, context.Canceled, err)
+
+	// the full rate delay is a second; giving up early is the whole point
+	assertTrue(t, time.Since(start) < 900*time.Millisecond,
+		"expected the rate delay wait to be abandoned on context cancellation")
+	assertEqual(t, int32(1), attempts.Load(), "expected no further attempts to be started")
+}
+
+// A hedged attempt that loses the race but still produced a response must have
+// that response drained and closed, otherwise its connection is never returned.
+func TestHedgingLosingAttemptResponseBodyDrained(t *testing.T) {
+	var attempts atomic.Int32
+	release := make(chan struct{})
+	loser := newTrackedBody("loser")
+
+	h := NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(2).
+		SetMaxRequestPerSecond(0)
+	h.SetTransport(roundTripFunc(func(*http.Request) (*http.Response, error) {
+		if attempts.Add(1) == 1 {
+			<-release // lose the race, then still hand back a usable response
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{},
+				Body:       loser,
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Body:       io.NopCloser(strings.NewReader("winner")),
+		}, nil
+	}))
+
+	req, err := http.NewRequest(MethodGet, "http://127.0.0.1:65535/", nil)
+	assertNil(t, err)
+
+	resp, err := h.RoundTrip(req)
+	assertNil(t, err)
+	body, err := io.ReadAll(resp.Body)
+	assertNil(t, err)
+	assertEqual(t, "winner", string(body))
+	assertNil(t, resp.Body.Close())
+
+	close(release)
+	select {
+	case <-loser.closed:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the losing response body was never closed")
+	}
+	assertEqual(t, int64(len("loser")), loser.read.Load(),
+		"expected the losing response body to be drained before closing")
+}
+
+// With neither an inter-attempt delay nor a rate delay the spawn loop has no
+// select to observe the winner on, so it has to re-check before every attempt.
+// Otherwise every configured attempt is fired even after the race is over.
+func TestHedgingSpawnLoopStopsOnceDecided(t *testing.T) {
+	const runs = 200
+
+	var attempts atomic.Int32
+	h := NewHedging().
+		SetDelay(0).
+		SetMaxRequest(8).
+		SetMaxRequestPerSecond(0)
+	h.SetTransport(roundTripFunc(func(*http.Request) (*http.Response, error) {
+		attempts.Add(1)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Body:       io.NopCloser(strings.NewReader("ok")),
+		}, nil
+	}))
+
+	for range runs {
+		req, err := http.NewRequest(MethodGet, "http://127.0.0.1:65535/", nil)
+		assertNil(t, err)
+
+		resp, err := h.RoundTrip(req)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode)
+		body, err := io.ReadAll(resp.Body)
+		assertNil(t, err)
+		assertEqual(t, "ok", string(body))
+		assertNil(t, resp.Body.Close())
+	}
+
+	// every run still has to produce exactly one usable response
+	assertTrue(t, attempts.Load() >= runs, "expected at least one attempt per run")
 }
