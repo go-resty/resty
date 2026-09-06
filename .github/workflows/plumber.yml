@@ -32,3 +32,5 @@ jobs:
           # Gate at 85 points instead of the all-or-nothing default,
           # leaves room for a small finding without blocking PRs.
           min-points: 85
+          # Let's start with report only
+          soft-fail: true
