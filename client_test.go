@@ -237,7 +237,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		assertEqual(t, "Bearer secret", cur.Header.Get("Authorization"))
 		assertEqual(t, "my-api-key", cur.Header.Get("X-Api-Key"))
@@ -259,7 +259,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-My-Secret", "secret-value")
 		cur.Header.Set("X-Safe-Header", "safe")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Sensitive headers must be stripped
 		assertEqual(t, "", cur.Header.Get("X-Api-Key"))
@@ -283,7 +283,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-Corp-Access-Token", "Bearer CORP_SECRET_123")
 		cur.Header.Set("Content-Type", "application/json")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Custom auth header must be stripped (contains "token")
 		assertEqual(t, "", cur.Header.Get("X-Corp-Access-Token"))
@@ -297,7 +297,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Same host (case insensitive) → headers copied, not stripped
 		assertEqual(t, "key", cur.Header.Get("X-Api-Key"))
@@ -1793,4 +1793,179 @@ func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	c.SetHedging(nil)
 	assertEqual(t, false, c.isHedgingEnabled())
 	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
+}
+
+// Client.Header, QueryParams, FormData, PathParams and Cookies used to return the
+// live maps and slices, so request middleware iterated them after the read lock
+// had been released. Mutating the client concurrently was then a data race that
+// could escalate to an uncatchable "concurrent map read and map write".
+func TestClientAccessorsReturnSnapshots(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	c.SetHeader("X-Snap", "one")
+	c.SetQueryParam("q", "one")
+	c.SetFormData(map[string]string{"f": "one"})
+	c.SetPathParam("p", "one")
+	c.SetCookie(&http.Cookie{Name: "c", Value: "one"})
+
+	// mutating what the accessors hand back must not reach the client
+	c.Header().Set("X-Snap", "mutated")
+	c.Header().Set("X-Added", "nope")
+	c.QueryParams().Set("q", "mutated")
+	c.FormData().Set("f", "mutated")
+	c.PathParams()["p"] = "mutated"
+	cookies := c.Cookies()
+	cookies = append(cookies, &http.Cookie{Name: "extra", Value: "nope"})
+	_ = cookies
+
+	assertEqual(t, "one", c.Header().Get("X-Snap"))
+	assertEqual(t, "", c.Header().Get("X-Added"))
+	assertEqual(t, "one", c.QueryParams().Get("q"))
+	assertEqual(t, "one", c.FormData().Get("f"))
+	assertEqual(t, "one", c.PathParams()["p"])
+	assertEqual(t, 1, len(c.Cookies()))
+
+	// the slice-returning accessors are snapshots too
+	assertEqual(t, 0, len(c.RetryConditions()))
+	c.AddRetryConditions(func(_ *Response, _ error) bool { return false })
+	rc := c.RetryConditions()
+	assertEqual(t, 1, len(rc))
+	rc = append(rc, func(_ *Response, _ error) bool { return true })
+	assertEqual(t, 2, len(rc))
+	assertEqual(t, 1, len(c.RetryConditions()))
+
+	assertEqual(t, 0, len(c.RetryHooks()))
+	c.AddRetryHooks(func(_ *Response, _ error) {})
+	assertEqual(t, 1, len(c.RetryHooks()))
+
+	decompressers := c.ContentDecompressers()
+	decompressers["bogus"] = nil
+	_, found := c.ContentDecompressers()["bogus"]
+	assertEqual(t, false, found)
+}
+
+// Mutating a client while requests are in flight is documented as safe. It used
+// to race against the middleware that merges client values into each request.
+func TestClientMutationDuringRequestsIsRaceFree(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl().SetBaseURL(ts.URL)
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	wg.Add(1)
+	go func() { // e.g. a token-refresh goroutine
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			c.SetHeader("Authorization", fmt.Sprintf("Bearer %d", i))
+			c.SetQueryParam("v", strconv.Itoa(i))
+			c.SetPathParam("p", strconv.Itoa(i))
+			c.SetFormData(map[string]string{"f": strconv.Itoa(i)})
+		}
+	}()
+
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 25; j++ {
+				res, err := c.R().Get("/")
+				if err == nil {
+					_ = res.StatusCode()
+				}
+			}
+		}()
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// Client had no multi-value setters, so Header().Add() on the live map was the
+// only way to reach them. The accessors now return snapshots, so these exist.
+func TestClientMultiValueSetters(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	c.AddHeader("X-Multi", "one").AddHeader("X-Multi", "two")
+	assertEqual(t, 2, len(c.Header()["X-Multi"]))
+
+	c.SetHeaderMultiValues(map[string][]string{
+		"Accept": {"text/html", "application/json"},
+	})
+	assertEqual(t, "text/html, application/json", c.Header().Get("Accept"))
+
+	c.AddQueryParam("status", "pending").AddQueryParam("status", "approved")
+	assertEqual(t, 2, len(c.QueryParams()["status"]))
+
+	c.SetQueryParamsFromValues(url.Values{"tag": {"a", "b", "c"}})
+	assertEqual(t, 3, len(c.QueryParams()["tag"]))
+
+	c.SetFormDataFromValues(url.Values{"criteria": {"book", "glass"}})
+	assertEqual(t, 2, len(c.FormData()["criteria"]))
+}
+
+// SetDigestAuth and SetHedging replace the client transport with a wrapper.
+// Every TLS, certificate and proxy setter called afterwards used to log an error
+// and silently do nothing, so an application that believed it had pinned a CA or
+// required TLS 1.3 got neither.
+func TestTransportSettersReachThroughWrappers(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		wrap func(*Client)
+	}{
+		{"no wrapper", func(c *Client) {}},
+		{"digest transport", func(c *Client) { c.SetDigestAuth("u", "p") }},
+		{"hedging transport", func(c *Client) { c.SetHedging(NewHedging()) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := dcnl()
+			defer c.Close()
+			tc.wrap(c)
+
+			c.SetTLSClientConfig(&tls.Config{MinVersion: tls.VersionTLS13})
+			c.SetProxy("http://127.0.0.1:9999")
+
+			transport, err := c.HTTPTransport()
+			assertNil(t, err)
+			assertNotNil(t, transport.TLSClientConfig)
+			assertEqual(t, uint16(tls.VersionTLS13), transport.TLSClientConfig.MinVersion)
+			assertNotNil(t, transport.Proxy)
+			assertEqual(t, "http://127.0.0.1:9999", c.ProxyURL().String())
+
+			cfg, err := c.tlsConfig()
+			assertNil(t, err)
+			assertEqual(t, uint16(tls.VersionTLS13), cfg.MinVersion)
+		})
+	}
+}
+
+type selfWrappingTransport struct{}
+
+func (s *selfWrappingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, nil
+}
+func (s *selfWrappingTransport) unwrap() http.RoundTripper { return s }
+
+func TestHTTPTransportOfBoundsWrapperChain(t *testing.T) {
+	// a wrapper that returns itself must terminate rather than spin
+	_, err := httpTransportOf(&selfWrappingTransport{})
+	assertErrorIs(t, ErrNotHttpTransportType, err)
+
+	// a plain non-wrapper round tripper is also an error
+	_, err = httpTransportOf(http.NewFileTransport(http.Dir(".")))
+	assertErrorIs(t, ErrNotHttpTransportType, err)
+
+	_, err = httpTransportOf(nil)
+	assertErrorIs(t, ErrNotHttpTransportType, err)
 }
