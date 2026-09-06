@@ -724,3 +724,15 @@ func TestIsZlibWrapped(t *testing.T) {
 		})
 	}
 }
+
+// A header that passes the zlib sniff but that zlib.NewReader rejects (FDICT set,
+// so the stream needs a preset dictionary) must surface as an error rather than
+// an empty body.
+func TestDecompressDeflateZlibHeaderError(t *testing.T) {
+	// 0x78 0x20: CM=deflate, FDICT set, and (0x7820 % 31) == 0
+	body := []byte{0x78, 0x20, 0x00, 0x00, 0x00, 0x00}
+	assertEqual(t, true, isZlibWrapped(bufio.NewReader(bytes.NewReader(body))))
+
+	_, err := decompressDeflate(io.NopCloser(bytes.NewReader(body)))
+	assertNotNil(t, err)
+}

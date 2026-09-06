@@ -147,6 +147,13 @@ type (
 		TLSClientConfig() *tls.Config
 		SetTLSClientConfig(*tls.Config) error
 	}
+
+	// transportWrapper is implemented by the transports Resty layers over the
+	// client's own, so settings that need the underlying [http.Transport] can
+	// still reach it. See [httpTransportOf].
+	transportWrapper interface {
+		unwrap() http.RoundTripper
+	}
 )
 
 // TransportSettings struct is used to define custom dialer and transport
@@ -1765,10 +1772,10 @@ func (c *Client) SetTLSClientConfig(tlsConfig *tls.Config) *Client {
 		return c
 	}
 
-	// default standard transport handling
-	transport, ok := c.httpClient.Transport.(*http.Transport)
-	if !ok {
-		c.log.Errorf("SetTLSClientConfig: %v", ErrNotHttpTransportType)
+	// default standard transport handling, reached through any Resty wrapper
+	transport, err := httpTransportOf(c.httpClient.Transport)
+	if err != nil {
+		c.log.Errorf("SetTLSClientConfig: %v", err)
 		return c
 	}
 	transport.TLSClientConfig = tlsConfig
@@ -2132,8 +2139,27 @@ func (c *Client) SetResponseSaveToFile(save bool) *Client {
 func (c *Client) HTTPTransport() (*http.Transport, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
-		return transport, nil
+	return httpTransportOf(c.httpClient.Transport)
+}
+
+// maxTransportUnwrap bounds the wrapper chain httpTransportOf will walk, so a
+// custom [http.RoundTripper] that returns itself cannot spin forever.
+const maxTransportUnwrap = 8
+
+// httpTransportOf reaches the [http.Transport] underneath Resty's own transport
+// wrappers. [Client.SetDigestAuth] and [Client.SetHedging] replace the client
+// transport with a wrapper; without unwrapping here, every TLS, certificate and
+// proxy setter called afterwards would silently do nothing.
+func httpTransportOf(rt http.RoundTripper) (*http.Transport, error) {
+	for i := 0; rt != nil && i < maxTransportUnwrap; i++ {
+		if transport, ok := rt.(*http.Transport); ok {
+			return transport, nil
+		}
+		w, ok := rt.(transportWrapper)
+		if !ok {
+			break
+		}
+		rt = w.unwrap()
 	}
 	return nil, ErrNotHttpTransportType
 }
@@ -2738,9 +2764,9 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 		return tc.TLSClientConfig(), nil
 	}
 
-	transport, ok := c.httpClient.Transport.(*http.Transport)
-	if !ok {
-		return nil, ErrNotHttpTransportType
+	transport, err := httpTransportOf(c.httpClient.Transport)
+	if err != nil {
+		return nil, err
 	}
 
 	if transport.TLSClientConfig == nil {

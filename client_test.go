@@ -237,7 +237,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		assertEqual(t, "Bearer secret", cur.Header.Get("Authorization"))
 		assertEqual(t, "my-api-key", cur.Header.Get("X-Api-Key"))
@@ -259,7 +259,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-My-Secret", "secret-value")
 		cur.Header.Set("X-Safe-Header", "safe")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Sensitive headers must be stripped
 		assertEqual(t, "", cur.Header.Get("X-Api-Key"))
@@ -283,7 +283,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-Corp-Access-Token", "Bearer CORP_SECRET_123")
 		cur.Header.Set("Content-Type", "application/json")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Custom auth header must be stripped (contains "token")
 		assertEqual(t, "", cur.Header.Get("X-Corp-Access-Token"))
@@ -297,7 +297,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Same host (case insensitive) → headers copied, not stripped
 		assertEqual(t, "key", cur.Header.Get("X-Api-Key"))
@@ -1913,4 +1913,59 @@ func TestClientMultiValueSetters(t *testing.T) {
 
 	c.SetFormDataFromValues(url.Values{"criteria": {"book", "glass"}})
 	assertEqual(t, 2, len(c.FormData()["criteria"]))
+}
+
+// SetDigestAuth and SetHedging replace the client transport with a wrapper.
+// Every TLS, certificate and proxy setter called afterwards used to log an error
+// and silently do nothing, so an application that believed it had pinned a CA or
+// required TLS 1.3 got neither.
+func TestTransportSettersReachThroughWrappers(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		wrap func(*Client)
+	}{
+		{"no wrapper", func(c *Client) {}},
+		{"digest transport", func(c *Client) { c.SetDigestAuth("u", "p") }},
+		{"hedging transport", func(c *Client) { c.SetHedging(NewHedging()) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := dcnl()
+			defer c.Close()
+			tc.wrap(c)
+
+			c.SetTLSClientConfig(&tls.Config{MinVersion: tls.VersionTLS13})
+			c.SetProxy("http://127.0.0.1:9999")
+
+			transport, err := c.HTTPTransport()
+			assertNil(t, err)
+			assertNotNil(t, transport.TLSClientConfig)
+			assertEqual(t, uint16(tls.VersionTLS13), transport.TLSClientConfig.MinVersion)
+			assertNotNil(t, transport.Proxy)
+			assertEqual(t, "http://127.0.0.1:9999", c.ProxyURL().String())
+
+			cfg, err := c.tlsConfig()
+			assertNil(t, err)
+			assertEqual(t, uint16(tls.VersionTLS13), cfg.MinVersion)
+		})
+	}
+}
+
+type selfWrappingTransport struct{}
+
+func (s *selfWrappingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, nil
+}
+func (s *selfWrappingTransport) unwrap() http.RoundTripper { return s }
+
+func TestHTTPTransportOfBoundsWrapperChain(t *testing.T) {
+	// a wrapper that returns itself must terminate rather than spin
+	_, err := httpTransportOf(&selfWrappingTransport{})
+	assertErrorIs(t, ErrNotHttpTransportType, err)
+
+	// a plain non-wrapper round tripper is also an error
+	_, err = httpTransportOf(http.NewFileTransport(http.Dir(".")))
+	assertErrorIs(t, ErrNotHttpTransportType, err)
+
+	_, err = httpTransportOf(nil)
+	assertErrorIs(t, ErrNotHttpTransportType, err)
 }
