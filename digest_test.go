@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"crypto/md5"
 	"errors"
 	"io"
 	"net/http"
@@ -425,4 +426,99 @@ func TestClientDigestAuthQopListWithSpaces(t *testing.T) {
 	res, err := c.R().SetResult(&AuthSuccess{}).Get(conf.uri)
 	assertNil(t, err)
 	assertEqual(t, http.StatusOK, res.StatusCode())
+}
+
+// digestTransport runs on every redirect hop, so a redirect to a host the caller
+// never addressed used to be answered with the configured credentials: the
+// username in cleartext plus a digest over a realm and nonce that host chose.
+// Compare curl CVE-2022-27774.
+func TestDigestDoesNotAuthenticateToRedirectTarget(t *testing.T) {
+	var attackerGotAuth string
+	var attackerHits int
+	attacker := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		attackerHits++
+		attackerGotAuth = r.Header.Get("Authorization")
+		w.Header().Set("WWW-Authenticate",
+			`Digest realm="attacker-realm", nonce="attacker-nonce", qop="auth"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	defer attacker.Close()
+
+	origin := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, attacker.URL+"/x", http.StatusFound)
+	})
+	defer origin.Close()
+
+	c := dcnl().SetDigestAuth("victim-user", "victim-pass")
+	defer c.Close()
+
+	res, err := c.R().Get(origin.URL + "/start")
+	assertError(t, err)
+
+	// the attacker sees the unauthenticated probe only, and gets no credentials
+	assertEqual(t, 1, attackerHits)
+	assertEqual(t, "", attackerGotAuth)
+	assertEqual(t, http.StatusUnauthorized, res.StatusCode())
+}
+
+// A same-origin challenge must still be answered.
+func TestDigestAuthenticatesOnSameOriginRedirect(t *testing.T) {
+	var authed bool
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/start" {
+			http.Redirect(w, r, "/protected", http.StatusFound)
+			return
+		}
+		if r.Header.Get("Authorization") == "" {
+			w.Header().Set("WWW-Authenticate",
+				`Digest realm="test", nonce="abc", qop="auth"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		authed = true
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetDigestAuth("user", "pass")
+	defer c.Close()
+
+	res, err := c.R().Get(ts.URL + "/start")
+	assertError(t, err)
+	assertEqual(t, true, authed)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+}
+
+func TestOriginatingURL(t *testing.T) {
+	first := mustReq(t, http.MethodGet, "https://origin.example/start")
+	second := mustReq(t, http.MethodGet, "https://evil.example/x")
+	second.Response = &http.Response{Request: first}
+
+	assertEqual(t, "https://origin.example/start", originatingURL(second).String())
+	assertEqual(t, "https://origin.example/start", originatingURL(first).String())
+}
+
+// An unsupported algorithm combined with qop=auth-int reached newHashFunc before
+// the algorithm was validated, and the nil map entry panicked.
+func TestDigestUnsupportedAlgorithmWithAuthInt(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("WWW-Authenticate",
+			`Digest realm="test", nonce="abc123", qop="auth-int", algorithm=NOT-A-HASH`)
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetDigestAuth("user", "pass")
+	defer c.Close()
+
+	_, err := c.R().SetBody(`{"a":1}`).Post(ts.URL)
+	assertErrorIs(t, ErrDigestAlgNotSupported, err)
+}
+
+// Callers validate the algorithm against digestHashFuncs before reaching
+// newHashFunc, so an unknown one must fall back rather than call a nil func.
+func TestDigestNewHashFuncUnsupportedAlgorithm(t *testing.T) {
+	h := newHashFunc("SHA-1")
+	assertNotNil(t, h)
+	assertEqual(t, md5.Size, h.Size(), "expected the RFC 7616 default hash")
 }

@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -218,7 +219,7 @@ func TestClientRetryDelayStrategyFuncError(t *testing.T) {
 	retryWaitTime := 50 * time.Millisecond
 	retryMaxWaitTime := 150 * time.Millisecond
 
-	retryDelayStrategyFunc := func(res *Response, err error) (time.Duration, error) {
+	retryDelayStrategyFunc := func(_ *Request, res *Response, _ int, err error) (time.Duration, error) {
 		return 0, errors.New("quota exceeded")
 	}
 
@@ -1100,7 +1101,7 @@ func TestRetryConstantDelayStrategyReturnsGivenDelay(t *testing.T) {
 	d := 250 * time.Millisecond
 	strat := RetryConstantDelayStrategy(d)
 
-	got, err := strat(nil, nil)
+	got, err := strat(nil, nil, 0, nil)
 	assertNil(t, err)
 	assertEqual(t, d, got)
 }
@@ -1108,14 +1109,14 @@ func TestRetryConstantDelayStrategyReturnsGivenDelay(t *testing.T) {
 func TestRetryConstantDelayStrategyZeroAndNegative(t *testing.T) {
 	// zero duration
 	strategyZero := RetryConstantDelayStrategy(0)
-	d, err := strategyZero(nil, nil)
+	d, err := strategyZero(nil, nil, 0, nil)
 	assertNil(t, err)
 	assertEqual(t, time.Duration(0), d)
 
 	// negative duration (function should faithfully return what was provided)
 	neg := -5 * time.Second
 	strategyNeg := RetryConstantDelayStrategy(neg)
-	d, err = strategyNeg(nil, nil)
+	d, err = strategyNeg(nil, nil, 0, nil)
 	assertNil(t, err)
 	assertEqual(t, neg, d)
 }
@@ -1267,4 +1268,51 @@ func testStaticTime(t *testing.T) {
 	t.Cleanup(func() {
 		timeNow = time.Now
 	})
+}
+
+// RetryDelayStrategyFunc now receives the request and the attempt number
+// directly, so a strategy can back off without reaching through res.Request --
+// which is what it had to do before, and which is unavailable when there is no
+// response at all (the SSE reconnect path passes none).
+func TestRetryDelayStrategyReceivesRequestAndAttempt(t *testing.T) {
+	var mu sync.Mutex
+	var attempts []int
+	var sawTransportError bool
+
+	c := dcnl().SetRetryCount(2).
+		SetRetryWaitTime(time.Millisecond).
+		SetRetryMaxWaitTime(2 * time.Millisecond)
+	defer c.Close()
+
+	_, err := c.R().
+		AddRetryConditions(func(_ *Response, err error) bool { return err != nil }).
+		SetRetryDelayStrategy(func(req *Request, res *Response, attempt int, err error) (time.Duration, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			assertNotNil(t, req)
+			if res == nil || res.RawResponse == nil {
+				sawTransportError = true
+			}
+			attempts = append(attempts, attempt)
+			return time.Millisecond, nil
+		}).
+		Get("http://127.0.0.1:1/never-listening")
+
+	assertNotNil(t, err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertEqual(t, true, sawTransportError)
+	assertEqual(t, 2, len(attempts))
+	assertEqual(t, 1, attempts[0])
+	assertEqual(t, 2, attempts[1])
+}
+
+// With no response and no request, the strategy cannot be reached, so the
+// default backoff applies. This is the shape the SSE reconnect path uses.
+func TestNextWaitDurationFallsBackWithoutRequest(t *testing.T) {
+	b := newBackoffWithJitter(10*time.Millisecond, 20*time.Millisecond)
+	d, err := b.NextWaitDuration(nil, nil, nil, nil, 0)
+	assertNil(t, err)
+	assertEqual(t, true, d > 0)
 }
