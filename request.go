@@ -173,10 +173,7 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 	if ctx == nil {
 		panic("resty: Request.WithContext nil context")
 	}
-	rr := new(Request)
-	*rr = *r
-	rr.ctx = ctx
-	return rr
+	return r.Clone(ctx)
 }
 
 // SetContentType method is a convenient way to set the header Content-Type in the request
@@ -1573,7 +1570,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			// let's drain the response body, before retry wait
 			drainBody(res)
 
-			waitDuration, waitErr := backoff.NextWaitDuration(r.client, res, err, r.Attempt)
+			waitDuration, waitErr := backoff.NextWaitDuration(r.client, r, res, err, r.Attempt)
 			if waitErr != nil {
 				// if any error in retry strategy, stop here
 				err = wrapErrors(waitErr, err)

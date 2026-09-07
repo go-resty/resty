@@ -48,23 +48,35 @@ type (
 		ApplyPolicies(*Response)
 	}
 
-	// CircuitBreakerObserver is an interface for observing circuit breaker events via hooks.
-	// It provides methods to register hooks for trigger and state change events, and to
-	// execute those hooks.
+	// circuitBreakerHookRunner is the dispatch side of [CircuitBreakerObserver].
+	// It stays unexported so a third-party CircuitBreaker is not required to
+	// implement Resty's internal hook plumbing to satisfy the public interface.
+	circuitBreakerHookRunner interface {
+		runOnTriggerHooks(*Request, error)
+		runOnStateChangeHooks(oldState, newState CircuitBreakerState)
+	}
+
+	// CircuitBreakerObserver is a [CircuitBreaker] that also reports its events
+	// via hooks. It embeds [CircuitBreaker] so a breaker with hooks attached can
+	// be passed straight to [Client.SetCircuitBreaker]:
+	//
+	//	client.SetCircuitBreaker(
+	//		resty.NewCircuitBreakerCount(3, 1, time.Second).
+	//			OnTrigger(func(req *resty.Request, err error) { ... }),
+	//	)
 	CircuitBreakerObserver interface {
+		CircuitBreaker
+
 		// OnTrigger registers one or more [CircuitBreakerTriggerHook] functions that are invoked
 		// each time the circuit breaker rejects a request in the open state.
 		OnTrigger(...CircuitBreakerTriggerHook) CircuitBreakerObserver
-
-		// RunOnTriggerHooks executes all registered trigger hooks with the given request and error.
-		RunOnTriggerHooks(*Request, error)
 
 		// OnStateChange registers one or more [CircuitBreakerStateChangeHook] functions that are
 		// invoked whenever the circuit breaker transitions between states.
 		OnStateChange(...CircuitBreakerStateChangeHook) CircuitBreakerObserver
 
-		// RunOnStateChangeHooks executes all registered state change hooks with the given old and new states.
-		RunOnStateChangeHooks(oldState, newState CircuitBreakerState)
+		// State reports the breaker's current state.
+		State() CircuitBreakerState
 	}
 
 	// CircuitBreakerTriggerHook is called each time the circuit breaker blocks a
@@ -117,6 +129,20 @@ func (cb *CircuitBreakerCount) ApplyPolicies(resp *Response) {
 	cb.applyPolicies(resp, cb)
 }
 
+// OnTrigger registers one or more [CircuitBreakerTriggerHook] functions that are
+// invoked each time the circuit breaker rejects a request in the open state.
+func (cb *CircuitBreakerCount) OnTrigger(hooks ...CircuitBreakerTriggerHook) CircuitBreakerObserver {
+	cb.addTriggerHooks(hooks...)
+	return cb
+}
+
+// OnStateChange registers one or more [CircuitBreakerStateChangeHook] functions
+// that are invoked whenever the circuit breaker transitions between states.
+func (cb *CircuitBreakerCount) OnStateChange(hooks ...CircuitBreakerStateChangeHook) CircuitBreakerObserver {
+	cb.addStateChangeHooks(hooks...)
+	return cb
+}
+
 var _ CircuitBreakerObserver = (*CircuitBreakerRatio)(nil)
 var _ CircuitBreaker = (*CircuitBreakerRatio)(nil)
 
@@ -151,6 +177,20 @@ func (cb *CircuitBreakerRatio) halfOpenSuccessThreshold() uint64 {
 // counts and manages state transitions accordingly.
 func (cb *CircuitBreakerRatio) ApplyPolicies(resp *Response) {
 	cb.applyPolicies(resp, cb)
+}
+
+// OnTrigger registers one or more [CircuitBreakerTriggerHook] functions that are
+// invoked each time the circuit breaker rejects a request in the open state.
+func (cb *CircuitBreakerRatio) OnTrigger(hooks ...CircuitBreakerTriggerHook) CircuitBreakerObserver {
+	cb.addTriggerHooks(hooks...)
+	return cb
+}
+
+// OnStateChange registers one or more [CircuitBreakerStateChangeHook] functions
+// that are invoked whenever the circuit breaker transitions between states.
+func (cb *CircuitBreakerRatio) OnStateChange(hooks ...CircuitBreakerStateChangeHook) CircuitBreakerObserver {
+	cb.addStateChangeHooks(hooks...)
+	return cb
 }
 
 // group is an interface for types that can be combined and inverted
@@ -379,17 +419,16 @@ func (cb *circuitBreakerBase) applyPolicies(resp *Response, mode circuitBreakerM
 	}
 }
 
-// OnTrigger registers one or more [CircuitBreakerTriggerHook] functions that are invoked
-// each time the circuit breaker rejects a request in the open state.
-func (cb *circuitBreakerBase) OnTrigger(hooks ...CircuitBreakerTriggerHook) CircuitBreakerObserver {
+// addTriggerHooks stores trigger hooks. The chaining OnTrigger lives on each
+// concrete breaker, since only those satisfy [CircuitBreakerObserver].
+func (cb *circuitBreakerBase) addTriggerHooks(hooks ...CircuitBreakerTriggerHook) {
 	cb.lock.Lock()
 	defer cb.lock.Unlock()
 	cb.triggerHooks = append(cb.triggerHooks, hooks...)
-	return cb
 }
 
-// RunOnTriggerHooks method executes all registered trigger hooks with the given request and error.
-func (cb *circuitBreakerBase) RunOnTriggerHooks(req *Request, err error) {
+// runOnTriggerHooks method executes all registered trigger hooks with the given request and error.
+func (cb *circuitBreakerBase) runOnTriggerHooks(req *Request, err error) {
 	cb.lock.RLock()
 	defer cb.lock.RUnlock()
 	for _, h := range cb.triggerHooks {
@@ -397,17 +436,17 @@ func (cb *circuitBreakerBase) RunOnTriggerHooks(req *Request, err error) {
 	}
 }
 
-// OnStateChange registers one or more [CircuitBreakerStateChangeHook] functions that are
-// invoked whenever the circuit breaker transitions between states.
-func (cb *circuitBreakerBase) OnStateChange(hooks ...CircuitBreakerStateChangeHook) CircuitBreakerObserver {
+// addStateChangeHooks stores state-change hooks. The chaining OnStateChange
+// lives on each concrete breaker, since only those satisfy
+// [CircuitBreakerObserver].
+func (cb *circuitBreakerBase) addStateChangeHooks(hooks ...CircuitBreakerStateChangeHook) {
 	cb.lock.Lock()
 	defer cb.lock.Unlock()
 	cb.stateChangeHooks = append(cb.stateChangeHooks, hooks...)
-	return cb
 }
 
-// RunOnStateChangeHooks method executes all registered state change hooks with the given old and new states.
-func (cb *circuitBreakerBase) RunOnStateChangeHooks(oldState, newState CircuitBreakerState) {
+// runOnStateChangeHooks method executes all registered state change hooks with the given old and new states.
+func (cb *circuitBreakerBase) runOnStateChangeHooks(oldState, newState CircuitBreakerState) {
 	cb.lock.RLock()
 	defer cb.lock.RUnlock()
 	for _, h := range cb.stateChangeHooks {
@@ -425,6 +464,11 @@ type CircuitBreakerPolicy func(resp *Response) bool
 // response as a failure when the HTTP status code is greater than or equal to 500.
 func CircuitBreaker5xxPolicy(resp *Response) bool {
 	return resp.StatusCode() > 499
+}
+
+// State method returns the circuit breaker's current state.
+func (cb *circuitBreakerBase) State() CircuitBreakerState {
+	return cb.getState()
 }
 
 func (cb *circuitBreakerBase) getState() CircuitBreakerState {
@@ -472,7 +516,7 @@ func (cb *circuitBreakerBase) changeState(state CircuitBreakerState) {
 	cb.halfOpenProbeInFlight.Store(0)
 	cb.sw.Store(newSlidingWindow[totalAndFailures](cb.resetTimeout, 10))
 	if oldState != state {
-		cb.RunOnStateChangeHooks(oldState, state)
+		cb.runOnStateChangeHooks(oldState, state)
 	}
 }
 
