@@ -173,10 +173,7 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 	if ctx == nil {
 		panic("resty: Request.WithContext nil context")
 	}
-	rr := new(Request)
-	*rr = *r
-	rr.ctx = ctx
-	return rr
+	return r.Clone(ctx)
 }
 
 // SetContentType method is a convenient way to set the header Content-Type in the request
@@ -1314,6 +1311,10 @@ func (r *Request) SetLabel(label string) *Request {
 // TraceInfo method returns trace information for the request.
 // If either [Client.SetTrace] or [Request.SetTrace] has not been enabled
 // before the request is made, an empty [resty.TraceInfo] object is returned.
+//
+// NOTE: Call this after the request completes. A [Request] is not safe for
+// concurrent use, so calling TraceInfo while the same request is in flight races
+// on the attempt counter and the trace instance itself.
 func (r *Request) TraceInfo() TraceInfo {
 	ct := r.trace
 
@@ -1573,7 +1574,7 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			// let's drain the response body, before retry wait
 			drainBody(res)
 
-			waitDuration, waitErr := backoff.NextWaitDuration(r.client, res, err, r.Attempt)
+			waitDuration, waitErr := backoff.NextWaitDuration(r.client, r, res, err, r.Attempt)
 			if waitErr != nil {
 				// if any error in retry strategy, stop here
 				err = wrapErrors(waitErr, err)
@@ -1883,6 +1884,11 @@ func (r *Request) sendLoadBalancerFeedback(res *Response, err error) {
 
 func (r *Request) resetFileReaders() error {
 	for _, f := range r.multipartFields {
+		// Value-only fields carry no reader to rewind; the multipart producer
+		// writes them from [MultipartField.Values] on every attempt.
+		if f.isValues() {
+			continue
+		}
 		if err := f.resetReader(); err != nil {
 			return err
 		}

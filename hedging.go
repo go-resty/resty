@@ -95,6 +95,14 @@ type Hedging struct {
 	isNonReadOnlyAllowed bool
 }
 
+// unwrap implements [transportWrapper] so Resty's TLS, certificate and proxy
+// setters still reach the real transport after [Client.SetHedging].
+func (h *Hedging) unwrap() http.RoundTripper {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	return h.underlying
+}
+
 // SetTransport sets the underlying HTTP transport that [Hedging] delegates
 // individual requests to.
 func (h *Hedging) SetTransport(t http.RoundTripper) {
@@ -210,6 +218,14 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 		return underlying.RoundTrip(req)
 	}
 
+	// http.Request.Clone does not copy the body, so every attempt would read the
+	// same io.ReadCloser and the first to finish would close it. Attempts need
+	// their own copy, which only GetBody can supply; without it, send once.
+	hasBody := req.Body != nil && req.Body != http.NoBody
+	if hasBody && req.GetBody == nil {
+		return underlying.RoundTrip(req)
+	}
+
 	reqCtx := req.Context()
 
 	type result struct {
@@ -289,7 +305,20 @@ spawn:
 		mu.Unlock()
 
 		go func(i int, attemptCancel context.CancelFunc) {
-			resp, err := underlying.RoundTrip(req.Clone(attemptCtx))
+			attemptReq := req.Clone(attemptCtx)
+			if hasBody {
+				body, err := req.GetBody()
+				if err != nil {
+					if decide(i) {
+						resultCh <- result{nil, err}
+					}
+					attemptCancel()
+					return
+				}
+				attemptReq.Body = body
+			}
+
+			resp, err := underlying.RoundTrip(attemptReq)
 
 			if !decide(i) {
 				attemptCancel()

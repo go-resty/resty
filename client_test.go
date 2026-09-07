@@ -95,7 +95,7 @@ func TestClientResponseMiddleware(t *testing.T) {
 	defer ts.Close()
 
 	c := dcnl()
-	c.AddResponseMiddleware(func(c *Client, res *Response) error {
+	c.AddResponseMiddlewares(func(c *Client, res *Response) error {
 		t.Logf("Request sent at: %v", res.Request.StartTime)
 		t.Logf("Response Received at: %v", res.ReceivedAt())
 
@@ -237,7 +237,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		assertEqual(t, "Bearer secret", cur.Header.Get("Authorization"))
 		assertEqual(t, "my-api-key", cur.Header.Get("X-Api-Key"))
@@ -259,7 +259,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-My-Secret", "secret-value")
 		cur.Header.Set("X-Safe-Header", "safe")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Sensitive headers must be stripped
 		assertEqual(t, "", cur.Header.Get("X-Api-Key"))
@@ -283,7 +283,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-Corp-Access-Token", "Bearer CORP_SECRET_123")
 		cur.Header.Set("Content-Type", "application/json")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Custom auth header must be stripped (contains "token")
 		assertEqual(t, "", cur.Header.Get("X-Corp-Access-Token"))
@@ -297,7 +297,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Same host (case insensitive) → headers copied, not stripped
 		assertEqual(t, "key", cur.Header.Get("X-Api-Key"))
@@ -563,7 +563,7 @@ func TestClientSetClientRootCertificateWatcher(t *testing.T) {
 	t.Run("Cert exists", func(t *testing.T) {
 		client := dcnl()
 		client.SetClientRootCertificatesWatcher(
-			&CertWatcherOptions{PoolInterval: time.Second * 1},
+			&CertWatcherOptions{PollInterval: time.Second * 1},
 			filepath.Join(getTestDataPath(), "sample-root.pem"),
 		)
 
@@ -599,7 +599,7 @@ func TestClientSetClientRootCertificateFromString(t *testing.T) {
 
 func TestClientRequestMiddlewareModification(t *testing.T) {
 	tc := dcnl()
-	tc.AddRequestMiddleware(func(c *Client, r *Request) error {
+	tc.AddRequestMiddlewares(func(c *Client, r *Request) error {
 		r.SetAuthToken("This is test auth token")
 		return nil
 	})
@@ -761,7 +761,7 @@ func TestClientSettingsCoverage(t *testing.T) {
 	ct.SetTransport(&CustomRoundTripper1{})
 	_, err := ct.HTTPTransport()
 	assertNotNil(t, err)
-	assertEqual(t, ErrNotHttpTransportType, err)
+	assertEqual(t, ErrNotHTTPTransportType, err)
 
 	ct.SetProxy("http://localhost:8080")
 	ct.RemoveProxy()
@@ -964,7 +964,7 @@ func TestClientRoundTripper(t *testing.T) {
 	ct, err := c.HTTPTransport()
 	assertNotNil(t, err)
 	assertNil(t, ct)
-	assertEqual(t, ErrNotHttpTransportType, err)
+	assertEqual(t, ErrNotHTTPTransportType, err)
 }
 
 func TestClientNewRequest(t *testing.T) {
@@ -1075,17 +1075,17 @@ func TestLzwCompress(t *testing.T) {
 	// Not found scenario
 	_, err := c.R().Get(ts.URL + "/lzw-test")
 	assertNotNil(t, err)
-	assertEqual(t, ErrContentDecompresserNotFound, err)
+	assertEqual(t, ErrContentDecompressorNotFound, err)
 
 	// Register LZW content decoder
-	c.AddContentDecompresser("ComPreSs", func(r io.ReadCloser) (io.ReadCloser, error) {
+	c.AddContentDecompressor("ComPreSs", func(r io.ReadCloser) (io.ReadCloser, error) {
 		l := &lzwReader{
 			s: r,
 			r: lzw.NewReader(r, lzw.LSB, 8),
 		}
 		return l, nil
 	})
-	c.SetContentDecompresserKeys([]string{"compress"})
+	c.SetContentDecompressorKeys([]string{"compress"})
 
 	testcases := []struct{ url, want string }{
 		{ts.URL + "/lzw-test", "This is LZW response testing"},
@@ -1269,7 +1269,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "before_request_failure",
 			setup: func(client *Client) {
-				client.AddRequestMiddleware(func(client *Client, request *Request) error {
+				client.AddRequestMiddlewares(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
 				})
 			},
@@ -1278,7 +1278,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "before_request_failure_retry",
 			setup: func(client *Client) {
-				client.SetRetryCount(3).AddRequestMiddleware(func(client *Client, request *Request) error {
+				client.SetRetryCount(3).AddRequestMiddlewares(func(client *Client, request *Request) error {
 					return fmt.Errorf("before request")
 				})
 			},
@@ -1287,7 +1287,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "after_response_failure",
 			setup: func(client *Client) {
-				client.AddResponseMiddleware(func(client *Client, response *Response) error {
+				client.AddResponseMiddlewares(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
 				})
 			},
@@ -1297,7 +1297,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "after_response_failure_retry",
 			setup: func(client *Client) {
-				client.SetRetryCount(3).AddResponseMiddleware(func(client *Client, response *Response) error {
+				client.SetRetryCount(3).AddResponseMiddlewares(func(client *Client, response *Response) error {
 					return fmt.Errorf("after response")
 				})
 			},
@@ -1307,7 +1307,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "panic with error",
 			setup: func(client *Client) {
-				client.AddRequestMiddleware(func(client *Client, request *Request) error {
+				client.AddRequestMiddlewares(func(client *Client, request *Request) error {
 					panic(fmt.Errorf("before request"))
 				})
 			},
@@ -1318,7 +1318,7 @@ func TestClientOnResponseFailure(t *testing.T) {
 		{
 			name: "panic with string",
 			setup: func(client *Client) {
-				client.AddRequestMiddleware(func(client *Client, request *Request) error {
+				client.AddRequestMiddlewares(func(client *Client, request *Request) error {
 					panic("before request")
 				})
 			},
@@ -1793,4 +1793,371 @@ func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	c.SetHedging(nil)
 	assertEqual(t, false, c.isHedgingEnabled())
 	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
+}
+
+// Client.Header, QueryParams, FormData, PathParams and Cookies used to return the
+// live maps and slices, so request middleware iterated them after the read lock
+// had been released. Mutating the client concurrently was then a data race that
+// could escalate to an uncatchable "concurrent map read and map write".
+func TestClientAccessorsReturnSnapshots(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	c.SetHeader("X-Snap", "one")
+	c.SetQueryParam("q", "one")
+	c.SetFormData(map[string]string{"f": "one"})
+	c.SetPathParam("p", "one")
+	c.SetCookie(&http.Cookie{Name: "c", Value: "one"})
+
+	// mutating what the accessors hand back must not reach the client
+	c.Header().Set("X-Snap", "mutated")
+	c.Header().Set("X-Added", "nope")
+	c.QueryParams().Set("q", "mutated")
+	c.FormData().Set("f", "mutated")
+	c.PathParams()["p"] = "mutated"
+	cookies := c.Cookies()
+	cookies = append(cookies, &http.Cookie{Name: "extra", Value: "nope"})
+	_ = cookies
+
+	assertEqual(t, "one", c.Header().Get("X-Snap"))
+	assertEqual(t, "", c.Header().Get("X-Added"))
+	assertEqual(t, "one", c.QueryParams().Get("q"))
+	assertEqual(t, "one", c.FormData().Get("f"))
+	assertEqual(t, "one", c.PathParams()["p"])
+	assertEqual(t, 1, len(c.Cookies()))
+
+	// the slice-returning accessors are snapshots too
+	assertEqual(t, 0, len(c.RetryConditions()))
+	c.AddRetryConditions(func(_ *Response, _ error) bool { return false })
+	rc := c.RetryConditions()
+	assertEqual(t, 1, len(rc))
+	rc = append(rc, func(_ *Response, _ error) bool { return true })
+	assertEqual(t, 2, len(rc))
+	assertEqual(t, 1, len(c.RetryConditions()))
+
+	assertEqual(t, 0, len(c.RetryHooks()))
+	c.AddRetryHooks(func(_ *Response, _ error) {})
+	assertEqual(t, 1, len(c.RetryHooks()))
+
+	decompressors := c.ContentDecompressors()
+	decompressors["bogus"] = nil
+	_, found := c.ContentDecompressors()["bogus"]
+	assertEqual(t, false, found)
+}
+
+// Mutating a client while requests are in flight is documented as safe. It used
+// to race against the middleware that merges client values into each request.
+func TestClientMutationDuringRequestsIsRaceFree(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl().SetBaseURL(ts.URL)
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	wg.Add(1)
+	go func() { // e.g. a token-refresh goroutine
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			c.SetHeader("Authorization", fmt.Sprintf("Bearer %d", i))
+			c.SetQueryParam("v", strconv.Itoa(i))
+			c.SetPathParam("p", strconv.Itoa(i))
+			c.SetFormData(map[string]string{"f": strconv.Itoa(i)})
+		}
+	}()
+
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 25; j++ {
+				res, err := c.R().Get("/")
+				if err == nil {
+					_ = res.StatusCode()
+				}
+			}
+		}()
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// Client had no multi-value setters, so Header().Add() on the live map was the
+// only way to reach them. The accessors now return snapshots, so these exist.
+func TestClientMultiValueSetters(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	c.AddHeader("X-Multi", "one").AddHeader("X-Multi", "two")
+	assertEqual(t, 2, len(c.Header()["X-Multi"]))
+
+	c.SetHeaderMultiValues(map[string][]string{
+		"Accept": {"text/html", "application/json"},
+	})
+	assertEqual(t, "text/html, application/json", c.Header().Get("Accept"))
+
+	c.AddQueryParam("status", "pending").AddQueryParam("status", "approved")
+	assertEqual(t, 2, len(c.QueryParams()["status"]))
+
+	c.SetQueryParamsFromValues(url.Values{"tag": {"a", "b", "c"}})
+	assertEqual(t, 3, len(c.QueryParams()["tag"]))
+
+	c.SetFormDataFromValues(url.Values{"criteria": {"book", "glass"}})
+	assertEqual(t, 2, len(c.FormData()["criteria"]))
+}
+
+// SetDigestAuth and SetHedging replace the client transport with a wrapper.
+// Every TLS, certificate and proxy setter called afterwards used to log an error
+// and silently do nothing, so an application that believed it had pinned a CA or
+// required TLS 1.3 got neither.
+func TestTransportSettersReachThroughWrappers(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		wrap func(*Client)
+	}{
+		{"no wrapper", func(c *Client) {}},
+		{"digest transport", func(c *Client) { c.SetDigestAuth("u", "p") }},
+		{"hedging transport", func(c *Client) { c.SetHedging(NewHedging()) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := dcnl()
+			defer c.Close()
+			tc.wrap(c)
+
+			c.SetTLSClientConfig(&tls.Config{MinVersion: tls.VersionTLS13})
+			c.SetProxy("http://127.0.0.1:9999")
+
+			transport, err := c.HTTPTransport()
+			assertNil(t, err)
+			assertNotNil(t, transport.TLSClientConfig)
+			assertEqual(t, uint16(tls.VersionTLS13), transport.TLSClientConfig.MinVersion)
+			assertNotNil(t, transport.Proxy)
+			assertEqual(t, "http://127.0.0.1:9999", c.ProxyURL().String())
+
+			cfg, err := c.tlsConfig()
+			assertNil(t, err)
+			assertEqual(t, uint16(tls.VersionTLS13), cfg.MinVersion)
+		})
+	}
+}
+
+type selfWrappingTransport struct{}
+
+func (s *selfWrappingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, nil
+}
+func (s *selfWrappingTransport) unwrap() http.RoundTripper { return s }
+
+func TestHTTPTransportOfBoundsWrapperChain(t *testing.T) {
+	// a wrapper that returns itself must terminate rather than spin
+	_, err := httpTransportOf(&selfWrappingTransport{})
+	assertErrorIs(t, ErrNotHTTPTransportType, err)
+
+	// a plain non-wrapper round tripper is also an error
+	_, err = httpTransportOf(http.NewFileTransport(http.Dir(".")))
+	assertErrorIs(t, ErrNotHTTPTransportType, err)
+
+	_, err = httpTransportOf(nil)
+	assertErrorIs(t, ErrNotHTTPTransportType, err)
+}
+
+// AddRequestMiddlewares/AddResponseMiddlewares are variadic, matching every
+// other Add* in the package, and tolerate an emptied chain.
+func TestAddMiddlewaresVariadic(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	before := len(c.requestMiddlewares())
+	c.AddRequestMiddlewares(
+		func(*Client, *Request) error { return nil },
+		func(*Client, *Request) error { return nil },
+	)
+	assertEqual(t, before+2, len(c.requestMiddlewares()))
+
+	afterBefore := len(c.responseMiddlewares())
+	c.AddResponseMiddlewares(
+		func(*Client, *Response) error { return nil },
+		func(*Client, *Response) error { return nil },
+	)
+	assertEqual(t, afterBefore+2, len(c.responseMiddlewares()))
+
+	// clearing the chain then adding must not panic on a negative index
+	c.SetRequestMiddlewares()
+	c.AddRequestMiddlewares(func(*Client, *Request) error { return nil })
+	assertEqual(t, 1, len(c.requestMiddlewares()))
+}
+
+// Request.WithContext shared Header, QueryParams, FormData and PathParams with
+// the source, so configuring the copy mutated the original.
+func TestRequestWithContextDoesNotShareState(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	r := c.R().SetHeader("X-Original", "yes").SetQueryParam("q", "one")
+	r2 := r.WithContext(context.Background())
+
+	r2.SetHeader("X-Only-On-Copy", "yes").SetQueryParam("q", "two")
+
+	assertEqual(t, "", r.Header.Get("X-Only-On-Copy"))
+	assertEqual(t, "one", r.QueryParams.Get("q"))
+	assertEqual(t, "yes", r2.Header.Get("X-Original"))
+	assertEqual(t, "two", r2.QueryParams.Get("q"))
+}
+
+// AddRequestMiddlewares inserts before the last entry, which underflowed to -1
+// once the chain had been emptied.
+func TestAddRequestMiddlewareOnEmptyChain(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	called := false
+	c := dcnl()
+	defer c.Close()
+
+	c.SetRequestMiddlewares()
+	c.AddRequestMiddlewares(func(_ *Client, r *Request) error {
+		called = true
+		return MiddlewareRequestCreate(c, r)
+	})
+
+	res, err := c.R().Get(ts.URL + "/")
+	assertNil(t, err)
+	assertTrue(t, called)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+}
+
+// Client.execute and cbRequestError read c.circuitBreaker directly while
+// SetCircuitBreaker writes it under the write lock. Run under -race.
+func TestClientCircuitBreakerConcurrentSet(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				c.SetCircuitBreaker(NewCircuitBreakerCount(100, 1, time.Minute))
+				c.SetCircuitBreaker(nil)
+			}
+		}
+	}()
+
+	for range 30 {
+		_, err := c.R().Get(ts.URL + "/")
+		assertNil(t, err)
+	}
+
+	close(stop)
+	wg.Wait()
+}
+
+// Clone shares every slice's backing array with the original after the struct
+// copy, so Add* on either side could write into the other's array.
+func TestClientCloneDoesNotShareSlices(t *testing.T) {
+	parent := dcnl()
+	defer parent.Close()
+
+	parent.AddRetryConditions(func(*Response, error) bool { return false })
+	parent.AddRetryHooks(func(*Response, error) {})
+	parent.OnError(func(*Request, error) {})
+	parent.AddContentDecompressor("br", func(r io.ReadCloser) (io.ReadCloser, error) { return r, nil })
+
+	clone := parent.Clone(context.Background())
+
+	parentConditions := len(parent.RetryConditions())
+	parentHooks := len(parent.RetryHooks())
+	parentKeys := parent.ContentDecompressorKeys()
+
+	// grow every slice on the clone
+	clone.AddRetryConditions(func(*Response, error) bool { return true })
+	clone.AddRetryHooks(func(*Response, error) {})
+	clone.AddRequestMiddlewares(func(*Client, *Request) error { return nil })
+	clone.AddResponseMiddlewares(func(*Client, *Response) error { return nil })
+	clone.AddContentDecompressor("zstd", func(r io.ReadCloser) (io.ReadCloser, error) { return r, nil })
+
+	assertEqual(t, parentConditions, len(parent.RetryConditions()))
+	assertEqual(t, parentHooks, len(parent.RetryHooks()))
+	assertEqual(t, parentKeys, parent.ContentDecompressorKeys())
+	assertEqual(t, parentConditions+1, len(clone.RetryConditions()))
+
+	// contentDecompressorKeys was copied onto itself, so the clone used to share it
+	assertTrue(t, strings.Contains(clone.ContentDecompressorKeys(), "zstd"))
+	assertTrue(t, !strings.Contains(parent.ContentDecompressorKeys(), "zstd"),
+		"parent keys leaked the clone's decompressor: "+parent.ContentDecompressorKeys())
+}
+
+// Close must release the transport's idle connections and stop the circuit
+// breaker reset timer.
+func TestClientCloseReleasesResources(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl().SetCircuitBreaker(NewCircuitBreakerCount(1, 1, time.Hour))
+
+	res, err := c.R().Get(ts.URL + "/")
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+
+	cb := c.CircuitBreaker().(*CircuitBreakerCount)
+	cb.open()
+
+	assertNil(t, c.Close())
+	assertNil(t, c.Close()) // still idempotent
+
+	cb.resetTimerMu.Lock()
+	stopped := !cb.resetTimer.Stop() // already stopped by Close
+	cb.resetTimerMu.Unlock()
+	assertTrue(t, stopped, "Close did not stop the circuit breaker reset timer")
+}
+
+// When no decompressor matches the Content-Encoding, the body is never handed to
+// the caller, so Resty has to release it. If it does not, the connection is
+// abandoned instead of returned to the keep-alive pool.
+func TestClientDecompressorNotFoundReleasesConnection(t *testing.T) {
+	var (
+		mu      sync.Mutex
+		remotes []string
+	)
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		remotes = append(remotes, r.RemoteAddr)
+		mu.Unlock()
+		w.Header().Set(hdrContentEncodingKey, "br") // no decompressor registered
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("payload the client cannot decode"))
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	for range 3 {
+		_, err := c.R().Get(ts.URL + "/")
+		assertErrorIs(t, ErrContentDecompressorNotFound, err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertEqual(t, 3, len(remotes))
+	assertEqual(t, remotes[0], remotes[1])
+	assertEqual(t, remotes[0], remotes[2])
 }

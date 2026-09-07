@@ -106,6 +106,15 @@ type clientTrace struct {
 	gotConnInfo          httptrace.GotConnInfo
 }
 
+// setEndTime records when the response was received. It takes the same lock as
+// the [httptrace.ClientTrace] hooks below, since [Request.TraceInfo] can be
+// called from another goroutine.
+func (t *clientTrace) setEndTime(at time.Time) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.endTime = at
+}
+
 func (t *clientTrace) createContext(ctx context.Context) context.Context {
 	return httptrace.WithClientTrace(
 		ctx,

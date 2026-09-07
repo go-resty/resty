@@ -8,8 +8,9 @@ package resty
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -60,7 +61,7 @@ func RedirectFlexiblePolicy(noOfRedirect int) RedirectPolicy {
 		if len(via) >= noOfRedirect {
 			return fmt.Errorf("resty: stopped after %d redirects", noOfRedirect)
 		}
-		checkHostAndAddHeaders(req, via[0])
+		checkHostAndAddHeaders(req, via)
 		return nil
 	})
 }
@@ -79,7 +80,7 @@ func RedirectDomainCheckPolicy(hostnames ...string) RedirectPolicy {
 		if ok := hosts[strings.ToLower(req.URL.Host)]; !ok {
 			return errors.New("resty: redirect is not allowed as per DomainCheckRedirectPolicy")
 		}
-		checkHostAndAddHeaders(req, via[0])
+		checkHostAndAddHeaders(req, via)
 		return nil
 	})
 }
@@ -123,29 +124,89 @@ func RedirectHeaderStripSensitivePolicy(applyDefault bool, headers ...string) Re
 	})
 }
 
+// redirectBodyHeaders describe the enclosed representation. RFC 9110 section 8.3
+// ties them to a request body, and net/http deliberately withholds them when a
+// 301, 302 or 303 turns a request with a body into a body-less GET, so they must
+// not be restored on a method change either.
+var redirectBodyHeaders = []string{
+	"Content-Type",
+	"Content-Encoding",
+	"Content-Language",
+	"Content-Location",
+}
+
+// sameOrigin reports whether two URLs share a scheme and a host. Host alone is
+// not enough: the default port is elided, so an https to http downgrade of the
+// same hostname compares equal on Host and would look like a same-origin hop.
+func sameOrigin(a, b *url.URL) bool {
+	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
+}
+
+// leftOrigin reports whether any hop so far targeted an origin other than the
+// one the chain started at.
+func leftOrigin(via []*http.Request) bool {
+	for _, r := range via[1:] {
+		if !sameOrigin(r.URL, via[0].URL) {
+			return true
+		}
+	}
+	return false
+}
+
 // By default, Golang will not redirect request headers.
 // After reading through the various discussion comments from the thread -
 // https://github.com/golang/go/issues/4800
 // Resty will add all the headers during a redirect for the same host and
 // adds library user-agent if the Host is different.
 //
-// For cross-domain redirects, sensitive headers (matching [isSanitizeHeader])
+// For cross-origin redirects, sensitive headers (matching [isSanitizeHeader])
 // are stripped from the redirected request. Go's net/http only strips standard
 // headers such as Authorization and Cookie; custom authentication headers
 // (e.g. those set via [Client.SetHeaderAuthorizationKey]) are forwarded
 // verbatim unless explicitly removed. See https://github.com/go-resty/resty/issues/1128.
-func checkHostAndAddHeaders(cur *http.Request, pre *http.Request) {
-	curHostname := strings.ToLower(cur.URL.Host)
-	preHostname := strings.ToLower(pre.URL.Host)
-	if strings.EqualFold(curHostname, preHostname) {
-		maps.Copy(cur.Header, pre.Header)
-	} else {
-		// Cross-domain redirect: strip sensitive headers that Go's
+//
+// Headers already present on the redirected request are never overwritten, and
+// three kinds are never restored from the original request:
+//
+//   - anything sensitive, once any hop in the chain has left the original
+//     origin. net/http sets its own strip flag once and never clears it, so a
+//     credential dropped at a foreign hop must stay dropped even if the chain
+//     returns to the original host.
+//   - [redirectBodyHeaders], when the redirect changed the method and therefore
+//     dropped the body.
+//   - anything on a hop whose scheme or host differs from the original.
+func checkHostAndAddHeaders(cur *http.Request, via []*http.Request) {
+	orig := via[0]
+
+	if !sameOrigin(cur.URL, orig.URL) {
+		// Cross-origin redirect: strip sensitive headers that Go's
 		// net/http does not know about (custom auth, token, api-key, etc.).
 		for key := range cur.Header {
 			if isSanitizeHeader(key) {
 				cur.Header.Del(key)
 			}
 		}
+		return
+	}
+
+	credentialsSpent := leftOrigin(via)
+	methodChanged := cur.Method != orig.Method
+
+	for key, value := range orig.Header {
+		// Never clobber what net/http or an earlier hop already set; that is how
+		// a Set-Cookie delivered with the redirect supersedes the original
+		// Cookie header (RFC 6265 section 5.3).
+		if _, ok := cur.Header[key]; ok {
+			continue
+		}
+		if credentialsSpent && isSanitizeHeader(key) {
+			continue
+		}
+		if methodChanged && slices.ContainsFunc(redirectBodyHeaders, func(h string) bool {
+			return strings.EqualFold(h, key)
+		}) {
+			continue
+		}
+		cur.Header[key] = slices.Clone(value)
 	}
 }

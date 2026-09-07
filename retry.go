@@ -34,17 +34,22 @@ type (
 	// request state. It receives the same response and error as [RetryConditionFunc].
 	RetryHookFunc func(*Response, error)
 
-	// RetryDelayStrategyFunc defines a custom retry delay strategy.
-	// It receives the response/error from the previous attempt and returns the
-	// wait duration before the next retry.
+	// RetryDelayStrategyFunc defines a custom retry delay strategy. It receives
+	// the request, the response and error from the previous attempt, and the
+	// attempt number, and returns the wait duration before the next retry.
+	//
+	// res is nil when the attempt failed before a response was received, which
+	// is exactly the transport-error case retries exist for; req and attempt are
+	// always supplied so a strategy can back off without one.
+	//
 	// By default, Resty uses capped exponential backoff with jitter.
-	RetryDelayStrategyFunc func(*Response, error) (time.Duration, error)
+	RetryDelayStrategyFunc func(req *Request, res *Response, attempt int, err error) (time.Duration, error)
 )
 
 // RetryConstantDelayStrategy returns a [RetryDelayStrategyFunc] that always
 // returns the specified delay duration.
 func RetryConstantDelayStrategy(delay time.Duration) RetryDelayStrategyFunc {
-	return func(*Response, error) (time.Duration, error) {
+	return func(*Request, *Response, int, error) (time.Duration, error) {
 		return delay, nil
 	}
 }
@@ -150,7 +155,7 @@ type backoffWithJitter struct {
 	max time.Duration
 }
 
-func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error, attempt int) (time.Duration, error) {
+func (b *backoffWithJitter) NextWaitDuration(c *Client, req *Request, res *Response, err error, attempt int) (time.Duration, error) {
 	if res != nil {
 		if res.StatusCode() == http.StatusTooManyRequests || res.StatusCode() == http.StatusServiceUnavailable {
 			if delay, ok := parseRetryAfterHeader(res.Header().Get(hdrRetryAfterKey)); ok {
@@ -164,12 +169,15 @@ func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error
 		b.max = maxInt
 	}
 
-	if res == nil || res.Request.RetryDelayStrategy == nil {
+	if req == nil && res != nil {
+		req = res.Request
+	}
+	if req == nil || req.RetryDelayStrategy == nil {
 		return b.balanceMinMax(b.defaultDelayStrategy(attempt)), nil
 	}
 
 	// invoke custom retry delay strategy
-	return res.Request.RetryDelayStrategy(res, err)
+	return req.RetryDelayStrategy(req, res, attempt, err)
 }
 
 // defaultDelayStrategy returns capped exponential backoff with jitter.

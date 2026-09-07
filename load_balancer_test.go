@@ -667,7 +667,7 @@ func TestWeightedRoundRobinStateChangeFiresOnce(t *testing.T) {
 	wrr.SetOnStateChange(func(_ string, from, to HostState) {
 		atomic.AddInt32(&changes, 1)
 		assertEqual(t, HostStateActive, from)
-		assertEqual(t, HostStateInActive, to)
+		assertEqual(t, HostStateInactive, to)
 	})
 
 	for range 5 {
@@ -728,7 +728,7 @@ func TestWeightedRoundRobinHostRecovery(t *testing.T) {
 
 	recovered := make(chan string, 4)
 	wrr.SetOnStateChange(func(baseURL string, from, to HostState) {
-		if from == HostStateInActive && to == HostStateActive {
+		if from == HostStateInactive && to == HostStateActive {
 			// calling back in has to be safe: the hook runs without the lock held
 			_, _ = wrr.NextWithContext(context.Background())
 			recovered <- baseURL

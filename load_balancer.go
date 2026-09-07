@@ -135,7 +135,7 @@ type HostState int
 
 // Host transition states.
 const (
-	HostStateInActive HostState = iota
+	HostStateInactive HostState = iota
 	HostStateActive
 )
 
@@ -207,7 +207,7 @@ func (wrr *WeightedRoundRobin) NextWithContext(ctx context.Context) (string, err
 	var best *Host
 	total := 0
 	for _, h := range wrr.hosts {
-		if h.state == HostStateInActive {
+		if h.state == HostStateInactive {
 			continue
 		}
 
@@ -248,7 +248,7 @@ func (wrr *WeightedRoundRobin) Feedback(f *RequestFeedback) {
 		// Feedback for a host that is already inactive (in-flight requests that
 		// were dispatched before it was taken out) must not re-fire the hook.
 		if host.state == HostStateActive && host.failedRequests >= host.MaxFailures {
-			host.state = HostStateInActive
+			host.state = HostStateInactive
 			deactivated = host.BaseURL
 		}
 		break
@@ -256,7 +256,7 @@ func (wrr *WeightedRoundRobin) Feedback(f *RequestFeedback) {
 	wrr.lock.Unlock()
 
 	if onStateChange != nil && deactivated != "" {
-		onStateChange(deactivated, HostStateActive, HostStateInActive)
+		onStateChange(deactivated, HostStateActive, HostStateInactive)
 	}
 }
 
@@ -350,7 +350,7 @@ func (wrr *WeightedRoundRobin) recoverHosts() {
 	wrr.lock.Lock()
 	recovered := make([]string, 0, len(wrr.hosts))
 	for _, host := range wrr.hosts {
-		if host.state == HostStateInActive {
+		if host.state == HostStateInactive {
 			host.state = HostStateActive
 			host.failedRequests = 0
 			recovered = append(recovered, host.BaseURL)
@@ -363,7 +363,7 @@ func (wrr *WeightedRoundRobin) recoverHosts() {
 		return
 	}
 	for _, baseURL := range recovered {
-		onStateChange(baseURL, HostStateInActive, HostStateActive)
+		onStateChange(baseURL, HostStateInactive, HostStateActive)
 	}
 }
 
@@ -393,7 +393,7 @@ func newSRVWeightedRoundRobin(service, proto, domainName, httpScheme string,
 		Service:    service,
 		Proto:      proto,
 		DomainName: domainName,
-		HttpScheme: httpScheme,
+		HTTPScheme: httpScheme,
 		wrr:        wrr,
 		tick:       time.NewTicker(180 * time.Second), // default is 180 seconds
 		lock:       new(sync.Mutex),
@@ -421,7 +421,7 @@ type SRVWeightedRoundRobin struct {
 	Service    string
 	Proto      string
 	DomainName string
-	HttpScheme string
+	HTTPScheme string
 
 	wrr       *WeightedRoundRobin
 	tick      *time.Ticker
@@ -471,7 +471,7 @@ func (swrr *SRVWeightedRoundRobin) Refresh() error {
 	hosts := make([]*Host, len(addrs))
 	for idx, addr := range addrs {
 		domain := strings.TrimRight(addr.Target, ".")
-		baseURL := fmt.Sprintf("%s://%s:%d", swrr.HttpScheme, domain, addr.Port)
+		baseURL := fmt.Sprintf("%s://%s:%d", swrr.HTTPScheme, domain, addr.Port)
 		hosts[idx] = &Host{BaseURL: baseURL, Weight: int(addr.Weight)}
 	}
 
