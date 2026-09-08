@@ -28,8 +28,9 @@ type LoadBalancer interface {
 	Close() error
 }
 
-// RequestFeedback contains request outcome data reported back to a
-// [LoadBalancer] implementation.
+// RequestFeedback contains an HTTP attempt outcome reported to a [LoadBalancer].
+// Retried requests can produce multiple reports. Preparation failures and caller
+// cancellations without an HTTP response do not produce reports.
 type RequestFeedback struct {
 	BaseURL string
 	Success bool
