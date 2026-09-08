@@ -1513,6 +1513,11 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		err = nil
 		r.URL = url
 		res, err = r.client.execute(r)
+		// A response wrapper marks an HTTP attempt, even on a transport error.
+		// Caller cancellation without an HTTP response says nothing about the host.
+		if res != nil && (res.RawResponse != nil || r.Context().Err() == nil) {
+			r.sendLoadBalancerFeedback(res, err)
+		}
 		if err != nil {
 			if irErr, ok := err.(*invalidRequestError); ok {
 				err = irErr.Err
@@ -1609,8 +1614,6 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	} else {
 		r.client.onErrorHooks(r, res, err)
 	}
-
-	r.sendLoadBalancerFeedback(res, err)
 
 	// The buffer goes back to bufPool, so this Request must stop pointing at it;
 	// another goroutine may own it by the time anyone touches r again.
@@ -1867,7 +1870,7 @@ func (r *Request) sendLoadBalancerFeedback(res *Response, err error) {
 	if err != nil {
 		var noe *net.OpError
 		if errors.As(err, &noe) {
-			success = !isConnectionRefused(noe.Err) || noe.Timeout()
+			success = !(isConnectionRefused(noe.Err) || noe.Timeout())
 		}
 	}
 	if success && res != nil &&
