@@ -14,6 +14,7 @@ import (
 	"net/http/cookiejar"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 func TestCurlGenerateUnexecutedRequest(t *testing.T) {
@@ -400,4 +401,42 @@ func TestCurlMultipartWithCookies(t *testing.T) {
 
 	// Verify cookies are included
 	assertTrue(t, strings.Contains(curlCmd, "-H 'Cookie:"), "expected cookies to be included in curl command")
+}
+
+func TestCurlClosesGetBody(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		reader io.Reader
+	}{
+		{"success", strings.NewReader("payload")},
+		{"read error", iotest.ErrReader(errors.New("read failed"))},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := dcnl()
+			defer c.Close()
+			req := c.R().SetMethod(MethodPost).SetURL("https://example.com").SetBody("payload")
+			assertNil(t, createRawRequest(c, req))
+			original := &curlTrackingReadCloser{Reader: req.RawRequest.Body}
+			req.RawRequest.Body = original
+			body := &curlTrackingReadCloser{Reader: tt.reader}
+			req.RawRequest.GetBody = func() (io.ReadCloser, error) {
+				return body, nil
+			}
+
+			buildCurlCmd(req)
+
+			assertEqual(t, 1, body.closed)
+			assertEqual(t, 0, original.closed)
+		})
+	}
+}
+
+type curlTrackingReadCloser struct {
+	io.Reader
+	closed int
+}
+
+func (r *curlTrackingReadCloser) Close() error {
+	r.closed++
+	return nil
 }

@@ -52,6 +52,7 @@ func buildCurlCmd(req *Request) string {
 		body, err := req.RawRequest.GetBody()
 		if err == nil {
 			buf, _ := io.ReadAll(body)
+			closeq(body)
 			curl += "-d " + cmdQuote(string(bytes.TrimRight(buf, "\r\n"))) + " "
 		} else {
 			req.log.Errorf("curl: %v", err)
