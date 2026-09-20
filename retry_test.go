@@ -736,6 +736,10 @@ func TestParseRetryAfterHeader(t *testing.T) {
 	}{
 		{"seconds", "2", time.Second * 2, true},
 		{"date", "Fri, 31 Dec 1999 23:59:59 GMT", time.Second * 2, true},
+		{"rfc850-date", "Friday, 31-Dec-99 23:59:59 GMT", time.Second * 2, true},
+		{"asctime-date", "Fri Dec 31 23:59:59 1999", time.Second * 2, true},
+		{"past-rfc850-date", "Friday, 31-Dec-99 23:59:00 GMT", 0, true},
+		{"past-asctime-date", "Fri Dec 31 23:59:00 1999", 0, true},
 		{"past-date", "Fri, 31 Dec 1999 23:59:00 GMT", 0, true},
 		{"two-headers", "3", time.Second * 3, true},
 		{"empty", "", 0, false},

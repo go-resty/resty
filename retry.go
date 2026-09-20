@@ -229,7 +229,7 @@ func parseRetryAfterHeader(v string) (time.Duration, bool) {
 	}
 
 	// Retry-After: Fri, 31 Dec 1999 23:59:59 GMT
-	retryTime, err := time.Parse(time.RFC1123, v)
+	retryTime, err := http.ParseTime(v)
 	if err != nil {
 		return 0, false
 	}
