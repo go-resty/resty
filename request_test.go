@@ -2720,7 +2720,7 @@ func TestRequestDataRace(t *testing.T) {
 	totalRequests := 4000
 	wg := sync.WaitGroup{}
 	wg.Add(totalRequests)
-	for i := 0; i < totalRequests; i++ {
+	for i := range totalRequests {
 		if i%100 == 0 {
 			time.Sleep(20 * time.Millisecond) // to prevent test server socket exhaustion
 		}

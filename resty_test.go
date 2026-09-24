@@ -47,8 +47,8 @@ func getTestDataPath() string {
 }
 
 func createGetServer(t *testing.T) *httptest.Server {
-	var attempt int32
-	var sequence int32
+	var attempt atomic.Int32
+	var sequence atomic.Int32
 	var lastRequest time.Time
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
@@ -80,7 +80,7 @@ func createGetServer(t *testing.T) *httptest.Server {
 			case "/mypage2":
 				_, _ = w.Write([]byte("TestGet: text response from mypage2"))
 			case "/set-retrycount-test":
-				attp := atomic.AddInt32(&attempt, 1)
+				attp := attempt.Add(1)
 				if attp <= 4 {
 					time.Sleep(time.Millisecond * 150)
 				}
@@ -88,7 +88,7 @@ func createGetServer(t *testing.T) *httptest.Server {
 			case "/set-retrywaittime-test":
 				// Returns time.Duration since last request here
 				// or 0 for the very first request
-				if atomic.LoadInt32(&attempt) == 0 {
+				if attempt.Load() == 0 {
 					lastRequest = time.Now()
 					_, _ = fmt.Fprint(w, "0")
 				} else {
@@ -97,19 +97,19 @@ func createGetServer(t *testing.T) *httptest.Server {
 					lastRequest = now
 					_, _ = fmt.Fprintf(w, "%d", uint64(sinceLastRequest))
 				}
-				atomic.AddInt32(&attempt, 1)
+				attempt.Add(1)
 
 			case "/set-retry-error-recover":
 				w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
-				if atomic.LoadInt32(&attempt) == 0 {
+				if attempt.Load() == 0 {
 					w.WriteHeader(http.StatusTooManyRequests)
 					_, _ = w.Write([]byte(`{ "message": "too many" }`))
 				} else {
 					_, _ = w.Write([]byte(`{ "message": "hello" }`))
 				}
-				atomic.AddInt32(&attempt, 1)
+				attempt.Add(1)
 			case "/set-timeout-test-with-sequence":
-				seq := atomic.AddInt32(&sequence, 1)
+				seq := sequence.Add(1)
 				time.Sleep(100 * time.Millisecond)
 				_, _ = fmt.Fprintf(w, "%d", seq)
 			case "/set-timeout-test":
@@ -141,14 +141,14 @@ func createGetServer(t *testing.T) *httptest.Server {
 				w.WriteHeader(http.StatusNotFound)
 			case "/retry-after-delay":
 				w.Header().Set(hdrContentTypeKey, "application/json; charset=utf-8")
-				if atomic.LoadInt32(&attempt) == 0 {
+				if attempt.Load() == 0 {
 					w.Header().Set(hdrRetryAfterKey, "1")
 					w.WriteHeader(http.StatusTooManyRequests)
 					_, _ = w.Write([]byte(`{ "message": "too many" }`))
 				} else {
 					_, _ = w.Write([]byte(`{ "message": "hello" }`))
 				}
-				atomic.AddInt32(&attempt, 1)
+				attempt.Add(1)
 			case "/unescape-query-params":
 				initOne := r.URL.Query().Get("initone")
 				fromClient := r.URL.Query().Get("fromclient")

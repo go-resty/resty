@@ -41,7 +41,7 @@ func TestCircuitBreakerCountBased(t *testing.T) {
 
 	c := dcnl().SetCircuitBreaker(cb)
 
-	for i := uint64(0); i < failThreshold; i++ {
+	for range failThreshold {
 		_, err := c.R().Get(ts.URL + "/500")
 		assertNil(t, err)
 	}
@@ -60,7 +60,7 @@ func TestCircuitBreakerCountBased(t *testing.T) {
 	time.Sleep(resetTimeout + 50*time.Millisecond)
 	assertEqual(t, CircuitBreakerStateHalfOpen, cbc.getState(), "expected half-open state")
 
-	for i := uint64(0); i < successThreshold; i++ {
+	for range successThreshold {
 		_, err := c.R().Get(ts.URL + "/200")
 		assertNil(t, err)
 	}
@@ -273,10 +273,10 @@ func TestCircuitBreakerOpenCancelsPreviousResetTimer(t *testing.T) {
 	cb := NewCircuitBreakerCount(1, 1, resetTimeout)
 	cbc := cb.circuitBreakerBase
 
-	var halfOpenTransitions int32
+	var halfOpenTransitions atomic.Int32
 	cbc.OnStateChange(func(oldState, newState CircuitBreakerState) {
 		if oldState == CircuitBreakerStateOpen && newState == CircuitBreakerStateHalfOpen {
-			atomic.AddInt32(&halfOpenTransitions, 1)
+			halfOpenTransitions.Add(1)
 		}
 	})
 
@@ -297,7 +297,7 @@ func TestCircuitBreakerOpenCancelsPreviousResetTimer(t *testing.T) {
 	}
 
 	assertEqual(t, CircuitBreakerStateHalfOpen, cbc.getState(), "expected half-open transition from latest timer")
-	assertEqual(t, int32(1), atomic.LoadInt32(&halfOpenTransitions), "expected exactly one open-to-half-open transition")
+	assertEqual(t, int32(1), halfOpenTransitions.Load(), "expected exactly one open-to-half-open transition")
 }
 
 func TestCircuitBreakerOnResetTimeout(t *testing.T) {
@@ -410,14 +410,14 @@ func TestCircuitBreakerConcurrentOnTriggerRegistration(t *testing.T) {
 	cb := NewCircuitBreakerCount(1, 1, 10*time.Millisecond)
 	cbc := cb.circuitBreakerBase
 	var wg sync.WaitGroup
-	var cnt int32
+	var cnt atomic.Int32
 	n := 100
 
 	wg.Add(n)
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			cbc.OnTrigger(func(_ *Request, _ error) {
-				atomic.AddInt32(&cnt, 1)
+				cnt.Add(1)
 			})
 			wg.Done()
 		}()
@@ -425,7 +425,7 @@ func TestCircuitBreakerConcurrentOnTriggerRegistration(t *testing.T) {
 	wg.Wait()
 
 	cbc.RunOnTriggerHooks(nil, ErrCircuitBreakerOpen)
-	got := atomic.LoadInt32(&cnt)
+	got := cnt.Load()
 	assertEqual(t, int32(n), got, "expected N hooks executed")
 }
 
@@ -433,14 +433,14 @@ func TestCircuitBreakerConcurrentOnStateChangeRegistration(t *testing.T) {
 	cb := NewCircuitBreakerCount(1, 1, 10*time.Millisecond)
 	cbc := cb.circuitBreakerBase
 	var wg sync.WaitGroup
-	var cnt int32
+	var cnt atomic.Int32
 	n := 100
 
 	wg.Add(n)
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			cbc.OnStateChange(func(_, _ CircuitBreakerState) {
-				atomic.AddInt32(&cnt, 1)
+				cnt.Add(1)
 			})
 			wg.Done()
 		}()
@@ -448,7 +448,7 @@ func TestCircuitBreakerConcurrentOnStateChangeRegistration(t *testing.T) {
 	wg.Wait()
 
 	cbc.RunOnStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateOpen)
-	got := atomic.LoadInt32(&cnt)
+	got := cnt.Load()
 	assertEqual(t, int32(n), got, "expected N state change hooks executed")
 }
 
@@ -480,7 +480,7 @@ func TestCircuitBreakerSlidingWindowConcurrentAddGet(t *testing.T) {
 	var wg sync.WaitGroup
 	n := 200
 	wg.Add(n)
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			sw.Add(totalAndFailures{total: 1, failures: 0})
 			wg.Done()

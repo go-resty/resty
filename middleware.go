@@ -605,7 +605,7 @@ func sanitizeResponseSaveFileNameFromHeader(file string) (string, error) {
 	if strings.HasPrefix(normalized, "/") || isWindowsAbsPath(normalized) {
 		return "", fmt.Errorf("resty: invalid Content-Disposition filename: absolute path is not allowed")
 	}
-	for _, s := range strings.Split(normalized, "/") {
+	for s := range strings.SplitSeq(normalized, "/") {
 		if s == ".." {
 			return "", fmt.Errorf("resty: invalid Content-Disposition filename: parent directory traversal is not allowed")
 		}

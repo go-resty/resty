@@ -808,7 +808,7 @@ func TestClientPreRequestMiddlewares(t *testing.T) {
 		c.Logger().Debugf("I'm Overwriting existing Pre-Request Hook")
 
 		// Reading Request `N` no of times
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			b, _ := r.RawRequest.GetBody()
 			rb, _ := io.ReadAll(b)
 			c.Logger().Debugf("%s %v", string(rb), len(rb))
@@ -1157,7 +1157,7 @@ func TestDebugLogSimultaneously(t *testing.T) {
 		SetBaseURL(ts.URL)
 
 	t.Cleanup(ts.Close)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			t.Parallel()
 			resp, err := c.R().
@@ -1329,7 +1329,6 @@ func TestClientOnResponseFailure(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			ts := createAuthServer(t)
@@ -1474,7 +1473,7 @@ func TestPostRedirectWithBody(t *testing.T) {
 	totalRequests := 4000
 	wg := sync.WaitGroup{}
 	wg.Add(totalRequests)
-	for i := 0; i < totalRequests; i++ {
+	for i := range totalRequests {
 		if i%50 == 0 {
 			time.Sleep(20 * time.Millisecond) // to prevent test server socket exhaustion
 		}
@@ -1733,7 +1732,7 @@ func TestClientCloseConcurrentIdempotent(t *testing.T) {
 	errs := make([]error, goroutines)
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		go func(idx int) {
 			defer wg.Done()
 			errs[idx] = c.Close()

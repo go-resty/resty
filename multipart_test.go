@@ -654,10 +654,8 @@ func TestMultipartUploadFailAutoErrorParse(t *testing.T) {
 	t.Run("concurrent requests", func(t *testing.T) {
 		concurrencyCount := 50
 		wg := sync.WaitGroup{}
-		for i := 0; i < concurrencyCount; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range concurrencyCount {
+			wg.Go(func() {
 				res, _ := c.R().
 					SetFile("profile_img", filepath.Join(getTestDataPath(), "test-img.png")).
 					SetResultError(&ErrorResponse{}).
@@ -667,7 +665,7 @@ func TestMultipartUploadFailAutoErrorParse(t *testing.T) {
 				assertEqual(t, http.StatusForbidden, res.StatusCode())
 				assertEqual(t, 403, er.Code)
 				assertEqual(t, "forbidden error message", er.Message)
-			}()
+			})
 		}
 		wg.Wait()
 	})
@@ -684,10 +682,8 @@ func TestMultipartConcurrentRequests(t *testing.T) {
 
 	concurrencyCount := 100
 	wg := sync.WaitGroup{}
-	for i := 0; i < concurrencyCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range concurrencyCount {
+		wg.Go(func() {
 			res, err := c.R().
 				SetFormData(map[string]string{
 					"welcome1": "welcome value 1",
@@ -700,7 +696,7 @@ func TestMultipartConcurrentRequests(t *testing.T) {
 			assertError(t, err)
 			assertEqual(t, http.StatusOK, res.StatusCode())
 			assertEqual(t, true, strings.Contains(res.String(), "test-img.png"))
-		}()
+		})
 	}
 	wg.Wait()
 }

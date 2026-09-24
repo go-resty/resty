@@ -19,6 +19,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -259,12 +260,7 @@ type digestChallenge struct {
 }
 
 func (dc *digestChallenge) isQopSupported(qop string) bool {
-	for _, v := range dc.qop {
-		if v == qop {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(dc.qop, qop)
 }
 
 func (dc *digestChallenge) setValue(k, v string) error {

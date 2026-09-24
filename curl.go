@@ -21,7 +21,8 @@ const unexecutedRequestURL = "http://unexecuted-request"
 // buildCurlCmd returns an equivalent curl command for the given request.
 func buildCurlCmd(req *Request) string {
 	// generate curl raw headers
-	var curl = "curl -X " + req.Method + " "
+	var curl strings.Builder
+	curl.WriteString("curl -X " + req.Method + " ")
 	headers := dumpCurlHeaders(req.RawRequest)
 	for _, kv := range *headers {
 		value := kv[1]
@@ -31,13 +32,13 @@ func buildCurlCmd(req *Request) string {
 			value = "*****REDACTED*****"
 		}
 
-		curl += "-H " + cmdQuote(kv[0]+": "+value) + " "
+		curl.WriteString("-H " + cmdQuote(kv[0]+": "+value) + " ")
 	}
 
 	// generate curl cookies
 	if cookieJar := req.client.CookieJar(); cookieJar != nil {
 		if cookies := cookieJar.Cookies(req.RawRequest.URL); len(cookies) > 0 {
-			curl += "-H " + cmdQuote(dumpCurlCookies(cookies)) + " "
+			curl.WriteString("-H " + cmdQuote(dumpCurlCookies(cookies)) + " ")
 		}
 	}
 
@@ -46,17 +47,17 @@ func buildCurlCmd(req *Request) string {
 	contentType := req.RawRequest.Header.Get(hdrContentTypeKey)
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		// Multipart: show placeholder
-		curl += "-F '<fields omitted, see original request>' "
+		curl.WriteString("-F '<fields omitted, see original request>' ")
 	} else if req.RawRequest.GetBody != nil {
 		// Handle normal body
 		body, err := req.RawRequest.GetBody()
 		if err == nil {
 			buf, _ := io.ReadAll(body)
 			closeq(body)
-			curl += "-d " + cmdQuote(string(bytes.TrimRight(buf, "\r\n"))) + " "
+			curl.WriteString("-d " + cmdQuote(string(bytes.TrimRight(buf, "\r\n"))) + " ")
 		} else {
 			req.log.Errorf("curl: %v", err)
-			curl += "-d '' "
+			curl.WriteString("-d '' ")
 		}
 	}
 
@@ -66,8 +67,8 @@ func buildCurlCmd(req *Request) string {
 	}
 	urlString := cmdQuote(url)
 
-	curl += urlString
-	return curl
+	curl.WriteString(urlString)
+	return curl.String()
 }
 
 // dumpCurlCookies returns a Cookie header string formatted for curl.

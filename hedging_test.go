@@ -48,11 +48,11 @@ func TestHedgingBasic(t *testing.T) {
 }
 
 func TestHedgingSecondWins(t *testing.T) {
-	var attemptCount int32
+	var attemptCount atomic.Int32
 	winnerAttempt := atomic.Int32{}
 	timeouts := [2]time.Duration{400 * time.Millisecond, 20 * time.Millisecond}
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		attempt := atomic.AddInt32(&attemptCount, 1)
+		attempt := attemptCount.Add(1)
 		time.Sleep(timeouts[attempt-1])
 		winnerAttempt.CompareAndSwap(0, attempt)
 
@@ -76,17 +76,17 @@ func TestHedgingSecondWins(t *testing.T) {
 	winnerRequest := winnerAttempt.Load()
 	assertEqual(t, fmt.Sprintf("Attempt %d", winnerRequest), resp.String(), "expected second attempt to win")
 	assertEqual(t, int32(2), winnerRequest, "expected second request to win")
-	assertEqual(t, int32(2), atomic.LoadInt32(&attemptCount), "total attempts should be 2")
+	assertEqual(t, int32(2), attemptCount.Load(), "total attempts should be 2")
 }
 
 func TestHedgingTimeout(t *testing.T) {
-	var attemptCount int32
+	var attemptCount atomic.Int32
 	requestTimes := make([]time.Time, 0, 3)
 	var timesLock atomic.Value
 	timesLock.Store(requestTimes)
 
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		attempt := atomic.AddInt32(&attemptCount, 1)
+		attempt := attemptCount.Add(1)
 		now := time.Now()
 
 		times := timesLock.Load().([]time.Time)
@@ -602,9 +602,9 @@ func TestHedgingLargeResponseBody(t *testing.T) {
 		payload[i] = byte('a' + i%26)
 	}
 
-	var attemptCount int32
+	var attemptCount atomic.Int32
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		attempt := atomic.AddInt32(&attemptCount, 1)
+		attempt := attemptCount.Add(1)
 		if attempt == 1 {
 			// lose the race so a hedged attempt wins and returns this body
 			time.Sleep(500 * time.Millisecond)
@@ -633,9 +633,9 @@ func TestHedgingDoNotParseResponseLargeBody(t *testing.T) {
 	const bodySize = 512 * 1024
 	payload := make([]byte, bodySize)
 
-	var attemptCount int32
+	var attemptCount atomic.Int32
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		if atomic.AddInt32(&attemptCount, 1) == 1 {
+		if attemptCount.Add(1) == 1 {
 			time.Sleep(500 * time.Millisecond)
 		}
 		w.WriteHeader(http.StatusOK)

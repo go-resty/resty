@@ -934,9 +934,9 @@ func TestRequestRetryPostIoReadSeeker(t *testing.T) {
 // This mirrors TestRetryNonSeekableReaderWithoutFactoryReturnsError which
 // covers the same guarantee for multipart bodies (see PR #1133).
 func TestRequestRetryNonSeekableReaderReturnsError(t *testing.T) {
-	var attempts int32
+	var attempts atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&attempts, 1)
+		attempts.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
@@ -958,13 +958,13 @@ func TestRequestRetryNonSeekableReaderReturnsError(t *testing.T) {
 		Post(srv.URL)
 
 	assertErrorIs(t, ErrReaderNotSeekable, err)
-	assertEqual(t, int32(1), atomic.LoadInt32(&attempts))
+	assertEqual(t, int32(1), attempts.Load())
 }
 
 func TestRequestRetryReadSeekerReturnsSeekError(t *testing.T) {
-	var attempts int32
+	var attempts atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&attempts, 1)
+		attempts.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
@@ -987,7 +987,7 @@ func TestRequestRetryReadSeekerReturnsSeekError(t *testing.T) {
 		Post(srv.URL)
 
 	assertErrorIs(t, seekErr, err)
-	assertEqual(t, int32(1), atomic.LoadInt32(&attempts))
+	assertEqual(t, int32(1), attempts.Load())
 }
 
 // nonSeekableReader hides any seek/rewind capability of the underlying reader,

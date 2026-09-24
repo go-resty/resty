@@ -15,7 +15,7 @@ jobs:
   build:
     strategy:
       matrix:
-        go: [ 'stable', '1.23.x' ]
+        go: [ 'stable', '1.25.x' ]
         os: [ ubuntu-latest ]
 
     name: Run Build

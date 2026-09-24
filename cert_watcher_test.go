@@ -76,7 +76,7 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 	t.Log("Test URL:", url)
 
 	t.Run("Cert Watcher should handle certs rotation", func(t *testing.T) {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			res, err := client.R().Get(url)
 			if err != nil {
 				t.Fatal(err)

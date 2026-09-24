@@ -31,7 +31,7 @@ func TestRoundRobin(t *testing.T) {
 		runCount := 5
 		var result []string
 		ctx := context.Background()
-		for i := 0; i < runCount; i++ {
+		for range runCount {
 			baseURL, _ := rr.NextWithContext(ctx)
 			result = append(result, baseURL)
 		}
@@ -58,7 +58,7 @@ func TestRoundRobin(t *testing.T) {
 		runCount := 30
 		var result []string
 		ctx := context.Background()
-		for i := 0; i < runCount; i++ {
+		for range runCount {
 			baseURL, _ := rr.NextWithContext(ctx)
 			result = append(result, baseURL)
 		}
@@ -86,7 +86,7 @@ func TestRoundRobin(t *testing.T) {
 		runCount := 5
 		var result []string
 		ctx := context.Background()
-		for i := 0; i < runCount; i++ {
+		for range runCount {
 			baseURL, _ := rr.NextWithContext(ctx)
 			result = append(result, baseURL)
 		}
@@ -157,7 +157,7 @@ func TestWeightedRoundRobin(t *testing.T) {
 		runCount := 5
 		var result []string
 		ctx := context.Background()
-		for i := 0; i < runCount; i++ {
+		for range runCount {
 			baseURL, err := wrr.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
@@ -194,7 +194,7 @@ func TestWeightedRoundRobin(t *testing.T) {
 		runCount := 10
 		var result []string
 		ctx := context.Background()
-		for i := 0; i < runCount; i++ {
+		for i := range runCount {
 			baseURL, err := wrr.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
@@ -236,7 +236,7 @@ func TestWeightedRoundRobin(t *testing.T) {
 		runCount := 5
 		var result []string
 		ctx := context.Background()
-		for i := 0; i < runCount; i++ {
+		for range runCount {
 			baseURL, err := wrr.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
@@ -308,7 +308,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		runCount := 5
 		var result []string
 		ctx := context.Background()
-		for i := 0; i < runCount; i++ {
+		for range runCount {
 			baseURL, err := srv.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
@@ -347,7 +347,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		runCount := 5
 		var result []string
 		ctx := context.Background()
-		for i := 0; i < runCount; i++ {
+		for range runCount {
 			baseURL, err := srv.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
@@ -382,9 +382,9 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		err = srv.Refresh()
 		assertNil(t, err)
 
-		var stateChangeCalled int32
+		var stateChangeCalled atomic.Int32
 		srv.SetOnStateChange(func(baseURL string, from, to HostState) {
-			atomic.AddInt32(&stateChangeCalled, 1)
+			stateChangeCalled.Add(1)
 		})
 
 		srv.SetRecoveryDuration(200 * time.Millisecond)
@@ -392,7 +392,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		runCount := 20
 		var result []string
 		ctx := context.Background()
-		for i := 0; i < runCount; i++ {
+		for range runCount {
 			baseURL, err := srv.NextWithContext(ctx)
 			assertNil(t, err)
 			result = append(result, baseURL)
@@ -439,7 +439,7 @@ func TestSRVWeightedRoundRobin(t *testing.T) {
 		srv.SetRecoveryDuration(200 * time.Millisecond)
 
 		go func() {
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				baseURL, _ := srv.NextWithContext(context.Background())
 				assertNotNil(t, baseURL)
 				time.Sleep(15 * time.Millisecond)
@@ -490,7 +490,7 @@ func TestLoadBalancerRequest(t *testing.T) {
 	c.SetLoadBalancer(rr)
 
 	ts1URL, ts2URL := 0, 0
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		resp, err := c.R().Get("/")
 		assertNil(t, err)
 		switch resp.Request.baseURL {
@@ -592,7 +592,7 @@ func TestLoadBalancerRequestFailures(t *testing.T) {
 	c.SetLoadBalancer(rr)
 
 	ts1URL, ts2URL := 0, 0
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		resp, _ := c.R().Get("/")
 		switch resp.Request.baseURL {
 		case ts1.URL:
@@ -689,9 +689,9 @@ func TestWeightedRoundRobinStateChangeFiresOnce(t *testing.T) {
 	assertNil(t, err)
 	defer func() { assertNil(t, wrr.Close()) }()
 
-	var changes int32
+	var changes atomic.Int32
 	wrr.SetOnStateChange(func(_ string, from, to HostState) {
-		atomic.AddInt32(&changes, 1)
+		changes.Add(1)
 		assertEqual(t, HostStateActive, from)
 		assertEqual(t, HostStateInActive, to)
 	})
@@ -699,7 +699,7 @@ func TestWeightedRoundRobinStateChangeFiresOnce(t *testing.T) {
 	for range 5 {
 		wrr.Feedback(&RequestFeedback{BaseURL: "https://example1.com", Success: false, Attempt: 1})
 	}
-	assertEqual(t, int32(1), atomic.LoadInt32(&changes))
+	assertEqual(t, int32(1), changes.Load())
 }
 
 // Refresh must not hand the balancer's bookkeeping back to the caller, nor read

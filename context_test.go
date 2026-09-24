@@ -205,11 +205,11 @@ func TestSetContextCancelWithError(t *testing.T) {
 }
 
 func TestClientRetryWithSetContext(t *testing.T) {
-	var attempt int32
+	var attempt atomic.Int32
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Method: %v", r.Method)
 		t.Logf("Path: %v", r.URL.Path)
-		if atomic.AddInt32(&attempt, 1) <= 4 {
+		if attempt.Add(1) <= 4 {
 			time.Sleep(100 * time.Millisecond)
 		}
 		_, _ = w.Write([]byte("TestClientRetry page"))
@@ -234,8 +234,7 @@ func TestRequestContext(t *testing.T) {
 	r := client.NewRequest()
 	assertNotNil(t, r.Context(), "expected default context to be non-nil")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	r.SetContext(ctx)
 	assertEqual(t, ctx, r.Context(), "expected context to be set")
@@ -245,17 +244,16 @@ func TestSSESourceContext(t *testing.T) {
 	es := NewSSESource()
 	assertNotNil(t, es.Context(), "expected default context to be non-nil")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	es.SetContext(ctx)
 	assertEqual(t, ctx, es.Context(), "expected context to be set")
 }
 
 func TestSSESourceSetContextCancelBeforeConnect(t *testing.T) {
-	var count int32
+	var count atomic.Int32
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&count, 1)
+		count.Add(1)
 		w.WriteHeader(http.StatusOK)
 	})
 	defer ts.Close()
@@ -270,15 +268,15 @@ func TestSSESourceSetContextCancelBeforeConnect(t *testing.T) {
 		Get()
 
 	assertErrorIs(t, context.Canceled, err, "expected canceled context to stop before connect")
-	assertEqual(t, int32(0), atomic.LoadInt32(&count), "expected no request to be sent")
+	assertEqual(t, int32(0), count.Load(), "expected no request to be sent")
 }
 
 func TestSSESourceSetContextCancel(t *testing.T) {
 	canceled := make(chan struct{}, 1)
-	var count int32
+	var count atomic.Int32
 
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&count, 1)
+		count.Add(1)
 
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -308,7 +306,7 @@ func TestSSESourceSetContextCancel(t *testing.T) {
 
 	assertErrorIs(t, context.Canceled, err, "expected canceled context while listening to stream")
 	assertEqual(t, 1, received, "expected one event before cancellation")
-	assertEqual(t, int32(1), atomic.LoadInt32(&count), "expected a single request")
+	assertEqual(t, int32(1), count.Load(), "expected a single request")
 
 	select {
 	case <-canceled:
