@@ -6,7 +6,6 @@
 package resty
 
 import (
-	"bytes"
 	"io"
 	"net/http"
 	"regexp"
@@ -53,7 +52,7 @@ func buildCurlCmd(req *Request) string {
 		if err == nil {
 			buf, _ := io.ReadAll(body)
 			closeq(body)
-			curl += "-d " + cmdQuote(string(bytes.TrimRight(buf, "\r\n"))) + " "
+			curl += "-d " + cmdQuote(string(buf)) + " "
 		} else {
 			req.log.Errorf("curl: %v", err)
 			curl += "-d '' "
