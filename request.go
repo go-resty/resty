@@ -533,6 +533,10 @@ func (r *Request) SetResultError(err any) *Request {
 //		SetFile("my_file", "/Users/jeeva/Gas Bill - Sep.pdf")
 func (r *Request) SetFile(fieldName, filePath string) *Request {
 	r.isMultiPart = true
+	if r.FormData == nil {
+		r.FormData = url.Values{}
+	}
+	r.FormData.Set("@"+fieldName, filePath)
 	r.multipartFields = append(r.multipartFields, &MultipartField{
 		Name:     fieldName,
 		FileName: filepath.Base(filePath),
@@ -554,7 +558,11 @@ func (r *Request) SetFile(fieldName, filePath string) *Request {
 //		})
 func (r *Request) SetFiles(files map[string]string) *Request {
 	r.isMultiPart = true
+	if r.FormData == nil {
+		r.FormData = url.Values{}
+	}
 	for f, fp := range files {
+		r.FormData.Set("@"+f, fp)
 		r.multipartFields = append(r.multipartFields, &MultipartField{
 			Name:     f,
 			FileName: filepath.Base(fp),
