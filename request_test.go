@@ -2788,3 +2788,64 @@ func TestRequestExecuteDoesNotAliasRetryConditions(t *testing.T) {
 	after := reflect.ValueOf(clone.retryConditions[1]).Pointer()
 	assertEqual(t, before, after)
 }
+
+func TestRequestLoadBalancerTimeoutFeedback(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	wrr, err := NewWeightedRoundRobin(time.Second, &Host{BaseURL: ts.URL, Weight: 1, MaxFailures: 1})
+	assertNil(t, err)
+	defer wrr.Close()
+
+	c := dcnl().
+		SetLoadBalancer(wrr).
+		SetTimeout(50 * time.Millisecond)
+	defer c.Close()
+
+	_, err = c.R().Get("/")
+	assertNotNil(t, err)
+
+	assertEqual(t, HostStateInActive, wrr.hosts[0].state)
+	assertEqual(t, 1, wrr.hosts[0].failedRequests)
+}
+
+func TestRequestLoadBalancerTimeoutFeedbackWithRetry(t *testing.T) {
+	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts1.Close()
+
+	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("healthy"))
+	}))
+	defer ts2.Close()
+
+	wrr, err := NewWeightedRoundRobin(time.Second,
+		&Host{BaseURL: ts1.URL, Weight: 1, MaxFailures: 1},
+		&Host{BaseURL: ts2.URL, Weight: 1, MaxFailures: 1},
+	)
+	assertNil(t, err)
+	defer wrr.Close()
+
+	c := dcnl().
+		SetLoadBalancer(wrr).
+		SetTimeout(50 * time.Millisecond).
+		SetRetryCount(1).
+		SetRetryWaitTime(10 * time.Millisecond)
+	defer c.Close()
+
+	resp, err := c.R().Get("/")
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "healthy", resp.String())
+
+	assertEqual(t, HostStateInActive, wrr.hosts[0].state)
+	assertEqual(t, 1, wrr.hosts[0].failedRequests)
+	assertEqual(t, HostStateActive, wrr.hosts[1].state)
+	assertEqual(t, 0, wrr.hosts[1].failedRequests)
+}

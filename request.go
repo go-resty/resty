@@ -1507,17 +1507,23 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 	}
 
 	isInvalidRequestErr := false
+	lbFeedbackSent := false
 	// first attempt + retry count = total attempts
 	for i := 0; i <= r.RetryCount; i++ {
 		r.Attempt++
 		err = nil
 		r.URL = url
+		lbFeedbackSent = false
 		res, err = r.client.execute(r)
 		if err != nil {
 			if irErr, ok := err.(*invalidRequestError); ok {
 				err = irErr.Err
 				isInvalidRequestErr = true
 				break
+			}
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				r.sendLoadBalancerFeedback(nil, err)
+				lbFeedbackSent = true
 			}
 			// The per-attempt timeout context cancel func is owned and
 			// released by Client.execute (on transport error, or when the
@@ -1610,7 +1616,9 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		r.client.onErrorHooks(r, res, err)
 	}
 
-	r.sendLoadBalancerFeedback(res, err)
+	if !lbFeedbackSent {
+		r.sendLoadBalancerFeedback(res, err)
+	}
 
 	// The buffer goes back to bufPool, so this Request must stop pointing at it;
 	// another goroutine may own it by the time anyone touches r again.
@@ -1867,7 +1875,12 @@ func (r *Request) sendLoadBalancerFeedback(res *Response, err error) {
 	if err != nil {
 		var noe *net.OpError
 		if errors.As(err, &noe) {
-			success = !isConnectionRefused(noe.Err) || noe.Timeout()
+			success = !(isConnectionRefused(noe.Err) || noe.Timeout())
+		} else {
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
+				success = false
+			}
 		}
 	}
 	if success && res != nil &&
