@@ -12,6 +12,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -67,6 +68,7 @@ type MultipartField struct {
 func (mf *MultipartField) Clone() *MultipartField {
 	mf2 := new(MultipartField)
 	*mf2 = *mf
+	mf2.Values = slices.Clone(mf.Values)
 	return mf2
 }
 
