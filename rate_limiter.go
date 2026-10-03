@@ -36,18 +36,18 @@ func rateLimitError(ctx context.Context) error {
 
 // RateLimiter is the interface that wraps the rate limiting behavior used by
 // [Client]. Implement this interface to provide custom rate limiting strategies.
-// The [Client] calls [RateLimiter.Allow] before every request; if it returns
+// The [Client] calls [RateLimiter.Wait] before every request; if it returns
 // an error the request is aborted with that error.
 //
-// The context passed to [RateLimiter.Allow] is the request context, so
+// The context passed to [RateLimiter.Wait] is the request context, so
 // cancellation or deadline expiry is respected automatically. Implementations
 // must be safe for concurrent use.
 type RateLimiter interface {
-	// Allow blocks until the rate limiter permits the next request or the
+	// Wait blocks until the rate limiter permits the next request or the
 	// context is done. It returns [ErrRateLimitExceeded] if the context expires
 	// or is cancelled before a token is available, and nil when the request may
 	// proceed. Implementations must be goroutine-safe.
-	Allow(ctx context.Context) error
+	Wait(ctx context.Context) error
 }
 
 // NewRateLimitTokenBucket creates a new token-bucket [RateLimiter] that permits at most
@@ -89,7 +89,7 @@ var _ RateLimiter = (*RateLimitTokenBucket)(nil)
 // RateLimitTokenBucket is a token-bucket based implementation of [RateLimiter].
 // It implements the standard token-bucket algorithm: tokens refill at a
 // constant rate and each request consumes one token. When no tokens are
-// available, [RateLimitTokenBucket.Allow] blocks until either a token becomes
+// available, [RateLimitTokenBucket.Wait] blocks until either a token becomes
 // available or the context expires.
 //
 // This implementation is safe for concurrent use from multiple goroutines.
@@ -119,16 +119,16 @@ func (l *RateLimitTokenBucket) Burst() int {
 	return l.burst
 }
 
-// Allow blocks until the rate limiter grants a token or the context is done.
+// Wait blocks until the rate limiter grants a token or the context is done.
 // It returns [ErrRateLimitExceeded] if the context is cancelled or times out
 // before a token is available.
 //
 // Performance note: Timer allocations occur only when tokens are exhausted and
-// waiting is necessary. When tokens are available (the common case), Allow
+// waiting is necessary. When tokens are available (the common case), Wait
 // returns immediately without allocating timers. Context deadline and
 // cancellation checks are performed on every iteration,
 // respecting cancellation immediately even during token waits.
-func (l *RateLimitTokenBucket) Allow(ctx context.Context) error {
+func (l *RateLimitTokenBucket) Wait(ctx context.Context) error {
 	for {
 		// Check context first to avoid acquiring the lock unnecessarily.
 		select {
@@ -235,16 +235,16 @@ func (l *RateLimitSlidingWindow) WindowSize() time.Duration {
 	return l.windowSize
 }
 
-// Allow blocks until the sliding window permits the next request or the context
+// Wait blocks until the sliding window permits the next request or the context
 // is done. It returns [ErrRateLimitExceeded] if the context is cancelled or
 // times out before a slot becomes available.
 //
-// Performance note: When a slot is available (the common case), Allow returns
+// Performance note: When a slot is available (the common case), Wait returns
 // immediately after evicting out-of-window timestamps. The eviction is O(n)
 // where n is the number of out-of-window timestamps, but typically small due
 // to sliding window semantics. Context cancellation is checked before and during
 // any wait period, respecting cancellation immediately.
-func (l *RateLimitSlidingWindow) Allow(ctx context.Context) error {
+func (l *RateLimitSlidingWindow) Wait(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():

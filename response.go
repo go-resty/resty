@@ -213,8 +213,8 @@ func (r *Response) RedirectHistory() []*RedirectInfo {
 
 func (r *Response) setReceivedAt() {
 	r.receivedAt = time.Now()
-	if r.Request.trace != nil {
-		r.Request.trace.endTime = r.receivedAt
+	if ct := r.Request.trace; ct != nil {
+		ct.setEndTime(r.receivedAt)
 	}
 }
 
@@ -309,13 +309,13 @@ func (r *Response) wrapCopyReadCloser() {
 	}
 }
 
-func (r *Response) wrapContentDecompresser() error {
+func (r *Response) wrapContentDecompressor() error {
 	ce := r.Header().Get(hdrContentEncodingKey)
 	if isStringEmpty(ce) {
 		return nil
 	}
 
-	if decFunc, f := r.Request.client.ContentDecompressers()[strings.ToLower(ce)]; f {
+	if decFunc, f := r.Request.client.ContentDecompressors()[strings.ToLower(ce)]; f {
 		dec, err := decFunc(r.Body)
 		if err != nil {
 			if err == io.EOF {
@@ -331,14 +331,14 @@ func (r *Response) wrapContentDecompresser() error {
 		r.RawResponse.ContentLength = -1
 	} else if r.Request.IsResponseDoNotParse {
 		// GH#1168 Don't return an error if DoNotParse is enabled and the content
-		// decompresser is not found. Possibly the user is handling content decompression
+		// decompressor is not found. Possibly the user is handling content decompression
 		// in their own way, so instead of returning an error and breaking the response
 		// processing, just log it and let the caller handle it when they try to read the body.
-		r.Request.log.Warnf("Response.wrapContentDecompresser: DoNotParse is enabled and the content"+
-			" decompresser is not found for encoding '%s', just log it and let the caller handle it", ce)
+		r.Request.log.Warnf("Response.wrapContentDecompressor: DoNotParse is enabled and the content"+
+			" decompressor is not found for encoding '%s', just log it and let the caller handle it", ce)
 		return nil
 	} else {
-		return ErrContentDecompresserNotFound
+		return ErrContentDecompressorNotFound
 	}
 
 	return nil

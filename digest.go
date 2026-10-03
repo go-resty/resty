@@ -19,6 +19,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -67,6 +68,21 @@ type digestTransport struct {
 	transport http.RoundTripper
 }
 
+// unwrap implements [transportWrapper] so Resty's TLS, certificate and proxy
+// setters still reach the real transport after [Client.SetDigestAuth].
+func (dt *digestTransport) unwrap() http.RoundTripper { return dt.transport }
+
+// originatingURL walks back to the URL the caller actually requested. net/http
+// sets Request.Response on a redirected request, and that response's Request is
+// the previous hop.
+func originatingURL(req *http.Request) *url.URL {
+	u := req.URL
+	for res := req.Response; res != nil && res.Request != nil; res = res.Request.Response {
+		u = res.Request.URL
+	}
+	return u
+}
+
 func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// first request without body for all HTTP verbs
 	req1 := dt.cloneReq(req, true)
@@ -77,6 +93,13 @@ func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		return nil, err
 	}
 	if res.StatusCode != http.StatusUnauthorized {
+		return res, nil
+	}
+	// Never answer a challenge from an origin the caller did not address. The
+	// transport runs on every redirect hop, so without this a redirect to an
+	// attacker-controlled host yields the username in cleartext plus a digest
+	// over a realm and nonce that host chose (compare curl CVE-2022-27774).
+	if !sameOrigin(req.URL, originatingURL(req)) {
 		return res, nil
 	}
 	_, _ = ioCopy(io.Discard, res.Body)
@@ -180,6 +203,12 @@ func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error
 }
 
 func (dt *digestTransport) createCredentials(cha *digestChallenge, req *http.Request) (*digestCredentials, error) {
+	// Validate the challenge algorithm before it is used to build a hash below;
+	// an unsupported value has no entry in digestHashFuncs.
+	if _, ok := digestHashFuncs[cha.algorithm]; !ok {
+		return nil, ErrDigestAlgNotSupported
+	}
+
 	cred := &digestCredentials{
 		username:      dt.Username,
 		password:      dt.Password,
@@ -429,7 +458,12 @@ func (dc *digestCredentials) String() string {
 }
 
 func newHashFunc(algorithm string) hash.Hash {
-	hf := digestHashFuncs[algorithm]
+	// Callers validate the algorithm against digestHashFuncs before reaching
+	// here; fall back to the RFC 7616 default rather than calling a nil func.
+	hf, found := digestHashFuncs[algorithm]
+	if !found {
+		hf = md5.New
+	}
 	h := hf()
 	h.Reset()
 	return h

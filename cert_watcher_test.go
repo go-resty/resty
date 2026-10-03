@@ -65,10 +65,10 @@ func TestClient_SetRootCertificateWatcher(t *testing.T) {
 		// (otherwise, test may succeed because 1st TLS session is re-used)
 		DisableKeepAlives: true,
 	}).SetRootCertificatesWatcher(
-		&CertWatcherOptions{PoolInterval: poolingInterval},
+		&CertWatcherOptions{PollInterval: poolingInterval},
 		paths.RootCACert,
 	).SetClientRootCertificatesWatcher(
-		&CertWatcherOptions{PoolInterval: poolingInterval},
+		&CertWatcherOptions{PollInterval: poolingInterval},
 		paths.RootCACert,
 	).SetDebug(false)
 

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -754,4 +756,147 @@ func TestRetryNonSeekableReaderWithoutFactoryReturnsError(t *testing.T) {
 
 	assertErrorIs(t, ErrReaderNotSeekable, err)
 	assertEqual(t, 1, attemptCount)
+}
+
+// Resty opens files named by SetFile itself and closes them after every attempt,
+// so a retry used to seek an already-closed handle and abandon the request. The
+// sniffed content-type head must also be sent exactly once per attempt.
+func TestMultipartRetryResendsIdenticalFile(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []string
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(body))
+		mu.Unlock()
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	_, err := c.R().
+		SetRetryCount(1).
+		SetRetryWaitTime(time.Millisecond).
+		SetRetryMaxWaitTime(2*time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		AddRetryConditions(func(res *Response, _ error) bool { return true }).
+		SetFile("file", filepath.Join(getTestDataPath(), "text-file.txt")).
+		Post(ts.URL)
+	assertNil(t, err)
+
+	const payload = "THIS IS TEXT FILE FOR MULTIPART UPLOAD TEST :)"
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertEqual(t, 2, len(bodies))
+	for _, body := range bodies {
+		// exactly once: the sniffed head is neither dropped nor re-sent
+		assertEqual(t, 1, strings.Count(body, payload))
+		assertEqual(t, 1, strings.Count(body, "text-file.txt"))
+	}
+}
+
+// mime/multipart writes part headers verbatim, so CR and LF in a field name,
+// filename or content type must be percent-encoded. Resty's escaper was a fork
+// of the stdlib one with those two replacements dropped, which let an
+// attacker-controlled filename inject headers or forge an entire extra part.
+func TestEscapeQuotesEncodesCRLF(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		in     string
+		expect string
+	}{
+		{"carriage return", "a\rb", "a%0Db"},
+		{"line feed", "a\nb", "a%0Ab"},
+		{"crlf pair", "a\r\nb", "a%0D%0Ab"},
+		{"quote still escaped", `a"b`, `a\"b`},
+		{"backslash still escaped", `a\b`, `a\\b`},
+		{"plain text untouched", "report.pdf", "report.pdf"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertEqual(t, tc.expect, escapeQuotes(tc.in))
+		})
+	}
+}
+
+func TestMultipartFileNameCannotInjectParts(t *testing.T) {
+	var gotRole string
+	var partCount int
+	var parseErr error
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		mr, err := r.MultipartReader()
+		if err != nil {
+			parseErr = err
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		for {
+			p, err := mr.NextPart()
+			if err != nil {
+				break
+			}
+			partCount++
+			if p.FormName() == "role" {
+				b, _ := io.ReadAll(p)
+				gotRole = string(b)
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	// A filename carrying a forged part boundary and an extra form field.
+	evil := "x.txt\"\r\n\r\nnot-a-part\r\n--BOUND\r\n" +
+		"Content-Disposition: form-data; name=\"role\"\r\n\r\nadmin\r\n--BOUND--\r\n"
+
+	res, err := c.R().
+		SetMultipartBoundary("BOUND").
+		SetFileReader("file", evil, strings.NewReader("real content")).
+		Post(ts.URL)
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+
+	// A real multipart parser must see exactly the one part Resty intended,
+	// and no injected "role" field.
+	assertNil(t, parseErr)
+	assertEqual(t, 1, partCount)
+	assertEqual(t, "", gotRole)
+}
+
+// A field carrying only Values has no reader to rewind, so it must not make the
+// retry fail with ErrReaderNotSeekable.
+func TestMultipartRetryWithOrderedFormData(t *testing.T) {
+	var attempts int32
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&attempts, 1)
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "pending") {
+			t.Errorf("attempt %d did not carry the ordered values: %q", n, body)
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	res, err := c.R().
+		SetRetryCount(2).
+		SetRetryWaitTime(time.Millisecond).
+		SetRetryMaxWaitTime(2*time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		AddRetryConditions(func(res *Response, _ error) bool {
+			return res != nil && res.StatusCode() == http.StatusInternalServerError
+		}).
+		SetMultipartOrderedFormData("status", []string{"pending", "approved"}).
+		Post(ts.URL)
+
+	assertNil(t, err)
+	assertEqual(t, http.StatusInternalServerError, res.StatusCode())
+	assertEqual(t, int32(3), atomic.LoadInt32(&attempts))
 }

@@ -18,7 +18,7 @@ func TestRateLimiterTokenBucket(t *testing.T) {
 	t.Run("allow", func(t *testing.T) {
 		l := NewRateLimitTokenBucket(100, 5)
 		for i := range 5 {
-			err := l.Allow(context.Background())
+			err := l.Wait(context.Background())
 			assertNil(t, err, fmt.Sprintf("unexpected error on iteration %d", i))
 		}
 	})
@@ -28,25 +28,25 @@ func TestRateLimiterTokenBucket(t *testing.T) {
 		l := NewRateLimitTokenBucket(1, 1)
 
 		// First call should succeed immediately (burst token available).
-		err := l.Allow(context.Background())
+		err := l.Wait(context.Background())
 		assertNil(t, err)
 
 		// Second call: no token available, context with very short deadline should time out.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
-		err = l.Allow(ctx)
+		err = l.Wait(ctx)
 		assertErrorIs(t, ErrRateLimitExceeded, err)
 	})
 
 	t.Run("context cancellation", func(t *testing.T) {
 		// rate=1/s, burst=1 -> drain burst first, then cancel
 		l := NewRateLimitTokenBucket(1, 1)
-		_ = l.Allow(context.Background()) // drain the single burst token
+		_ = l.Wait(context.Background()) // drain the single burst token
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // already cancelled
 
-		err := l.Allow(ctx)
+		err := l.Wait(ctx)
 		assertErrorIs(t, ErrRateLimitExceeded, err)
 	})
 
@@ -55,7 +55,7 @@ func TestRateLimiterTokenBucket(t *testing.T) {
 		l := NewRateLimitTokenBucket(10, 1)
 
 		// Drain burst.
-		err := l.Allow(context.Background())
+		err := l.Wait(context.Background())
 		assertNil(t, err)
 
 		// Wait for one token to refill, then allow should succeed.
@@ -63,7 +63,7 @@ func TestRateLimiterTokenBucket(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
-		err = l.Allow(ctx)
+		err = l.Wait(ctx)
 		assertNil(t, err, "expected token to be available after refill interval")
 	})
 }
@@ -163,7 +163,7 @@ type customTestLimiter struct {
 	calls *atomic.Int32
 }
 
-func (l *customTestLimiter) Allow(_ context.Context) error {
+func (l *customTestLimiter) Wait(_ context.Context) error {
 	l.calls.Add(1)
 	if !l.allow {
 		return ErrRateLimitExceeded
@@ -175,7 +175,7 @@ func TestRateLimiterSlidingWindow(t *testing.T) {
 	t.Run("allow", func(t *testing.T) {
 		l := NewRateLimitSlidingWindow(5, time.Second)
 		for i := range 5 {
-			err := l.Allow(context.Background())
+			err := l.Wait(context.Background())
 			assertNil(t, err, fmt.Sprintf("unexpected error on iteration %d: %v", i, err))
 		}
 	})
@@ -183,23 +183,23 @@ func TestRateLimiterSlidingWindow(t *testing.T) {
 	t.Run("limit exhausted", func(t *testing.T) {
 		// 2 requests per second window; drain both slots immediately.
 		l := NewRateLimitSlidingWindow(2, time.Second)
-		assertNil(t, l.Allow(context.Background()))
-		assertNil(t, l.Allow(context.Background()))
+		assertNil(t, l.Wait(context.Background()))
+		assertNil(t, l.Wait(context.Background()))
 
 		// Third request: window is full, short deadline must be rejected.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
-		err := l.Allow(ctx)
+		err := l.Wait(ctx)
 		assertErrorIs(t, ErrRateLimitExceeded, err)
 	})
 
 	t.Run("context cancellation", func(t *testing.T) {
 		l := NewRateLimitSlidingWindow(1, time.Second)
-		assertNil(t, l.Allow(context.Background())) // drain the single slot
+		assertNil(t, l.Wait(context.Background())) // drain the single slot
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // already cancelled
-		err := l.Allow(ctx)
+		err := l.Wait(ctx)
 		assertErrorIs(t, ErrRateLimitExceeded, err)
 	})
 
@@ -207,13 +207,13 @@ func TestRateLimiterSlidingWindow(t *testing.T) {
 		// Window of 100 ms, limit 1: after the first request, wait >100 ms and
 		// the slot should become available again.
 		l := NewRateLimitSlidingWindow(1, 100*time.Millisecond)
-		assertNil(t, l.Allow(context.Background()))
+		assertNil(t, l.Wait(context.Background()))
 
 		time.Sleep(120 * time.Millisecond)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
-		err := l.Allow(ctx)
+		err := l.Wait(ctx)
 		assertNil(t, err, "expected slot to be available after window slides")
 	})
 
@@ -263,12 +263,12 @@ func TestRateLimiterErrorWrapsContextCause(t *testing.T) {
 
 	for name, l := range limiters {
 		t.Run(name, func(t *testing.T) {
-			assertNil(t, l.Allow(context.Background())) // consume the only slot
+			assertNil(t, l.Wait(context.Background())) // consume the only slot
 
 			t.Run("cancelled", func(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
-				err := l.Allow(ctx)
+				err := l.Wait(ctx)
 				assertErrorIs(t, ErrRateLimitExceeded, err)
 				assertErrorIs(t, context.Canceled, err)
 			})
@@ -276,7 +276,7 @@ func TestRateLimiterErrorWrapsContextCause(t *testing.T) {
 			t.Run("deadline exceeded", func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 				defer cancel()
-				err := l.Allow(ctx)
+				err := l.Wait(ctx)
 				assertErrorIs(t, ErrRateLimitExceeded, err)
 				assertErrorIs(t, context.DeadlineExceeded, err)
 			})
