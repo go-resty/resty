@@ -332,20 +332,6 @@ func (c *Client) Header() http.Header {
 	return c.header.Clone()
 }
 
-// mergeHeaderInto copies the client headers into dst, skipping keys dst already
-// carries. The lock is held across the whole copy; [Client.Header] cannot be used
-// for this because the caller would iterate the snapshot after releasing it.
-func (c *Client) mergeHeaderInto(dst http.Header) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	for k, v := range c.header {
-		if _, ok := dst[k]; ok {
-			continue
-		}
-		dst[k] = slices.Clone(v)
-	}
-}
-
 // SetHeader method sets a single header and its value in the client instance.
 // These headers will be applied to all requests raised from the client instance.
 // Also, it can be overridden by request-level header options.
@@ -400,36 +386,6 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 	defer c.lock.Unlock()
 	for h, v := range headers {
 		c.header.Set(h, v)
-	}
-	return c
-}
-
-// AddHeader method adds a single header and its value to the client instance,
-// keeping any values already present for that key.
-//
-// See [Client.SetHeader] to replace the existing values instead.
-//
-//	client.
-//		AddHeader("Accept", "text/html").
-//		AddHeader("Accept", "application/json")
-func (c *Client) AddHeader(header, value string) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.header.Add(header, value)
-	return c
-}
-
-// SetHeaderMultiValues method sets multiple headers along with their multiple
-// values from a map in the client instance.
-//
-// See [Request.SetHeaderMultiValues].
-//
-//	client.SetHeaderMultiValues(map[string][]string{
-//		"Accept": []string{"text/html", "application/xhtml+xml", "application/xml;q=0.9"},
-//	})
-func (c *Client) SetHeaderMultiValues(headers map[string][]string) *Client {
-	for key, values := range headers {
-		c.SetHeader(key, strings.Join(values, ", "))
 	}
 	return c
 }
@@ -562,20 +518,6 @@ func (c *Client) QueryParams() url.Values {
 	return cloneURLValues(c.queryParams)
 }
 
-// mergeQueryParamsInto copies the client query parameters into dst, skipping keys
-// dst already carries. See [Client.mergeHeaderInto] for why this is not built on
-// the public accessor.
-func (c *Client) mergeQueryParamsInto(dst url.Values) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	for k, v := range c.queryParams {
-		if _, ok := dst[k]; ok {
-			continue
-		}
-		dst[k] = slices.Clone(v)
-	}
-}
-
 // SetQueryParam method sets a single parameter and its value in the client instance.
 // It will be formed as a query string for the request.
 //
@@ -649,54 +591,6 @@ func (c *Client) FormData() url.Values {
 	return cloneURLValues(c.formData)
 }
 
-// mergeFormDataInto copies the client form data into dst, skipping keys dst
-// already carries. See [Client.mergeHeaderInto] for why this is not built on the
-// public accessor.
-func (c *Client) mergeFormDataInto(dst url.Values) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	for k, v := range c.formData {
-		if _, ok := dst[k]; ok {
-			continue
-		}
-		dst[k] = slices.Clone(v)
-	}
-}
-
-// AddQueryParam method adds a single query parameter and its value to the client
-// instance, keeping any values already present for that key.
-//
-// See [Client.SetQueryParam] to replace the existing values instead.
-//
-//	client.
-//		AddQueryParam("status", "pending").
-//		AddQueryParam("status", "approved")
-func (c *Client) AddQueryParam(param, value string) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.queryParams.Add(param, value)
-	return c
-}
-
-// SetQueryParamsFromValues method sets multiple query parameters with multiple
-// values from [url.Values] in the client instance.
-//
-// See [Request.SetQueryParamsFromValues].
-//
-//	client.SetQueryParamsFromValues(url.Values{
-//		"status": []string{"pending", "approved", "open"},
-//	})
-func (c *Client) SetQueryParamsFromValues(params url.Values) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	for p, v := range params {
-		for _, pv := range v {
-			c.queryParams.Add(p, pv)
-		}
-	}
-	return c
-}
-
 // SetFormData method sets Form parameters and their values in the client instance.
 // The request content type would be set as `application/x-www-form-urlencoded`.
 // The client-level form data gets added to all the requests. Also, it can be
@@ -713,25 +607,6 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 	defer c.lock.Unlock()
 	for k, v := range data {
 		c.formData.Set(k, v)
-	}
-	return c
-}
-
-// SetFormDataFromValues method sets multiple form parameters with multiple values
-// from [url.Values] in the client instance.
-//
-// See [Request.SetFormDataFromValues].
-//
-//	client.SetFormDataFromValues(url.Values{
-//		"search_criteria": []string{"book", "glass", "pencil"},
-//	})
-func (c *Client) SetFormDataFromValues(data url.Values) *Client {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	for k, v := range data {
-		for _, kv := range v {
-			c.formData.Add(k, kv)
-		}
 	}
 	return c
 }
@@ -2223,20 +2098,6 @@ func (c *Client) PathParams() map[string]string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return maps.Clone(c.pathParams)
-}
-
-// mergePathParamsInto copies the client path parameters into dst, skipping keys
-// dst already carries. See [Client.mergeHeaderInto] for why this is not built on
-// the public accessor.
-func (c *Client) mergePathParamsInto(dst map[string]string) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	for k, v := range c.pathParams {
-		if _, ok := dst[k]; ok {
-			continue
-		}
-		dst[k] = v
-	}
 }
 
 // SetPathParam method sets a single URL path key-value pair in the

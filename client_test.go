@@ -1890,27 +1890,3 @@ func TestClientMutationDuringRequestsIsRaceFree(t *testing.T) {
 	close(stop)
 	wg.Wait()
 }
-
-// Client had no multi-value setters, so Header().Add() on the live map was the
-// only way to reach them. The accessors now return snapshots, so these exist.
-func TestClientMultiValueSetters(t *testing.T) {
-	c := dcnl()
-	defer c.Close()
-
-	c.AddHeader("X-Multi", "one").AddHeader("X-Multi", "two")
-	assertEqual(t, 2, len(c.Header()["X-Multi"]))
-
-	c.SetHeaderMultiValues(map[string][]string{
-		"Accept": {"text/html", "application/json"},
-	})
-	assertEqual(t, "text/html, application/json", c.Header().Get("Accept"))
-
-	c.AddQueryParam("status", "pending").AddQueryParam("status", "approved")
-	assertEqual(t, 2, len(c.QueryParams()["status"]))
-
-	c.SetQueryParamsFromValues(url.Values{"tag": {"a", "b", "c"}})
-	assertEqual(t, 3, len(c.QueryParams()["tag"]))
-
-	c.SetFormDataFromValues(url.Values{"criteria": {"book", "glass"}})
-	assertEqual(t, 2, len(c.FormData()["criteria"]))
-}

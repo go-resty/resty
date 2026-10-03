@@ -1419,12 +1419,14 @@ func TestClientValuesAreNotAliasedIntoRequests(t *testing.T) {
 
 	// Set then two Adds leaves len 3 in a cap 4 array: one spare slot, which is
 	// where a request's own Add would write.
+	// Client has no multi-value setters and its accessors return snapshots, so
+	// build the fixture on the underlying maps.
 	c.SetHeader("X-Multi", "one")
-	c.AddHeader("X-Multi", "two")
-	c.AddHeader("X-Multi", "three")
+	c.header.Add("X-Multi", "two")
+	c.header.Add("X-Multi", "three")
 	c.SetQueryParam("tag", "a")
-	c.AddQueryParam("tag", "b")
-	c.AddQueryParam("tag", "c")
+	c.queryParams.Add("tag", "b")
+	c.queryParams.Add("tag", "c")
 
 	newRequest := func(path, marker string) *Request {
 		r := c.R()

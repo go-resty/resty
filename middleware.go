@@ -18,6 +18,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -60,9 +61,15 @@ func MiddlewareRequestCreate(c *Client, r *Request) (err error) {
 }
 
 func parseRequestURL(c *Client, r *Request) error {
-	// GitHub #103 Path Params, #663 Raw Path Params
-	c.mergePathParamsInto(r.PathParams)
-	if len(r.PathParams) > 0 {
+	if len(c.PathParams())+len(r.PathParams) > 0 {
+		// GitHub #103 Path Params, #663 Raw Path Params
+		for p, v := range c.PathParams() {
+			if _, ok := r.PathParams[p]; ok {
+				continue
+			}
+			r.PathParams[p] = v
+		}
+
 		var prev int
 		buf := acquireBuffer()
 		defer releaseBuffer(buf)
@@ -151,8 +158,14 @@ func parseRequestURL(c *Client, r *Request) error {
 	}
 
 	// Adding Query Param
-	c.mergeQueryParamsInto(r.QueryParams)
-	if len(r.QueryParams) > 0 {
+	if len(c.QueryParams())+len(r.QueryParams) > 0 {
+		for k, v := range c.QueryParams() {
+			if _, ok := r.QueryParams[k]; ok {
+				continue
+			}
+			r.QueryParams[k] = slices.Clone(v)
+		}
+
 		// GitHub #123 Preserve query string order partially.
 		// Since not feasible in `SetQuery*` resty methods, because
 		// standard package `url.Encode(...)` sorts the query params
@@ -179,7 +192,12 @@ func parseRequestURL(c *Client, r *Request) error {
 }
 
 func parseRequestHeader(c *Client, r *Request) {
-	c.mergeHeaderInto(r.Header)
+	for k, v := range c.Header() {
+		if _, ok := r.Header[k]; ok {
+			continue
+		}
+		r.Header[k] = slices.Clone(v)
+	}
 
 	if !r.isHeaderExists(hdrUserAgentKey) {
 		r.Header.Set(hdrUserAgentKey, hdrUserAgentValue)
@@ -332,7 +350,12 @@ func handleMultipartFormData(r *Request) error {
 }
 
 func handleMultipart(c *Client, r *Request) error {
-	c.mergeFormDataInto(r.FormData)
+	for k, v := range c.FormData() {
+		if _, ok := r.FormData[k]; ok {
+			continue
+		}
+		r.FormData[k] = slices.Clone(v)
+	}
 
 	if len(r.multipartFields) == 0 {
 		return handleMultipartFormData(r)
@@ -425,7 +448,12 @@ func handleMultipart(c *Client, r *Request) error {
 }
 
 func handleFormData(c *Client, r *Request) {
-	c.mergeFormDataInto(r.FormData)
+	for k, v := range c.FormData() {
+		if _, ok := r.FormData[k]; ok {
+			continue
+		}
+		r.FormData[k] = slices.Clone(v)
+	}
 
 	r.bodyBuf = acquireBuffer()
 	r.bodyBuf.WriteString(r.FormData.Encode())
