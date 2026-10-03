@@ -1899,6 +1899,10 @@ func isConnectionRefused(err error) bool {
 
 func (r *Request) resetFileReaders() error {
 	for _, f := range r.multipartFields {
+		// value-only fields have no reader; they are rewritten from Values on each attempt
+		if f.isValues() {
+			continue
+		}
 		if err := f.resetReader(); err != nil {
 			return err
 		}
