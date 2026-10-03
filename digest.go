@@ -180,6 +180,11 @@ func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error
 }
 
 func (dt *digestTransport) createCredentials(cha *digestChallenge, req *http.Request) (*digestCredentials, error) {
+	// newHashFunc below needs a supported algorithm; validate it up front.
+	if _, ok := digestHashFuncs[cha.algorithm]; !ok {
+		return nil, ErrDigestAlgNotSupported
+	}
+
 	cred := &digestCredentials{
 		username:      dt.Username,
 		password:      dt.Password,
