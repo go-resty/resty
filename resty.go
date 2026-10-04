@@ -178,8 +178,8 @@ func createClient(hc *http.Client) *Client {
 		debugBodyLimit:           math.MaxInt32,
 		contentTypeEncoders:      make(map[string]ContentTypeEncoder),
 		contentTypeDecoders:      make(map[string]ContentTypeDecoder),
-		contentDecompresserKeys:  make([]string, 0),
-		contentDecompressers:     make(map[string]ContentDecompresser),
+		contentDecompressorKeys:  make([]string, 0),
+		contentDecompressors:     make(map[string]ContentDecompressor),
 		certWatcherStopChan:      make(chan bool),
 	}
 
@@ -194,8 +194,8 @@ func createClient(hc *http.Client) *Client {
 	c.AddContentTypeDecoder(xmlKey, decodeXML)
 
 	// Order matter, giving priority to gzip
-	c.AddContentDecompresser("deflate", decompressDeflate)
-	c.AddContentDecompresser("gzip", decompressGzip)
+	c.AddContentDecompressor("deflate", decompressDeflate)
+	c.AddContentDecompressor("gzip", decompressGzip)
 
 	// request middlewares
 	c.SetRequestMiddlewares(

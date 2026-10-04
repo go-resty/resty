@@ -250,7 +250,7 @@ func TestCircuitBreakerHalfOpenToOpenOnError(t *testing.T) {
 		mwErr := errors.New("middleware failure")
 
 		c := dcnl().SetCircuitBreaker(cb)
-		c.AddRequestMiddleware(func(_ *Client, _ *Request) error {
+		c.AddRequestMiddlewares(func(_ *Client, _ *Request) error {
 			return mwErr
 		})
 
@@ -274,7 +274,7 @@ func TestCircuitBreakerOpenCancelsPreviousResetTimer(t *testing.T) {
 	cbc := cb.circuitBreakerBase
 
 	var halfOpenTransitions int32
-	cbc.OnStateChange(func(oldState, newState CircuitBreakerState) {
+	cbc.addStateChangeHooks(func(oldState, newState CircuitBreakerState) {
 		if oldState == CircuitBreakerStateOpen && newState == CircuitBreakerStateHalfOpen {
 			atomic.AddInt32(&halfOpenTransitions, 1)
 		}
@@ -357,12 +357,12 @@ func TestCircuitBreakerOnTriggerHooks(t *testing.T) {
 
 	called := false
 	var gotErr error
-	cbc.OnTrigger(func(r *Request, e error) {
+	cbc.addTriggerHooks(func(r *Request, e error) {
 		called = true
 		gotErr = e
 	})
 
-	cbc.RunOnTriggerHooks(nil, ErrCircuitBreakerOpen)
+	cbc.runOnTriggerHooks(nil, ErrCircuitBreakerOpen)
 
 	assertTrue(t, called, "expected onTrigger hook to be called")
 	assertEqual(t, ErrCircuitBreakerOpen, gotErr, "expected error to be passed to onTrigger hook")
@@ -374,13 +374,13 @@ func TestCircuitBreakerOnStateChangeHooks(t *testing.T) {
 
 	called := false
 	var oldState, newState CircuitBreakerState
-	cbc.OnStateChange(func(o, n CircuitBreakerState) {
+	cbc.addStateChangeHooks(func(o, n CircuitBreakerState) {
 		called = true
 		oldState = o
 		newState = n
 	})
 
-	cbc.RunOnStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateOpen)
+	cbc.runOnStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateOpen)
 
 	assertTrue(t, called)
 	assertEqual(t, CircuitBreakerStateClosed, oldState, "expected old state to be passed to onStateChange hook")
@@ -392,17 +392,17 @@ func TestCircuitBreakerMultipleHooksAreCalled(t *testing.T) {
 	cbc := cb.circuitBreakerBase
 
 	triggerCount := 0
-	cbc.OnTrigger(func(_ *Request, _ error) { triggerCount++ })
-	cbc.OnTrigger(func(_ *Request, _ error) { triggerCount++ })
+	cbc.addTriggerHooks(func(_ *Request, _ error) { triggerCount++ })
+	cbc.addTriggerHooks(func(_ *Request, _ error) { triggerCount++ })
 
-	cbc.RunOnTriggerHooks(nil, ErrCircuitBreakerOpen)
+	cbc.runOnTriggerHooks(nil, ErrCircuitBreakerOpen)
 	assertEqual(t, 2, triggerCount, "expected both trigger hooks to be called")
 
 	stateCount := 0
-	cbc.OnStateChange(func(_, _ CircuitBreakerState) { stateCount++ })
-	cbc.OnStateChange(func(_, _ CircuitBreakerState) { stateCount++ })
+	cbc.addStateChangeHooks(func(_, _ CircuitBreakerState) { stateCount++ })
+	cbc.addStateChangeHooks(func(_, _ CircuitBreakerState) { stateCount++ })
 
-	cbc.RunOnStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateHalfOpen)
+	cbc.runOnStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateHalfOpen)
 	assertEqual(t, 2, stateCount, "expected both state change hooks to be called")
 }
 
@@ -416,7 +416,7 @@ func TestCircuitBreakerConcurrentOnTriggerRegistration(t *testing.T) {
 	wg.Add(n)
 	for i := 0; i < n; i++ {
 		go func() {
-			cbc.OnTrigger(func(_ *Request, _ error) {
+			cbc.addTriggerHooks(func(_ *Request, _ error) {
 				atomic.AddInt32(&cnt, 1)
 			})
 			wg.Done()
@@ -424,7 +424,7 @@ func TestCircuitBreakerConcurrentOnTriggerRegistration(t *testing.T) {
 	}
 	wg.Wait()
 
-	cbc.RunOnTriggerHooks(nil, ErrCircuitBreakerOpen)
+	cbc.runOnTriggerHooks(nil, ErrCircuitBreakerOpen)
 	got := atomic.LoadInt32(&cnt)
 	assertEqual(t, int32(n), got, "expected N hooks executed")
 }
@@ -439,7 +439,7 @@ func TestCircuitBreakerConcurrentOnStateChangeRegistration(t *testing.T) {
 	wg.Add(n)
 	for i := 0; i < n; i++ {
 		go func() {
-			cbc.OnStateChange(func(_, _ CircuitBreakerState) {
+			cbc.addStateChangeHooks(func(_, _ CircuitBreakerState) {
 				atomic.AddInt32(&cnt, 1)
 			})
 			wg.Done()
@@ -447,7 +447,7 @@ func TestCircuitBreakerConcurrentOnStateChangeRegistration(t *testing.T) {
 	}
 	wg.Wait()
 
-	cbc.RunOnStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateOpen)
+	cbc.runOnStateChangeHooks(CircuitBreakerStateClosed, CircuitBreakerStateOpen)
 	got := atomic.LoadInt32(&cnt)
 	assertEqual(t, int32(n), got, "expected N state change hooks executed")
 }
@@ -528,4 +528,37 @@ func TestCircuitBreakerSlidingWindowResetWhenElapsedExceedsBuckets(t *testing.T)
 	assertEqual(t, 1, got.total, "after reset expected total=1")
 	assertEqual(t, 1, got.failures, "after reset expected failures=1")
 	assertEqual(t, 0, sw.idx, "expected idx reset to 0")
+}
+
+// CircuitBreakerObserver did not embed CircuitBreaker, so the documented way to
+// attach a hook did not compile: OnTrigger returned an interface that
+// SetCircuitBreaker would not accept.
+func TestCircuitBreakerObserverIsUsableAsCircuitBreaker(t *testing.T) {
+	var triggered, changed int32
+
+	for _, cb := range []CircuitBreakerObserver{
+		NewCircuitBreakerCount(1, 1, 50*time.Millisecond).
+			OnTrigger(func(*Request, error) { atomic.AddInt32(&triggered, 1) }).
+			OnStateChange(func(_, _ CircuitBreakerState) { atomic.AddInt32(&changed, 1) }),
+		NewCircuitBreakerRatio(0.5, 1, 50*time.Millisecond).
+			OnTrigger(func(*Request, error) { atomic.AddInt32(&triggered, 1) }).
+			OnStateChange(func(_, _ CircuitBreakerState) { atomic.AddInt32(&changed, 1) }),
+	} {
+		// the observer satisfies CircuitBreaker, so this compiles and runs
+		var asBreaker CircuitBreaker = cb
+		assertNil(t, asBreaker.Allow())
+		assertEqual(t, CircuitBreakerStateClosed, cb.State())
+
+		c := dcnl().SetCircuitBreaker(cb)
+		c.Close()
+	}
+}
+
+func TestCircuitBreakerStateAccessor(t *testing.T) {
+	cb := NewCircuitBreakerCount(1, 1, time.Hour)
+	assertEqual(t, CircuitBreakerStateClosed, cb.State())
+
+	cb.open()
+	assertEqual(t, CircuitBreakerStateOpen, cb.State())
+	assertErrorIs(t, ErrCircuitBreakerOpen, cb.Allow())
 }

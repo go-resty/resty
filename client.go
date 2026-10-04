@@ -53,12 +53,12 @@ const (
 )
 
 const (
-	defaultWatcherPoolingInterval = 24 * time.Hour
+	defaultWatcherPollingInterval = 24 * time.Hour
 )
 
 var (
-	// ErrNotHttpTransportType is returned when the underlying transport is not an [http.Transport].
-	ErrNotHttpTransportType = errors.New("resty: not a http.Transport type")
+	// ErrNotHTTPTransportType is returned when the underlying transport is not an [http.Transport].
+	ErrNotHTTPTransportType = errors.New("resty: not a http.Transport type")
 
 	// ErrUnsupportedRequestBodyKind is returned when the request body is of an unsupported kind.
 	ErrUnsupportedRequestBodyKind = errors.New("resty: unsupported request body kind")
@@ -101,7 +101,7 @@ type (
 	//   - Intercept Request instance for manipulation
 	//   - Terminate the Request early by returning non-nil error
 	//   - etc.
-	// See methods [Client.AddRequestMiddleware], [Client.SetRequestMiddlewares].
+	// See methods [Client.AddRequestMiddlewares], [Client.SetRequestMiddlewares].
 	//
 	// Resty provides some built-in request middlewares such as:
 	//   - [PrepareRequestMiddleware]: creates the [http.Request] instance using the Resty [Request] instance.
@@ -117,7 +117,7 @@ type (
 	//     the [Response].CascadeError field.
 	//   - Before processing your middleware, ensure to check [Response].CascadeError.
 	//
-	// See methods [Client.AddResponseMiddleware], [Client.SetResponseMiddlewares].
+	// See methods [Client.AddResponseMiddlewares], [Client.SetResponseMiddlewares].
 	//
 	// Resty provides some built-in response middlewares such as:
 	//   - [AutoParseResponseMiddleware]: automatically parses the response body into the provided
@@ -146,6 +146,13 @@ type (
 	TLSClientConfiger interface {
 		TLSClientConfig() *tls.Config
 		SetTLSClientConfig(*tls.Config) error
+	}
+
+	// transportWrapper is implemented by the transports Resty layers over the
+	// client's own, so settings that need the underlying [http.Transport] can
+	// still reach it. See [httpTransportOf].
+	transportWrapper interface {
+		unwrap() http.RoundTripper
 	}
 )
 
@@ -263,8 +270,8 @@ type Client struct {
 	closeHooks                 []CloseHook
 	contentTypeEncoders        map[string]ContentTypeEncoder
 	contentTypeDecoders        map[string]ContentTypeDecoder
-	contentDecompresserKeys    []string
-	contentDecompressers       map[string]ContentDecompresser
+	contentDecompressorKeys    []string
+	contentDecompressors       map[string]ContentDecompressor
 	certWatcherStopChan        chan bool
 	isClosed                   bool
 	circuitBreaker             CircuitBreaker
@@ -276,9 +283,9 @@ type Client struct {
 // certificates dynamically. See [Client.SetRootCertificatesWatcher],
 // [Client.SetClientRootCertificatesWatcher].
 type CertWatcherOptions struct {
-	// PoolInterval is the frequency at which resty will check if the PEM file needs to be reloaded.
+	// PollInterval is the frequency at which resty will check if the PEM file needs to be reloaded.
 	// Default is 24 hours.
-	PoolInterval time.Duration
+	PollInterval time.Duration
 }
 
 //‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
@@ -323,10 +330,27 @@ func (c *Client) SetLoadBalancer(b LoadBalancer) *Client {
 }
 
 // Header method returns the headers from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) Header() http.Header {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.header
+	return c.header.Clone()
+}
+
+// mergeHeaderInto copies the client headers into dst, skipping keys dst already
+// carries. The lock is held across the whole copy; [Client.Header] cannot be used
+// for this because the caller would iterate the snapshot after releasing it.
+func (c *Client) mergeHeaderInto(dst http.Header) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for k, v := range c.header {
+		if _, ok := dst[k]; ok {
+			continue
+		}
+		dst[k] = slices.Clone(v)
+	}
 }
 
 // SetHeader method sets a single header and its value in the client instance.
@@ -383,6 +407,36 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 	defer c.lock.Unlock()
 	for h, v := range headers {
 		c.header.Set(h, v)
+	}
+	return c
+}
+
+// AddHeader method adds a single header and its value to the client instance,
+// keeping any values already present for that key.
+//
+// See [Client.SetHeader] to replace the existing values instead.
+//
+//	client.
+//		AddHeader("Accept", "text/html").
+//		AddHeader("Accept", "application/json")
+func (c *Client) AddHeader(header, value string) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.header.Add(header, value)
+	return c
+}
+
+// SetHeaderMultiValues method sets multiple headers along with their multiple
+// values from a map in the client instance.
+//
+// See [Request.SetHeaderMultiValues].
+//
+//	client.SetHeaderMultiValues(map[string][]string{
+//		"Accept": []string{"text/html", "application/xhtml+xml", "application/xml;q=0.9"},
+//	})
+func (c *Client) SetHeaderMultiValues(headers map[string][]string) *Client {
+	for key, values := range headers {
+		c.SetHeader(key, strings.Join(values, ", "))
 	}
 	return c
 }
@@ -459,10 +513,13 @@ func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
 }
 
 // Cookies method returns all cookies registered in the client instance.
+//
+// The returned slice is a snapshot; appending to it does not affect the client.
+// The [http.Cookie] values themselves are shared and must not be mutated.
 func (c *Client) Cookies() []*http.Cookie {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.cookies
+	return slices.Clone(c.cookies)
 }
 
 // SetCookie method appends a single cookie to the client instance.
@@ -503,10 +560,27 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 }
 
 // QueryParams method returns all query parameters and their values from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) QueryParams() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.queryParams
+	return cloneURLValues(c.queryParams)
+}
+
+// mergeQueryParamsInto copies the client query parameters into dst, skipping keys
+// dst already carries. See [Client.mergeHeaderInto] for why this is not built on
+// the public accessor.
+func (c *Client) mergeQueryParamsInto(dst url.Values) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for k, v := range c.queryParams {
+		if _, ok := dst[k]; ok {
+			continue
+		}
+		dst[k] = slices.Clone(v)
+	}
 }
 
 // SetQueryParam method sets a single parameter and its value in the client instance.
@@ -573,10 +647,61 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 }
 
 // FormData method returns the form parameters and their values from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) FormData() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.formData
+	return cloneURLValues(c.formData)
+}
+
+// mergeFormDataInto copies the client form data into dst, skipping keys dst
+// already carries. See [Client.mergeHeaderInto] for why this is not built on the
+// public accessor.
+func (c *Client) mergeFormDataInto(dst url.Values) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for k, v := range c.formData {
+		if _, ok := dst[k]; ok {
+			continue
+		}
+		dst[k] = slices.Clone(v)
+	}
+}
+
+// AddQueryParam method adds a single query parameter and its value to the client
+// instance, keeping any values already present for that key.
+//
+// See [Client.SetQueryParam] to replace the existing values instead.
+//
+//	client.
+//		AddQueryParam("status", "pending").
+//		AddQueryParam("status", "approved")
+func (c *Client) AddQueryParam(param, value string) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.queryParams.Add(param, value)
+	return c
+}
+
+// SetQueryParamsFromValues method sets multiple query parameters with multiple
+// values from [url.Values] in the client instance.
+//
+// See [Request.SetQueryParamsFromValues].
+//
+//	client.SetQueryParamsFromValues(url.Values{
+//		"status": []string{"pending", "approved", "open"},
+//	})
+func (c *Client) SetQueryParamsFromValues(params url.Values) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for p, v := range params {
+		for _, pv := range v {
+			c.queryParams.Add(p, pv)
+		}
+	}
+	return c
 }
 
 // SetFormData method sets Form parameters and their values in the client instance.
@@ -595,6 +720,25 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 	defer c.lock.Unlock()
 	for k, v := range data {
 		c.formData.Set(k, v)
+	}
+	return c
+}
+
+// SetFormDataFromValues method sets multiple form parameters with multiple values
+// from [url.Values] in the client instance.
+//
+// See [Request.SetFormDataFromValues].
+//
+//	client.SetFormDataFromValues(url.Values{
+//		"search_criteria": []string{"book", "glass", "pencil"},
+//	})
+func (c *Client) SetFormDataFromValues(data url.Values) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for k, v := range data {
+		for _, kv := range v {
+			c.formData.Add(k, kv)
+		}
 	}
 	return c
 }
@@ -778,7 +922,7 @@ func (c *Client) NewRequest() *Request {
 	return c.R()
 }
 
-// AddRequestMiddleware method appends a request middleware to the request chain.
+// AddRequestMiddlewares method appends a request middleware to the request chain.
 // Method accepts a function of type [RequestMiddleware]. All the request middlewares are applied;
 // before sending the request to the server.
 //
@@ -789,7 +933,7 @@ func (c *Client) NewRequest() *Request {
 //
 // See methods [Client.SetRequestMiddlewares].
 //
-//	client.AddRequestMiddleware(func(c *resty.Client, r *resty.Request) error {
+//	client.AddRequestMiddlewares(func(c *resty.Client, r *resty.Request) error {
 //		// Now you have access to the Client and Request instance
 //		// manipulate it as per your need
 //
@@ -798,11 +942,14 @@ func (c *Client) NewRequest() *Request {
 //
 // Resty provides some built-in request middlewares such as:
 //   - [PrepareRequestMiddleware]: creates the [http.Request] instance using the Resty [Request] instance.
-func (c *Client) AddRequestMiddleware(m RequestMiddleware) *Client {
+func (c *Client) AddRequestMiddlewares(middlewares ...RequestMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	idx := len(c.beforeRequest) - 1
-	c.beforeRequest = slices.Insert(c.beforeRequest, idx, m)
+	// Insert before the final middleware so user middlewares run ahead of
+	// [MiddlewareRequestCreate]. max guards slices.Insert against a negative
+	// index when the chain has been emptied via SetRequestMiddlewares().
+	idx := max(len(c.beforeRequest)-1, 0)
+	c.beforeRequest = slices.Insert(c.beforeRequest, idx, middlewares...)
 	return c
 }
 
@@ -820,7 +967,7 @@ func (c *Client) AddRequestMiddleware(m RequestMiddleware) *Client {
 //		Custom4RequestMiddleware,
 //	)
 //
-// See [Client.AddRequestMiddleware] for more details.
+// See [Client.AddRequestMiddlewares] for more details.
 //
 // NOTE:
 //   - It overwrites the existing request middleware list.
@@ -838,7 +985,7 @@ func (c *Client) requestMiddlewares() []RequestMiddleware {
 	return c.beforeRequest
 }
 
-// AddResponseMiddleware method appends a response middleware to the after-response chain.
+// AddResponseMiddlewares method appends a response middleware to the after-response chain.
 // All the response middlewares are executed with a [Response] instance
 // before returning the response to the caller.
 //
@@ -850,17 +997,17 @@ func (c *Client) requestMiddlewares() []RequestMiddleware {
 //
 // Method accepts a function of type [ResponseMiddleware].
 //
-//	client.AddResponseMiddleware(func(c *resty.Client, r *resty.Response) error {
+//	client.AddResponseMiddlewares(func(c *resty.Client, r *resty.Response) error {
 //		// Now you have access to the Client and Response instance
 //		// Also, you could access request via Response.Request i.e., r.Request
 //		// manipulate it as per your need
 //
 //		return nil 	// if it’s successful otherwise return error
 //	})
-func (c *Client) AddResponseMiddleware(m ResponseMiddleware) *Client {
+func (c *Client) AddResponseMiddlewares(middlewares ...ResponseMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.afterResponse = append(c.afterResponse, m)
+	c.afterResponse = append(c.afterResponse, middlewares...)
 	return c
 }
 
@@ -880,7 +1027,7 @@ func (c *Client) AddResponseMiddleware(m ResponseMiddleware) *Client {
 //		Custom5ResponseMiddleware,
 //	)
 //
-// See, [Client.AddResponseMiddleware]
+// See, [Client.AddResponseMiddlewares]
 //
 // NOTE:
 //   - It overwrites the existing response middleware list.
@@ -1035,50 +1182,50 @@ func (c *Client) inferContentTypeDecoder(ct ...string) (ContentTypeDecoder, bool
 	return nil, false
 }
 
-// ContentDecompressers method returns all the registered content-encoding Decompressers.
-func (c *Client) ContentDecompressers() map[string]ContentDecompresser {
+// ContentDecompressors method returns all the registered content-encoding Decompressors.
+func (c *Client) ContentDecompressors() map[string]ContentDecompressor {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.contentDecompressers
+	return maps.Clone(c.contentDecompressors)
 }
 
-// AddContentDecompresser method adds a Content-Encoding ([RFC 9110]) decompresser
+// AddContentDecompressor method adds a Content-Encoding ([RFC 9110]) decompressor
 // and its directive to the client.
 //
-// NOTE: It overwrites the Decompresser function if the given Content-Encoding directive already exists.
+// NOTE: It overwrites the Decompressor function if the given Content-Encoding directive already exists.
 //
 // [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
-func (c *Client) AddContentDecompresser(k string, d ContentDecompresser) *Client {
+func (c *Client) AddContentDecompressor(k string, d ContentDecompressor) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	lk := strings.ToLower(k)
-	if !slices.Contains(c.contentDecompresserKeys, lk) {
-		c.contentDecompresserKeys = slices.Insert(c.contentDecompresserKeys, 0, lk)
+	if !slices.Contains(c.contentDecompressorKeys, lk) {
+		c.contentDecompressorKeys = slices.Insert(c.contentDecompressorKeys, 0, lk)
 	}
-	c.contentDecompressers[lk] = d
+	c.contentDecompressors[lk] = d
 	return c
 }
 
-// ContentDecompresserKeys method returns all the registered content-encoding Decompressers
+// ContentDecompressorKeys method returns all the registered content-encoding Decompressors
 // keys as comma-separated string.
-func (c *Client) ContentDecompresserKeys() string {
+func (c *Client) ContentDecompressorKeys() string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return strings.Join(c.contentDecompresserKeys, ", ")
+	return strings.Join(c.contentDecompressorKeys, ", ")
 }
 
-// SetContentDecompresserKeys method sets given Content-Encoding ([RFC 9110]) directives into the client instance.
+// SetContentDecompressorKeys method sets given Content-Encoding ([RFC 9110]) directives into the client instance.
 //
-// It checks the given Content-Encoding exists in the [ContentDecompresser] list before assigning it,
+// It checks the given Content-Encoding exists in the [ContentDecompressor] list before assigning it,
 // if it does not exist, it will skip that directive.
 //
-// Use this method to overwrite the default order. If a new content Decompresser is added,
+// Use this method to overwrite the default order. If a new content Decompressor is added,
 // that directive will be the first.
 //
 // [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
-func (c *Client) SetContentDecompresserKeys(keys []string) *Client {
+func (c *Client) SetContentDecompressorKeys(keys []string) *Client {
 	result := make([]string, 0)
-	decoders := c.ContentDecompressers()
+	decoders := c.ContentDecompressors()
 	for _, k := range keys {
 		k = strings.ToLower(k)
 		if _, f := decoders[k]; f {
@@ -1088,7 +1235,7 @@ func (c *Client) SetContentDecompresserKeys(keys []string) *Client {
 
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.contentDecompresserKeys = result
+	c.contentDecompressorKeys = result
 	return c
 }
 
@@ -1213,15 +1360,17 @@ func (c *Client) IsDisableWarn() bool {
 	return c.disableWarn
 }
 
-// SetLoggerWarnLevel method controls whether warning log messages are emitted.
-// When d is true, warnings are suppressed. For example, Resty normally warns
-// when BasicAuth is used over a non-TLS connection.
+// SetDisableWarn method disables the warning log messages when disable is true.
+// For example, Resty normally warns when BasicAuth is used over a non-TLS
+// connection.
 //
-//	client.SetLoggerWarnLevel(true)
-func (c *Client) SetLoggerWarnLevel(d bool) *Client {
+// See [Client.IsDisableWarn].
+//
+//	client.SetDisableWarn(true)
+func (c *Client) SetDisableWarn(disable bool) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.disableWarn = d
+	c.disableWarn = disable
 	return c
 }
 
@@ -1309,7 +1458,7 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 }
 
 // ResultError method returns the common error type registered on the client, or nil if none is set.
-func (c *Client) ResultError() reflect.Type {
+func (c *Client) resultErrorType() reflect.Type {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.errorType
@@ -1331,7 +1480,7 @@ func (c *Client) SetResultError(v any) *Client {
 }
 
 func (c *Client) newErrorInterface() any {
-	e := c.ResultError()
+	e := c.resultErrorType()
 	if e == nil {
 		return e
 	}
@@ -1491,7 +1640,7 @@ func (c *Client) SetRetryAllowNonIdempotent(b bool) *Client {
 func (c *Client) RetryConditions() []RetryConditionFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryConditions
+	return slices.Clone(c.retryConditions)
 }
 
 // AddRetryConditions method adds one or more retry condition functions to the client.
@@ -1517,7 +1666,7 @@ func (c *Client) AddRetryConditions(conditions ...RetryConditionFunc) *Client {
 func (c *Client) RetryHooks() []RetryHookFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryHooks
+	return slices.Clone(c.retryHooks)
 }
 
 // AddRetryHooks method appends one or more retry hook functions to the client;
@@ -1628,10 +1777,10 @@ func (c *Client) SetTLSClientConfig(tlsConfig *tls.Config) *Client {
 		return c
 	}
 
-	// default standard transport handling
-	transport, ok := c.httpClient.Transport.(*http.Transport)
-	if !ok {
-		c.log.Errorf("SetTLSClientConfig: %v", ErrNotHttpTransportType)
+	// default standard transport handling, reached through any Resty wrapper
+	transport, err := httpTransportOf(c.httpClient.Transport)
+	if err != nil {
+		c.log.Errorf("SetTLSClientConfig: %v", err)
 		return c
 	}
 	transport.TLSClientConfig = tlsConfig
@@ -1787,7 +1936,7 @@ func (c *Client) SetRootCertificates(pemFilePaths ...string) *Client {
 //
 //	client.SetRootCertificatesWatcher(
 //		&resty.CertWatcherOptions{
-//			PoolInterval: 24 * time.Hour,
+//			PollInterval: 24 * time.Hour,
 //		},
 //		"root-ca.pem",
 //	)
@@ -1844,7 +1993,7 @@ func (c *Client) SetClientRootCertificates(pemFilePaths ...string) *Client {
 //
 //	client.SetClientRootCertificatesWatcher(
 //		&resty.CertWatcherOptions{
-//			PoolInterval: 24 * time.Hour,
+//			PollInterval: 24 * time.Hour,
 //		},
 //		"client-root-ca.pem",
 //	)
@@ -1893,9 +2042,9 @@ func (c *Client) handleCAs(scope string, permCerts []byte) {
 }
 
 func (c *Client) initCertWatcher(pemFilePath, scope string, options *CertWatcherOptions) {
-	tickerDuration := defaultWatcherPoolingInterval
-	if options != nil && options.PoolInterval > 0 {
-		tickerDuration = options.PoolInterval
+	tickerDuration := defaultWatcherPollingInterval
+	if options != nil && options.PollInterval > 0 {
+		tickerDuration = options.PollInterval
 	}
 
 	go func() {
@@ -1991,14 +2140,33 @@ func (c *Client) SetResponseSaveToFile(save bool) *Client {
 }
 
 // HTTPTransport method returns the underlying [http.Transport], or
-// [ErrNotHttpTransportType] if the transport is not of that type.
+// [ErrNotHTTPTransportType] if the transport is not of that type.
 func (c *Client) HTTPTransport() (*http.Transport, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
-		return transport, nil
+	return httpTransportOf(c.httpClient.Transport)
+}
+
+// maxTransportUnwrap bounds the wrapper chain httpTransportOf will walk, so a
+// custom [http.RoundTripper] that returns itself cannot spin forever.
+const maxTransportUnwrap = 8
+
+// httpTransportOf reaches the [http.Transport] underneath Resty's own transport
+// wrappers. [Client.SetDigestAuth] and [Client.SetHedging] replace the client
+// transport with a wrapper; without unwrapping here, every TLS, certificate and
+// proxy setter called afterwards would silently do nothing.
+func httpTransportOf(rt http.RoundTripper) (*http.Transport, error) {
+	for i := 0; rt != nil && i < maxTransportUnwrap; i++ {
+		if transport, ok := rt.(*http.Transport); ok {
+			return transport, nil
+		}
+		w, ok := rt.(transportWrapper)
+		if !ok {
+			break
+		}
+		rt = w.unwrap()
 	}
-	return nil, ErrNotHttpTransportType
+	return nil, ErrNotHTTPTransportType
 }
 
 // Transport method returns the underlying [http.RoundTripper] used by the client.
@@ -2079,10 +2247,27 @@ func (c *Client) SetResponseDoNotParse(notParse bool) *Client {
 }
 
 // PathParams method returns the path parameters set on the client.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) PathParams() map[string]string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.pathParams
+	return maps.Clone(c.pathParams)
+}
+
+// mergePathParamsInto copies the client path parameters into dst, skipping keys
+// dst already carries. See [Client.mergeHeaderInto] for why this is not built on
+// the public accessor.
+func (c *Client) mergePathParamsInto(dst map[string]string) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for k, v := range c.pathParams {
+		if _, ok := dst[k]; ok {
+			continue
+		}
+		dst[k] = v
+	}
 }
 
 // SetPathParam method sets a single URL path key-value pair in the
@@ -2335,7 +2520,7 @@ func (c *Client) SetQueryParamsUnescape(unescape bool) *Client {
 }
 
 // ResponseBodyUnlimitedReads method returns true if enabled. Otherwise, it returns false
-func (c *Client) ResponseBodyUnlimitedReads() bool {
+func (c *Client) IsResponseBodyUnlimitedReads() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.resBodyUnlimitedReads
@@ -2397,8 +2582,8 @@ func (c *Client) Clone(ctx context.Context) *Client {
 
 	cc.contentTypeEncoders = maps.Clone(c.contentTypeEncoders)
 	cc.contentTypeDecoders = maps.Clone(c.contentTypeDecoders)
-	cc.contentDecompressers = maps.Clone(c.contentDecompressers)
-	copy(cc.contentDecompresserKeys, c.contentDecompresserKeys)
+	cc.contentDecompressors = maps.Clone(c.contentDecompressors)
+	copy(cc.contentDecompressorKeys, c.contentDecompressorKeys)
 
 	if c.proxyURL != nil {
 		cc.proxyURL, _ = url.Parse(c.proxyURL.String())
@@ -2461,15 +2646,15 @@ func (c *Client) cbRequestError() {
 // response or error.
 func (c *Client) execute(req *Request) (*Response, error) {
 	if c.RateLimiter() != nil {
-		if err := c.RateLimiter().Allow(req.Context()); err != nil {
+		if err := c.RateLimiter().Wait(req.Context()); err != nil {
 			return nil, err
 		}
 	}
 
 	if c.circuitBreaker != nil {
 		if err := c.circuitBreaker.Allow(); err != nil {
-			if cbo, ok := c.circuitBreaker.(CircuitBreakerObserver); ok {
-				cbo.RunOnTriggerHooks(req, err)
+			if cbo, ok := c.circuitBreaker.(circuitBreakerHookRunner); ok {
+				cbo.runOnTriggerHooks(req, err)
 			}
 			return nil, err
 		}
@@ -2540,7 +2725,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 			response.Body = &cancelReadCloser{r: response.Body, cancel: cancel}
 			cancel = nil
 		}
-		if err = response.wrapContentDecompresser(); err != nil {
+		if err = response.wrapContentDecompressor(); err != nil {
 			return response, response.wrapError(err, false)
 		}
 
@@ -2584,9 +2769,9 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 		return tc.TLSClientConfig(), nil
 	}
 
-	transport, ok := c.httpClient.Transport.(*http.Transport)
-	if !ok {
-		return nil, ErrNotHttpTransportType
+	transport, err := httpTransportOf(c.httpClient.Transport)
+	if err != nil {
+		return nil, err
 	}
 
 	if transport.TLSClientConfig == nil {

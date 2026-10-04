@@ -6,9 +6,11 @@
 package resty
 
 import (
+	"bufio"
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -19,9 +21,9 @@ import (
 )
 
 var (
-	// ErrContentDecompresserNotFound is returned when no decompresser is registered
+	// ErrContentDecompressorNotFound is returned when no decompressor is registered
 	// for the Content-Encoding directive present in the response.
-	ErrContentDecompresserNotFound = errors.New("resty: content decoder not found")
+	ErrContentDecompressorNotFound = errors.New("resty: content decompressor not found")
 
 	// maxDecodeObjects caps the number of JSON or XML objects decoded from a single
 	// response body. If the limit is exceeded before EOF, decoding returns an error.
@@ -45,14 +47,14 @@ type (
 	// See [Client.AddContentTypeDecoder].
 	ContentTypeDecoder func(io.Reader, any) error
 
-	// ContentDecompresser wraps an [io.ReadCloser] response body with
+	// ContentDecompressor wraps an [io.ReadCloser] response body with
 	// decompression based on the Content-Encoding header ([RFC 9110]).
 	// For example, gzip, deflate, etc.
 	//
-	// See [Client.AddContentDecompresser].
+	// See [Client.AddContentDecompressor].
 	//
 	// [RFC 9110]: https://datatracker.ietf.org/doc/html/rfc9110
-	ContentDecompresser func(io.ReadCloser) (io.ReadCloser, error)
+	ContentDecompressor func(io.ReadCloser) (io.ReadCloser, error)
 )
 
 func encodeJSON(w io.Writer, v any) error {
@@ -229,11 +231,16 @@ type deflateReaderWrapper struct {
 	mu *sync.Mutex
 	r  io.ReadCloser
 	fr io.ReadCloser
+	// fromPool marks fr as a flate reader that may go back to flateReaderPool.
+	// A zlib reader must never be pooled there: zlib.Resetter and flate.Resetter
+	// have the same method set, so a type assertion cannot tell them apart, and a
+	// pooled zlib reader would fail every later raw-deflate stream.
+	fromPool bool
 }
 
 // acquireDeflateReader gets a flate.Reader from the pool or creates one.
 // It resets the reader for the new stream using the provided io.ReadCloser.
-func acquireDeflateReader(r io.ReadCloser) (*deflateReaderWrapper, error) {
+func acquireDeflateReader(r io.ReadCloser, src io.Reader) (*deflateReaderWrapper, error) {
 	w := &deflateReaderWrapper{
 		mu: new(sync.Mutex),
 		r:  r,
@@ -242,14 +249,16 @@ func acquireDeflateReader(r io.ReadCloser) (*deflateReaderWrapper, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	w.fromPool = true
+
 	// Try to get a cached reader from the pool
 	if cached := flateReaderPool.Get(); cached != nil {
 		w.fr = cached.(io.ReadCloser)
 		// Reset the pooled reader for the new stream; flate.Resetter.Reset never errors
-		w.fr.(flate.Resetter).Reset(r, nil)
+		w.fr.(flate.Resetter).Reset(src, nil)
 	} else {
 		// Pool is empty, create a new reader
-		w.fr = flate.NewReader(r)
+		w.fr = flate.NewReader(src)
 	}
 
 	return w, nil
@@ -262,8 +271,12 @@ func releaseDeflateReader(w *deflateReaderWrapper) {
 	defer w.mu.Unlock()
 
 	if w.fr != nil {
-		w.fr.(flate.Resetter).Reset(nopReader{}, nil)
-		flateReaderPool.Put(w.fr)
+		if w.fromPool {
+			w.fr.(flate.Resetter).Reset(nopReader{}, nil)
+			flateReaderPool.Put(w.fr)
+		} else {
+			closeq(w.fr)
+		}
 		w.fr = nil
 	}
 	if w.r != nil {
@@ -272,8 +285,30 @@ func releaseDeflateReader(w *deflateReaderWrapper) {
 	}
 }
 
+// isZlibWrapped reports whether the next two bytes of br are an RFC 1950 zlib
+// header. RFC 9110 section 8.4.1.2 defines the "deflate" content coding as a
+// zlib stream, but plenty of servers send a bare RFC 1951 stream under the same
+// name, so both are accepted.
+func isZlibWrapped(br *bufio.Reader) bool {
+	h, err := br.Peek(2)
+	if err != nil {
+		return false
+	}
+	// The low nibble of CMF is the compression method; 8 is deflate. The two
+	// header bytes read big-endian must also be a multiple of 31.
+	return h[0]&0x0f == 8 && (uint16(h[0])<<8|uint16(h[1]))%31 == 0
+}
+
 func decompressDeflate(r io.ReadCloser) (io.ReadCloser, error) {
-	return acquireDeflateReader(r)
+	br := bufio.NewReader(r)
+	if isZlibWrapped(br) {
+		zr, err := zlib.NewReader(br)
+		if err != nil {
+			return nil, err
+		}
+		return &deflateReaderWrapper{mu: new(sync.Mutex), r: r, fr: zr}, nil
+	}
+	return acquireDeflateReader(r, br)
 }
 
 // Implement io.ReadCloser for deflateReaderWrapper

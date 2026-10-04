@@ -426,3 +426,73 @@ func TestClientDigestAuthQopListWithSpaces(t *testing.T) {
 	assertNil(t, err)
 	assertEqual(t, http.StatusOK, res.StatusCode())
 }
+
+// digestTransport runs on every redirect hop, so a redirect to a host the caller
+// never addressed used to be answered with the configured credentials: the
+// username in cleartext plus a digest over a realm and nonce that host chose.
+// Compare curl CVE-2022-27774.
+func TestDigestDoesNotAuthenticateToRedirectTarget(t *testing.T) {
+	var attackerGotAuth string
+	var attackerHits int
+	attacker := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		attackerHits++
+		attackerGotAuth = r.Header.Get("Authorization")
+		w.Header().Set("WWW-Authenticate",
+			`Digest realm="attacker-realm", nonce="attacker-nonce", qop="auth"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	defer attacker.Close()
+
+	origin := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, attacker.URL+"/x", http.StatusFound)
+	})
+	defer origin.Close()
+
+	c := dcnl().SetDigestAuth("victim-user", "victim-pass")
+	defer c.Close()
+
+	res, err := c.R().Get(origin.URL + "/start")
+	assertError(t, err)
+
+	// the attacker sees the unauthenticated probe only, and gets no credentials
+	assertEqual(t, 1, attackerHits)
+	assertEqual(t, "", attackerGotAuth)
+	assertEqual(t, http.StatusUnauthorized, res.StatusCode())
+}
+
+// A same-origin challenge must still be answered.
+func TestDigestAuthenticatesOnSameOriginRedirect(t *testing.T) {
+	var authed bool
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/start" {
+			http.Redirect(w, r, "/protected", http.StatusFound)
+			return
+		}
+		if r.Header.Get("Authorization") == "" {
+			w.Header().Set("WWW-Authenticate",
+				`Digest realm="test", nonce="abc", qop="auth"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		authed = true
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetDigestAuth("user", "pass")
+	defer c.Close()
+
+	res, err := c.R().Get(ts.URL + "/start")
+	assertError(t, err)
+	assertEqual(t, true, authed)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+}
+
+func TestOriginatingURL(t *testing.T) {
+	first := mustReq(t, http.MethodGet, "https://origin.example/start")
+	second := mustReq(t, http.MethodGet, "https://evil.example/x")
+	second.Response = &http.Response{Request: first}
+
+	assertEqual(t, "https://origin.example/start", originatingURL(second).String())
+	assertEqual(t, "https://origin.example/start", originatingURL(first).String())
+}

@@ -778,7 +778,7 @@ func TestFormDataDisableWarn(t *testing.T) {
 
 	c := dcnl()
 	c.SetFormData(map[string]string{"zip_code": "00000", "city": "Los Angeles"}).
-		SetLoggerWarnLevel(true)
+		SetDisableWarn(true)
 	c.outputLogTo(io.Discard)
 
 	resp, err := c.R().
@@ -895,11 +895,11 @@ func TestPutJSONString(t *testing.T) {
 
 	client := dcnl()
 
-	client.AddRequestMiddleware(func(c *Client, r *Request) error {
+	client.AddRequestMiddlewares(func(c *Client, r *Request) error {
 		r.SetHeader("X-Custom-Request-Middleware", "Request middleware")
 		return nil
 	})
-	client.AddRequestMiddleware(func(c *Client, r *Request) error {
+	client.AddRequestMiddlewares(func(c *Client, r *Request) error {
 		r.SetHeader("X-ContentLength", "Request middleware ContentLength set")
 		return nil
 	})
@@ -937,11 +937,11 @@ func TestRequestMiddleware(t *testing.T) {
 
 	c := dcnl()
 
-	c.AddRequestMiddleware(func(c *Client, r *Request) error {
+	c.AddRequestMiddlewares(func(c *Client, r *Request) error {
 		r.SetHeader("X-Custom-Request-Middleware", "Request middleware")
 		return nil
 	})
-	c.AddRequestMiddleware(func(c *Client, r *Request) error {
+	c.AddRequestMiddlewares(func(c *Client, r *Request) error {
 		r.SetHeader("X-ContentLength", "Request middleware ContentLength set")
 		return nil
 	})
@@ -2320,7 +2320,7 @@ func TestResponseBodyUnlimitedReads(t *testing.T) {
 		SetJSONEscapeHTML(false).
 		SetResponseBodyUnlimitedReads(true)
 
-	assertTrue(t, c.ResponseBodyUnlimitedReads())
+	assertTrue(t, c.IsResponseBodyUnlimitedReads())
 
 	resp, err := c.R().
 		SetHeader(hdrContentTypeKey, "application/json; charset=utf-8").
