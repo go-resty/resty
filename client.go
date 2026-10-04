@@ -323,10 +323,13 @@ func (c *Client) SetLoadBalancer(b LoadBalancer) *Client {
 }
 
 // Header method returns the headers from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) Header() http.Header {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.header
+	return c.header.Clone()
 }
 
 // SetHeader method sets a single header and its value in the client instance.
@@ -459,10 +462,13 @@ func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
 }
 
 // Cookies method returns all cookies registered in the client instance.
+//
+// The returned slice is a snapshot; appending to it does not affect the client.
+// The [http.Cookie] values themselves are shared and must not be mutated.
 func (c *Client) Cookies() []*http.Cookie {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.cookies
+	return slices.Clone(c.cookies)
 }
 
 // SetCookie method appends a single cookie to the client instance.
@@ -503,10 +509,13 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 }
 
 // QueryParams method returns all query parameters and their values from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) QueryParams() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.queryParams
+	return cloneURLValues(c.queryParams)
 }
 
 // SetQueryParam method sets a single parameter and its value in the client instance.
@@ -573,10 +582,13 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 }
 
 // FormData method returns the form parameters and their values from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) FormData() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.formData
+	return cloneURLValues(c.formData)
 }
 
 // SetFormData method sets Form parameters and their values in the client instance.
@@ -1039,7 +1051,7 @@ func (c *Client) inferContentTypeDecoder(ct ...string) (ContentTypeDecoder, bool
 func (c *Client) ContentDecompressers() map[string]ContentDecompresser {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.contentDecompressers
+	return maps.Clone(c.contentDecompressers)
 }
 
 // AddContentDecompresser method adds a Content-Encoding ([RFC 9110]) decompresser
@@ -1491,7 +1503,7 @@ func (c *Client) SetRetryAllowNonIdempotent(b bool) *Client {
 func (c *Client) RetryConditions() []RetryConditionFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryConditions
+	return slices.Clone(c.retryConditions)
 }
 
 // AddRetryConditions method adds one or more retry condition functions to the client.
@@ -1517,7 +1529,7 @@ func (c *Client) AddRetryConditions(conditions ...RetryConditionFunc) *Client {
 func (c *Client) RetryHooks() []RetryHookFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryHooks
+	return slices.Clone(c.retryHooks)
 }
 
 // AddRetryHooks method appends one or more retry hook functions to the client;
@@ -2079,10 +2091,13 @@ func (c *Client) SetResponseDoNotParse(notParse bool) *Client {
 }
 
 // PathParams method returns the path parameters set on the client.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) PathParams() map[string]string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.pathParams
+	return maps.Clone(c.pathParams)
 }
 
 // SetPathParam method sets a single URL path key-value pair in the
