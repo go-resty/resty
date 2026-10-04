@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -971,4 +972,163 @@ func TestSSESourceConnectContextDoneDuringRetryWait(t *testing.T) {
 	assertTrue(t, time.Since(start) < 2*time.Second,
 		"expected the retry wait to be abandoned when the context is done")
 	assertEqual(t, int32(1), attempts.Load(), "expected no further connect attempts")
+}
+
+// The WHATWG event stream grammar separates lines with CRLF, LF or CR. Resty
+// recognised only LF, so a CRLF stream -- common from .NET and Java servers --
+// was never framed: events arrived glued together at EOF instead of live.
+func TestSSEEventTerminators(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sep  string
+	}{
+		{"LF", "\n"},
+		{"CRLF", "\r\n"},
+		{"CR", "\r"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var got []string
+
+			counter := 0
+			es := NewSSESource().SetRetryCount(0)
+			ts := createSSETestServer(t, 5*time.Millisecond, func(w io.Writer) error {
+				if counter == 3 {
+					es.Close()
+					return fmt.Errorf("stop sending events")
+				}
+				_, err := fmt.Fprintf(w, "event: tick%sdata: value-%d%s%s",
+					tc.sep, counter, tc.sep, tc.sep)
+				counter++
+				return err
+			})
+			defer ts.Close()
+
+			es.SetURL(ts.URL).AddEventListener("tick", func(e any) {
+				mu.Lock()
+				got = append(got, e.(*SSE).Data)
+				mu.Unlock()
+			}, nil)
+
+			assertNil(t, es.Get())
+
+			mu.Lock()
+			defer mu.Unlock()
+			assertEqual(t, 3, len(got))
+			for i, v := range got {
+				assertEqual(t, fmt.Sprintf("value-%d", i), v)
+			}
+		})
+	}
+}
+
+func TestIndexEventTerminator(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		in        string
+		wantIdx   int
+		wantWidth int
+	}{
+		{"lf pair", "a\n\nb", 1, 2},
+		{"crlf pair", "a\r\n\r\nb", 1, 4},
+		{"cr pair", "a\r\rb", 1, 2},
+		{"none", "a\nb", -1, 0},
+		{"earliest wins", "a\n\nb\r\n\r\n", 1, 2},
+		{"empty", "", -1, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			i, w := indexEventTerminator([]byte(tc.in))
+			assertEqual(t, tc.wantIdx, i)
+			assertEqual(t, tc.wantWidth, w)
+		})
+	}
+}
+
+// Callbacks used to run while holding the source's read lock, so any callback
+// touching the source -- Close is the obvious one -- deadlocked on itself.
+func TestSSECallbackMayCloseSource(t *testing.T) {
+	es := NewSSESource().SetRetryCount(0)
+	ts := createSSETestServer(t, 5*time.Millisecond, func(w io.Writer) error {
+		_, err := fmt.Fprint(w, "data: hello\n\n")
+		return err
+	})
+	defer ts.Close()
+
+	es.SetURL(ts.URL).
+		OnMessage(func(_ any) {}, nil).
+		OnOpen(func(_ string, _ http.Header) {
+			// would deadlock: Close takes the write lock the trigger used to hold
+			es.Close()
+		})
+
+	done := make(chan error, 1)
+	go func() { done <- es.Get() }()
+
+	select {
+	case err := <-done:
+		assertNil(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnOpen callback calling Close deadlocked")
+	}
+}
+
+// A stream whose final event is not followed by a blank line must still be
+// dispatched when the connection ends.
+func TestSSEFinalEventWithoutTrailingBlankLine(t *testing.T) {
+	var mu sync.Mutex
+	var got []string
+
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		// second event has no terminating blank line before the stream ends
+		fmt.Fprint(w, "data: first\n\ndata: last")
+	})
+	defer ts.Close()
+
+	es := NewSSESource().SetRetryCount(0).SetURL(ts.URL).
+		OnMessage(func(e any) {
+			mu.Lock()
+			got = append(got, e.(*SSE).Data)
+			mu.Unlock()
+		}, nil)
+
+	assertErrorIs(t, io.EOF, es.Get())
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertEqual(t, 2, len(got))
+	assertEqual(t, "first", got[0])
+	assertEqual(t, "last", got[1])
+}
+
+// An event that arrives in fragments must be buffered until its terminator
+// shows up, rather than dispatched piecemeal.
+func TestSSEEventDeliveredInFragments(t *testing.T) {
+	var mu sync.Mutex
+	var got []string
+
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		rc := http.NewResponseController(w)
+		for _, chunk := range []string{"data: hel", "lo-wor", "ld\n\n"} {
+			fmt.Fprint(w, chunk)
+			_ = rc.Flush()
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
+	defer ts.Close()
+
+	es := NewSSESource().SetRetryCount(0).SetURL(ts.URL).
+		OnMessage(func(e any) {
+			mu.Lock()
+			got = append(got, e.(*SSE).Data)
+			mu.Unlock()
+		}, nil)
+
+	assertErrorIs(t, io.EOF, es.Get())
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertEqual(t, 1, len(got))
+	assertEqual(t, "hello-world", got[0])
 }

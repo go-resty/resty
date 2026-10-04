@@ -596,27 +596,36 @@ func (sse *SSESource) isClosed() bool {
 	return sse.closed
 }
 
+// The three trigger methods below snapshot the callback under the read lock and
+// invoke it after releasing. Calling user code while holding the lock deadlocks
+// the moment the callback touches the source -- Close, SetURL and SetHeader all
+// take the write lock, and sync.RWMutex is not reentrant. Stopping the stream
+// from OnOpen and refreshing auth from OnError are both ordinary SSE patterns.
+
 func (sse *SSESource) triggerOnOpen(hdr http.Header) {
 	sse.lock.RLock()
-	defer sse.lock.RUnlock()
-	if sse.onOpen != nil {
-		sse.onOpen(strings.Clone(sse.url), hdr)
+	onOpen, url := sse.onOpen, strings.Clone(sse.url)
+	sse.lock.RUnlock()
+	if onOpen != nil {
+		onOpen(url, hdr)
 	}
 }
 
 func (sse *SSESource) triggerOnError(err error) {
 	sse.lock.RLock()
-	defer sse.lock.RUnlock()
-	if sse.onError != nil {
-		sse.onError(err)
+	onError := sse.onError
+	sse.lock.RUnlock()
+	if onError != nil {
+		onError(err)
 	}
 }
 
 func (sse *SSESource) triggerOnRequestFailure(err error, res *http.Response) {
 	sse.lock.RLock()
-	defer sse.lock.RUnlock()
-	if sse.onRequestFailure != nil {
-		sse.onRequestFailure(err, res)
+	onRequestFailure := sse.onRequestFailure
+	sse.lock.RUnlock()
+	if onRequestFailure != nil {
+		onRequestFailure(err, res)
 	}
 }
 
@@ -753,6 +762,35 @@ func (sse *SSESource) connect() (*http.Response, error) {
 	return nil, fmt.Errorf("resty:sse: unable to connect stream")
 }
 
+// eventTerminators end an event. The WHATWG event stream grammar separates
+// lines with CRLF, LF or CR, so a blank line -- and therefore the end of an
+// event -- is any of those doubled. Recognising only "\n\n" left CRLF streams,
+// which are common in .NET and Java servers, undispatched until EOF.
+var eventTerminators = [][]byte{
+	[]byte("\r\n\r\n"),
+	[]byte("\n\n"),
+	[]byte("\r\r"),
+}
+
+// indexEventTerminator returns the offset and length of the earliest event
+// terminator in data, or -1 when there is none.
+func indexEventTerminator(data []byte) (int, int) {
+	best, width := -1, 0
+	for _, t := range eventTerminators {
+		i := bytes.Index(data, t)
+		if i < 0 {
+			continue
+		}
+		if best < 0 || i < best || (i == best && len(t) > width) {
+			best, width = i, len(t)
+		}
+	}
+	return best, width
+}
+
+// isEventLineBreak reports whether r ends a line in an event stream.
+func isEventLineBreak(r rune) bool { return r == '\n' || r == '\r' }
+
 func (sse *SSESource) listenStream(res *http.Response) error {
 	defer closeq(res.Body)
 
@@ -762,9 +800,9 @@ func (sse *SSESource) listenStream(res *http.Response) error {
 		if atEOF && len(data) == 0 {
 			return 0, nil, nil
 		}
-		if i := bytes.Index(data, []byte{'\n', '\n'}); i >= 0 {
-			// We have a full double newline-terminated line.
-			return i + 1, data[0:i], nil
+		if i, width := indexEventTerminator(data); i >= 0 {
+			// We have a full event, terminated by a blank line.
+			return i + width, data[0:i], nil
 		}
 		// If we're at EOF, we have a final, non-terminated line. Return it.
 		if atEOF {
@@ -786,6 +824,11 @@ func (sse *SSESource) listenStream(res *http.Response) error {
 		}
 
 		if err := sse.processEvent(scanner); err != nil {
+			// Close racing with the server ending the stream must report a clean
+			// shutdown rather than the io.EOF the closed connection produced.
+			if sse.isClosed() {
+				return nil
+			}
 			return err
 		}
 	}
@@ -897,8 +940,9 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 
 	e := newRawEvent()
 
-	// Split the line by "\n"
-	for _, line := range bytes.FieldsFunc(msg, func(r rune) bool { return r == '\n' }) {
+	// Split into lines. Per the WHATWG event stream grammar a line ends with
+	// CRLF, LF or CR; FieldsFunc drops the empty field a CRLF pair produces.
+	for _, line := range bytes.FieldsFunc(msg, isEventLineBreak) {
 		switch {
 		case bytes.HasPrefix(line, headerID):
 			e.ID = append([]byte(nil), trimHeader(len(headerID), line)...)
@@ -935,7 +979,7 @@ func trimHeader(size int, data []byte) []byte {
 	if len(data) > 0 && data[0] == ' ' {
 		data = data[1:]
 	}
-	if len(data) > 0 && data[len(data)-1] == '\n' {
+	for len(data) > 0 && isEventLineBreak(rune(data[len(data)-1])) {
 		data = data[:len(data)-1]
 	}
 	return data

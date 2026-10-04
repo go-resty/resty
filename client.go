@@ -147,6 +147,13 @@ type (
 		TLSClientConfig() *tls.Config
 		SetTLSClientConfig(*tls.Config) error
 	}
+
+	// transportWrapper is implemented by the transports Resty layers over the
+	// client's own, so settings that need the underlying [http.Transport] can
+	// still reach it. See [httpTransportOf].
+	transportWrapper interface {
+		unwrap() http.RoundTripper
+	}
 )
 
 // TransportSettings struct is used to define custom dialer and transport
@@ -323,10 +330,27 @@ func (c *Client) SetLoadBalancer(b LoadBalancer) *Client {
 }
 
 // Header method returns the headers from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) Header() http.Header {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.header
+	return c.header.Clone()
+}
+
+// mergeHeaderInto copies the client headers into dst, skipping keys dst already
+// carries. The lock is held across the whole copy; [Client.Header] cannot be used
+// for this because the caller would iterate the snapshot after releasing it.
+func (c *Client) mergeHeaderInto(dst http.Header) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for k, v := range c.header {
+		if _, ok := dst[k]; ok {
+			continue
+		}
+		dst[k] = slices.Clone(v)
+	}
 }
 
 // SetHeader method sets a single header and its value in the client instance.
@@ -383,6 +407,36 @@ func (c *Client) SetHeaders(headers map[string]string) *Client {
 	defer c.lock.Unlock()
 	for h, v := range headers {
 		c.header.Set(h, v)
+	}
+	return c
+}
+
+// AddHeader method adds a single header and its value to the client instance,
+// keeping any values already present for that key.
+//
+// See [Client.SetHeader] to replace the existing values instead.
+//
+//	client.
+//		AddHeader("Accept", "text/html").
+//		AddHeader("Accept", "application/json")
+func (c *Client) AddHeader(header, value string) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.header.Add(header, value)
+	return c
+}
+
+// SetHeaderMultiValues method sets multiple headers along with their multiple
+// values from a map in the client instance.
+//
+// See [Request.SetHeaderMultiValues].
+//
+//	client.SetHeaderMultiValues(map[string][]string{
+//		"Accept": []string{"text/html", "application/xhtml+xml", "application/xml;q=0.9"},
+//	})
+func (c *Client) SetHeaderMultiValues(headers map[string][]string) *Client {
+	for key, values := range headers {
+		c.SetHeader(key, strings.Join(values, ", "))
 	}
 	return c
 }
@@ -459,10 +513,13 @@ func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
 }
 
 // Cookies method returns all cookies registered in the client instance.
+//
+// The returned slice is a snapshot; appending to it does not affect the client.
+// The [http.Cookie] values themselves are shared and must not be mutated.
 func (c *Client) Cookies() []*http.Cookie {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.cookies
+	return slices.Clone(c.cookies)
 }
 
 // SetCookie method appends a single cookie to the client instance.
@@ -503,10 +560,27 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 }
 
 // QueryParams method returns all query parameters and their values from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) QueryParams() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.queryParams
+	return cloneURLValues(c.queryParams)
+}
+
+// mergeQueryParamsInto copies the client query parameters into dst, skipping keys
+// dst already carries. See [Client.mergeHeaderInto] for why this is not built on
+// the public accessor.
+func (c *Client) mergeQueryParamsInto(dst url.Values) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for k, v := range c.queryParams {
+		if _, ok := dst[k]; ok {
+			continue
+		}
+		dst[k] = slices.Clone(v)
+	}
 }
 
 // SetQueryParam method sets a single parameter and its value in the client instance.
@@ -573,10 +647,61 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 }
 
 // FormData method returns the form parameters and their values from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) FormData() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.formData
+	return cloneURLValues(c.formData)
+}
+
+// mergeFormDataInto copies the client form data into dst, skipping keys dst
+// already carries. See [Client.mergeHeaderInto] for why this is not built on the
+// public accessor.
+func (c *Client) mergeFormDataInto(dst url.Values) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for k, v := range c.formData {
+		if _, ok := dst[k]; ok {
+			continue
+		}
+		dst[k] = slices.Clone(v)
+	}
+}
+
+// AddQueryParam method adds a single query parameter and its value to the client
+// instance, keeping any values already present for that key.
+//
+// See [Client.SetQueryParam] to replace the existing values instead.
+//
+//	client.
+//		AddQueryParam("status", "pending").
+//		AddQueryParam("status", "approved")
+func (c *Client) AddQueryParam(param, value string) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.queryParams.Add(param, value)
+	return c
+}
+
+// SetQueryParamsFromValues method sets multiple query parameters with multiple
+// values from [url.Values] in the client instance.
+//
+// See [Request.SetQueryParamsFromValues].
+//
+//	client.SetQueryParamsFromValues(url.Values{
+//		"status": []string{"pending", "approved", "open"},
+//	})
+func (c *Client) SetQueryParamsFromValues(params url.Values) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for p, v := range params {
+		for _, pv := range v {
+			c.queryParams.Add(p, pv)
+		}
+	}
+	return c
 }
 
 // SetFormData method sets Form parameters and their values in the client instance.
@@ -595,6 +720,25 @@ func (c *Client) SetFormData(data map[string]string) *Client {
 	defer c.lock.Unlock()
 	for k, v := range data {
 		c.formData.Set(k, v)
+	}
+	return c
+}
+
+// SetFormDataFromValues method sets multiple form parameters with multiple values
+// from [url.Values] in the client instance.
+//
+// See [Request.SetFormDataFromValues].
+//
+//	client.SetFormDataFromValues(url.Values{
+//		"search_criteria": []string{"book", "glass", "pencil"},
+//	})
+func (c *Client) SetFormDataFromValues(data url.Values) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for k, v := range data {
+		for _, kv := range v {
+			c.formData.Add(k, kv)
+		}
 	}
 	return c
 }
@@ -1039,7 +1183,7 @@ func (c *Client) inferContentTypeDecoder(ct ...string) (ContentTypeDecoder, bool
 func (c *Client) ContentDecompressers() map[string]ContentDecompresser {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.contentDecompressers
+	return maps.Clone(c.contentDecompressers)
 }
 
 // AddContentDecompresser method adds a Content-Encoding ([RFC 9110]) decompresser
@@ -1491,7 +1635,7 @@ func (c *Client) SetRetryAllowNonIdempotent(b bool) *Client {
 func (c *Client) RetryConditions() []RetryConditionFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryConditions
+	return slices.Clone(c.retryConditions)
 }
 
 // AddRetryConditions method adds one or more retry condition functions to the client.
@@ -1517,7 +1661,7 @@ func (c *Client) AddRetryConditions(conditions ...RetryConditionFunc) *Client {
 func (c *Client) RetryHooks() []RetryHookFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryHooks
+	return slices.Clone(c.retryHooks)
 }
 
 // AddRetryHooks method appends one or more retry hook functions to the client;
@@ -1628,10 +1772,10 @@ func (c *Client) SetTLSClientConfig(tlsConfig *tls.Config) *Client {
 		return c
 	}
 
-	// default standard transport handling
-	transport, ok := c.httpClient.Transport.(*http.Transport)
-	if !ok {
-		c.log.Errorf("SetTLSClientConfig: %v", ErrNotHttpTransportType)
+	// default standard transport handling, reached through any Resty wrapper
+	transport, err := httpTransportOf(c.httpClient.Transport)
+	if err != nil {
+		c.log.Errorf("SetTLSClientConfig: %v", err)
 		return c
 	}
 	transport.TLSClientConfig = tlsConfig
@@ -1995,8 +2139,27 @@ func (c *Client) SetResponseSaveToFile(save bool) *Client {
 func (c *Client) HTTPTransport() (*http.Transport, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if transport, ok := c.httpClient.Transport.(*http.Transport); ok {
-		return transport, nil
+	return httpTransportOf(c.httpClient.Transport)
+}
+
+// maxTransportUnwrap bounds the wrapper chain httpTransportOf will walk, so a
+// custom [http.RoundTripper] that returns itself cannot spin forever.
+const maxTransportUnwrap = 8
+
+// httpTransportOf reaches the [http.Transport] underneath Resty's own transport
+// wrappers. [Client.SetDigestAuth] and [Client.SetHedging] replace the client
+// transport with a wrapper; without unwrapping here, every TLS, certificate and
+// proxy setter called afterwards would silently do nothing.
+func httpTransportOf(rt http.RoundTripper) (*http.Transport, error) {
+	for i := 0; rt != nil && i < maxTransportUnwrap; i++ {
+		if transport, ok := rt.(*http.Transport); ok {
+			return transport, nil
+		}
+		w, ok := rt.(transportWrapper)
+		if !ok {
+			break
+		}
+		rt = w.unwrap()
 	}
 	return nil, ErrNotHttpTransportType
 }
@@ -2079,10 +2242,27 @@ func (c *Client) SetResponseDoNotParse(notParse bool) *Client {
 }
 
 // PathParams method returns the path parameters set on the client.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) PathParams() map[string]string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.pathParams
+	return maps.Clone(c.pathParams)
+}
+
+// mergePathParamsInto copies the client path parameters into dst, skipping keys
+// dst already carries. See [Client.mergeHeaderInto] for why this is not built on
+// the public accessor.
+func (c *Client) mergePathParamsInto(dst map[string]string) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for k, v := range c.pathParams {
+		if _, ok := dst[k]; ok {
+			continue
+		}
+		dst[k] = v
+	}
 }
 
 // SetPathParam method sets a single URL path key-value pair in the
@@ -2584,9 +2764,9 @@ func (c *Client) tlsConfig() (*tls.Config, error) {
 		return tc.TLSClientConfig(), nil
 	}
 
-	transport, ok := c.httpClient.Transport.(*http.Transport)
-	if !ok {
-		return nil, ErrNotHttpTransportType
+	transport, err := httpTransportOf(c.httpClient.Transport)
+	if err != nil {
+		return nil, err
 	}
 
 	if transport.TLSClientConfig == nil {

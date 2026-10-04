@@ -18,7 +18,6 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 )
 
@@ -61,15 +60,9 @@ func MiddlewareRequestCreate(c *Client, r *Request) (err error) {
 }
 
 func parseRequestURL(c *Client, r *Request) error {
-	if len(c.PathParams())+len(r.PathParams) > 0 {
-		// GitHub #103 Path Params, #663 Raw Path Params
-		for p, v := range c.PathParams() {
-			if _, ok := r.PathParams[p]; ok {
-				continue
-			}
-			r.PathParams[p] = v
-		}
-
+	// GitHub #103 Path Params, #663 Raw Path Params
+	c.mergePathParamsInto(r.PathParams)
+	if len(r.PathParams) > 0 {
 		var prev int
 		buf := acquireBuffer()
 		defer releaseBuffer(buf)
@@ -158,14 +151,8 @@ func parseRequestURL(c *Client, r *Request) error {
 	}
 
 	// Adding Query Param
-	if len(c.QueryParams())+len(r.QueryParams) > 0 {
-		for k, v := range c.QueryParams() {
-			if _, ok := r.QueryParams[k]; ok {
-				continue
-			}
-			r.QueryParams[k] = slices.Clone(v)
-		}
-
+	c.mergeQueryParamsInto(r.QueryParams)
+	if len(r.QueryParams) > 0 {
 		// GitHub #123 Preserve query string order partially.
 		// Since not feasible in `SetQuery*` resty methods, because
 		// standard package `url.Encode(...)` sorts the query params
@@ -192,12 +179,7 @@ func parseRequestURL(c *Client, r *Request) error {
 }
 
 func parseRequestHeader(c *Client, r *Request) {
-	for k, v := range c.Header() {
-		if _, ok := r.Header[k]; ok {
-			continue
-		}
-		r.Header[k] = slices.Clone(v)
-	}
+	c.mergeHeaderInto(r.Header)
 
 	if !r.isHeaderExists(hdrUserAgentKey) {
 		r.Header.Set(hdrUserAgentKey, hdrUserAgentValue)
@@ -350,12 +332,7 @@ func handleMultipartFormData(r *Request) error {
 }
 
 func handleMultipart(c *Client, r *Request) error {
-	for k, v := range c.FormData() {
-		if _, ok := r.FormData[k]; ok {
-			continue
-		}
-		r.FormData[k] = slices.Clone(v)
-	}
+	c.mergeFormDataInto(r.FormData)
 
 	if len(r.multipartFields) == 0 {
 		return handleMultipartFormData(r)
@@ -448,12 +425,7 @@ func handleMultipart(c *Client, r *Request) error {
 }
 
 func handleFormData(c *Client, r *Request) {
-	for k, v := range c.FormData() {
-		if _, ok := r.FormData[k]; ok {
-			continue
-		}
-		r.FormData[k] = slices.Clone(v)
-	}
+	c.mergeFormDataInto(r.FormData)
 
 	r.bodyBuf = acquireBuffer()
 	r.bodyBuf.WriteString(r.FormData.Encode())
@@ -590,6 +562,17 @@ func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 		}
 	}
 
+	// A decoder exists, but no result object was registered for this status code,
+	// so nothing above consumed the body. Read it here: leaving it open holds the
+	// connection out of the keep-alive pool for the life of the process, and it
+	// keeps [Response.String] and [Response.Bytes] working on this path.
+	//
+	// The exception is a save-to-file response, whose body belongs to
+	// [MiddlewareResponseSaveToFile] further down the chain; buffering it here
+	// would hold the whole download in memory.
+	if !res.Request.IsResponseSaveToFile {
+		err = res.readAll()
+	}
 	return
 }
 

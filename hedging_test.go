@@ -7,6 +7,7 @@ package resty
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -803,4 +804,114 @@ func TestHedgingSpawnLoopStopsOnceDecided(t *testing.T) {
 
 	// every run still has to produce exactly one usable response
 	assertTrue(t, attempts.Load() >= runs, "expected at least one attempt per run")
+}
+
+// http.Request.Clone does not copy the body, so every hedged attempt read the
+// same io.ReadCloser and the first to finish closed it. Attempts saw disjoint
+// slices of the payload, and the truncated one could win.
+func TestHedgingGivesEachAttemptItsOwnBody(t *testing.T) {
+	const payload = `{"payload":"the-full-request-body"}`
+
+	var mu sync.Mutex
+	var bodies []string
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(b))
+		n := len(bodies)
+		mu.Unlock()
+		if n < 3 {
+			// stall the early attempts so later ones are actually spawned
+			time.Sleep(300 * time.Millisecond)
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetHedging(NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(1000).
+		SetNonReadOnlyAllowed(true))
+	defer c.Close()
+
+	res, err := c.R().
+		SetHeader(hdrContentTypeKey, "application/json").
+		SetBody(payload).
+		Post(ts.URL + "/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertEqual(t, true, len(bodies) > 1)
+	for _, b := range bodies {
+		// every attempt must carry the whole payload, never a truncated one
+		assertEqual(t, payload, b)
+	}
+}
+
+// Without GetBody an attempt's body cannot be rebuilt, so the request must be
+// sent once rather than raced with a shared reader.
+func TestHedgingSkipsRacingWhenBodyIsNotReplayable(t *testing.T) {
+	var mu sync.Mutex
+	var count int
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		count++
+		mu.Unlock()
+		assertEqual(t, "streamed-body", string(b))
+		time.Sleep(150 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetHedging(NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(1000).
+		SetNonReadOnlyAllowed(true))
+	defer c.Close()
+
+	// a bare io.Reader gives net/http no GetBody to rebuild from
+	res, err := c.R().
+		SetBody(io.NopCloser(strings.NewReader("streamed-body"))).
+		Post(ts.URL + "/")
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertEqual(t, 1, count)
+}
+
+// A GetBody that fails leaves the attempt with no body to send; the error must
+// reach the caller rather than being raced away or sending a bodyless request.
+func TestHedgingSurfacesGetBodyError(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetHedging(NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(2).
+		SetMaxRequestPerSecond(1000).
+		SetNonReadOnlyAllowed(true))
+	defer c.Close()
+
+	c.SetRequestMiddlewares(
+		MiddlewareRequestCreate,
+		func(_ *Client, r *Request) error {
+			r.RawRequest.GetBody = func() (io.ReadCloser, error) {
+				return nil, errors.New("get body test error")
+			}
+			return nil
+		},
+	)
+
+	_, err := c.R().SetBody(`{"a":1}`).Post(ts.URL + "/")
+	assertNotNil(t, err)
+	assertEqual(t, true, strings.Contains(err.Error(), "get body test error"))
 }
