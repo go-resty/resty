@@ -529,3 +529,37 @@ func TestCircuitBreakerSlidingWindowResetWhenElapsedExceedsBuckets(t *testing.T)
 	assertEqual(t, 1, got.failures, "after reset expected failures=1")
 	assertEqual(t, 0, sw.idx, "expected idx reset to 0")
 }
+
+// A zero resetTimeout leaves every sliding window bucket zero-length, which used
+// to divide by zero on the first recorded request.
+func TestCircuitBreakerZeroResetTimeout(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer ts.Close()
+
+	for _, cb := range []CircuitBreaker{
+		NewCircuitBreakerCount(5, 1, 0),
+		NewCircuitBreakerRatio(0.5, 5, 0),
+	} {
+		c := dcnl().SetCircuitBreaker(cb)
+		res, err := c.R().Get(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusInternalServerError, res.StatusCode())
+		assertNil(t, c.Close())
+	}
+}
+
+func TestCircuitBreakerSlidingWindowSubBucketInterval(t *testing.T) {
+	sw := newSlidingWindow[totalAndFailures](5*time.Nanosecond, 10) // 0ns per bucket
+
+	got := sw.AddAndGet(totalAndFailures{total: 1, failures: 1})
+	assertEqual(t, 1, got.total)
+	assertEqual(t, 1, got.failures)
+
+	// the window never advances, so values accumulate
+	got = sw.AddAndGet(totalAndFailures{total: 1, failures: 0})
+	assertEqual(t, 2, got.total)
+	assertEqual(t, 1, got.failures)
+	assertEqual(t, 0, sw.idx)
+}
