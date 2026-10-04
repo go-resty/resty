@@ -7,6 +7,7 @@ package resty
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -269,35 +270,54 @@ func TestCircuitBreakerHalfOpenToOpenOnError(t *testing.T) {
 }
 
 func TestCircuitBreakerOpenCancelsPreviousResetTimer(t *testing.T) {
-	resetTimeout := 60 * time.Millisecond
+	const resetTimeout = 300 * time.Millisecond
 	cb := NewCircuitBreakerCount(1, 1, resetTimeout)
 	cbc := cb.circuitBreakerBase
 
-	var halfOpenTransitions int32
+	var (
+		mu          sync.Mutex
+		transitions int
+		halfOpenAt  time.Time
+	)
 	cbc.OnStateChange(func(oldState, newState CircuitBreakerState) {
 		if oldState == CircuitBreakerStateOpen && newState == CircuitBreakerStateHalfOpen {
-			atomic.AddInt32(&halfOpenTransitions, 1)
+			mu.Lock()
+			transitions++
+			halfOpenAt = time.Now()
+			mu.Unlock()
 		}
 	})
 
 	cbc.open()
-	time.Sleep(40 * time.Millisecond)
+	time.Sleep(resetTimeout / 3)
+
+	// Re-opening must restart the countdown, so half-open is due resetTimeout
+	// after this point, not before.
+	secondOpen := time.Now()
 	cbc.open()
 
-	// If the previous timer was not canceled, it would flip to half-open soon.
-	time.Sleep(30 * time.Millisecond)
-	assertEqual(t, CircuitBreakerStateOpen, cbc.getState(), "expected open state while waiting for latest timer")
-
-	deadline := time.Now().Add(300 * time.Millisecond)
+	deadline := time.Now().Add(10 * resetTimeout)
 	for time.Now().Before(deadline) {
-		if cbc.getState() == CircuitBreakerStateHalfOpen {
+		mu.Lock()
+		seen := transitions
+		mu.Unlock()
+		if seen > 0 {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 
+	mu.Lock()
+	seen, at := transitions, halfOpenAt
+	mu.Unlock()
+
 	assertEqual(t, CircuitBreakerStateHalfOpen, cbc.getState(), "expected half-open transition from latest timer")
-	assertEqual(t, int32(1), atomic.LoadInt32(&halfOpenTransitions), "expected exactly one open-to-half-open transition")
+	assertEqual(t, 1, seen, "expected exactly one open-to-half-open transition")
+
+	// Timers fire late but never early, so only a lower bound is asserted.
+	elapsed := at.Sub(secondOpen)
+	assertTrue(t, elapsed >= resetTimeout, fmt.Sprintf(
+		"half-open came %v after the second open(), sooner than the %v reset timeout", elapsed, resetTimeout))
 }
 
 func TestCircuitBreakerOnResetTimeout(t *testing.T) {
