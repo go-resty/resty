@@ -99,8 +99,9 @@ type Request struct {
 	log                  Logger
 	baseURL              string
 	multipartBoundary    string
-	multipartFields      []*MultipartField
-	retryConditions      []RetryConditionFunc
+	multipartFields        []*MultipartField
+	multipartContentLength bool
+	retryConditions        []RetryConditionFunc
 	isSetRetryConditions bool
 	retryHooks           []RetryHookFunc
 	isSetRetryHooks      bool
@@ -673,6 +674,17 @@ func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 // Typically, the `mime/multipart` package generates a random multipart boundary if not provided.
 func (r *Request) SetMultipartBoundary(boundary string) *Request {
 	r.multipartBoundary = boundary
+	return r
+}
+
+// SetMultipartContentLength method enables or disables calculating the Content-Length
+// for multipart requests.
+//
+// By default, Resty streams multipart uploads using chunked transfer encoding
+// without calculating Content-Length. Enabling this option calculates and sets the
+// Content-Length header on-demand when all multipart field sizes are known.
+func (r *Request) SetMultipartContentLength(enable bool) *Request {
+	r.multipartContentLength = enable
 	return r
 }
 

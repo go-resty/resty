@@ -156,8 +156,9 @@ func TestMultipartFilesAndFormDataEmptyGH1046(t *testing.T) {
 	assertEqual(t, profileImgPath, resp.Request.FormData.Get("@profile_img"))
 	assertEqual(t, notesPath, resp.Request.FormData.Get("@notes"))
 
-	// Content-Length must be calculated and set on RawRequest
-	assertTrue(t, resp.Request.RawRequest.ContentLength > 0)
+	// Default streaming behavior in v3: Content-Length is not calculated/set
+	assertEqual(t, false, resp.Request.isContentLengthSet)
+	assertEqual(t, int64(0), resp.Request.RawRequest.ContentLength)
 }
 
 func TestMultipartSetFilesContentLengthAndFormDataGH1046(t *testing.T) {
@@ -189,8 +190,20 @@ func TestMultipartSetFilesContentLengthAndFormDataGH1046(t *testing.T) {
 
 	c := dcnld()
 
-	// Test SetFiles
+	// Default behavior: streaming multipart does not set Content-Length, server rejects with 412
+	respDefault, errDefault := c.R().
+		SetFiles(map[string]string{
+			"media": filePath,
+		}).
+		Post(ts.URL)
+
+	assertNil(t, errDefault)
+	assertEqual(t, http.StatusPreconditionFailed, respDefault.StatusCode())
+	assertEqual(t, false, respDefault.Request.isContentLengthSet)
+
+	// Test SetFiles with SetMultipartContentLength(true)
 	resp, err := c.R().
+		SetMultipartContentLength(true).
 		SetFiles(map[string]string{
 			"media": filePath,
 		}).
@@ -200,10 +213,12 @@ func TestMultipartSetFilesContentLengthAndFormDataGH1046(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertEqual(t, "Upload success", resp.String())
 	assertEqual(t, filePath, resp.Request.FormData.Get("@media"))
+	assertTrue(t, resp.Request.isContentLengthSet)
 	assertTrue(t, resp.Request.RawRequest.ContentLength > 0)
 
-	// Test SetFile
+	// Test SetFile with SetMultipartContentLength(true)
 	resp2, err := c.R().
+		SetMultipartContentLength(true).
 		SetFile("media", filePath).
 		Post(ts.URL)
 
@@ -211,6 +226,7 @@ func TestMultipartSetFilesContentLengthAndFormDataGH1046(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp2.StatusCode())
 	assertEqual(t, "Upload success", resp2.String())
 	assertEqual(t, filePath, resp2.Request.FormData.Get("@media"))
+	assertTrue(t, resp2.Request.isContentLengthSet)
 	assertTrue(t, resp2.Request.RawRequest.ContentLength > 0)
 }
 

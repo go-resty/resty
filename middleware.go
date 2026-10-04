@@ -461,7 +461,7 @@ func handleMultipart(c *Client, r *Request) error {
 
 	r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
 
-	if !r.isContentLengthSet {
+	if r.multipartContentLength && !r.isContentLengthSet {
 		if cl, ok := calculateMultipartContentLength(mw.Boundary(), r); ok {
 			r.contentLength = cl
 			r.isContentLengthSet = true

@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -2788,3 +2789,55 @@ func TestRequestExecuteDoesNotAliasRetryConditions(t *testing.T) {
 	after := reflect.ValueOf(clone.retryConditions[1]).Pointer()
 	assertEqual(t, before, after)
 }
+
+func TestRequestSetMultipartContentLength(t *testing.T) {
+	var receivedContentLength int64
+	var isChunked bool
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedContentLength = r.ContentLength
+		isChunked = slices.Contains(r.TransferEncoding, "chunked")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	basePath := getTestDataPath()
+	filePath := filepath.Join(basePath, "test-img.png")
+
+	c := dcnl()
+	defer c.Close()
+
+	// Default behavior: streaming multipart does not set Content-Length header
+	resp, err := c.R().
+		SetFile("file", filePath).
+		Post(ts.URL)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, false, resp.Request.isContentLengthSet)
+	assertEqual(t, int64(-1), receivedContentLength)
+	assertTrue(t, isChunked)
+
+	// SetMultipartContentLength(true): calculates and sets Content-Length header properly
+	resp2, err := c.R().
+		SetMultipartContentLength(true).
+		SetFile("file", filePath).
+		Post(ts.URL)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp2.StatusCode())
+	assertTrue(t, resp2.Request.isContentLengthSet)
+	assertTrue(t, resp2.Request.RawRequest.ContentLength > 0)
+	assertEqual(t, resp2.Request.RawRequest.ContentLength, receivedContentLength)
+	assertTrue(t, !isChunked)
+
+	// SetMultipartContentLength(false): retains streaming multipart default behavior
+	resp3, err := c.R().
+		SetMultipartContentLength(false).
+		SetFile("file", filePath).
+		Post(ts.URL)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp3.StatusCode())
+	assertEqual(t, false, resp3.Request.isContentLengthSet)
+	assertEqual(t, int64(-1), receivedContentLength)
+	assertTrue(t, isChunked)
+}
+
