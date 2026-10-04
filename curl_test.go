@@ -17,6 +17,31 @@ import (
 	"testing/iotest"
 )
 
+func TestCurlPreservesBodyNewlines(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+	}{
+		{"no newline", "payload"},
+		{"LF", "payload\n"},
+		{"CRLF", "payload\r\n"},
+		{"multiple newlines", "payload\n\n"},
+		{"only newlines", "\r\n\n"},
+		{"NDJSON", "{\"value\":1}\n{\"value\":2}\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := dcnl()
+			defer c.Close()
+			req := c.R().SetMethod(MethodPost).SetURL("http://example.com").SetBody(tt.body)
+			raw, err := http.NewRequest(MethodPost, req.URL, strings.NewReader(tt.body))
+			assertNil(t, err)
+			req.RawRequest = raw
+			want := "curl -X POST -d " + cmdQuote(tt.body) + " http://example.com"
+			assertEqual(t, want, buildCurlCmd(req))
+		})
+	}
+}
+
 func TestCurlGenerateUnexecutedRequest(t *testing.T) {
 	req := dcnldr().
 		SetBody(map[string]string{
@@ -36,7 +61,7 @@ func TestCurlGenerateUnexecutedRequest(t *testing.T) {
 
 	if !strings.Contains(curlCmdUnexecuted, "Cookie: count=1") ||
 		!strings.Contains(curlCmdUnexecuted, "curl -X POST") ||
-		!strings.Contains(curlCmdUnexecuted, `-d '{"name":"Resty"}'`) {
+		!strings.Contains(curlCmdUnexecuted, "-d "+cmdQuote("{\"name\":\"Resty\"}\n")) {
 		t.Fatal("Incomplete curl:", curlCmdUnexecuted)
 	} else {
 		t.Log("curlCmdUnexecuted: \n", curlCmdUnexecuted)
@@ -73,7 +98,7 @@ func TestCurlGenerateExecutedRequest(t *testing.T) {
 	req.SetCurlCmdGenerate(false)
 	if !strings.Contains(curlCmdExecuted, "Cookie: count=1") ||
 		!strings.Contains(curlCmdExecuted, "curl -X POST") ||
-		!strings.Contains(curlCmdExecuted, `-d '{"name":"Resty"}'`) ||
+		!strings.Contains(curlCmdExecuted, "-d "+cmdQuote("{\"name\":\"Resty\"}\n")) ||
 		!strings.Contains(curlCmdExecuted, url) {
 		t.Fatal("Incomplete curl:", curlCmdExecuted)
 	} else {
@@ -114,7 +139,7 @@ func TestCurlCmdDebugMode(t *testing.T) {
 	// test logContent curl cmd
 	logContent := logBuf.String()
 	if !strings.Contains(logContent, "Cookie: count=1") ||
-		!strings.Contains(logContent, `-d '{"name":"Resty"}'`) {
+		!strings.Contains(logContent, "-d "+cmdQuote("{\"name\":\"Resty\"}\n")) {
 		t.Fatal("Incomplete debug curl info:", logContent)
 	}
 }
