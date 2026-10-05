@@ -67,6 +67,10 @@ type digestTransport struct {
 	transport http.RoundTripper
 }
 
+// unwrap implements [transportWrapper] so Resty's TLS, certificate and proxy
+// setters still reach the real transport after [Client.SetDigestAuth].
+func (dt *digestTransport) unwrap() http.RoundTripper { return dt.transport }
+
 func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// first request without body for all HTTP verbs
 	req1 := dt.cloneReq(req, true)

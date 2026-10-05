@@ -95,6 +95,14 @@ type Hedging struct {
 	isNonReadOnlyAllowed bool
 }
 
+// unwrap implements [transportWrapper] so Resty's TLS, certificate and proxy
+// setters still reach the real transport after [Client.SetHedging].
+func (h *Hedging) unwrap() http.RoundTripper {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	return h.underlying
+}
+
 // SetTransport sets the underlying HTTP transport that [Hedging] delegates
 // individual requests to.
 func (h *Hedging) SetTransport(t http.RoundTripper) {
