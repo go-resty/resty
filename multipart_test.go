@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
@@ -830,5 +831,45 @@ func TestMultipartFieldClonePreservesReaderAndEmptyValues(t *testing.T) {
 		if copied == source || copied.Reader != reader || !reflect.DeepEqual(copied.Values, values) {
 			t.Fatalf("clone does not preserve field metadata and shared reader: %#v", copied)
 		}
+	}
+}
+
+// Resty opens files named by SetFile itself and closes them after every attempt,
+// so a retry used to seek an already-closed handle and abandon the request. The
+// sniffed content-type head must also be sent exactly once per attempt.
+func TestMultipartRetryResendsIdenticalFile(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []string
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(body))
+		mu.Unlock()
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	_, err := c.R().
+		SetRetryCount(1).
+		SetRetryWaitTime(time.Millisecond).
+		SetRetryMaxWaitTime(2*time.Millisecond).
+		SetRetryAllowNonIdempotent(true).
+		AddRetryConditions(func(res *Response, _ error) bool { return true }).
+		SetFile("file", filepath.Join(getTestDataPath(), "text-file.txt")).
+		Post(ts.URL)
+	assertNil(t, err)
+
+	const payload = "THIS IS TEXT FILE FOR MULTIPART UPLOAD TEST :)"
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertEqual(t, 2, len(bodies))
+	for _, body := range bodies {
+		// exactly once: the sniffed head is neither dropped nor re-sent
+		assertEqual(t, 1, strings.Count(body, payload))
+		assertEqual(t, 1, strings.Count(body, "text-file.txt"))
 	}
 }
