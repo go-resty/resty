@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1535,4 +1536,218 @@ func TestAutoParseDoesNotBufferSaveToFileBody(t *testing.T) {
 	b, err := os.ReadFile(outputFile)
 	assertError(t, err)
 	assertEqual(t, `{"a":1}`, string(b))
+}
+
+func TestCalculateMultipartContentLength(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	t.Run("seekable reader with content", func(t *testing.T) {
+		r := c.R()
+		r.SetFileReader("file", "test.txt", strings.NewReader("hello world"))
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertTrue(t, ok)
+		assertTrue(t, cl > 0)
+	})
+
+	t.Run("seekable reader empty", func(t *testing.T) {
+		r := c.R()
+		r.SetFileReader("file", "empty.txt", strings.NewReader(""))
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertTrue(t, ok)
+		assertTrue(t, cl > 0)
+	})
+
+	t.Run("unseekable reader without size and with sniffed tempBuf", func(t *testing.T) {
+		r := c.R()
+		unseekable := struct{ io.Reader }{strings.NewReader("sample payload data")}
+		r.SetFileReader("file", "test.txt", unseekable)
+		// Simulate MIME sniffing populating tempBuf
+		r.multipartFields[0].tempBuf = []byte("sample")
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertFalse(t, ok)
+		assertEqual(t, int64(0), cl)
+	})
+
+	t.Run("unseekable reader without size and empty tempBuf", func(t *testing.T) {
+		r := c.R()
+		unseekable := struct{ io.Reader }{strings.NewReader("sample payload data")}
+		r.SetMultipartField("file", "test.txt", "text/plain", unseekable)
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertFalse(t, ok)
+		assertEqual(t, int64(0), cl)
+	})
+
+	t.Run("unseekable reader with explicit positive FileSize", func(t *testing.T) {
+		r := c.R()
+		unseekable := struct{ io.Reader }{strings.NewReader("sample payload data")}
+		r.SetMultipartFields(&MultipartField{
+			Name:     "file",
+			FileName: "test.txt",
+			Reader:   unseekable,
+			FileSize: 19,
+		})
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertTrue(t, ok)
+		assertTrue(t, cl > 19)
+	})
+
+	t.Run("unseekable reader with negative FileSize", func(t *testing.T) {
+		r := c.R()
+		unseekable := struct{ io.Reader }{strings.NewReader("sample payload data")}
+		r.SetMultipartFields(&MultipartField{
+			Name:     "file",
+			FileName: "test.txt",
+			Reader:   unseekable,
+			FileSize: -1,
+		})
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertFalse(t, ok)
+		assertEqual(t, int64(0), cl)
+	})
+
+	t.Run("file on disk", func(t *testing.T) {
+		basePath := getTestDataPath()
+		filePath := filepath.Join(basePath, "text-file.txt")
+		r := c.R()
+		r.SetFile("file", filePath)
+		assertNil(t, r.multipartFields[0].openFile())
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertTrue(t, ok)
+		assertTrue(t, cl > 0)
+	})
+
+	t.Run("mixed fields with one unseekable unknown size", func(t *testing.T) {
+		r := c.R()
+		r.SetFileReader("seekable", "seekable.txt", strings.NewReader("valid content"))
+		unseekable := struct{ io.Reader }{strings.NewReader("unseekable content")}
+		r.SetFileReader("unseekable", "unseekable.txt", unseekable)
+		r.multipartFields[1].tempBuf = []byte("unseekable")
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertFalse(t, ok)
+		assertEqual(t, int64(0), cl)
+	})
+}
+
+func TestMultipartStreamedReaderContentLengthFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		payloadSize         int
+		explicitContentType string
+		explicitFileSize    int64
+		unseekable          bool
+		expectChunked       bool
+		expectContentLength bool
+	}{
+		{
+			name:                "unseekable reader 600 bytes with mime sniffing falls back to chunked",
+			payloadSize:         600,
+			unseekable:          true,
+			expectChunked:       true,
+			expectContentLength: false,
+		},
+		{
+			name:                "unseekable reader 5 bytes with mime sniffing falls back to chunked",
+			payloadSize:         5,
+			unseekable:          true,
+			expectChunked:       true,
+			expectContentLength: false,
+		},
+		{
+			name:                "unseekable reader with explicit content type falls back to chunked",
+			payloadSize:         600,
+			explicitContentType: "text/plain",
+			unseekable:          true,
+			expectChunked:       true,
+			expectContentLength: false,
+		},
+		{
+			name:                "unseekable reader with explicit FileSize calculates Content-Length",
+			payloadSize:         600,
+			explicitFileSize:    600,
+			unseekable:          true,
+			expectChunked:       false,
+			expectContentLength: true,
+		},
+		{
+			name:                "seekable reader calculates Content-Length",
+			payloadSize:         600,
+			unseekable:          false,
+			expectChunked:       false,
+			expectContentLength: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var receivedContentLength int64
+			var isChunked bool
+			var receivedBody bytes.Buffer
+
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				receivedContentLength = r.ContentLength
+				isChunked = slices.Contains(r.TransferEncoding, "chunked")
+
+				mr, err := r.MultipartReader()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+
+				part, err := mr.NextPart()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+
+				if _, err = io.Copy(&receivedBody, part); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("ok"))
+			}))
+			defer ts.Close()
+
+			c := dcnl()
+			defer c.Close()
+
+			payload := strings.Repeat("A", tc.payloadSize)
+			var reader io.Reader = strings.NewReader(payload)
+			if tc.unseekable {
+				reader = struct{ io.Reader }{reader}
+			}
+
+			req := c.R().
+				SetMultipartBoundary("resty-test-boundary").
+				SetMultipartContentLength(true)
+
+			if tc.explicitFileSize > 0 {
+				req.SetMultipartFields(&MultipartField{
+					Name:        "file",
+					FileName:    "tiny.txt",
+					ContentType: tc.explicitContentType,
+					Reader:      reader,
+					FileSize:    tc.explicitFileSize,
+				})
+			} else if tc.explicitContentType != "" {
+				req.SetMultipartField("file", "tiny.txt", tc.explicitContentType, reader)
+			} else {
+				req.SetFileReader("file", "tiny.txt", reader)
+			}
+
+			resp, err := req.Post(ts.URL)
+			assertNil(t, err)
+			assertEqual(t, http.StatusOK, resp.StatusCode())
+			assertEqual(t, payload, receivedBody.String())
+			assertEqual(t, tc.expectChunked, isChunked)
+			assertEqual(t, tc.expectContentLength, resp.Request.isContentLengthSet)
+
+			if tc.expectContentLength {
+				assertTrue(t, receivedContentLength > int64(tc.payloadSize))
+				assertEqual(t, resp.Request.RawRequest.ContentLength, receivedContentLength)
+			} else {
+				assertEqual(t, int64(-1), receivedContentLength)
+			}
+		})
+	}
 }

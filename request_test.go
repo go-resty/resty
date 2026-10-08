@@ -2840,4 +2840,3 @@ func TestRequestSetMultipartContentLength(t *testing.T) {
 	assertEqual(t, int64(-1), receivedContentLength)
 	assertTrue(t, isChunked)
 }
-

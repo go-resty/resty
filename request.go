@@ -83,35 +83,35 @@ type Request struct {
 	//	first attempt + retry count = total attempts
 	Attempt int
 
-	mu                   *sync.Mutex
-	credentials          *credentials
-	isMultiPart          bool
-	isFormData           bool
-	isContentLengthSet   bool
-	contentLength        int64
-	jsonEscapeHTML       bool
-	ctx                  context.Context
-	ctxCancelFunc        context.CancelFunc
-	values               map[string]any
-	client               *Client
-	bodyBuf              *bytes.Buffer
-	trace                *clientTrace
-	log                  Logger
-	baseURL              string
-	multipartBoundary    string
+	mu                     *sync.Mutex
+	credentials            *credentials
+	isMultiPart            bool
+	isFormData             bool
+	isContentLengthSet     bool
+	contentLength          int64
+	jsonEscapeHTML         bool
+	ctx                    context.Context
+	ctxCancelFunc          context.CancelFunc
+	values                 map[string]any
+	client                 *Client
+	bodyBuf                *bytes.Buffer
+	trace                  *clientTrace
+	log                    Logger
+	baseURL                string
+	multipartBoundary      string
 	multipartFields        []*MultipartField
 	multipartContentLength bool
 	retryConditions        []RetryConditionFunc
-	isSetRetryConditions bool
-	retryHooks           []RetryHookFunc
-	isSetRetryHooks      bool
-	curlCmdString        string
-	isCurlCmdGenerate    bool
-	isCurlCmdDebugLog    bool
-	unescapeQueryParams  bool
-	multipartErrChan     chan error
-	multipartCancelFunc  context.CancelFunc
-	multipartPipeWriter  *io.PipeWriter
+	isSetRetryConditions   bool
+	retryHooks             []RetryHookFunc
+	isSetRetryHooks        bool
+	curlCmdString          string
+	isCurlCmdGenerate      bool
+	isCurlCmdDebugLog      bool
+	unescapeQueryParams    bool
+	multipartErrChan       chan error
+	multipartCancelFunc    context.CancelFunc
+	multipartPipeWriter    *io.PipeWriter
 }
 
 // SetCorrelationID method is used to set the correlation ID for the request

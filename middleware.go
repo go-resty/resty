@@ -375,20 +375,23 @@ func calculateMultipartContentLength(boundary string, r *Request) (int64, bool) 
 			continue
 		}
 
+		seekDetermined := false
 		if mf.FileSize <= 0 && mf.Reader != nil {
 			if seeker, ok := mf.Reader.(io.Seeker); ok {
 				curr, err := seeker.Seek(0, io.SeekCurrent)
 				if err == nil {
 					end, err := seeker.Seek(0, io.SeekEnd)
 					if err == nil {
-						mf.FileSize = end
-						_, _ = seeker.Seek(curr, io.SeekStart)
+						if _, err = seeker.Seek(curr, io.SeekStart); err == nil {
+							mf.FileSize = end
+							seekDetermined = true
+						}
 					}
 				}
 			}
 		}
 
-		if mf.FileSize < 0 || (mf.FileSize == 0 && mf.FilePath == "" && mf.Reader != nil && len(mf.tempBuf) == 0) {
+		if mf.FileSize < 0 || (mf.FileSize <= 0 && mf.FilePath == "" && !seekDetermined) {
 			return 0, false
 		}
 

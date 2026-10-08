@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
@@ -228,6 +229,70 @@ func TestMultipartSetFilesContentLengthAndFormDataGH1046(t *testing.T) {
 	assertEqual(t, filePath, resp2.Request.FormData.Get("@media"))
 	assertTrue(t, resp2.Request.isContentLengthSet)
 	assertTrue(t, resp2.Request.RawRequest.ContentLength > 0)
+}
+
+func TestMultipartStreamedReaderFallbackGH1046(t *testing.T) {
+	var receivedContentLength int64
+	var isChunked bool
+	var receivedFileName string
+	var receivedContent string
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedContentLength = r.ContentLength
+		isChunked = slices.Contains(r.TransferEncoding, "chunked")
+
+		if err := r.ParseMultipartForm(10e6); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		files := r.MultipartForm.File["file"]
+		if len(files) == 0 {
+			http.Error(w, "missing file", http.StatusBadRequest)
+			return
+		}
+
+		receivedFileName = files[0].Filename
+		f, err := files[0].Open()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer closeq(f)
+
+		b, err := io.ReadAll(f)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		receivedContent = string(b)
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("Upload success"))
+	}))
+	defer ts.Close()
+
+	c := dcnld()
+
+	for _, size := range []int{5, 600} {
+		payload := strings.Repeat("A", size)
+		reader := struct{ io.Reader }{strings.NewReader(payload)}
+
+		resp, err := c.R().
+			SetMultipartBoundary("resty-review-boundary").
+			SetMultipartContentLength(true).
+			SetFileReader("file", "tiny.txt", reader).
+			Post(ts.URL)
+
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "Upload success", resp.String())
+		assertEqual(t, "tiny.txt", receivedFileName)
+		assertEqual(t, payload, receivedContent)
+		assertEqual(t, false, resp.Request.isContentLengthSet)
+		assertEqual(t, int64(-1), receivedContentLength)
+		assertTrue(t, isChunked)
+	}
 }
 
 func TestMultipartIoReaderFiles(t *testing.T) {
