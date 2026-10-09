@@ -31,6 +31,10 @@ func TestIsJSONContentType(t *testing.T) {
 
 		{"application/json; charset=utf-8", true},
 		{"application/vnd.foo+json; charset=utf-8", true},
+		{"application/xml; profile=json", false},
+		{"text/plain; format=json", false},
+		{"application/octet-stream; name=\"data.json\"", false},
+		{"text/plain; profile=\"JSON; version=1\"", false},
 
 		{"text/json", true},
 		{"text/vnd.foo+json", true},
@@ -64,6 +68,10 @@ func TestIsXMLContentType(t *testing.T) {
 
 		{"application/xml; charset=utf-8", true},
 		{"application/vnd.foo+xml; charset=utf-8", true},
+		{"application/json; profile=xml", false},
+		{"text/plain; format=xml", false},
+		{"application/octet-stream; name=\"data.xml\"", false},
+		{"text/plain; profile=\"XML; version=1\"", false},
 
 		{"text/xml", true},
 		{"text/vnd.foo+xml", true},
