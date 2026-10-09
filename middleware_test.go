@@ -1627,6 +1627,49 @@ func TestCalculateMultipartContentLength(t *testing.T) {
 		assertFalse(t, ok)
 		assertEqual(t, int64(0), cl)
 	})
+
+	t.Run("invalid boundary returns false", func(t *testing.T) {
+		r := c.R()
+		r.SetFileReader("file", "test.txt", strings.NewReader("sample payload data"))
+		cl, ok := calculateMultipartContentLength("invalid\nboundary", r)
+		assertFalse(t, ok)
+		assertEqual(t, int64(0), cl)
+	})
+
+	t.Run("mixed FormData with regular fields and file markers", func(t *testing.T) {
+		r := c.R()
+		r.SetFormData(map[string]string{
+			"username": "john_doe",
+			"category": "documents",
+		})
+		basePath := getTestDataPath()
+		filePath := filepath.Join(basePath, "text-file.txt")
+		r.SetFiles(map[string]string{
+			"upload1": filePath,
+		})
+		assertNil(t, r.multipartFields[0].openFile())
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertTrue(t, ok)
+		assertTrue(t, cl > 0)
+	})
+
+	t.Run("multipart fields containing values", func(t *testing.T) {
+		r := c.R()
+		r.SetMultipartFields(
+			&MultipartField{
+				Name:   "tags",
+				Values: []string{"tag1", "tag2"},
+			},
+			&MultipartField{
+				Name:     "doc",
+				FileName: "sample.txt",
+				Reader:   strings.NewReader("sample content"),
+			},
+		)
+		cl, ok := calculateMultipartContentLength("test-boundary", r)
+		assertTrue(t, ok)
+		assertTrue(t, cl > 0)
+	})
 }
 
 func TestMultipartStreamedReaderContentLengthFallback(t *testing.T) {
