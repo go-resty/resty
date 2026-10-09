@@ -121,10 +121,11 @@ func DebugLogJSONFormatter(dl *DebugLog) string {
 }
 
 func debugLogger(c *Client, res *Response) {
-	req := res.Request
-	if !req.IsDebug {
+	if res == nil || res.Request == nil || !res.Request.IsDebug {
 		return
 	}
+
+	req := res.Request
 
 	rdl := &DebugLogResponse{
 		StatusCode: res.StatusCode(),
@@ -142,6 +143,24 @@ func debugLogger(c *Client, res *Response) {
 	rql, _ := req.values[debugRequestLogKey].(*DebugLogRequest)
 	if rql == nil {
 		rql = &DebugLogRequest{}
+	}
+
+	if res.RawResponse != nil && res.RawResponse.Request != nil {
+		if res.RawResponse.Request.Header != nil {
+			rql.Header = sanitizeHeaders(res.RawResponse.Request.Header.Clone())
+		}
+		if isStringEmpty(rql.Host) && res.RawResponse.Request.URL != nil {
+			rql.Host = res.RawResponse.Request.URL.Host
+		}
+		if isStringEmpty(rql.URI) && res.RawResponse.Request.URL != nil {
+			rql.URI = res.RawResponse.Request.URL.RequestURI()
+		}
+		if isStringEmpty(rql.Method) {
+			rql.Method = res.RawResponse.Request.Method
+		}
+		if isStringEmpty(rql.Proto) {
+			rql.Proto = res.RawResponse.Request.Proto
+		}
 	}
 
 	dl := &DebugLog{
