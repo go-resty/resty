@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
@@ -18,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+
 	"strconv"
 	"strings"
 	"sync"
@@ -133,10 +136,13 @@ func TestMultipartFilesAndFormDataEmptyGH1046(t *testing.T) {
 
 	c := dcnld()
 
+	profileImgPath := filepath.Join(basePath, "test-img.png")
+	notesPath := filepath.Join(basePath, "text-file.txt")
+
 	resp, err := c.R().
 		SetFiles(map[string]string{
-			"profile_img": filepath.Join(basePath, "test-img.png"),
-			"notes":       filepath.Join(basePath, "text-file.txt"),
+			"profile_img": profileImgPath,
+			"notes":       notesPath,
 		}).
 		Post(ts.URL + "/upload")
 
@@ -146,6 +152,147 @@ func TestMultipartFilesAndFormDataEmptyGH1046(t *testing.T) {
 	assertEqual(t, http.StatusOK, resp.StatusCode())
 	assertTrue(t, strings.Contains(responseStr, "test-img.png"))
 	assertTrue(t, strings.Contains(responseStr, "text-file.txt"))
+
+	// GH #1046: FormData must contain @-prefixed file paths matching v2 behavior
+	assertEqual(t, profileImgPath, resp.Request.FormData.Get("@profile_img"))
+	assertEqual(t, notesPath, resp.Request.FormData.Get("@notes"))
+
+	// Default streaming behavior in v3: Content-Length is not calculated/set
+	assertEqual(t, false, resp.Request.isContentLengthSet)
+	assertEqual(t, int64(0), resp.Request.RawRequest.ContentLength)
+}
+
+func TestMultipartSetFilesContentLengthAndFormDataGH1046(t *testing.T) {
+	// Replicates WeChat API behavior where missing Content-Length / chunked transfer results in HTTP 412
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ContentLength <= 0 || slices.Contains(r.TransferEncoding, "chunked") {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			_, _ = w.Write([]byte("HTTP 412 Precondition Failed: Content-Length required"))
+			return
+		}
+
+		if err := r.ParseMultipartForm(10e6); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if len(r.MultipartForm.File["media"]) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("Upload success"))
+	}))
+	defer ts.Close()
+
+	basePath := getTestDataPath()
+	filePath := filepath.Join(basePath, "test-img.png")
+
+	c := dcnld()
+
+	// Default behavior: streaming multipart does not set Content-Length, server rejects with 412
+	respDefault, errDefault := c.R().
+		SetFiles(map[string]string{
+			"media": filePath,
+		}).
+		Post(ts.URL)
+
+	assertNil(t, errDefault)
+	assertEqual(t, http.StatusPreconditionFailed, respDefault.StatusCode())
+	assertEqual(t, false, respDefault.Request.isContentLengthSet)
+
+	// Test SetFiles with SetMultipartContentLength(true)
+	resp, err := c.R().
+		SetMultipartContentLength(true).
+		SetFiles(map[string]string{
+			"media": filePath,
+		}).
+		Post(ts.URL)
+
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, "Upload success", resp.String())
+	assertEqual(t, filePath, resp.Request.FormData.Get("@media"))
+	assertTrue(t, resp.Request.isContentLengthSet)
+	assertTrue(t, resp.Request.RawRequest.ContentLength > 0)
+
+	// Test SetFile with SetMultipartContentLength(true)
+	resp2, err := c.R().
+		SetMultipartContentLength(true).
+		SetFile("media", filePath).
+		Post(ts.URL)
+
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp2.StatusCode())
+	assertEqual(t, "Upload success", resp2.String())
+	assertEqual(t, filePath, resp2.Request.FormData.Get("@media"))
+	assertTrue(t, resp2.Request.isContentLengthSet)
+	assertTrue(t, resp2.Request.RawRequest.ContentLength > 0)
+}
+
+func TestMultipartStreamedReaderFallbackGH1046(t *testing.T) {
+	var receivedContentLength int64
+	var isChunked bool
+	var receivedFileName string
+	var receivedContent string
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedContentLength = r.ContentLength
+		isChunked = slices.Contains(r.TransferEncoding, "chunked")
+
+		if err := r.ParseMultipartForm(10e6); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		files := r.MultipartForm.File["file"]
+		if len(files) == 0 {
+			http.Error(w, "missing file", http.StatusBadRequest)
+			return
+		}
+
+		receivedFileName = files[0].Filename
+		f, err := files[0].Open()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer closeq(f)
+
+		b, err := io.ReadAll(f)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		receivedContent = string(b)
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("Upload success"))
+	}))
+	defer ts.Close()
+
+	c := dcnld()
+
+	for _, size := range []int{5, 600} {
+		payload := strings.Repeat("A", size)
+		reader := struct{ io.Reader }{strings.NewReader(payload)}
+
+		resp, err := c.R().
+			SetMultipartBoundary("resty-review-boundary").
+			SetMultipartContentLength(true).
+			SetFileReader("file", "tiny.txt", reader).
+			Post(ts.URL)
+
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertEqual(t, "Upload success", resp.String())
+		assertEqual(t, "tiny.txt", receivedFileName)
+		assertEqual(t, payload, receivedContent)
+		assertEqual(t, false, resp.Request.isContentLengthSet)
+		assertEqual(t, int64(-1), receivedContentLength)
+		assertTrue(t, isChunked)
+	}
 }
 
 func TestMultipartIoReaderFiles(t *testing.T) {

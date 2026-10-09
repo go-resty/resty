@@ -310,6 +310,9 @@ var multipartWriteField = func(w *multipart.Writer, name, value string) error {
 
 var multipartWriteFormData = func(w *multipart.Writer, r *Request) error {
 	for k, v := range r.FormData {
+		if strings.HasPrefix(k, "@") {
+			continue
+		}
 		for _, iv := range v {
 			if err := multipartWriteField(w, k, iv); err != nil {
 				return err
@@ -332,6 +335,77 @@ var multipartSetBoundary = func(w *multipart.Writer, r *Request) error {
 
 var multipartPipeWriterClose = func(w *io.PipeWriter) error {
 	return w.Close()
+}
+
+type countWriter struct {
+	n int64
+}
+
+func (cw *countWriter) Write(p []byte) (int, error) {
+	cw.n += int64(len(p))
+	return len(p), nil
+}
+
+func calculateMultipartContentLength(boundary string, r *Request) (int64, bool) {
+	cw := &countWriter{}
+	mw := multipart.NewWriter(cw)
+	if err := mw.SetBoundary(boundary); err != nil {
+		return 0, false
+	}
+
+	for k, v := range r.FormData {
+		if strings.HasPrefix(k, "@") {
+			continue
+		}
+		for _, iv := range v {
+			if err := mw.WriteField(k, iv); err != nil {
+				return 0, false
+			}
+		}
+	}
+
+	var totalPayloadSize int64
+	for _, mf := range r.multipartFields {
+		if mf.isValues() {
+			for _, v := range mf.Values {
+				if err := mw.WriteField(mf.Name, v); err != nil {
+					return 0, false
+				}
+			}
+			continue
+		}
+
+		seekDetermined := false
+		if mf.FileSize <= 0 && mf.Reader != nil {
+			if seeker, ok := mf.Reader.(io.Seeker); ok {
+				curr, err := seeker.Seek(0, io.SeekCurrent)
+				if err == nil {
+					end, err := seeker.Seek(0, io.SeekEnd)
+					if err == nil {
+						if _, err = seeker.Seek(curr, io.SeekStart); err == nil {
+							mf.FileSize = end
+							seekDetermined = true
+						}
+					}
+				}
+			}
+		}
+
+		if mf.FileSize < 0 || (mf.FileSize <= 0 && mf.FilePath == "" && !seekDetermined) {
+			return 0, false
+		}
+
+		if _, err := mw.CreatePart(mf.createHeader()); err != nil {
+			return 0, false
+		}
+		totalPayloadSize += mf.FileSize
+	}
+
+	if err := mw.Close(); err != nil {
+		return 0, false
+	}
+
+	return cw.n + totalPayloadSize, true
 }
 
 func handleMultipartFormData(r *Request) error {
@@ -389,6 +463,13 @@ func handleMultipart(c *Client, r *Request) error {
 	}
 
 	r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
+
+	if r.multipartContentLength && !r.isContentLengthSet {
+		if cl, ok := calculateMultipartContentLength(mw.Boundary(), r); ok {
+			r.contentLength = cl
+			r.isContentLengthSet = true
+		}
+	}
 
 	// Create cancel before the writer goroutine so Client.execute can stop
 	// production without racing on multipartCancelFunc publication.

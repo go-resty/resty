@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -2787,4 +2788,125 @@ func TestRequestExecuteDoesNotAliasRetryConditions(t *testing.T) {
 
 	after := reflect.ValueOf(clone.retryConditions[1]).Pointer()
 	assertEqual(t, before, after)
+}
+
+func TestRequestSetMultipartContentLength(t *testing.T) {
+	var receivedContentLength int64
+	var isChunked bool
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedContentLength = r.ContentLength
+		isChunked = slices.Contains(r.TransferEncoding, "chunked")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	basePath := getTestDataPath()
+	filePath := filepath.Join(basePath, "test-img.png")
+
+	c := dcnl()
+	defer c.Close()
+
+	// Default behavior: streaming multipart does not set Content-Length header
+	resp, err := c.R().
+		SetFile("file", filePath).
+		Post(ts.URL)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, false, resp.Request.isContentLengthSet)
+	assertEqual(t, int64(-1), receivedContentLength)
+	assertTrue(t, isChunked)
+
+	// SetMultipartContentLength(true): calculates and sets Content-Length header properly
+	resp2, err := c.R().
+		SetMultipartContentLength(true).
+		SetFile("file", filePath).
+		Post(ts.URL)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp2.StatusCode())
+	assertTrue(t, resp2.Request.isContentLengthSet)
+	assertTrue(t, resp2.Request.RawRequest.ContentLength > 0)
+	assertEqual(t, resp2.Request.RawRequest.ContentLength, receivedContentLength)
+	assertTrue(t, !isChunked)
+
+	// SetMultipartContentLength(false): retains streaming multipart default behavior
+	resp3, err := c.R().
+		SetMultipartContentLength(false).
+		SetFile("file", filePath).
+		Post(ts.URL)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp3.StatusCode())
+	assertEqual(t, false, resp3.Request.isContentLengthSet)
+	assertEqual(t, int64(-1), receivedContentLength)
+	assertTrue(t, isChunked)
+
+	// SetMultipartContentLength(true) with mixed FormData and SetFiles
+	resp4, err := c.R().
+		SetMultipartContentLength(true).
+		SetFormData(map[string]string{"username": "gopher", "env": "prod"}).
+		SetFiles(map[string]string{"file": filePath}).
+		Post(ts.URL)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp4.StatusCode())
+	assertTrue(t, resp4.Request.isContentLengthSet)
+	assertTrue(t, resp4.Request.RawRequest.ContentLength > 0)
+	assertEqual(t, resp4.Request.RawRequest.ContentLength, receivedContentLength)
+	assertTrue(t, !isChunked)
+
+	// SetMultipartContentLength(true) with SetMultipartFields containing values (isValues())
+	resp5, err := c.R().
+		SetMultipartContentLength(true).
+		SetMultipartFields(
+			&MultipartField{
+				Name:   "tag",
+				Values: []string{"golang", "resty"},
+			},
+			&MultipartField{
+				Name:     "file",
+				FileName: "test-img.png",
+				FilePath: filePath,
+			},
+		).
+		Post(ts.URL)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp5.StatusCode())
+	assertTrue(t, resp5.Request.isContentLengthSet)
+	assertTrue(t, resp5.Request.RawRequest.ContentLength > 0)
+	assertEqual(t, resp5.Request.RawRequest.ContentLength, receivedContentLength)
+	assertTrue(t, !isChunked)
+}
+
+func TestRequestSetFileAndSetFilesFormData(t *testing.T) {
+	// Verify SetFile and SetFiles initialize r.FormData when it is nil
+	r1 := &Request{}
+	assertNil(t, r1.FormData)
+	r1.SetFile("avatar", "/path/to/avatar.png")
+	assertNotNil(t, r1.FormData)
+	assertEqual(t, "/path/to/avatar.png", r1.FormData.Get("@avatar"))
+
+	r2 := &Request{}
+	assertNil(t, r2.FormData)
+	r2.SetFiles(map[string]string{
+		"doc1": "/path/to/doc1.pdf",
+		"doc2": "/path/to/doc2.pdf",
+	})
+	assertNotNil(t, r2.FormData)
+	assertEqual(t, "/path/to/doc1.pdf", r2.FormData.Get("@doc1"))
+	assertEqual(t, "/path/to/doc2.pdf", r2.FormData.Get("@doc2"))
+
+	// Verify SetFile and SetFiles preserve existing regular form values when FormData is already initialized
+	c := dcnl()
+	defer c.Close()
+
+	r3 := c.R().SetFormData(map[string]string{"user": "alice", "role": "admin"})
+	r3.SetFile("avatar", "/path/to/avatar.png")
+	assertEqual(t, "alice", r3.FormData.Get("user"))
+	assertEqual(t, "admin", r3.FormData.Get("role"))
+	assertEqual(t, "/path/to/avatar.png", r3.FormData.Get("@avatar"))
+
+	r4 := c.R().SetFormData(map[string]string{"user": "bob", "role": "editor"})
+	r4.SetFiles(map[string]string{"doc": "/path/to/doc.pdf"})
+	assertEqual(t, "bob", r4.FormData.Get("user"))
+	assertEqual(t, "editor", r4.FormData.Get("role"))
+	assertEqual(t, "/path/to/doc.pdf", r4.FormData.Get("@doc"))
 }
