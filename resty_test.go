@@ -1098,3 +1098,329 @@ func TestDebugLoggerWithoutPreparedRequestLog(t *testing.T) {
 	assertTrue(t, strings.Contains(logBuf.String(), "RESPONSE"),
 		"expected the debug log to be written, got: "+logBuf.String())
 }
+
+func TestMultipartSetFilesWithFormData(t *testing.T) {
+	basePath := getTestDataPath()
+	file1 := filepath.Join(basePath, "text-file.txt")
+	file2 := filepath.Join(basePath, "test-img.png")
+
+	var (
+		receivedContentLength int64
+		isChunked             bool
+		parsedValues          map[string][]string
+		parsedFiles           map[string]string
+	)
+
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		receivedContentLength = r.ContentLength
+		isChunked = len(r.TransferEncoding) > 0 && r.TransferEncoding[0] == "chunked"
+
+		if err := r.ParseMultipartForm(1024 * 1024); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer func() {
+			if r.MultipartForm != nil {
+				_ = r.MultipartForm.RemoveAll()
+			}
+		}()
+
+		parsedValues = r.MultipartForm.Value
+		parsedFiles = make(map[string]string)
+		for k, headers := range r.MultipartForm.File {
+			if len(headers) > 0 {
+				f, err := headers[0].Open()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				content, err := io.ReadAll(f)
+				_ = f.Close()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				parsedFiles[k] = string(content)
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	t.Run("SetFormData then SetFiles with Content-Length calculated", func(t *testing.T) {
+		resp, err := c.R().
+			SetMultipartContentLength(true).
+			SetFormData(map[string]string{"user": "alice", "team": "dev"}).
+			SetFiles(map[string]string{"f1": file1, "f2": file2}).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertTrue(t, resp.Request.isContentLengthSet)
+		assertFalse(t, isChunked)
+		assertEqual(t, resp.Request.RawRequest.ContentLength, receivedContentLength)
+		assertTrue(t, receivedContentLength > 0)
+
+		// Form values must contain user and team, but must NOT leak @f1 or @f2
+		assertEqual(t, []string{"alice"}, parsedValues["user"])
+		assertEqual(t, []string{"dev"}, parsedValues["team"])
+		assertFalse(t, len(parsedValues["@f1"]) > 0)
+		assertFalse(t, len(parsedValues["@f2"]) > 0)
+
+		// File parts must be present
+		assertTrue(t, len(parsedFiles["f1"]) > 0)
+		assertTrue(t, len(parsedFiles["f2"]) > 0)
+	})
+
+	t.Run("SetFiles then SetFormData with Content-Length calculated", func(t *testing.T) {
+		resp, err := c.R().
+			SetMultipartContentLength(true).
+			SetFiles(map[string]string{"f1": file1}).
+			SetFormData(map[string]string{"user": "bob"}).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertTrue(t, resp.Request.isContentLengthSet)
+		assertFalse(t, isChunked)
+		assertEqual(t, resp.Request.RawRequest.ContentLength, receivedContentLength)
+		assertEqual(t, []string{"bob"}, parsedValues["user"])
+		assertTrue(t, len(parsedFiles["f1"]) > 0)
+	})
+
+	t.Run("SetFiles with FormData chunked streaming default", func(t *testing.T) {
+		resp, err := c.R().
+			SetFormData(map[string]string{"user": "carol"}).
+			SetFiles(map[string]string{"f1": file1}).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertFalse(t, resp.Request.isContentLengthSet)
+		assertTrue(t, isChunked)
+		assertEqual(t, int64(-1), receivedContentLength)
+		assertEqual(t, []string{"carol"}, parsedValues["user"])
+		assertTrue(t, len(parsedFiles["f1"]) > 0)
+	})
+}
+
+func TestMultipartContentLengthDiverseReaders(t *testing.T) {
+	var (
+		receivedContentLength int64
+		isChunked             bool
+		receivedFileContent   string
+	)
+
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		receivedContentLength = r.ContentLength
+		isChunked = len(r.TransferEncoding) > 0 && r.TransferEncoding[0] == "chunked"
+
+		if err := r.ParseMultipartForm(1024 * 1024); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer func() {
+			if r.MultipartForm != nil {
+				_ = r.MultipartForm.RemoveAll()
+			}
+		}()
+
+		receivedFileContent = ""
+		for _, headers := range r.MultipartForm.File {
+			if len(headers) > 0 {
+				f, err := headers[0].Open()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				content, err := io.ReadAll(f)
+				_ = f.Close()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				receivedFileContent = string(content)
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	t.Run("seekable strings.Reader calculates Content-Length", func(t *testing.T) {
+		const payload = "hello from strings.Reader"
+		resp, err := c.R().
+			SetMultipartContentLength(true).
+			SetFileReader("doc", "doc.txt", strings.NewReader(payload)).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertTrue(t, resp.Request.isContentLengthSet)
+		assertFalse(t, isChunked)
+		assertEqual(t, resp.Request.RawRequest.ContentLength, receivedContentLength)
+		assertEqual(t, payload, receivedFileContent)
+	})
+
+	t.Run("seekable bytes.Reader calculates Content-Length", func(t *testing.T) {
+		const payload = "hello from bytes.Reader"
+		resp, err := c.R().
+			SetMultipartContentLength(true).
+			SetFileReader("doc", "doc.bin", bytes.NewReader([]byte(payload))).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertTrue(t, resp.Request.isContentLengthSet)
+		assertFalse(t, isChunked)
+		assertEqual(t, resp.Request.RawRequest.ContentLength, receivedContentLength)
+		assertEqual(t, payload, receivedFileContent)
+	})
+
+	t.Run("unseekable reader without size falls back to chunked", func(t *testing.T) {
+		const payload = "hello from unseekable reader"
+		unseekable := struct{ io.Reader }{strings.NewReader(payload)}
+		resp, err := c.R().
+			SetMultipartContentLength(true).
+			SetFileReader("stream", "stream.txt", unseekable).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertFalse(t, resp.Request.isContentLengthSet)
+		assertTrue(t, isChunked)
+		assertEqual(t, int64(-1), receivedContentLength)
+		assertEqual(t, payload, receivedFileContent)
+	})
+
+	t.Run("unseekable reader with explicit positive FileSize calculates Content-Length", func(t *testing.T) {
+		const payload = "explicit size payload"
+		unseekable := struct{ io.Reader }{strings.NewReader(payload)}
+		resp, err := c.R().
+			SetMultipartContentLength(true).
+			SetMultipartFields(&MultipartField{
+				Name:     "stream",
+				FileName: "stream.txt",
+				Reader:   unseekable,
+				FileSize: int64(len(payload)),
+			}).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertTrue(t, resp.Request.isContentLengthSet)
+		assertFalse(t, isChunked)
+		assertEqual(t, resp.Request.RawRequest.ContentLength, receivedContentLength)
+		assertEqual(t, payload, receivedFileContent)
+	})
+
+	t.Run("unseekable reader with negative FileSize falls back to chunked", func(t *testing.T) {
+		const payload = "negative size payload"
+		unseekable := struct{ io.Reader }{strings.NewReader(payload)}
+		resp, err := c.R().
+			SetMultipartContentLength(true).
+			SetMultipartFields(&MultipartField{
+				Name:     "stream",
+				FileName: "stream.txt",
+				Reader:   unseekable,
+				FileSize: -1,
+			}).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertFalse(t, resp.Request.isContentLengthSet)
+		assertTrue(t, isChunked)
+		assertEqual(t, int64(-1), receivedContentLength)
+		assertEqual(t, payload, receivedFileContent)
+	})
+}
+
+func TestMultipartNilAndEmptyEdgeCases(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	t.Run("SetFiles with nil map initializes FormData without error", func(t *testing.T) {
+		r := c.R().SetFiles(nil)
+		assertTrue(t, r.isMultiPart)
+		assertNotNil(t, r.FormData)
+		assertEqual(t, 0, len(r.multipartFields))
+	})
+
+	t.Run("SetFiles with empty map initializes FormData without error", func(t *testing.T) {
+		r := c.R().SetFiles(map[string]string{})
+		assertTrue(t, r.isMultiPart)
+		assertNotNil(t, r.FormData)
+		assertEqual(t, 0, len(r.multipartFields))
+	})
+
+	t.Run("empty seekable reader calculates valid Content-Length", func(t *testing.T) {
+		var receivedLength int64
+		ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+			receivedLength = r.ContentLength
+			w.WriteHeader(http.StatusOK)
+		})
+		defer ts.Close()
+
+		resp, err := c.R().
+			SetMultipartContentLength(true).
+			SetFileReader("empty", "empty.txt", strings.NewReader("")).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertTrue(t, resp.Request.isContentLengthSet)
+		assertTrue(t, receivedLength > 0)
+		assertEqual(t, resp.Request.RawRequest.ContentLength, receivedLength)
+	})
+
+	t.Run("empty 0-byte file on disk calculates Content-Length", func(t *testing.T) {
+		emptyFile := createBinFile("empty_multipart_test.dat", 0)
+		defer cleanupFiles(emptyFile)
+
+		var receivedLength int64
+		ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+			receivedLength = r.ContentLength
+			w.WriteHeader(http.StatusOK)
+		})
+		defer ts.Close()
+
+		resp, err := c.R().
+			SetMultipartContentLength(true).
+			SetFile("empty_bin", emptyFile).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertTrue(t, resp.Request.isContentLengthSet)
+		assertTrue(t, receivedLength > 0)
+		assertEqual(t, resp.Request.RawRequest.ContentLength, receivedLength)
+	})
+
+	t.Run("explicit SetMultipartContentLength false stays chunked", func(t *testing.T) {
+		var isChunked bool
+		ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+			isChunked = len(r.TransferEncoding) > 0 && r.TransferEncoding[0] == "chunked"
+			w.WriteHeader(http.StatusOK)
+		})
+		defer ts.Close()
+
+		resp, err := c.R().
+			SetMultipartContentLength(false).
+			SetFileReader("doc", "doc.txt", strings.NewReader("test")).
+			Post(ts.URL)
+		assertNil(t, err)
+		assertEqual(t, http.StatusOK, resp.StatusCode())
+		assertFalse(t, resp.Request.isContentLengthSet)
+		assertTrue(t, isChunked)
+	})
+
+	t.Run("manual SetContentLength is not overridden by SetMultipartContentLength", func(t *testing.T) {
+		r := c.R().
+			SetContentLength(9999).
+			SetMultipartContentLength(true).
+			SetFileReader("doc", "doc.txt", strings.NewReader("sample"))
+		assertEqual(t, int64(9999), r.contentLength)
+		assertTrue(t, r.isContentLengthSet)
+	})
+}
+

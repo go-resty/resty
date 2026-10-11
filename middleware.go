@@ -358,9 +358,7 @@ func calculateMultipartContentLength(boundary string, r *Request) (int64, bool) 
 			continue
 		}
 		for _, iv := range v {
-			if err := mw.WriteField(k, iv); err != nil {
-				return 0, false
-			}
+			_ = mw.WriteField(k, iv)
 		}
 	}
 
@@ -368,9 +366,7 @@ func calculateMultipartContentLength(boundary string, r *Request) (int64, bool) 
 	for _, mf := range r.multipartFields {
 		if mf.isValues() {
 			for _, v := range mf.Values {
-				if err := mw.WriteField(mf.Name, v); err != nil {
-					return 0, false
-				}
+				_ = mw.WriteField(mf.Name, v)
 			}
 			continue
 		}
@@ -395,15 +391,11 @@ func calculateMultipartContentLength(boundary string, r *Request) (int64, bool) 
 			return 0, false
 		}
 
-		if _, err := mw.CreatePart(mf.createHeader()); err != nil {
-			return 0, false
-		}
+		_, _ = mw.CreatePart(mf.createHeader())
 		totalPayloadSize += mf.FileSize
 	}
 
-	if err := mw.Close(); err != nil {
-		return 0, false
-	}
+	_ = mw.Close()
 
 	return cw.n + totalPayloadSize, true
 }
