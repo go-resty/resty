@@ -1814,7 +1814,7 @@ func TestAddRequestMiddlewareOnEmptyChain(t *testing.T) {
 	res, err := c.R().Get(ts.URL + "/")
 	assertNil(t, err)
 	assertTrue(t, called)
-	assertEqual(t, http.StatusOK, res.StatusCode()) 
+	assertEqual(t, http.StatusOK, res.StatusCode())
 }
 
 // Client.Header, QueryParams, FormData, PathParams and Cookies used to return the
