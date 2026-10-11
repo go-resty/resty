@@ -813,7 +813,7 @@ func (c *Client) NewRequest() *Request {
 func (c *Client) AddRequestMiddleware(m RequestMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	idx := len(c.beforeRequest) - 1
+	idx := max(len(c.beforeRequest)-1, 0)
 	c.beforeRequest = slices.Insert(c.beforeRequest, idx, m)
 	return c
 }

@@ -1795,6 +1795,28 @@ func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
 }
 
+// AddRequestMiddleware inserts before the last entry, which underflowed to -1
+// once the chain had been emptied.
+func TestAddRequestMiddlewareOnEmptyChain(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	called := false
+	c := dcnl()
+	defer c.Close()
+
+	c.SetRequestMiddlewares()
+	c.AddRequestMiddleware(func(_ *Client, r *Request) error {
+		called = true
+		return MiddlewareRequestCreate(c, r)
+	})
+
+	res, err := c.R().Get(ts.URL + "/")
+	assertNil(t, err)
+	assertTrue(t, called)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+}
+
 // Client.Header, QueryParams, FormData, PathParams and Cookies used to return the
 // live maps and slices, so request middleware iterated them after the read lock
 // had been released. Mutating the client concurrently was then a data race that
