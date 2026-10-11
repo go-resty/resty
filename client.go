@@ -323,10 +323,13 @@ func (c *Client) SetLoadBalancer(b LoadBalancer) *Client {
 }
 
 // Header method returns the headers from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) Header() http.Header {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.header
+	return c.header.Clone()
 }
 
 // SetHeader method sets a single header and its value in the client instance.
@@ -459,10 +462,13 @@ func (c *Client) SetCookieJar(jar http.CookieJar) *Client {
 }
 
 // Cookies method returns all cookies registered in the client instance.
+//
+// The returned slice is a snapshot; appending to it does not affect the client.
+// The [http.Cookie] values themselves are shared and must not be mutated.
 func (c *Client) Cookies() []*http.Cookie {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.cookies
+	return slices.Clone(c.cookies)
 }
 
 // SetCookie method appends a single cookie to the client instance.
@@ -503,10 +509,13 @@ func (c *Client) SetCookies(cs []*http.Cookie) *Client {
 }
 
 // QueryParams method returns all query parameters and their values from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) QueryParams() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.queryParams
+	return cloneURLValues(c.queryParams)
 }
 
 // SetQueryParam method sets a single parameter and its value in the client instance.
@@ -573,10 +582,13 @@ func (c *Client) SetQueryParams(params map[string]string) *Client {
 }
 
 // FormData method returns the form parameters and their values from the client instance.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) FormData() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.formData
+	return cloneURLValues(c.formData)
 }
 
 // SetFormData method sets Form parameters and their values in the client instance.
@@ -801,7 +813,7 @@ func (c *Client) NewRequest() *Request {
 func (c *Client) AddRequestMiddleware(m RequestMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	idx := len(c.beforeRequest) - 1
+	idx := max(len(c.beforeRequest)-1, 0)
 	c.beforeRequest = slices.Insert(c.beforeRequest, idx, m)
 	return c
 }
@@ -1039,7 +1051,7 @@ func (c *Client) inferContentTypeDecoder(ct ...string) (ContentTypeDecoder, bool
 func (c *Client) ContentDecompressers() map[string]ContentDecompresser {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.contentDecompressers
+	return maps.Clone(c.contentDecompressers)
 }
 
 // AddContentDecompresser method adds a Content-Encoding ([RFC 9110]) decompresser
@@ -1491,7 +1503,7 @@ func (c *Client) SetRetryAllowNonIdempotent(b bool) *Client {
 func (c *Client) RetryConditions() []RetryConditionFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryConditions
+	return slices.Clone(c.retryConditions)
 }
 
 // AddRetryConditions method adds one or more retry condition functions to the client.
@@ -1517,7 +1529,7 @@ func (c *Client) AddRetryConditions(conditions ...RetryConditionFunc) *Client {
 func (c *Client) RetryHooks() []RetryHookFunc {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.retryHooks
+	return slices.Clone(c.retryHooks)
 }
 
 // AddRetryHooks method appends one or more retry hook functions to the client;
@@ -2079,10 +2091,13 @@ func (c *Client) SetResponseDoNotParse(notParse bool) *Client {
 }
 
 // PathParams method returns the path parameters set on the client.
+//
+// The returned value is a snapshot; mutating it does not affect the client, and
+// the client may be modified concurrently without disturbing it.
 func (c *Client) PathParams() map[string]string {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.pathParams
+	return maps.Clone(c.pathParams)
 }
 
 // SetPathParam method sets a single URL path key-value pair in the
@@ -2450,8 +2465,12 @@ func (c *Client) executeRequestMiddlewares(req *Request) (err error) {
 }
 
 func (c *Client) cbRequestError() {
-	if c.circuitBreaker != nil {
-		if cbe, ok := c.circuitBreaker.(cbRequestErrorObserver); ok {
+	c.lock.RLock()
+	circuitBreaker := c.circuitBreaker
+	c.lock.RUnlock()
+
+	if circuitBreaker != nil {
+		if cbe, ok := circuitBreaker.(cbRequestErrorObserver); ok {
 			cbe.onRequestError()
 		}
 	}
@@ -2466,9 +2485,13 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	if c.circuitBreaker != nil {
-		if err := c.circuitBreaker.Allow(); err != nil {
-			if cbo, ok := c.circuitBreaker.(CircuitBreakerObserver); ok {
+	c.lock.RLock()
+	circuitBreaker := c.circuitBreaker
+	c.lock.RUnlock()
+
+	if circuitBreaker != nil {
+		if err := circuitBreaker.Allow(); err != nil {
+			if cbo, ok := circuitBreaker.(CircuitBreakerObserver); ok {
 				cbo.RunOnTriggerHooks(req, err)
 			}
 			return nil, err
@@ -2527,8 +2550,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if resp != nil {
-		if c.circuitBreaker != nil {
-			c.circuitBreaker.ApplyPolicies(response)
+		if circuitBreaker != nil {
+			circuitBreaker.ApplyPolicies(response)
 		}
 
 		response.Body = resp.Body

@@ -1794,3 +1794,156 @@ func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	assertEqual(t, false, c.isHedgingEnabled())
 	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
 }
+
+// AddRequestMiddleware inserts before the last entry, which underflowed to -1
+// once the chain had been emptied.
+func TestAddRequestMiddlewareOnEmptyChain(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	called := false
+	c := dcnl()
+	defer c.Close()
+
+	c.SetRequestMiddlewares()
+	c.AddRequestMiddleware(func(_ *Client, r *Request) error {
+		called = true
+		return MiddlewareRequestCreate(c, r)
+	})
+
+	res, err := c.R().Get(ts.URL + "/")
+	assertNil(t, err)
+	assertTrue(t, called)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+}
+
+// Client.Header, QueryParams, FormData, PathParams and Cookies used to return the
+// live maps and slices, so request middleware iterated them after the read lock
+// had been released. Mutating the client concurrently was then a data race that
+// could escalate to an uncatchable "concurrent map read and map write".
+func TestClientAccessorsReturnSnapshots(t *testing.T) {
+	c := dcnl()
+	defer c.Close()
+
+	c.SetHeader("X-Snap", "one")
+	c.SetQueryParam("q", "one")
+	c.SetFormData(map[string]string{"f": "one"})
+	c.SetPathParam("p", "one")
+	c.SetCookie(&http.Cookie{Name: "c", Value: "one"})
+
+	// mutating what the accessors hand back must not reach the client
+	c.Header().Set("X-Snap", "mutated")
+	c.Header().Set("X-Added", "nope")
+	c.QueryParams().Set("q", "mutated")
+	c.FormData().Set("f", "mutated")
+	c.PathParams()["p"] = "mutated"
+	cookies := c.Cookies()
+	cookies = append(cookies, &http.Cookie{Name: "extra", Value: "nope"})
+	_ = cookies
+
+	assertEqual(t, "one", c.Header().Get("X-Snap"))
+	assertEqual(t, "", c.Header().Get("X-Added"))
+	assertEqual(t, "one", c.QueryParams().Get("q"))
+	assertEqual(t, "one", c.FormData().Get("f"))
+	assertEqual(t, "one", c.PathParams()["p"])
+	assertEqual(t, 1, len(c.Cookies()))
+
+	// the slice-returning accessors are snapshots too
+	assertEqual(t, 0, len(c.RetryConditions()))
+	c.AddRetryConditions(func(_ *Response, _ error) bool { return false })
+	rc := c.RetryConditions()
+	assertEqual(t, 1, len(rc))
+	rc = append(rc, func(_ *Response, _ error) bool { return true })
+	assertEqual(t, 2, len(rc))
+	assertEqual(t, 1, len(c.RetryConditions()))
+
+	assertEqual(t, 0, len(c.RetryHooks()))
+	c.AddRetryHooks(func(_ *Response, _ error) {})
+	assertEqual(t, 1, len(c.RetryHooks()))
+
+	decompressers := c.ContentDecompressers()
+	decompressers["bogus"] = nil
+	_, found := c.ContentDecompressers()["bogus"]
+	assertEqual(t, false, found)
+}
+
+// Mutating a client while requests are in flight is documented as safe. It used
+// to race against the middleware that merges client values into each request.
+func TestClientMutationDuringRequestsIsRaceFree(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl().SetBaseURL(ts.URL)
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	wg.Add(1)
+	go func() { // e.g. a token-refresh goroutine
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			c.SetHeader("Authorization", fmt.Sprintf("Bearer %d", i))
+			c.SetQueryParam("v", strconv.Itoa(i))
+			c.SetPathParam("p", strconv.Itoa(i))
+			c.SetFormData(map[string]string{"f": strconv.Itoa(i)})
+		}
+	}()
+
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 25; j++ {
+				res, err := c.R().Get("/")
+				if err == nil {
+					_ = res.StatusCode()
+				}
+			}
+		}()
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// Client.execute and cbRequestError read c.circuitBreaker without the lock while
+// SetCircuitBreaker writes it under the write lock. Run under -race.
+func TestClientCircuitBreakerConcurrentSet(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				c.SetCircuitBreaker(NewCircuitBreakerCount(100, 1, time.Minute))
+				c.SetCircuitBreaker(nil)
+			}
+		}
+	}()
+
+	for range 30 {
+		_, err := c.R().Get(ts.URL + "/")
+		assertNil(t, err)
+	}
+
+	close(stop)
+	wg.Wait()
+}

@@ -8,6 +8,7 @@ package resty
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -17,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -756,6 +758,151 @@ func TestRetryNonSeekableReaderWithoutFactoryReturnsError(t *testing.T) {
 
 	assertErrorIs(t, ErrReaderNotSeekable, err)
 	assertEqual(t, 1, attemptCount)
+}
+
+func TestMultipartFieldCloneValuesHTTP(t *testing.T) {
+	for _, requestClone := range []bool{false, true} {
+		name := "field"
+		if requestClone {
+			name = "request"
+		}
+		t.Run(name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := r.ParseMultipartForm(4096); err != nil {
+					t.Error(err)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				defer r.MultipartForm.RemoveAll()
+				w.Header().Set("Content-Type", "application/json")
+				if err := json.NewEncoder(w).Encode(r.MultipartForm.Value["tag"]); err != nil {
+					t.Error(err)
+				}
+			}))
+			defer ts.Close()
+			c := New().SetTimeout(5 * time.Second)
+			defer c.Close()
+			source := &MultipartField{Name: "tag", Values: []string{"first", "second"}}
+			original := c.R().SetMultipartFields(source)
+			var cloned *Request
+			if requestClone {
+				cloned = original.Clone(context.Background())
+			} else {
+				copied := source.Clone()
+				// Changing the clone must not change the source, either.
+				copied.Values[1] = "clone-second"
+				if source.Values[1] != "second" {
+					t.Errorf("source changed through clone: %q", source.Values)
+				}
+				copied.Values[1] = "second"
+				cloned = c.R().SetMultipartFields(copied)
+			}
+			source.Values[0] = "source-first"
+			for _, tt := range []struct {
+				name string
+				req  *Request
+				want []string
+			}{
+				{"clone", cloned, []string{"first", "second"}},
+				{"source", original, []string{"source-first", "second"}},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					var got []string
+					res, err := tt.req.SetResult(&got).Post(ts.URL)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if res.StatusCode() != http.StatusOK {
+						t.Fatalf("status: %d", res.StatusCode())
+					}
+					if !reflect.DeepEqual(got, tt.want) {
+						t.Fatalf("multipart values = %q; want %q", got, tt.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestMultipartFieldClonePreservesReaderAndEmptyValues(t *testing.T) {
+	reader := strings.NewReader("payload")
+	for _, values := range [][]string{nil, {}, {"one", "two"}} {
+		source := &MultipartField{Name: "tag", Reader: reader, Values: values}
+		copied := source.Clone()
+		if copied == source || copied.Reader != reader || !reflect.DeepEqual(copied.Values, values) {
+			t.Fatalf("clone does not preserve field metadata and shared reader: %#v", copied)
+		}
+	}
+}
+
+// mime/multipart writes part headers verbatim, so CR and LF in a field name,
+// filename or content type must be percent-encoded. Resty's escaper was a fork
+// of the stdlib one with those two replacements dropped, which let an
+// attacker-controlled filename inject headers or forge an entire extra part.
+func TestEscapeQuotesEncodesCRLF(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		in     string
+		expect string
+	}{
+		{"carriage return", "a\rb", "a%0Db"},
+		{"line feed", "a\nb", "a%0Ab"},
+		{"crlf pair", "a\r\nb", "a%0D%0Ab"},
+		{"quote still escaped", `a"b`, `a\"b`},
+		{"backslash still escaped", `a\b`, `a\\b`},
+		{"plain text untouched", "report.pdf", "report.pdf"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertEqual(t, tc.expect, escapeQuotes(tc.in))
+		})
+	}
+}
+
+func TestMultipartFileNameCannotInjectParts(t *testing.T) {
+	var gotRole string
+	var partCount int
+	var parseErr error
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		mr, err := r.MultipartReader()
+		if err != nil {
+			parseErr = err
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		for {
+			p, err := mr.NextPart()
+			if err != nil {
+				break
+			}
+			partCount++
+			if p.FormName() == "role" {
+				b, _ := io.ReadAll(p)
+				gotRole = string(b)
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	// A filename carrying a forged part boundary and an extra form field.
+	evil := "x.txt\"\r\n\r\nnot-a-part\r\n--BOUND\r\n" +
+		"Content-Disposition: form-data; name=\"role\"\r\n\r\nadmin\r\n--BOUND--\r\n"
+
+	res, err := c.R().
+		SetMultipartBoundary("BOUND").
+		SetFileReader("file", evil, strings.NewReader("real content")).
+		Post(ts.URL)
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+
+	// A real multipart parser must see exactly the one part Resty intended,
+	// and no injected "role" field.
+	assertNil(t, parseErr)
+	assertEqual(t, 1, partCount)
+	assertEqual(t, "", gotRole)
 }
 
 // A field carrying only Values has no reader to rewind, so it must not make the

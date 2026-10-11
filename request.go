@@ -1312,9 +1312,12 @@ func (r *Request) SetLabel(label string) *Request {
 	return r
 }
 
-// TraceInfo method returns trace information for the request.
-// If either [Client.SetTrace] or [Request.SetTrace] has not been enabled
-// before the request is made, an empty [resty.TraceInfo] object is returned.
+// TraceInfo method returns trace information for the current request attempt.
+// After a request completes, it describes the final attempt, not the combined
+// duration of all attempts and retry waits. Use [TraceInfo.RequestAttempt] to
+// identify the attempt when collecting trace information in retry hooks.
+// If tracing has not been enabled with [Client.SetTrace] or [Request.SetTrace]
+// before the request is made, an empty [TraceInfo] object is returned.
 func (r *Request) TraceInfo() TraceInfo {
 	ct := r.trace
 

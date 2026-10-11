@@ -12,10 +12,14 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
-var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+// quoteEscaper matches mime/multipart's own escaper. CR and LF must be
+// percent-encoded: part headers are written verbatim, so a newline in a field
+// name, filename or content type would otherwise inject headers.
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"", "\r", "%0D", "\n", "%0A")
 
 func escapeQuotes(s string) string {
 	return quoteEscaper.Replace(s)
@@ -67,6 +71,7 @@ type MultipartField struct {
 func (mf *MultipartField) Clone() *MultipartField {
 	mf2 := new(MultipartField)
 	*mf2 = *mf
+	mf2.Values = slices.Clone(mf.Values)
 	return mf2
 }
 

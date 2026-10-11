@@ -590,6 +590,17 @@ func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 		}
 	}
 
+	// A decoder exists, but no result object was registered for this status code,
+	// so nothing above consumed the body. Read it here: leaving it open holds the
+	// connection out of the keep-alive pool for the life of the process, and it
+	// keeps [Response.String] and [Response.Bytes] working on this path.
+	//
+	// The exception is a save-to-file response, whose body belongs to
+	// [MiddlewareResponseSaveToFile] further down the chain; buffering it here
+	// would hold the whole download in memory.
+	if !res.Request.IsResponseSaveToFile {
+		err = res.readAll()
+	}
 	return
 }
 
