@@ -343,10 +343,11 @@ type resetter interface {
 const unlimitedRead = 0
 
 type limitReadCloser struct {
-	r io.Reader
-	l int64 // Limit (0 or <0 - unlimited, >0 limit)
-	t int64 // Total bytes read
-	f func(s int64)
+	r        io.Reader
+	l        int64 // Limit (0 or <0 - unlimited, >0 limit)
+	t        int64 // Total bytes read
+	f        func(s int64)
+	exceeded bool
 }
 
 func (l *limitReadCloser) Read(p []byte) (n int, err error) {
@@ -359,7 +360,21 @@ func (l *limitReadCloser) Read(p []byte) (n int, err error) {
 	default:
 		remaining := l.l - l.t
 		if remaining <= 0 {
-			return 0, ErrReadExceedsThresholdLimit
+			if len(p) == 0 {
+				return 0, nil
+			}
+			if l.exceeded {
+				return 0, ErrReadExceedsThresholdLimit
+			}
+			// Reaching the limit is valid if the next read is EOF. Keep the
+			// probe byte out of both the caller's buffer and the reported size.
+			var probe [1]byte
+			n, err = l.r.Read(probe[:])
+			if n > 0 {
+				l.exceeded = true
+				return 0, ErrReadExceedsThresholdLimit
+			}
+			return 0, err
 		}
 		if remaining < int64(len(p)) {
 			p = p[:remaining]
@@ -380,6 +395,7 @@ func (l *limitReadCloser) Close() error {
 
 func (l *limitReadCloser) Reset() error {
 	l.t = 0 // Reset total bytes read to zero
+	l.exceeded = false
 	return nil
 }
 
