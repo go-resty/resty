@@ -237,7 +237,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		assertEqual(t, "Bearer secret", cur.Header.Get("Authorization"))
 		assertEqual(t, "my-api-key", cur.Header.Get("X-Api-Key"))
@@ -259,7 +259,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-My-Secret", "secret-value")
 		cur.Header.Set("X-Safe-Header", "safe")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Sensitive headers must be stripped
 		assertEqual(t, "", cur.Header.Get("X-Api-Key"))
@@ -283,7 +283,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-Corp-Access-Token", "Bearer CORP_SECRET_123")
 		cur.Header.Set("Content-Type", "application/json")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Custom auth header must be stripped (contains "token")
 		assertEqual(t, "", cur.Header.Get("X-Corp-Access-Token"))
@@ -297,7 +297,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Same host (case insensitive) → headers copied, not stripped
 		assertEqual(t, "key", cur.Header.Get("X-Api-Key"))
