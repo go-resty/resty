@@ -2198,6 +2198,29 @@ func TestSetResultMustNotPanicOnNil(t *testing.T) {
 	dcnl().R().SetResult(nil)
 }
 
+func TestRequestBodyPoolLifetime(t *testing.T) {
+	var upload io.ReadCloser
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		upload = request.Body
+		t.Cleanup(func() { _ = upload.Close() })
+		return &http.Response{
+			StatusCode: http.StatusUnprocessableEntity,
+			Body:       http.NoBody,
+			Request:    request,
+		}, nil
+	})
+	client := dcnl().SetTransport(transport)
+	defer client.Close()
+
+	payload := "payload must survive"
+	_, err := client.R().SetBody(payload).Post("http://resty.test/upload")
+	assertError(t, err)
+
+	body, err := io.ReadAll(upload)
+	assertError(t, err)
+	assertEqual(t, payload, string(body))
+}
+
 func TestRequestClone(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
