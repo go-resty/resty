@@ -214,8 +214,9 @@ func (sw *slidingWindow[G]) AddAndGet(val G) G {
 	elapsed := now.Sub(sw.lastStart)
 	bucketDuration := sw.interval / time.Duration(len(sw.values))
 
-	// Advance window if needed
-	if elapsed >= bucketDuration {
+	// Advance window if needed. A zero bucket duration (an interval shorter
+	// than the bucket count, e.g. a zero resetTimeout) never advances.
+	if bucketDuration > 0 && elapsed >= bucketDuration {
 		bucketsToAdvance := int(elapsed / bucketDuration)
 		if bucketsToAdvance >= len(sw.values) {
 			// Reset all buckets

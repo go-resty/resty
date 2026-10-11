@@ -426,3 +426,20 @@ func TestClientDigestAuthQopListWithSpaces(t *testing.T) {
 	assertNil(t, err)
 	assertEqual(t, http.StatusOK, res.StatusCode())
 }
+
+// An unsupported algorithm combined with qop=auth-int reached newHashFunc before
+// the algorithm was validated, and the nil map entry panicked.
+func TestDigestUnsupportedAlgorithmWithAuthInt(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("WWW-Authenticate",
+			`Digest realm="test", nonce="abc123", qop="auth-int", algorithm=NOT-A-HASH`)
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	defer ts.Close()
+
+	c := dcnl().SetDigestAuth("user", "pass")
+	defer c.Close()
+
+	_, err := c.R().SetBody(`{"a":1}`).Post(ts.URL)
+	assertErrorIs(t, ErrDigestAlgNotSupported, err)
+}

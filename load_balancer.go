@@ -101,6 +101,9 @@ func (rr *RoundRobin) Refresh(baseURLs ...string) error {
 
 	// after processing, assign the updates
 	rr.baseURLs = result
+	if rr.current >= len(result) {
+		rr.current = 0
+	}
 	return nil
 }
 
