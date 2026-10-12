@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
+	"compress/lzw"
 	"compress/zlib"
 	"errors"
 	"io"
@@ -735,4 +736,163 @@ func TestDecompressDeflateZlibHeaderError(t *testing.T) {
 
 	_, err := decompressDeflate(io.NopCloser(bytes.NewReader(body)))
 	assertNotNil(t, err)
+}
+
+func TestTruncatedResponseBody(t *testing.T) {
+	const payload = "short"
+	var compressed bytes.Buffer
+	gz := gzip.NewWriter(&compressed)
+	_, err := io.WriteString(gz, payload)
+	assertNil(t, err)
+	assertNil(t, gz.Close())
+
+	for _, tc := range []struct {
+		name, encoding, contentLength string
+		body                          []byte
+	}{
+		{"short content length", "", "20", []byte(payload)},
+		{"truncated gzip trailer", "gzip", "", compressed.Bytes()[:compressed.Len()-4]},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/plain")
+				if tc.encoding != "" {
+					w.Header().Set("Content-Encoding", tc.encoding)
+				}
+				if tc.contentLength != "" {
+					w.Header().Set("Content-Length", tc.contentLength)
+				}
+				_, _ = w.Write(tc.body)
+			}))
+			defer ts.Close()
+
+			for _, mode := range []string{"default", "debug", "unlimited reads"} {
+				t.Run(mode, func(t *testing.T) {
+					c := dcnl().SetDebug(mode == "debug").SetResponseBodyUnlimitedReads(mode == "unlimited reads")
+					defer c.Close()
+
+					res, err := c.R().Get(ts.URL)
+					assertErrorIs(t, io.ErrUnexpectedEOF, err)
+					assertEqual(t, payload, string(res.Bytes()))
+				})
+			}
+		})
+	}
+}
+
+func TestEmptyEncodedResponseBody(t *testing.T) {
+	for _, encoding := range []string{"gzip", "deflate", "compress"} {
+		t.Run(encoding, func(t *testing.T) {
+			var compressed bytes.Buffer
+			var w io.WriteCloser
+			switch encoding {
+			case "gzip":
+				w = gzip.NewWriter(&compressed)
+			case "deflate":
+				w = zlib.NewWriter(&compressed)
+			case "compress":
+				w = lzw.NewWriter(&compressed, lzw.LSB, 8)
+			}
+			assertNil(t, w.Close())
+
+			for _, body := range []string{"encoded empty", "zero length", "chunked empty"} {
+				t.Run(body, func(t *testing.T) {
+					ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.Header().Set("Content-Type", "text/plain")
+						w.Header().Set("Content-Encoding", encoding)
+						switch body {
+						case "encoded empty":
+							_, _ = w.Write(compressed.Bytes())
+						case "zero length":
+							w.Header().Set("Content-Length", "0")
+						case "chunked empty":
+							w.(http.Flusher).Flush()
+						}
+					}))
+					defer ts.Close()
+
+					for _, mode := range []string{"default", "debug", "unlimited reads"} {
+						t.Run(mode, func(t *testing.T) {
+							c := dcnl().SetDebug(mode == "debug").SetResponseBodyUnlimitedReads(mode == "unlimited reads")
+							defer c.Close()
+							c.AddContentDecompresser("compress", func(r io.ReadCloser) (io.ReadCloser, error) {
+								return &lzwReader{s: r, r: lzw.NewReader(r, lzw.LSB, 8)}, nil
+							})
+
+							res, err := c.R().Get(ts.URL)
+							assertNil(t, err)
+							assertEqual(t, "", string(res.Bytes()))
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
+// responseReadErrorBody returns data and an error once, then EOF, and records Close.
+type responseReadErrorBody struct {
+	payload string
+	err     error
+	closed  bool
+}
+
+func (r *responseReadErrorBody) Read(p []byte) (int, error) {
+	n := copy(p, r.payload)
+	r.payload = r.payload[n:]
+	if len(r.payload) == 0 {
+		err := r.err
+		r.err = io.EOF
+		return n, err
+	}
+	return n, nil
+}
+
+func (r *responseReadErrorBody) Close() error {
+	r.closed = true
+	return nil
+}
+
+func TestResponseReadErrorPreservesBodyAndClosesSource(t *testing.T) {
+	readErr := errors.New("response read failed")
+	for _, tc := range []struct {
+		name, payload, encoding string
+		err                     error
+	}{
+		{"unexpected EOF with data", "short", "", io.ErrUnexpectedEOF},
+		{"read error with data", "short", "", readErr},
+		{"read error without data", "", "", readErr},
+		{"empty encoded source", "", "deflate", io.EOF},
+		{"truncated encoded source", "", "deflate", io.ErrUnexpectedEOF},
+		{"encoded source read error", "", "gzip", readErr},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, mode := range []string{"default", "debug", "unlimited reads"} {
+				t.Run(mode, func(t *testing.T) {
+					body := &responseReadErrorBody{payload: tc.payload, err: tc.err}
+					c := dcnl().SetDebug(mode == "debug").SetResponseBodyUnlimitedReads(mode == "unlimited reads")
+					defer c.Close()
+					c.SetTransport(roundTripFunc(func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Header: http.Header{
+								"Content-Type":     {"text/plain"},
+								"Content-Encoding": {tc.encoding},
+							},
+							Body: body,
+						}, nil
+					}))
+
+					res, err := c.R().Get("http://example.test")
+					if tc.err == io.EOF {
+						assertNil(t, err)
+					} else {
+						assertErrorIs(t, tc.err, err)
+					}
+					assertTrue(t, body.closed, "response source must be closed")
+					assertEqual(t, tc.payload, string(res.Bytes()))
+				})
+			}
+		})
+	}
 }

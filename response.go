@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -277,10 +278,6 @@ func (r *Response) readAll() (err error) {
 		closeq(r.Body)
 		r.Body = &nopReadCloser{r: bytes.NewReader(r.bodyBytes), resetOnEOF: true}
 	}
-	if err == io.ErrUnexpectedEOF {
-		// content-encoding scenario's - empty/no response body from server
-		err = nil
-	}
 
 	r.IsRead = true
 	return
@@ -316,12 +313,20 @@ func (r *Response) wrapContentDecompresser() error {
 	}
 
 	if decFunc, f := r.Request.client.ContentDecompressers()[strings.ToLower(ce)]; f {
-		dec, err := decFunc(r.Body)
-		if err != nil {
+		// Accept an absent encoded body, but do not hide truncated streams.
+		br := bufio.NewReader(r.Body)
+		if _, err := br.Peek(1); err != nil {
 			if err == io.EOF {
-				// empty/no response body from server
-				err = nil
+				return nil
 			}
+			closeq(r.Body)
+			return err
+		}
+		dec, err := decFunc(struct {
+			*bufio.Reader
+			io.Closer
+		}{br, r.Body})
+		if err != nil {
 			return err
 		}
 
