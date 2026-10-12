@@ -741,6 +741,7 @@ func TestParseRetryAfterHeader(t *testing.T) {
 		{"past-rfc850-date", "Friday, 31-Dec-99 23:59:00 GMT", 0, true},
 		{"past-asctime-date", "Fri Dec 31 23:59:00 1999", 0, true},
 		{"past-date", "Fri, 31 Dec 1999 23:59:00 GMT", 0, true},
+		{"current-date", "Fri, 31 Dec 1999 23:59:57 GMT", 0, true},
 		{"two-headers", "3", time.Second * 3, true},
 		{"empty", "", 0, false},
 		{"negative", "-2", 0, false},
@@ -781,8 +782,45 @@ func TestParseRetryAfterHeaderDateNowMovesForward(t *testing.T) {
 
 	sleep, ok := parseRetryAfterHeader("Fri, 31 Dec 1999 23:59:59 GMT")
 	assertTrue(t, ok)
-	assertEqual(t, time.Duration(math.MaxInt64), sleep)
+	assertEqual(t, time.Duration(0), sleep)
 	assertEqual(t, 2, callCount)
+}
+
+func TestRequestRetryAfterDateNowMovesForward(t *testing.T) {
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			retryAt := time.Date(1999, time.December, 31, 23, 59, 59, 0, time.UTC)
+			clockCalls := 0
+			timeNow = func() time.Time {
+				clockCalls++
+				if clockCalls == 1 {
+					return retryAt
+				}
+				return retryAt.Add(time.Nanosecond)
+			}
+			t.Cleanup(func() { timeNow = time.Now })
+
+			var attempts atomic.Int32
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if attempts.Add(1) == 1 {
+					w.Header().Set(hdrRetryAfterKey, retryAt.Format(http.TimeFormat))
+					w.WriteHeader(status)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer ts.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			resp, err := dcnl().R().SetContext(ctx).SetRetryCount(1).
+				AddRetryConditions(RetryConditionStatusTooManyRequests, RetryConditionStatus5XX).
+				Get(ts.URL)
+			assertNil(t, err)
+			assertEqual(t, http.StatusOK, resp.StatusCode())
+			assertEqual(t, int32(2), attempts.Load())
+		})
+	}
 }
 
 func TestRequestRetryTooManyRequestsHeaderRetryAfter(t *testing.T) {
