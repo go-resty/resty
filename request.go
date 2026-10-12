@@ -1569,8 +1569,9 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			}
 
 			// by default reset file readers
-			if err = r.resetFileReaders(); err != nil {
+			if resetErr := r.resetFileReaders(); resetErr != nil {
 				// if any error in reset readers, stop here
+				err = resetErr
 				break
 			}
 
