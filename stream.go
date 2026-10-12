@@ -397,7 +397,7 @@ func (r *copyReadCloser) Read(p []byte) (int, error) {
 	if n > 0 {
 		_, _ = r.t.Write(p[:n])
 	}
-	if err == io.EOF || err == ErrReadExceedsThresholdLimit {
+	if err != nil {
 		if !r.c {
 			r.f(r.t)
 			r.c = true
