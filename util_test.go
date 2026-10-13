@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -533,6 +534,85 @@ func TestIsMultipartStopError(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assertEqual(t, tc.expect, isMultipartStopError(tc.err))
+		})
+	}
+}
+
+func TestCloneCookieFields(t *testing.T) {
+	for _, unparsed := range []struct {
+		name  string
+		value []string
+	}{
+		{"nil", nil},
+		{"empty", []string{}},
+		{"populated", []string{"Custom=keep", "Other=value"}},
+	} {
+		t.Run(unparsed.name, func(t *testing.T) {
+			cookie := &http.Cookie{
+				Name: "theme", Value: "dark", Quoted: true, Path: "/", Domain: "example.com",
+				Expires:    time.Date(2030, time.January, 2, 3, 4, 5, 0, time.UTC),
+				RawExpires: "Wed, 02 Jan 2030 03:04:05 GMT", MaxAge: 3600,
+				Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode,
+				Partitioned: true, Raw: `theme="dark"; Custom=keep`, Unparsed: unparsed.value,
+			}
+			clone := cloneCookie(cookie)
+			if clone == cookie {
+				t.Fatal("clone shares the cookie pointer")
+			}
+			if !reflect.DeepEqual(clone, cookie) {
+				t.Errorf("cookie fields differ: got %#v, want %#v", clone, cookie)
+			}
+			if len(clone.Unparsed) > 0 {
+				clone.Unparsed[0] = "changed"
+				assertEqual(t, "Custom=keep", cookie.Unparsed[0])
+				cookie.Unparsed[1] = "source-changed"
+				assertEqual(t, "Other=value", clone.Unparsed[1])
+			}
+		})
+	}
+}
+
+func TestCloneCookiePublicPaths(t *testing.T) {
+	for _, path := range []string{"client", "request"} {
+		t.Run(path, func(t *testing.T) {
+			cookie, err := http.ParseSetCookie(`theme="dark"; Path=/; Secure; Partitioned; Custom=keep`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := New()
+			defer client.Close()
+			var original, cloned *Request
+			var cloneCookieValue *http.Cookie
+			if path == "client" {
+				client.SetCookie(cookie)
+				clone := client.Clone(context.Background())
+				defer clone.Close()
+				cloneCookieValue = clone.Cookies()[0]
+				original, cloned = client.R(), clone.R()
+			} else {
+				original = client.R().SetCookie(cookie)
+				cloned = original.Clone(context.Background())
+				cloneCookieValue = cloned.Cookies[0]
+			}
+			if !reflect.DeepEqual(cloneCookieValue, cookie) {
+				t.Errorf("cookie fields differ: got %#v, want %#v", cloneCookieValue, cookie)
+			}
+			cloneCookieValue.Unparsed[0] = "changed"
+			assertEqual(t, "Custom=keep", cookie.Unparsed[0])
+			cloneCookieValue.Value = "light"
+			assertEqual(t, "dark", cookie.Value)
+			cloneCookieValue.Value = "dark"
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(r.Header.Get("Cookie")))
+			}))
+			defer server.Close()
+			for _, request := range []*Request{original, cloned} {
+				response, err := request.Get(server.URL)
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertEqual(t, `theme="dark"`, response.String())
+			}
 		})
 	}
 }
