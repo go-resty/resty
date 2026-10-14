@@ -1423,4 +1423,3 @@ func TestMultipartNilAndEmptyEdgeCases(t *testing.T) {
 		assertTrue(t, r.isContentLengthSet)
 	})
 }
-
