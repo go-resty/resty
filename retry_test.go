@@ -1255,6 +1255,83 @@ func TestRetryCoverage(t *testing.T) {
 	})
 }
 
+func TestRetryHookWithErrorFunc(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	t.Run("client retry hook with error aborts retry", func(t *testing.T) {
+		expectedErr := errors.New("token refresh failed")
+		hookCalled := 0
+
+		c := dcnl().
+			SetRetryCount(3).
+			SetRetryWaitTime(1 * time.Millisecond).
+			AddRetryConditions(func(r *Response, err error) bool {
+				return true
+			}).
+			AddRetryHooksWithError(func(r *Response, err error) error {
+				hookCalled++
+				return expectedErr
+			})
+
+		res, err := c.R().Get("/set-retrycount-test")
+		assertTrue(t, err != nil, "expected error returned from request")
+		assertTrue(t, strings.Contains(err.Error(), expectedErr.Error()), "expected wrapped error containing hook error")
+		assertEqual(t, 1, hookCalled, "expected hook to be called exactly once before aborting retries")
+		assertEqual(t, 1, res.Request.Attempt, "expected attempt count to be 1")
+	})
+
+	t.Run("request retry hook with error overrides client and aborts retry", func(t *testing.T) {
+		clientErr := errors.New("client hook error")
+		requestErr := errors.New("request hook error")
+		clientCalled := 0
+		requestCalled := 0
+
+		c := dcnl().
+			SetRetryCount(3).
+			SetRetryWaitTime(1 * time.Millisecond).
+			AddRetryConditions(func(r *Response, err error) bool {
+				return true
+			}).
+			AddRetryHooksWithError(func(r *Response, err error) error {
+				clientCalled++
+				return clientErr
+			})
+
+		res, err := c.R().
+			AddRetryHooksWithError(func(r *Response, err error) error {
+				requestCalled++
+				return requestErr
+			}).
+			Get("/set-retrycount-test")
+
+		assertTrue(t, err != nil, "expected error returned from request")
+		assertTrue(t, strings.Contains(err.Error(), requestErr.Error()), "expected error from request hook")
+		assertEqual(t, 1, requestCalled, "expected request hook called once")
+		assertEqual(t, 0, clientCalled, "expected client hook not called when request hook is set")
+		assertEqual(t, 1, res.Request.Attempt, "expected attempt count to be 1")
+	})
+
+	t.Run("retry hook with nil error succeeds and continues retries", func(t *testing.T) {
+		hookCalled := 0
+
+		c := dcnl().
+			SetRetryCount(2).
+			SetRetryWaitTime(1 * time.Millisecond).
+			AddRetryConditions(func(r *Response, err error) bool {
+				return r.Request.Attempt < 3
+			}).
+			AddRetryHooksWithError(func(r *Response, err error) error {
+				hookCalled++
+				return nil
+			})
+
+		res, _ := c.R().Get("/set-retrycount-test")
+		assertEqual(t, 3, res.Request.Attempt, "expected 3 total attempts")
+		assertEqual(t, 2, hookCalled, "expected hook called twice between attempts")
+	})
+}
+
 func parseTimeSleptFromResponse(v string) uint64 {
 	timeSlept, _ := strconv.ParseUint(v, 10, 64)
 	return timeSlept

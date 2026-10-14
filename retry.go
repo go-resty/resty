@@ -34,6 +34,11 @@ type (
 	// request state. It receives the same response and error as [RetryConditionFunc].
 	RetryHookFunc func(*Response, error)
 
+	// RetryHookWithErrorFunc is a function called after each failed attempt
+	// and before the next retry. It can return an error to abort retries and
+	// return the error from the request execution.
+	RetryHookWithErrorFunc func(*Response, error) error
+
 	// RetryDelayStrategyFunc defines a custom retry delay strategy.
 	// It receives the response/error from the previous attempt and returns the
 	// wait duration before the next retry.
