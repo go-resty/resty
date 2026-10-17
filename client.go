@@ -230,6 +230,7 @@ type Client struct {
 	retryMaxWaitTime           time.Duration
 	retryConditions            []RetryConditionFunc
 	retryHooks                 []RetryHookFunc
+	retryHooksWithError        []RetryHookWithErrorFunc
 	retryDelayStrategy         RetryDelayStrategyFunc
 	isRetryDefaultConditions   bool
 	isRetryAllowNonIdempotent  bool
@@ -1544,6 +1545,30 @@ func (c *Client) AddRetryHooks(hooks ...RetryHookFunc) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.retryHooks = append(c.retryHooks, hooks...)
+	return c
+}
+
+// RetryHooksWithError method returns all the retry hook with error functions.
+func (c *Client) RetryHooksWithError() []RetryHookWithErrorFunc {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return slices.Clone(c.retryHooksWithError)
+}
+
+// AddRetryHooksWithError method appends one or more retry hook with error functions to the client;
+// each hook is called on every retry attempt and can return an error to abort retries.
+func (c *Client) AddRetryHooksWithError(hooks ...RetryHookWithErrorFunc) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.retryHooksWithError = append(c.retryHooksWithError, hooks...)
+	return c
+}
+
+// SetRetryHooksWithError method overwrites retry hook with error functions on the client.
+func (c *Client) SetRetryHooksWithError(hooks ...RetryHookWithErrorFunc) *Client {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.retryHooksWithError = hooks
 	return c
 }
 
