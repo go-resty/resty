@@ -915,7 +915,12 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 		case bytes.HasPrefix(line, headerEvent):
 			e.Event = append([]byte(nil), trimHeader(len(headerEvent), line)...)
 		case bytes.HasPrefix(line, headerRetry):
-			e.Retry = append([]byte(nil), trimHeader(len(headerRetry), line)...)
+			retry := trimHeader(len(headerRetry), line)
+			if len(retry) > 0 && bytes.IndexFunc(retry, func(r rune) bool {
+				return r < '0' || r > '9'
+			}) == -1 {
+				e.Retry = append([]byte(nil), retry...)
+			}
 		default:
 			// Ignore anything that doesn't match the header
 		}
