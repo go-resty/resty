@@ -972,3 +972,42 @@ func TestSSESourceConnectContextDoneDuringRetryWait(t *testing.T) {
 		"expected the retry wait to be abandoned when the context is done")
 	assertEqual(t, int32(1), attempts.Load(), "expected no further connect attempts")
 }
+
+// The id field sets the last event ID to its value, so an empty id resets it
+// and the next connection must not send Last-Event-ID; an id containing NULL
+// is ignored.
+// https://html.spec.whatwg.org/multipage/server-sent-events.html#processField
+func TestSSESourceLastEventIDFieldValue(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		stream string
+		want   []string
+	}{
+		{"set", "id: 1\ndata: a\n\n", []string{"1"}},
+		{"empty value resets", "id: 1\ndata: a\n\nid:\ndata: b\n\n", nil},
+		{"bare field resets", "id: 1\ndata: a\n\nid\ndata: b\n\n", nil},
+		{"reset without data", "id: 1\ndata: a\n\nid: \n\n", nil},
+		{"NULL is ignored", "id: 1\ndata: a\n\nid: 2\x003\ndata: b\n\n", []string{"1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests int
+			var got []string
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				if requests == 2 {
+					got = r.Header.Values(hdrLastEvevntID)
+					return
+				}
+				w.Header().Set(hdrContentTypeKey, "text/event-stream")
+				_, _ = io.WriteString(w, tc.stream)
+			})
+			defer ts.Close()
+
+			es := createSSESource(t, ts.URL, func(any) {}, nil).SetRetryCount(0)
+			assertErrorIs(t, io.EOF, es.Get())
+			_ = es.Get() // reconnect, sending the tracked last event ID
+			assertEqual(t, 2, requests)
+			assertEqual(t, tc.want, got)
+		})
+	}
+}
