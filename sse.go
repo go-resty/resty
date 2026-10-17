@@ -824,7 +824,9 @@ func (sse *SSESource) processEvent(scanner *bufio.Scanner) error {
 		}
 	}
 
-	if len(ed.Data) > 0 {
+	// An event is dispatched when it had at least one data field, even if every
+	// data field was empty; only an event without data fields is dropped.
+	if ed.HasData {
 		sse.handleCallback(&SSE{
 			ID:   string(ed.ID),
 			Name: string(ed.Event),
@@ -884,6 +886,10 @@ type rawSSE struct {
 	Data  []byte
 	Event []byte
 	Retry []byte
+
+	// HasData reports whether the event had a data field, which tells an empty
+	// data value apart from no data at all.
+	HasData bool
 }
 
 var parseEvent = parseEventFunc
@@ -909,9 +915,11 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 			// scanner has not handed out yet.
 			e.Data = append(e.Data, trimHeader(len(headerData), line)...)
 			e.Data = append(e.Data, '\n')
+			e.HasData = true
 		// The spec says that a line that simply contains the string "data" should be treated as a data field with an empty body.
 		case bytes.Equal(line, bytes.TrimSuffix(headerData, []byte(":"))):
 			e.Data = append(e.Data, byte('\n'))
+			e.HasData = true
 		case bytes.HasPrefix(line, headerEvent):
 			e.Event = append([]byte(nil), trimHeader(len(headerEvent), line)...)
 		case bytes.HasPrefix(line, headerRetry):
@@ -949,6 +957,7 @@ func newRawEvent() *rawSSE {
 	e.Data = e.Data[:0]
 	e.Event = e.Event[:0]
 	e.Retry = e.Retry[:0]
+	e.HasData = false
 	return e
 }
 
