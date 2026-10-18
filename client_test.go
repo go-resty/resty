@@ -237,7 +237,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		assertEqual(t, "Bearer secret", cur.Header.Get("Authorization"))
 		assertEqual(t, "my-api-key", cur.Header.Get("X-Api-Key"))
@@ -259,7 +259,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-My-Secret", "secret-value")
 		cur.Header.Set("X-Safe-Header", "safe")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Sensitive headers must be stripped
 		assertEqual(t, "", cur.Header.Get("X-Api-Key"))
@@ -283,7 +283,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 		cur.Header.Set("X-Corp-Access-Token", "Bearer CORP_SECRET_123")
 		cur.Header.Set("Content-Type", "application/json")
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Custom auth header must be stripped (contains "token")
 		assertEqual(t, "", cur.Header.Get("X-Corp-Access-Token"))
@@ -297,7 +297,7 @@ func TestCheckHostAndAddHeadersCrossDomainStrip(t *testing.T) {
 
 		cur, _ := http.NewRequest(http.MethodGet, "https://example.com/other", nil)
 
-		checkHostAndAddHeaders(cur, pre)
+		checkHostAndAddHeaders(cur, []*http.Request{pre})
 
 		// Same host (case insensitive) → headers copied, not stripped
 		assertEqual(t, "key", cur.Header.Get("X-Api-Key"))
@@ -1795,6 +1795,28 @@ func TestClientHedgingMutualExclusionWithRetry(t *testing.T) {
 	assertEqual(t, 1, c.RetryCount()) // Retry count should remain
 }
 
+// AddRequestMiddleware inserts before the last entry, which underflowed to -1
+// once the chain had been emptied.
+func TestAddRequestMiddlewareOnEmptyChain(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	called := false
+	c := dcnl()
+	defer c.Close()
+
+	c.SetRequestMiddlewares()
+	c.AddRequestMiddleware(func(_ *Client, r *Request) error {
+		called = true
+		return MiddlewareRequestCreate(c, r)
+	})
+
+	res, err := c.R().Get(ts.URL + "/")
+	assertNil(t, err)
+	assertTrue(t, called)
+	assertEqual(t, http.StatusOK, res.StatusCode())
+}
+
 // Client.Header, QueryParams, FormData, PathParams and Cookies used to return the
 // live maps and slices, so request middleware iterated them after the read lock
 // had been released. Mutating the client concurrently was then a data race that
@@ -1887,6 +1909,41 @@ func TestClientMutationDuringRequestsIsRaceFree(t *testing.T) {
 	}
 
 	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// Client.execute and cbRequestError read c.circuitBreaker without the lock while
+// SetCircuitBreaker writes it under the write lock. Run under -race.
+func TestClientCircuitBreakerConcurrentSet(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl()
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				c.SetCircuitBreaker(NewCircuitBreakerCount(100, 1, time.Minute))
+				c.SetCircuitBreaker(nil)
+			}
+		}
+	}()
+
+	for range 30 {
+		_, err := c.R().Get(ts.URL + "/")
+		assertNil(t, err)
+	}
+
 	close(stop)
 	wg.Wait()
 }

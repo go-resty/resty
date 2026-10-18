@@ -17,6 +17,37 @@ import (
 	"testing/iotest"
 )
 
+func TestCurlLiteralBody(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		flag string
+	}{
+		{"at prefix", "@payload", "--data-raw"},
+		{"at only", "@", "--data-raw"},
+		{"stdin prefix", "@-", "--data-raw"},
+		{"quoted at prefix", "@payload's\r\n", "--data-raw"},
+		{"plain text", "payload", "-d"},
+		{"embedded at", "email@example.com", "-d"},
+		{"JSON", "{\"value\":\"@payload\"}\n", "-d"},
+		{"quotes and newlines", "payload's\r\n", "-d"},
+		{"empty", "", "-d"},
+		{"binary bytes", "\x01\xff\r\n", "-d"},
+		{"binary at prefix", "@\x01\xff\r\n", "--data-raw"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := dcnl()
+			defer c.Close()
+			req := c.R().SetMethod(MethodPost).SetURL("http://example.com")
+			var err error
+			req.RawRequest, err = http.NewRequest(MethodPost, req.URL, strings.NewReader(tt.body))
+			assertNil(t, err)
+			want := "curl -X POST " + tt.flag + " " + cmdQuote(tt.body) + " http://example.com"
+			assertEqual(t, want, buildCurlCmd(req))
+		})
+	}
+}
+
 func TestCurlPreservesBodyNewlines(t *testing.T) {
 	for _, tt := range []struct {
 		name string

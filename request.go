@@ -83,34 +83,35 @@ type Request struct {
 	//	first attempt + retry count = total attempts
 	Attempt int
 
-	mu                   *sync.Mutex
-	credentials          *credentials
-	isMultiPart          bool
-	isFormData           bool
-	isContentLengthSet   bool
-	contentLength        int64
-	jsonEscapeHTML       bool
-	ctx                  context.Context
-	ctxCancelFunc        context.CancelFunc
-	values               map[string]any
-	client               *Client
-	bodyBuf              *bytes.Buffer
-	trace                *clientTrace
-	log                  Logger
-	baseURL              string
-	multipartBoundary    string
-	multipartFields      []*MultipartField
-	retryConditions      []RetryConditionFunc
-	isSetRetryConditions bool
-	retryHooks           []RetryHookFunc
-	isSetRetryHooks      bool
-	curlCmdString        string
-	isCurlCmdGenerate    bool
-	isCurlCmdDebugLog    bool
-	unescapeQueryParams  bool
-	multipartErrChan     chan error
-	multipartCancelFunc  context.CancelFunc
-	multipartPipeWriter  *io.PipeWriter
+	mu                     *sync.Mutex
+	credentials            *credentials
+	isMultiPart            bool
+	isFormData             bool
+	isContentLengthSet     bool
+	contentLength          int64
+	jsonEscapeHTML         bool
+	ctx                    context.Context
+	ctxCancelFunc          context.CancelFunc
+	values                 map[string]any
+	client                 *Client
+	bodyBuf                *bytes.Buffer
+	trace                  *clientTrace
+	log                    Logger
+	baseURL                string
+	multipartBoundary      string
+	multipartFields        []*MultipartField
+	multipartContentLength bool
+	retryConditions        []RetryConditionFunc
+	isSetRetryConditions   bool
+	retryHooks             []RetryHookFunc
+	isSetRetryHooks        bool
+	curlCmdString          string
+	isCurlCmdGenerate      bool
+	isCurlCmdDebugLog      bool
+	unescapeQueryParams    bool
+	multipartErrChan       chan error
+	multipartCancelFunc    context.CancelFunc
+	multipartPipeWriter    *io.PipeWriter
 }
 
 // SetCorrelationID method is used to set the correlation ID for the request
@@ -533,6 +534,10 @@ func (r *Request) SetResultError(err any) *Request {
 //		SetFile("my_file", "/Users/jeeva/Gas Bill - Sep.pdf")
 func (r *Request) SetFile(fieldName, filePath string) *Request {
 	r.isMultiPart = true
+	if r.FormData == nil {
+		r.FormData = url.Values{}
+	}
+	r.FormData.Set("@"+fieldName, filePath)
 	r.multipartFields = append(r.multipartFields, &MultipartField{
 		Name:     fieldName,
 		FileName: filepath.Base(filePath),
@@ -554,7 +559,11 @@ func (r *Request) SetFile(fieldName, filePath string) *Request {
 //		})
 func (r *Request) SetFiles(files map[string]string) *Request {
 	r.isMultiPart = true
+	if r.FormData == nil {
+		r.FormData = url.Values{}
+	}
 	for f, fp := range files {
+		r.FormData.Set("@"+f, fp)
 		r.multipartFields = append(r.multipartFields, &MultipartField{
 			Name:     f,
 			FileName: filepath.Base(fp),
@@ -665,6 +674,17 @@ func (r *Request) SetMultipartFields(fields ...*MultipartField) *Request {
 // Typically, the `mime/multipart` package generates a random multipart boundary if not provided.
 func (r *Request) SetMultipartBoundary(boundary string) *Request {
 	r.multipartBoundary = boundary
+	return r
+}
+
+// SetMultipartContentLength method enables or disables calculating the Content-Length
+// for multipart requests.
+//
+// By default, Resty streams multipart uploads using chunked transfer encoding
+// without calculating Content-Length. Enabling this option calculates and sets the
+// Content-Length header on-demand when all multipart field sizes are known.
+func (r *Request) SetMultipartContentLength(enable bool) *Request {
+	r.multipartContentLength = enable
 	return r
 }
 
@@ -1312,9 +1332,12 @@ func (r *Request) SetLabel(label string) *Request {
 	return r
 }
 
-// TraceInfo method returns trace information for the request.
-// If either [Client.SetTrace] or [Request.SetTrace] has not been enabled
-// before the request is made, an empty [resty.TraceInfo] object is returned.
+// TraceInfo method returns trace information for the current request attempt.
+// After a request completes, it describes the final attempt, not the combined
+// duration of all attempts and retry waits. Use [TraceInfo.RequestAttempt] to
+// identify the attempt when collecting trace information in retry hooks.
+// If tracing has not been enabled with [Client.SetTrace] or [Request.SetTrace]
+// before the request is made, an empty [TraceInfo] object is returned.
 func (r *Request) TraceInfo() TraceInfo {
 	ct := r.trace
 
@@ -1899,6 +1922,10 @@ func isConnectionRefused(err error) bool {
 
 func (r *Request) resetFileReaders() error {
 	for _, f := range r.multipartFields {
+		// value-only fields have no reader; they are rewritten from Values on each attempt
+		if f.isValues() {
+			continue
+		}
 		if err := f.resetReader(); err != nil {
 			return err
 		}

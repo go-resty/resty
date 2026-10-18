@@ -16,7 +16,10 @@ import (
 	"strings"
 )
 
-var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+// quoteEscaper matches mime/multipart's own escaper. CR and LF must be
+// percent-encoded: part headers are written verbatim, so a newline in a field
+// name, filename or content type would otherwise inject headers.
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"", "\r", "%0D", "\n", "%0A")
 
 func escapeQuotes(s string) string {
 	return quoteEscaper.Replace(s)
@@ -62,6 +65,10 @@ type MultipartField struct {
 	// tempBuf is used to preserve the byte(s) read from the file to detect the content type.
 	// Or any possible read error early.
 	tempBuf []byte
+
+	// openedByResty records that Resty opened Reader itself from FilePath, so it
+	// owns the handle and may close and reopen it between retry attempts.
+	openedByResty bool
 }
 
 // Clone returns a copy of m, except [MultipartField.Reader] which is shared.
@@ -73,6 +80,14 @@ func (mf *MultipartField) Clone() *MultipartField {
 }
 
 func (mf *MultipartField) resetReader() error {
+	// tempBuf holds the head sniffed for content-type detection on the previous
+	// attempt; the rewound reader supplies those bytes again.
+	mf.tempBuf = nil
+
+	// A file Resty opened is closed after every attempt, so reopen it.
+	if mf.openedByResty && mf.Reader == nil {
+		return mf.openFile()
+	}
 	if rs, ok := mf.Reader.(io.ReadSeeker); ok {
 		_, err := rs.Seek(0, io.SeekStart)
 		return err
@@ -86,6 +101,9 @@ func (mf *MultipartField) isValues() bool {
 
 func (mf *MultipartField) close() {
 	closeq(mf.Reader)
+	if mf.openedByResty {
+		mf.Reader = nil
+	}
 }
 
 func (mf *MultipartField) createHeader() textproto.MIMEHeader {
@@ -123,6 +141,7 @@ func (mf *MultipartField) openFile() error {
 
 	mf.Reader = file
 	mf.FileSize = fileStat.Size()
+	mf.openedByResty = true
 
 	return nil
 }

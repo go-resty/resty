@@ -919,8 +919,11 @@ func TestSRVWeightedRoundRobinTickerRefresh(t *testing.T) {
 	srv.SetRefreshDuration(20 * time.Millisecond)
 	go srv.ticker()
 
+	// Refresh applies the hosts only after lookupSRV returns, so seeing the
+	// second lookup is not enough. The ticker refreshes sequentially, so a third
+	// lookup means the second, successful refresh has been applied.
 	deadline := time.Now().Add(5 * time.Second)
-	for lookups.Load() < 2 {
+	for lookups.Load() < 3 {
 		if time.Now().After(deadline) {
 			t.Fatal("the SRV refresh ticker did not run")
 		}
