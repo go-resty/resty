@@ -179,16 +179,57 @@ func parseRequestURL(c *Client, r *Request) error {
 
 	// GH#797 Unescape query parameters (non-standard - not recommended)
 	if r.unescapeQueryParams && len(reqURL.RawQuery) > 0 {
-		// at this point, all errors caught up in the above operations
-		// so ignore the return error on query unescape; I realized
-		// while writing the unit test
-		unescapedQuery, _ := url.QueryUnescape(reqURL.RawQuery)
-		reqURL.RawQuery = strings.ReplaceAll(unescapedQuery, " ", "+") // otherwise request becomes bad request
+		reqURL.RawQuery = unescapeRawQueryParams(reqURL.RawQuery)
 	}
 
 	r.URL = reqURL.String()
 
 	return nil
+}
+
+// unescapeRawQueryParams decodes each query key and value independently so
+// escaped query data cannot turn into new parameters or separators.
+func unescapeRawQueryParams(rawQuery string) string {
+	params := strings.Split(rawQuery, "&")
+	for i, param := range params {
+		key, value, hasValue := strings.Cut(param, "=")
+		unescapedKey, err := url.QueryUnescape(key)
+		if err != nil {
+			return rawQuery
+		}
+		key = escapeUnescapedQueryComponent(unescapedKey)
+		if !hasValue {
+			params[i] = key
+			continue
+		}
+
+		unescapedValue, err := url.QueryUnescape(value)
+		if err != nil {
+			return rawQuery
+		}
+		params[i] = key + "=" + escapeUnescapedQueryComponent(unescapedValue)
+	}
+
+	return strings.Join(params, "&")
+}
+
+func escapeUnescapedQueryComponent(component string) string {
+	const hex = "0123456789ABCDEF"
+	var escaped strings.Builder
+	for i := 0; i < len(component); i++ {
+		char := component[i]
+		switch {
+		case char == ' ':
+			escaped.WriteByte('+')
+		case char == '&' || char == '=' || char == '+' || char == ';' || char == '#' || char == '%' || char < 0x20 || char == 0x7f:
+			escaped.WriteByte('%')
+			escaped.WriteByte(hex[char>>4])
+			escaped.WriteByte(hex[char&0x0f])
+		default:
+			escaped.WriteByte(char)
+		}
+	}
+	return escaped.String()
 }
 
 func parseRequestHeader(c *Client, r *Request) {
