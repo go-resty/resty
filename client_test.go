@@ -725,7 +725,7 @@ func TestCreateCookieJar(t *testing.T) {
 	assertEqual(t, "value", cookies[0].Value)
 }
 
-/ TestCreateCookieJarPublicSuffix validates that the jar applies its
+// TestCreateCookieJarPublicSuffix validates that the jar applies its
 // PublicSuffixList to cookies with an explicit Domain attribute.
 func TestCreateCookieJarPublicSuffix(t *testing.T) {
 	jar := createCookieJar()
