@@ -52,7 +52,12 @@ func buildCurlCmd(req *Request) string {
 		if err == nil {
 			buf, _ := io.ReadAll(body)
 			closeq(body)
-			curl += "-d " + cmdQuote(string(buf)) + " "
+			dataFlag := "-d "
+			// Prevent curl from interpreting a literal body as a file or stdin.
+			if len(buf) > 0 && buf[0] == '@' {
+				dataFlag = "--data-raw "
+			}
+			curl += dataFlag + cmdQuote(string(buf)) + " "
 		} else {
 			req.log.Errorf("curl: %v", err)
 			curl += "-d '' "

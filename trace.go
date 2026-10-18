@@ -14,9 +14,10 @@ import (
 	"time"
 )
 
-// TraceInfo holds timing and connection details captured during a request via
+// TraceInfo holds timing and connection details captured during a request attempt via
 // [httptrace.ClientTrace]. Fields cover DNS lookup, TCP connection, TLS handshake,
-// server processing, and total end-to-end duration.
+// server processing, and the duration of that attempt. Timings do not include
+// previous attempts or the wait between retries.
 type TraceInfo struct {
 	// DNSLookup is the duration that the transport took to perform the DNS lookup.
 	DNSLookup time.Duration `json:"dns_lookup_time"`
@@ -36,7 +37,10 @@ type TraceInfo struct {
 	// ResponseTime is the duration from the first response byte to the completion of reading the body.
 	ResponseTime time.Duration `json:"response_time"`
 
-	// TotalTime is the total end-to-end duration of the request.
+	// TotalTime is the total end-to-end duration of the current request attempt.
+	// It includes connection setup and reading the response body, but excludes previous
+	// attempts and the wait between retries, so it is not the elapsed time of an
+	// entire Request.Execute call when retries are enabled.
 	TotalTime time.Duration `json:"total_time"`
 
 	// IsConnReused reports whether this connection was previously used for another HTTP request.

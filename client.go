@@ -813,7 +813,7 @@ func (c *Client) NewRequest() *Request {
 func (c *Client) AddRequestMiddleware(m RequestMiddleware) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	idx := len(c.beforeRequest) - 1
+	idx := max(len(c.beforeRequest)-1, 0)
 	c.beforeRequest = slices.Insert(c.beforeRequest, idx, m)
 	return c
 }
@@ -2465,8 +2465,12 @@ func (c *Client) executeRequestMiddlewares(req *Request) (err error) {
 }
 
 func (c *Client) cbRequestError() {
-	if c.circuitBreaker != nil {
-		if cbe, ok := c.circuitBreaker.(cbRequestErrorObserver); ok {
+	c.lock.RLock()
+	circuitBreaker := c.circuitBreaker
+	c.lock.RUnlock()
+
+	if circuitBreaker != nil {
+		if cbe, ok := circuitBreaker.(cbRequestErrorObserver); ok {
 			cbe.onRequestError()
 		}
 	}
@@ -2481,9 +2485,13 @@ func (c *Client) execute(req *Request) (*Response, error) {
 		}
 	}
 
-	if c.circuitBreaker != nil {
-		if err := c.circuitBreaker.Allow(); err != nil {
-			if cbo, ok := c.circuitBreaker.(CircuitBreakerObserver); ok {
+	c.lock.RLock()
+	circuitBreaker := c.circuitBreaker
+	c.lock.RUnlock()
+
+	if circuitBreaker != nil {
+		if err := circuitBreaker.Allow(); err != nil {
+			if cbo, ok := circuitBreaker.(CircuitBreakerObserver); ok {
 				cbo.RunOnTriggerHooks(req, err)
 			}
 			return nil, err
@@ -2542,8 +2550,8 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	}
 
 	if resp != nil {
-		if c.circuitBreaker != nil {
-			c.circuitBreaker.ApplyPolicies(response)
+		if circuitBreaker != nil {
+			circuitBreaker.ApplyPolicies(response)
 		}
 
 		response.Body = resp.Body

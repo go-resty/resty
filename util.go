@@ -187,10 +187,12 @@ func detectContentType(body any) string {
 }
 
 func isJSONContentType(ct string) bool {
+	ct, _, _ = strings.Cut(ct, ";")
 	return strings.Contains(ct, jsonKey)
 }
 
 func isXMLContentType(ct string) bool {
+	ct, _, _ = strings.Cut(ct, ";")
 	return strings.Contains(ct, xmlKey)
 }
 
