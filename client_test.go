@@ -725,29 +725,26 @@ func TestCreateCookieJar(t *testing.T) {
 	assertEqual(t, "value", cookies[0].Value)
 }
 
-// TestCreateCookieJarPublicSuffix validates that the jar is initialized with
-// a working PublicSuffixList. This matters because without it, cookies on
-// public-suffix domains (e.g. co.uk) would be silently rejected. The fallback
-// cookiejar.New(nil) used on error still works for basic cookie operations,
-// so this test confirms the jar never returns nil and always handles Set/Cookies.
+/ TestCreateCookieJarPublicSuffix validates that the jar applies its
+// PublicSuffixList to cookies with an explicit Domain attribute.
 func TestCreateCookieJarPublicSuffix(t *testing.T) {
 	jar := createCookieJar()
 	assertNotNil(t, jar)
 
 	// A domain that has a public suffix (co.uk) — the PublicSuffixList should
-	// allow cookies on the registered domain (example.co.uk) but not on the
-	// public suffix itself (co.uk).
+	// allow a cookie for the registered domain but reject a cookie for co.uk
+	// set by one of its subdomains.
 	registeredDomain, _ := url.Parse("https://example.co.uk")
-	jar.SetCookies(registeredDomain, []*http.Cookie{{Name: "sid", Value: "abc123"}})
+	jar.SetCookies(registeredDomain, []*http.Cookie{{Name: "sid", Value: "abc123", Domain: "example.co.uk"}})
 	cookies := jar.Cookies(registeredDomain)
 	assertEqual(t, 1, len(cookies))
 	assertEqual(t, "sid", cookies[0].Name)
 	assertEqual(t, "abc123", cookies[0].Value)
 
-	// Cookies on the bare public suffix should be rejected by the PublicSuffixList.
-	publicSuffix, _ := url.Parse("https://co.uk")
-	jar.SetCookies(publicSuffix, []*http.Cookie{{Name: "sid", Value: "def456"}})
-	cookies = jar.Cookies(publicSuffix)
+	// A subdomain must not be allowed to set a cookie for the public suffix.
+	attackerDomain, _ := url.Parse("https://attacker.co.uk")
+	jar.SetCookies(attackerDomain, []*http.Cookie{{Name: "sid", Value: "def456", Domain: "co.uk"}})
+	cookies = jar.Cookies(attackerDomain)
 	assertEqual(t, 0, len(cookies))
 
 	// Subdomains of the registered domain should receive the cookie.
@@ -757,26 +754,27 @@ func TestCreateCookieJarPublicSuffix(t *testing.T) {
 	assertEqual(t, "sid", cookies[0].Name)
 }
 
-// TestCreateCookieJarErrorFallback verifies the createCookieJar always returns
-// a functional jar even when the preferred public suffix list is unavailable.
-// It exercises the fallback path cookiejar.New(nil) by confirming the returned
-// jar still supports standard cookie operations without panicking.
-func TestCreateCookieJarErrorFallback(t *testing.T) {
+// TestCreateCookieJarConcurrentAccess verifies the returned jar supports
+// concurrent SetCookies and Cookies calls.
+func TestCreateCookieJarConcurrentAccess(t *testing.T) {
 	jar := createCookieJar()
 	assertNotNil(t, jar)
 
-	// Repeatedly create and use the jar to ensure it is safe for concurrent
-	// use and never returns nil, regardless of how cookiejar.New was called.
 	testURL, _ := url.Parse("http://localhost:8080")
-	for i := 0; i < 50; i++ {
-		jar.SetCookies(testURL, []*http.Cookie{
-			{Name: "key" + strconv.Itoa(i), Value: "val" + strconv.Itoa(i)},
-		})
-		cookies := jar.Cookies(testURL)
-		if len(cookies) != i+1 {
-			t.Fatalf("expected %d cookies after %d iterations, got %d", i+1, i, len(cookies))
-		}
+	const cookieCount = 50
+	var wg sync.WaitGroup
+	wg.Add(cookieCount)
+	for i := 0; i < cookieCount; i++ {
+		go func(i int) {
+			defer wg.Done()
+			jar.SetCookies(testURL, []*http.Cookie{
+				{Name: "key" + strconv.Itoa(i), Value: "val" + strconv.Itoa(i)},
+			})
+			_ = jar.Cookies(testURL)
+		}(i)
 	}
+	wg.Wait()
+	assertEqual(t, cookieCount, len(jar.Cookies(testURL)))
 }
 
 // This test methods exist for test coverage purpose
