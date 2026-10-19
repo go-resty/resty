@@ -20,6 +20,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"path/filepath"
