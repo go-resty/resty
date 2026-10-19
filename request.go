@@ -83,35 +83,37 @@ type Request struct {
 	//	first attempt + retry count = total attempts
 	Attempt int
 
-	mu                     *sync.Mutex
-	credentials            *credentials
-	isMultiPart            bool
-	isFormData             bool
-	isContentLengthSet     bool
-	contentLength          int64
-	jsonEscapeHTML         bool
-	ctx                    context.Context
-	ctxCancelFunc          context.CancelFunc
-	values                 map[string]any
-	client                 *Client
-	bodyBuf                *bytes.Buffer
-	trace                  *clientTrace
-	log                    Logger
-	baseURL                string
-	multipartBoundary      string
-	multipartFields        []*MultipartField
-	multipartContentLength bool
-	retryConditions        []RetryConditionFunc
-	isSetRetryConditions   bool
-	retryHooks             []RetryHookFunc
-	isSetRetryHooks        bool
-	curlCmdString          string
-	isCurlCmdGenerate      bool
-	isCurlCmdDebugLog      bool
-	unescapeQueryParams    bool
-	multipartErrChan       chan error
-	multipartCancelFunc    context.CancelFunc
-	multipartPipeWriter    *io.PipeWriter
+	mu                       *sync.Mutex
+	credentials              *credentials
+	isMultiPart              bool
+	isFormData               bool
+	isContentLengthSet       bool
+	contentLength            int64
+	jsonEscapeHTML           bool
+	ctx                      context.Context
+	ctxCancelFunc            context.CancelFunc
+	values                   map[string]any
+	client                   *Client
+	bodyBuf                  *bytes.Buffer
+	trace                    *clientTrace
+	log                      Logger
+	baseURL                  string
+	multipartBoundary        string
+	multipartFields          []*MultipartField
+	multipartContentLength   bool
+	retryConditions          []RetryConditionFunc
+	isSetRetryConditions     bool
+	retryHooks               []RetryHookFunc
+	isSetRetryHooks          bool
+	retryHooksWithError      []RetryHookWithErrorFunc
+	isSetRetryHooksWithError bool
+	curlCmdString            string
+	isCurlCmdGenerate        bool
+	isCurlCmdDebugLog        bool
+	unescapeQueryParams      bool
+	multipartErrChan         chan error
+	multipartCancelFunc      context.CancelFunc
+	multipartPipeWriter      *io.PipeWriter
 }
 
 // SetCorrelationID method is used to set the correlation ID for the request
@@ -1151,6 +1153,19 @@ func (r *Request) SetRetryHooks(hooks ...RetryHookFunc) *Request {
 	return r
 }
 
+// AddRetryHooksWithError method adds one or more retry hook with error functions in the request.
+func (r *Request) AddRetryHooksWithError(hooks ...RetryHookWithErrorFunc) *Request {
+	r.retryHooksWithError = append(r.retryHooksWithError, hooks...)
+	return r
+}
+
+// SetRetryHooksWithError method overwrites retry hook with error functions in the request.
+func (r *Request) SetRetryHooksWithError(hooks ...RetryHookWithErrorFunc) *Request {
+	r.retryHooksWithError = hooks
+	r.isSetRetryHooksWithError = true
+	return r
+}
+
 // SetRetryCount method enables retry on Resty client and allows you
 // to set the retry count.
 //
@@ -1529,6 +1544,11 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 		retryHooks = r.retryHooks
 	}
 
+	retryHooksWithError := slices.Concat(r.retryHooksWithError, r.client.RetryHooksWithError())
+	if r.isSetRetryHooksWithError {
+		retryHooksWithError = r.retryHooksWithError
+	}
+
 	isInvalidRequestErr := false
 	// first attempt + retry count = total attempts
 	for i := 0; i <= r.RetryCount; i++ {
@@ -1597,6 +1617,18 @@ func (r *Request) Execute(method, url string) (res *Response, err error) {
 			// run user-defined retry hooks
 			for _, retryHookFunc := range retryHooks {
 				retryHookFunc(res, err)
+			}
+
+			// run user-defined retry hooks with error handling
+			var hookErr error
+			for _, retryHookWithErrorFunc := range retryHooksWithError {
+				if hookErr = retryHookWithErrorFunc(res, err); hookErr != nil {
+					break
+				}
+			}
+			if hookErr != nil {
+				err = wrapErrors(hookErr, err)
+				break
 			}
 
 			// let's drain the response body, before retry wait
