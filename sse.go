@@ -808,7 +808,9 @@ func (sse *SSESource) processEvent(scanner *bufio.Scanner) error {
 	}
 	defer putRawEvent(ed)
 
-	if len(ed.ID) > 0 {
+	// An id field replaces the last event ID even when its value is empty, which
+	// resets it so the next connect sends no Last-Event-ID.
+	if ed.HasID {
 		sse.lock.Lock()
 		sse.lastEventID = string(ed.ID)
 		sse.lock.Unlock()
@@ -884,6 +886,10 @@ type rawSSE struct {
 	Data  []byte
 	Event []byte
 	Retry []byte
+
+	// HasID reports whether the event had an id field, which tells an empty id
+	// apart from no id at all.
+	HasID bool
 }
 
 var parseEvent = parseEventFunc
@@ -901,7 +907,10 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 	for _, line := range bytes.FieldsFunc(msg, func(r rune) bool { return r == '\n' }) {
 		switch {
 		case bytes.HasPrefix(line, headerID):
-			e.ID = append([]byte(nil), trimHeader(len(headerID), line)...)
+			e.setID(trimHeader(len(headerID), line))
+		// A line that simply contains the string "id" is an id field with an empty value.
+		case bytes.Equal(line, bytes.TrimSuffix(headerID, []byte(":"))):
+			e.setID(nil)
 		case bytes.HasPrefix(line, headerData):
 			// The spec allows for multiple data fields per event, concatenated them with "\n".
 			// Append into e.Data rather than onto the trimmed slice: that slice aliases
@@ -927,6 +936,16 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 	return e, nil
 }
 
+// setID applies an id field. The spec ignores an id containing NULL, which
+// could not be sent back in the Last-Event-ID header either.
+func (e *rawSSE) setID(id []byte) {
+	if bytes.IndexByte(id, 0) >= 0 {
+		return
+	}
+	e.ID = append([]byte(nil), id...)
+	e.HasID = true
+}
+
 func trimHeader(size int, data []byte) []byte {
 	if data == nil || len(data) < size {
 		return data
@@ -949,6 +968,7 @@ func newRawEvent() *rawSSE {
 	e.Data = e.Data[:0]
 	e.Event = e.Event[:0]
 	e.Retry = e.Retry[:0]
+	e.HasID = false
 	return e
 }
 
