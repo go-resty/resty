@@ -777,6 +777,35 @@ func TestCreateCookieJarConcurrentAccess(t *testing.T) {
 	assertEqual(t, cookieCount, len(jar.Cookies(testURL)))
 }
 
+func TestCreateCookieJarErrorFallback(t *testing.T) {
+	originalNewCookieJar := newCookieJar
+	var calls int
+	newCookieJar = func(options *cookiejar.Options) (*cookiejar.Jar, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("preferred cookie jar unavailable")
+		}
+		if options != nil {
+			t.Fatal("fallback cookie jar should be created with nil options")
+		}
+		return originalNewCookieJar(options)
+	}
+	t.Cleanup(func() {
+		newCookieJar = originalNewCookieJar
+	})
+
+	jar := createCookieJar()
+	assertNotNil(t, jar)
+	assertEqual(t, 2, calls)
+
+	testURL, _ := url.Parse("https://example.com")
+	jar.SetCookies(testURL, []*http.Cookie{{Name: "fallback", Value: "works"}})
+	cookies := jar.Cookies(testURL)
+	assertEqual(t, 1, len(cookies))
+	assertEqual(t, "fallback", cookies[0].Name)
+	assertEqual(t, "works", cookies[0].Value)
+}
+
 // This test methods exist for test coverage purpose
 // to validate the getter and setter
 func TestClientSettingsCoverage(t *testing.T) {
