@@ -6,10 +6,13 @@
 package resty
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -512,4 +515,137 @@ func TestOriginatingURL(t *testing.T) {
 
 	assertEqual(t, "https://origin.example/start", originatingURL(second).String())
 	assertEqual(t, "https://origin.example/start", originatingURL(first).String())
+}
+
+func TestDigestChallengeCaseInsensitiveNames(t *testing.T) {
+	for _, tc := range []struct {
+		name, scheme, params string
+	}{
+		{"lowercase scheme", "digest", `realm="CaseSensitiveRealm", domain="/MixedPath", nonce="AbCd123", opaque="OpAqUe", algorithm=SHA-256, qop="auth", stale=FALSE, nc=0000000A, userhash=false, charset=UTF-8, extension="MiXeD"`},
+		{"mixed scheme", "DiGeSt", `realm="CaseSensitiveRealm", domain="/MixedPath", nonce="AbCd123", opaque="OpAqUe", algorithm=SHA-256, qop="auth", stale=FALSE, nc=0000000A, userhash=false, charset=UTF-8, extension="MiXeD"`},
+		{"algorithm name only", "Digest", `realm="CaseSensitiveRealm", domain="/MixedPath", nonce="AbCd123", opaque="OpAqUe", AlGoRiThM=SHA-256, qop="auth", stale=FALSE, nc=0000000A, userhash=false, charset=UTF-8, extension="MiXeD"`},
+		{"parameter names", "Digest", `ReAlM="CaseSensitiveRealm", DoMaIn="/MixedPath", NoNcE="AbCd123", OpAqUe="OpAqUe", AlGoRiThM=SHA-256, QoP="auth", StAlE=FALSE, Nc=0000000A, UsErHaSh=false, ChArSeT=UTF-8, ExTeNsIoN="MiXeD"`},
+		{"scheme and parameter names", "DiGeSt", `ReAlM="CaseSensitiveRealm", DoMaIn="/MixedPath", NoNcE="AbCd123", OpAqUe="OpAqUe", AlGoRiThM=SHA-256, QoP="auth", StAlE=FALSE, Nc=0000000A, UsErHaSh=false, ChArSeT=UTF-8, ExTeNsIoN="MiXeD"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cha, err := (&digestTransport{}).parseChallenge(tc.scheme + " " + tc.params)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertEqual(t, "CaseSensitiveRealm", cha.realm)
+			assertEqual(t, "/MixedPath", cha.domain)
+			assertEqual(t, "AbCd123", cha.nonce)
+			assertEqual(t, "OpAqUe", cha.opaque)
+			assertEqual(t, "SHA-256", cha.algorithm)
+			assertEqual(t, "FALSE", cha.stale)
+			assertEqual(t, "false", cha.userHash)
+			assertEqual(t, 10, cha.nc)
+			assertEqual(t, 1, len(cha.qop))
+			assertEqual(t, "auth", cha.qop[0])
+		})
+	}
+}
+
+func TestDigestChallengeCaseInsensitiveNamesErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name, challenge string
+		want            error
+	}{
+		{"empty", "", ErrDigestBadChallenge},
+		{"short scheme", "DiGe", ErrDigestBadChallenge},
+		{"scheme only", "DiGeSt", ErrDigestBadChallenge},
+		{"unknown scheme", `Basic nonce="n"`, ErrDigestBadChallenge},
+		{"longer scheme", `DigestX nonce="n"`, ErrDigestBadChallenge},
+		{"no space", `Digestnonce="n"`, ErrDigestBadChallenge},
+		{"missing nonce", `DiGeSt ReAlM="r", ExTeNsIoN="x"`, ErrDigestBadChallenge},
+		{"unclosed quote", `DiGeSt NoNcE="n`, ErrDigestBadChallenge},
+		{"charset", `Digest nonce="n", ChArSeT=UTF-16`, ErrDigestInvalidCharset},
+		{"algorithm value", `Digest nonce="n", AlGoRiThM=sha-256`, ErrDigestAlgNotSupported},
+		{"qop value", `Digest nonce="n", QoP="AUTH"`, ErrDigestQopNotSupported},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := &digestTransport{credentials: &credentials{"user", "pass"}}
+			cha, err := dt.parseChallenge(tc.challenge)
+			if err == nil {
+				_, err = dt.createCredentials(cha, mustReq(t, http.MethodGet, "http://example.com/"))
+			}
+			assertErrorIs(t, tc.want, err)
+		})
+	}
+}
+
+func TestClientDigestAuthCaseInsensitiveNames(t *testing.T) {
+	for _, tc := range []struct{ name, challenge string }{
+		{"lowercase scheme", `digest realm="CaseSensitiveRealm", nonce="AbCd123", opaque="OpAqUe", algorithm=SHA-256, qop="auth"`},
+		{"mixed scheme", `DiGeSt realm="CaseSensitiveRealm", nonce="AbCd123", opaque="OpAqUe", algorithm=SHA-256, qop="auth"`},
+		{"parameter names", `Digest ReAlM="CaseSensitiveRealm", NoNcE="AbCd123", OpAqUe="OpAqUe", AlGoRiThM=SHA-256, QoP="auth"`},
+		{"scheme and parameter names", `DiGeSt ReAlM="CaseSensitiveRealm", NoNcE="AbCd123", OpAqUe="OpAqUe", AlGoRiThM=SHA-256, QoP="auth"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var requests []string
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				auth := r.Header.Get("Authorization")
+				mu.Lock()
+				requests = append(requests, auth)
+				mu.Unlock()
+				if auth == "" {
+					w.Header().Set("WWW-Authenticate", tc.challenge)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				// Verify the response independently using SHA-256 and the original values.
+				params := make(map[string]string)
+				for _, param := range strings.Split(strings.TrimPrefix(auth, "Digest "), ", ") {
+					key, value, ok := strings.Cut(param, "=")
+					if !ok {
+						t.Errorf("malformed Authorization parameter: %q", param)
+						w.WriteHeader(http.StatusUnauthorized)
+						return
+					}
+					params[key] = strings.Trim(value, `"`)
+				}
+				for key, want := range map[string]string{
+					"username": "user", "realm": "CaseSensitiveRealm", "nonce": "AbCd123",
+					"opaque": "OpAqUe", "algorithm": "SHA-256", "qop": "auth", "uri": "/MixedPath", "nc": "00000001",
+				} {
+					if params[key] != want {
+						t.Errorf("%s = %q, want %q", key, params[key], want)
+						w.WriteHeader(http.StatusUnauthorized)
+						return
+					}
+				}
+				if !strings.HasPrefix(auth, "Digest ") || params["cnonce"] == "" {
+					t.Errorf("invalid Authorization: %q", auth)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				h := func(s string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(s))) }
+				ha1 := h("user:CaseSensitiveRealm:pass")
+				ha2 := h("GET:/MixedPath")
+				want := h(ha1 + ":AbCd123:00000001:" + params["cnonce"] + ":auth:" + ha2)
+				if params["response"] != want {
+					t.Errorf("response = %q, want %q", params["response"], want)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+			defer ts.Close()
+			c := dcnl().SetDigestAuth("user", "pass")
+			defer c.Close()
+			res, err := c.R().Get(ts.URL + "/MixedPath")
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertEqual(t, http.StatusOK, res.StatusCode())
+			mu.Lock()
+			defer mu.Unlock()
+			if len(requests) != 2 {
+				t.Fatalf("got %d requests, want 2", len(requests))
+			}
+			assertEqual(t, "", requests[0])
+			assertTrue(t, strings.HasPrefix(requests[1], "Digest "))
+		})
+	}
 }

@@ -134,7 +134,7 @@ func (dt *digestTransport) cloneReq(r *http.Request, first bool) *http.Request {
 func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error) {
 	const ws = " \n\r\t"
 	s := strings.Trim(input, ws)
-	if !strings.HasPrefix(s, "Digest ") {
+	if len(s) < 7 || !strings.EqualFold(s[:7], "Digest ") {
 		return nil, ErrDigestBadChallenge
 	}
 
@@ -286,7 +286,7 @@ func (dc *digestChallenge) isQopSupported(qop string) bool {
 }
 
 func (dc *digestChallenge) setValue(k, v string) error {
-	switch k {
+	switch strings.ToLower(k) {
 	case "realm":
 		dc.realm = v
 	case "domain":
