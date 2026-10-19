@@ -143,7 +143,17 @@ func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error
 	b := strings.Builder{}
 	key := ""
 	quoted := false
+	escaped := false
 	for _, r := range s {
+		if escaped {
+			b.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if quoted && r == '\\' {
+			escaped = true
+			continue
+		}
 		switch r {
 		case '"':
 			quoted = !quoted
@@ -419,19 +429,20 @@ func (dc *digestCredentials) ha2() string {
 
 func (dc *digestCredentials) String() string {
 	sl := make([]string, 0, 10)
+	quoteEscaper := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 	// https://datatracker.ietf.org/doc/html/rfc7616#section-3.4.4
 	if dc.userHash == "true" {
 		dc.username = dc.h(fmt.Sprintf("%s:%s", dc.username, dc.realm))
 	}
-	sl = append(sl, fmt.Sprintf(`username="%s"`, dc.username))
-	sl = append(sl, fmt.Sprintf(`realm="%s"`, dc.realm))
-	sl = append(sl, fmt.Sprintf(`nonce="%s"`, dc.nonce))
-	sl = append(sl, fmt.Sprintf(`uri="%s"`, dc.uri))
+	sl = append(sl, fmt.Sprintf(`username="%s"`, quoteEscaper.Replace(dc.username)))
+	sl = append(sl, fmt.Sprintf(`realm="%s"`, quoteEscaper.Replace(dc.realm)))
+	sl = append(sl, fmt.Sprintf(`nonce="%s"`, quoteEscaper.Replace(dc.nonce)))
+	sl = append(sl, fmt.Sprintf(`uri="%s"`, quoteEscaper.Replace(dc.uri)))
 	if dc.algorithm != "" {
 		sl = append(sl, fmt.Sprintf(`algorithm=%s`, dc.algorithm))
 	}
 	if dc.opaque != "" {
-		sl = append(sl, fmt.Sprintf(`opaque="%s"`, dc.opaque))
+		sl = append(sl, fmt.Sprintf(`opaque="%s"`, quoteEscaper.Replace(dc.opaque)))
 	}
 	if dc.qop != "" {
 		sl = append(sl, fmt.Sprintf("qop=%s", dc.qop))

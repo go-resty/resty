@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strings"
 	"sync"
@@ -410,6 +411,97 @@ func TestDigestChallengeParsing(t *testing.T) {
 		_, err := dt.parseChallenge(`Digest extension="x"`)
 		assertErrorIs(t, ErrDigestBadChallenge, err)
 	})
+}
+
+func TestDigestChallengeQuotedPairs(t *testing.T) {
+	for _, tc := range []struct {
+		name, challenge, realm string
+		invalid                bool
+	}{
+		{"escaped quote", `Digest realm="a\"b", nonce="n"`, `a"b`, false},
+		{"escaped backslash", `Digest realm="a\\b", nonce="n"`, `a\b`, false},
+		{"escaped delimiters", `Digest realm="a\,b\=c", nonce="n"`, `a,b=c`, false},
+		{"trailing escape", `Digest nonce="n\`, "", true},
+		{"escaped closing quote", `Digest nonce="n\"`, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cha, err := (&digestTransport{}).parseChallenge(tc.challenge)
+			if tc.invalid {
+				assertErrorIs(t, ErrDigestBadChallenge, err)
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertEqual(t, tc.realm, cha.realm)
+			assertEqual(t, "n", cha.nonce)
+		})
+	}
+}
+
+func TestClientDigestAuthQuotedPairs(t *testing.T) {
+	for _, tc := range []struct {
+		name, username, challenge, realm, nonce, opaque string
+	}{
+		{
+			"quoted username", `u"ser\name`,
+			`Digest realm="realm", nonce="nonce", opaque="opaque", algorithm=SHA-256, qop="auth"`,
+			"realm", "nonce", "opaque",
+		},
+		{
+			"quoted challenge", "user",
+			`Digest realm="r\"e\\alm,=", nonce="n\"o\\nce", opaque="o\"p\\aque", algorithm=SHA-256, qop="auth"`,
+			`r"e\alm,=`, `n"o\nce`, `o"p\aque`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				auth := r.Header.Get("Authorization")
+				if auth == "" {
+					w.Header().Set("WWW-Authenticate", tc.challenge)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				// Use an independent quoted-string parser with MIME parameter separators.
+				authParams := strings.ReplaceAll(strings.TrimPrefix(auth, "Digest "), ", ", "; ")
+				_, params, err := mime.ParseMediaType("Digest; " + authParams)
+				if err != nil {
+					t.Errorf("invalid Authorization %q: %v", auth, err)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				for key, want := range map[string]string{
+					"username": tc.username, "realm": tc.realm, "nonce": tc.nonce, "opaque": tc.opaque,
+					"uri": "/protected", "algorithm": "SHA-256", "qop": "auth", "nc": "00000001",
+				} {
+					if params[key] != want {
+						t.Errorf("%s = %q, want %q", key, params[key], want)
+						w.WriteHeader(http.StatusUnauthorized)
+						return
+					}
+				}
+				h := func(s string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(s))) }
+				ha1 := h(tc.username + ":" + tc.realm + ":pass")
+				ha2 := h("GET:/protected")
+				want := h(ha1 + ":" + tc.nonce + ":00000001:" + params["cnonce"] + ":auth:" + ha2)
+				if params["response"] != want {
+					t.Errorf("response = %q, want %q", params["response"], want)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+			defer ts.Close()
+
+			c := dcnl().SetDigestAuth(tc.username, "pass")
+			defer c.Close()
+			res, err := c.R().Get(ts.URL + "/protected")
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertEqual(t, http.StatusOK, res.StatusCode())
+		})
+	}
 }
 
 // A server offering an unsupported qop alongside a supported one must still
