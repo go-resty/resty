@@ -76,4 +76,25 @@ func TestCircuitBreakerTransportErrors(t *testing.T) {
 		_, err := c.R().Get("/")
 		assertErrorIs(t, ErrCircuitBreakerOpen, err, "expected default policy after nil reset")
 	})
+
+	t.Run("ratio custom error policy is honored", func(t *testing.T) {
+		cb := NewCircuitBreakerRatio(0.5, 2, time.Minute).SetErrorPolicy(func(error) bool { return false })
+		c := dcnl().SetBaseURL(closedAddr()).SetCircuitBreaker(cb)
+		for range 4 {
+			_, err := c.R().Get("/")
+			assertNotNil(t, err)
+			assertFalse(t, errors.Is(err, ErrCircuitBreakerOpen), "errors ignored by the policy must not open the breaker")
+		}
+	})
+
+	t.Run("ratio nil error policy restores default", func(t *testing.T) {
+		cb := NewCircuitBreakerRatio(0.5, 2, time.Minute).SetErrorPolicy(func(error) bool { return false }).SetErrorPolicy(nil)
+		c := dcnl().SetBaseURL(closedAddr()).SetCircuitBreaker(cb)
+		for range 2 {
+			_, err := c.R().Get("/")
+			assertNotNil(t, err)
+		}
+		_, err := c.R().Get("/")
+		assertErrorIs(t, ErrCircuitBreakerOpen, err, "expected default policy after nil reset")
+	})
 }
