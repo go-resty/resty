@@ -379,7 +379,7 @@ func calculateMultipartContentLength(boundary string, r *Request) (int64, bool) 
 					end, err := seeker.Seek(0, io.SeekEnd)
 					if err == nil {
 						if _, err = seeker.Seek(curr, io.SeekStart); err == nil {
-							mf.FileSize = end
+							mf.FileSize = max(end-curr, 0) + int64(len(mf.tempBuf))
 							seekDetermined = true
 						}
 					}
@@ -435,6 +435,12 @@ func handleMultipart(c *Client, r *Request) error {
 
 		if err := mf.openFile(); err != nil {
 			return err
+		}
+
+		if seeker, ok := mf.Reader.(io.Seeker); ok {
+			if offset, err := seeker.Seek(0, io.SeekCurrent); err == nil {
+				mf.readerOffset = offset
+			}
 		}
 
 		if err := mf.detectContentType(); err != nil {
