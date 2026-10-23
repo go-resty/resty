@@ -141,9 +141,10 @@ var gzipReaderPool = sync.Pool{
 // gzipReaderWrapper wraps a pooled gzip.Reader with a mutex for safe concurrent access.
 // The mutex ensures exclusive access to the reader during Read() and state transitions.
 type gzipReaderWrapper struct {
-	mu *sync.Mutex
-	r  io.ReadCloser
-	gr *gzip.Reader
+	closeOnce sync.Once
+	mu        *sync.Mutex
+	r         io.ReadCloser
+	gr        *gzip.Reader
 }
 
 // acquireGzipReader gets a gzip.Reader from the pool or creates one.
@@ -180,6 +181,12 @@ func acquireGzipReader(r io.ReadCloser) (*gzipReaderWrapper, error) {
 // releaseGzipReader returns the gzip reader to the pool for reuse,
 // and closes the underlying source.
 func releaseGzipReader(w *gzipReaderWrapper) {
+	// Close the HTTP response source first so a blocked decoder Read can
+	// return before we take its lock.
+	w.closeOnce.Do(func() {
+		closeq(w.r)
+		w.r = nil
+	})
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -187,10 +194,6 @@ func releaseGzipReader(w *gzipReaderWrapper) {
 		w.gr.Reset(nopReader{}) // clear reference to the closed source before pooling
 		gzipReaderPool.Put(w.gr)
 		w.gr = nil
-	}
-	if w.r != nil {
-		closeq(w.r)
-		w.r = nil
 	}
 }
 
@@ -228,9 +231,10 @@ var flateReaderPool = sync.Pool{
 // deflateReaderWrapper wraps a pooled flate.Reader with a mutex for safe concurrent access.
 // The mutex ensures exclusive access to the reader during Read() and state transitions.
 type deflateReaderWrapper struct {
-	mu *sync.Mutex
-	r  io.ReadCloser
-	fr io.ReadCloser
+	closeOnce sync.Once
+	mu        *sync.Mutex
+	r         io.ReadCloser
+	fr        io.ReadCloser
 	// fromPool marks fr as a flate reader that may go back to flateReaderPool.
 	// A zlib reader must never be pooled there: zlib.Resetter and flate.Resetter
 	// have the same method set, so a type assertion cannot tell them apart, and a
@@ -267,6 +271,12 @@ func acquireDeflateReader(r io.ReadCloser, src io.Reader) (*deflateReaderWrapper
 // releaseDeflateReader returns the flate reader to the pool for reuse,
 // and closes the underlying source.
 func releaseDeflateReader(w *deflateReaderWrapper) {
+	// Close the HTTP response source first so a blocked decoder Read can
+	// return before we take its lock.
+	w.closeOnce.Do(func() {
+		closeq(w.r)
+		w.r = nil
+	})
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -278,10 +288,6 @@ func releaseDeflateReader(w *deflateReaderWrapper) {
 			closeq(w.fr)
 		}
 		w.fr = nil
-	}
-	if w.r != nil {
-		closeq(w.r)
-		w.r = nil
 	}
 }
 
