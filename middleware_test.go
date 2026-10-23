@@ -1543,11 +1543,18 @@ func TestCalculateMultipartContentLength(t *testing.T) {
 	defer c.Close()
 
 	t.Run("seekable reader with content", func(t *testing.T) {
+		reader := strings.NewReader("hello world")
+		_, err := reader.Seek(6, io.SeekStart)
+		assertNil(t, err)
 		r := c.R()
-		r.SetFileReader("file", "test.txt", strings.NewReader("hello world"))
+		r.SetFileReader("file", "test.txt", reader)
 		cl, ok := calculateMultipartContentLength("test-boundary", r)
 		assertTrue(t, ok)
 		assertTrue(t, cl > 0)
+		assertEqual(t, int64(5), r.multipartFields[0].FileSize)
+		position, err := reader.Seek(0, io.SeekCurrent)
+		assertNil(t, err)
+		assertEqual(t, int64(6), position)
 	})
 
 	t.Run("seekable reader empty", func(t *testing.T) {

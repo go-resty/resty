@@ -66,6 +66,9 @@ type MultipartField struct {
 	// Or any possible read error early.
 	tempBuf []byte
 
+	// readerOffset records the position before MIME sniffing for retry replay.
+	readerOffset int64
+
 	// openedByResty records that Resty opened Reader itself from FilePath, so it
 	// owns the handle and may close and reopen it between retry attempts.
 	openedByResty bool
@@ -89,7 +92,7 @@ func (mf *MultipartField) resetReader() error {
 		return mf.openFile()
 	}
 	if rs, ok := mf.Reader.(io.ReadSeeker); ok {
-		_, err := rs.Seek(0, io.SeekStart)
+		_, err := rs.Seek(mf.readerOffset, io.SeekStart)
 		return err
 	}
 	return ErrReaderNotSeekable
