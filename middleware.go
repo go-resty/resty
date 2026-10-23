@@ -253,7 +253,7 @@ func createRawRequest(c *Client, r *Request) (err error) {
 	}
 
 	// get the context reference back from underlying RawRequest
-	r.SetContext(r.RawRequest.Context())
+	r.ctx = r.RawRequest.Context()
 
 	// Assign close connection option
 	r.RawRequest.Close = r.IsCloseConnection
