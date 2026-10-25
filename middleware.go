@@ -245,7 +245,10 @@ func createRawRequest(c *Client, r *Request) (err error) {
 			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, nil)
 		}
 	} else {
-		r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, r.bodyBuf)
+		// The transport may outlive Execute, which returns bodyBuf to the pool.
+		// Both Body and GetBody must retain an independent snapshot of its bytes.
+		body := bytes.NewReader(bytes.Clone(r.bodyBuf.Bytes()))
+		r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, body)
 	}
 
 	if err != nil {
