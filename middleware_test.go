@@ -491,7 +491,7 @@ func TestParseRequestBody(t *testing.T) {
 		name                  string
 		initClient            func(c *Client)
 		initRequest           func(r *Request)
-		expectedBodyBuf       []byte
+		expectedBody          []byte
 		expectedContentLength int64
 		expectedContentType   string
 		wantErr               bool
@@ -509,7 +509,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetMethod(MethodPost).
 					SetBody("foo")
 			},
-			expectedBodyBuf:       []byte("foo"),
+			expectedBody:          []byte("foo"),
 			expectedContentType:   plainTextType,
 			expectedContentLength: 3,
 		},
@@ -529,7 +529,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodGet
 			},
-			expectedBodyBuf:       []byte("foo"),
+			expectedBody:          []byte("foo"),
 			expectedContentType:   plainTextType,
 			expectedContentLength: 3,
 		},
@@ -540,7 +540,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodGet
 			},
-			expectedBodyBuf:       []byte("foo"),
+			expectedBody:          []byte("foo"),
 			expectedContentType:   plainTextType,
 			expectedContentLength: 3,
 		},
@@ -564,7 +564,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodPost
 			},
-			expectedBodyBuf:       []byte("foo"),
+			expectedBody:          []byte("foo"),
 			expectedContentType:   plainTextType,
 			expectedContentLength: 3,
 		},
@@ -574,7 +574,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodPatch
 			},
-			expectedBodyBuf:       []byte("foo"),
+			expectedBody:          []byte("foo"),
 			expectedContentType:   plainTextType,
 			expectedContentLength: 3,
 		},
@@ -584,7 +584,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodPut
 			},
-			expectedBodyBuf:       []byte("foo"),
+			expectedBody:          []byte("foo"),
 			expectedContentType:   plainTextType,
 			expectedContentLength: 3,
 		},
@@ -594,7 +594,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodDelete
 			},
-			expectedBodyBuf:     nil,
+			expectedBody:        nil,
 			expectedContentType: "",
 		},
 		{
@@ -604,7 +604,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodDelete
 			},
-			expectedBodyBuf:       []byte("foo"),
+			expectedBody:          []byte("foo"),
 			expectedContentType:   plainTextType,
 			expectedContentLength: 3,
 		},
@@ -614,7 +614,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodConnect
 			},
-			expectedBodyBuf:     nil,
+			expectedBody:        nil,
 			expectedContentType: "",
 		},
 		{
@@ -623,7 +623,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetBody("foo")
 				r.Method = http.MethodTrace
 			},
-			expectedBodyBuf:     nil,
+			expectedBody:        nil,
 			expectedContentType: "",
 		},
 		{
@@ -632,7 +632,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetMethod(MethodPost).
 					SetBody([]byte("foo"))
 			},
-			expectedBodyBuf:       []byte("foo"),
+			expectedBody:          []byte("foo"),
 			expectedContentType:   plainTextType,
 			expectedContentLength: 3,
 		},
@@ -642,7 +642,9 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetMethod(MethodPut).
 					SetBody(bytes.NewBufferString("foo"))
 			},
-			expectedContentType: jsonContentType,
+			expectedBody:          []byte("foo"),
+			expectedContentType:   jsonContentType,
+			expectedContentLength: 3,
 		},
 		{
 			name: "form data by request with method post",
@@ -653,7 +655,7 @@ func TestParseRequestBody(t *testing.T) {
 						"bar": "2",
 					})
 			},
-			expectedBodyBuf:       []byte("foo=1&bar=2"),
+			expectedBody:          []byte("foo=1&bar=2"),
 			expectedContentType:   formContentType,
 			expectedContentLength: 11,
 		},
@@ -668,7 +670,7 @@ func TestParseRequestBody(t *testing.T) {
 			initRequest: func(r *Request) {
 				r.SetMethod(MethodPatch)
 			},
-			expectedBodyBuf:       []byte("foo=1&bar=2"),
+			expectedBody:          []byte("foo=1&bar=2"),
 			expectedContentType:   formContentType,
 			expectedContentLength: 11,
 		},
@@ -687,7 +689,7 @@ func TestParseRequestBody(t *testing.T) {
 						"baz": "4",
 					})
 			},
-			expectedBodyBuf:       []byte("foo=3&bar=2&baz=4"),
+			expectedBody:          []byte("foo=3&bar=2&baz=4"),
 			expectedContentType:   formContentType,
 			expectedContentLength: 17,
 		},
@@ -703,7 +705,7 @@ func TestParseRequestBody(t *testing.T) {
 					Bar: "2",
 				})
 			},
-			expectedBodyBuf:       append([]byte(`{"foo":"1","bar":"2"}`), '\n'),
+			expectedBody:          append([]byte(`{"foo":"1","bar":"2"}`), '\n'),
 			expectedContentType:   jsonContentType,
 			expectedContentLength: 22,
 		},
@@ -713,7 +715,7 @@ func TestParseRequestBody(t *testing.T) {
 				r.SetMethod(MethodPost).
 					SetBody([]string{"foo", "bar"})
 			},
-			expectedBodyBuf:       append([]byte(`["foo","bar"]`), '\n'),
+			expectedBody:          append([]byte(`["foo","bar"]`), '\n'),
 			expectedContentType:   jsonContentType,
 			expectedContentLength: 14,
 		},
@@ -730,7 +732,7 @@ func TestParseRequestBody(t *testing.T) {
 						"xyz": nil,
 					})
 			},
-			expectedBodyBuf:       append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
+			expectedBody:          append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
 			expectedContentType:   jsonContentType,
 			expectedContentLength: 55,
 		},
@@ -747,7 +749,7 @@ func TestParseRequestBody(t *testing.T) {
 						"xyz": nil,
 					})
 			},
-			expectedBodyBuf:       append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
+			expectedBody:          append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
 			expectedContentType:   jsonContentType,
 			expectedContentLength: 55,
 		},
@@ -764,7 +766,7 @@ func TestParseRequestBody(t *testing.T) {
 						"xyz": nil,
 					})
 			},
-			expectedBodyBuf:       append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
+			expectedBody:          append([]byte(`{"bar":[1,2,3],"baz":{"qux":"4"},"foo":"1","xyz":null}`), '\n'),
 			expectedContentType:   jsonContentType,
 			expectedContentLength: 55,
 		},
@@ -782,7 +784,7 @@ func TestParseRequestBody(t *testing.T) {
 					}).
 					SetHeader(hdrContentTypeKey, "text/xml")
 			},
-			expectedBodyBuf:       []byte(`<FooBar><foo>1</foo><bar>2</bar></FooBar>`),
+			expectedBody:          []byte(`<FooBar><foo>1</foo><bar>2</bar></FooBar>`),
 			expectedContentType:   "text/xml",
 			expectedContentLength: 41,
 		},
@@ -829,26 +831,35 @@ func TestParseRequestBody(t *testing.T) {
 			} else if tt.wantErr {
 				t.Errorf("wanted error, but got nil")
 			}
-			// obtain value, since this is only parse request body method test
-			if r.bodyBuf != nil {
-				r.contentLength = int64(r.bodyBuf.Len())
+			if err := createRawRequest(c, r); err != nil {
+				t.Fatal(err)
+			}
+			defer releaseBuffer(r.bodyBuf)
+			var bodyBuf *bytes.Buffer
+			if r.RawRequest.Body != nil {
+				body, err := io.ReadAll(r.RawRequest.Body)
+				closeq(r.RawRequest.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				bodyBuf = bytes.NewBuffer(body)
 			}
 			switch {
-			case r.bodyBuf == nil && tt.expectedBodyBuf != nil:
-				t.Errorf("bodyBuf is nil, but expected: %s", string(tt.expectedBodyBuf))
-			case r.bodyBuf != nil && tt.expectedBodyBuf == nil:
-				t.Errorf("bodyBuf is not nil, but expected nil: %s", r.bodyBuf.String())
-			case r.bodyBuf != nil && tt.expectedBodyBuf != nil:
-				var actual, expected any = r.bodyBuf.Bytes(), tt.expectedBodyBuf
+			case bodyBuf == nil && tt.expectedBody != nil:
+				t.Errorf("bodyBuf is nil, but expected: %s", string(tt.expectedBody))
+			case bodyBuf != nil && tt.expectedBody == nil:
+				t.Errorf("bodyBuf is not nil, but expected nil: %s", bodyBuf.String())
+			case bodyBuf != nil && tt.expectedBody != nil:
+				var actual, expected any = bodyBuf.Bytes(), tt.expectedBody
 				if r.isFormData {
 					var err error
-					actual, err = url.ParseQuery(r.bodyBuf.String())
+					actual, err = url.ParseQuery(bodyBuf.String())
 					if err != nil {
-						t.Errorf("ParseQuery(r.bodyBuf) error = %v", err)
+						t.Errorf("ParseQuery(bodyBuf) error = %v", err)
 					}
-					expected, err = url.ParseQuery(string(tt.expectedBodyBuf))
+					expected, err = url.ParseQuery(string(tt.expectedBody))
 					if err != nil {
-						t.Errorf("ParseQuery(tt.expectedBodyBuf) error = %v", err)
+						t.Errorf("ParseQuery(tt.expectedBody) error = %v", err)
 					}
 				} else if r.isMultiPart {
 					_, params, err := mime.ParseMediaType(r.Header.Get(hdrContentTypeKey))
@@ -859,7 +870,7 @@ func TestParseRequestBody(t *testing.T) {
 					if !ok {
 						t.Errorf("boundary not found in Content-Type header")
 					}
-					reader := multipart.NewReader(r.bodyBuf, boundary)
+					reader := multipart.NewReader(bodyBuf, boundary)
 					body := make(map[string]any)
 					for part, perr := reader.NextPart(); perr != io.EOF; part, perr = reader.NextPart() {
 						if perr != nil {
@@ -877,13 +888,13 @@ func TestParseRequestBody(t *testing.T) {
 					}
 					actual = body
 					expected = nil
-					if err := json.Unmarshal(tt.expectedBodyBuf, &expected); err != nil {
-						t.Errorf("json.Unmarshal(tt.expectedBodyBuf) error = %v", err)
+					if err := json.Unmarshal(tt.expectedBody, &expected); err != nil {
+						t.Errorf("json.Unmarshal(tt.expectedBody) error = %v", err)
 					}
 					t.Logf(`in case of an error, the expected body should be set as json for object: %#+v`, actual)
 				}
 				if !reflect.DeepEqual(actual, expected) {
-					t.Errorf("bodyBuf = %q does not match expected %q", r.bodyBuf.String(), string(tt.expectedBodyBuf))
+					t.Errorf("bodyBuf = %q does not match expected %q", bodyBuf.String(), string(tt.expectedBody))
 				}
 			}
 			if tt.expectedContentLength != r.contentLength {

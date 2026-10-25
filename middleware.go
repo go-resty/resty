@@ -209,6 +209,11 @@ func parseRequestHeader(c *Client, r *Request) {
 }
 
 func parseRequestBody(c *Client, r *Request) error {
+	// A retry may replace the body or switch between buffered and raw inputs.
+	releaseBuffer(r.bodyBuf)
+	r.bodyBuf = nil
+	r.isFormData = false
+
 	if r.isMultiPart && !(r.Method == MethodPost || r.Method == MethodPut || r.Method == MethodPatch) {
 		err := fmt.Errorf("resty: multipart is not allowed in HTTP verb: %v", r.Method)
 		return &invalidRequestError{Err: err}
@@ -238,21 +243,39 @@ func createRawRequest(c *Client, r *Request) (err error) {
 	// init client trace if enabled
 	r.initTraceIfEnabled()
 
+	var body io.Reader
 	if r.bodyBuf == nil {
-		if reader, ok := r.Body.(io.Reader); ok {
-			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, reader)
-		} else {
-			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, nil)
-		}
-	} else {
-		// The transport may outlive Execute, which returns bodyBuf to the pool.
-		// Both Body and GetBody must retain an independent snapshot of its bytes.
-		body := bytes.NewReader(bytes.Clone(r.bodyBuf.Bytes()))
-		r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, body)
+		body, _ = r.Body.(io.Reader)
 	}
-
+	r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, body)
 	if err != nil {
 		return &invalidRequestError{Err: err}
+	}
+
+	payload := r.Body
+	if r.bodyBuf != nil {
+		payload = r.bodyBuf.Bytes()
+	}
+	switch b := payload.(type) {
+	case []byte:
+		// The transport and GetBody may outlive Execute and any reuse of the
+		// caller's input or pooled encoder buffer. Only immutable storage is shared.
+		data := bytes.Clone(b)
+		r.RawRequest.Body = &bytesReadCloser{reader: *bytes.NewReader(data)}
+		r.RawRequest.ContentLength = int64(len(data))
+		r.RawRequest.GetBody = func() (io.ReadCloser, error) {
+			return &bytesReadCloser{reader: *bytes.NewReader(data)}, nil
+		}
+	case string:
+		r.RawRequest.Body = &stringReadCloser{reader: *strings.NewReader(b)}
+		r.RawRequest.ContentLength = int64(len(b))
+		r.RawRequest.GetBody = func() (io.ReadCloser, error) {
+			return &stringReadCloser{reader: *strings.NewReader(b)}, nil
+		}
+	}
+	if r.RawRequest.GetBody != nil && r.RawRequest.ContentLength == 0 {
+		r.RawRequest.Body = http.NoBody
+		r.RawRequest.GetBody = func() (io.ReadCloser, error) { return http.NoBody, nil }
 	}
 
 	// get the context reference back from underlying RawRequest
@@ -283,6 +306,35 @@ func createRawRequest(c *Client, r *Request) (err error) {
 
 	return
 }
+
+var (
+	_ io.ReadCloser = (*bytesReadCloser)(nil)
+	_ io.WriterTo   = (*bytesReadCloser)(nil)
+	_ io.ReadCloser = (*stringReadCloser)(nil)
+	_ io.WriterTo   = (*stringReadCloser)(nil)
+)
+
+// Keep each reader and its no-op Close in one allocation while retaining the
+// same interfaces exposed by io.NopCloser around the standard library reader.
+type bytesReadCloser struct {
+	reader bytes.Reader
+}
+
+func (r *bytesReadCloser) Read(p []byte) (int, error) { return r.reader.Read(p) }
+
+func (r *bytesReadCloser) WriteTo(w io.Writer) (int64, error) { return r.reader.WriteTo(w) }
+
+func (r *bytesReadCloser) Close() error { return nil }
+
+type stringReadCloser struct {
+	reader strings.Reader
+}
+
+func (r *stringReadCloser) Read(p []byte) (int, error) { return r.reader.Read(p) }
+
+func (r *stringReadCloser) WriteTo(w io.Writer) (int64, error) { return r.reader.WriteTo(w) }
+
+func (r *stringReadCloser) Close() error { return nil }
 
 func addCredentials(c *Client, r *Request) error {
 	credentialsAdded := false
@@ -548,14 +600,9 @@ func handleRequestBody(c *Client, r *Request) error {
 		r.Header.Set(hdrContentTypeKey, contentType)
 	}
 
-	r.bodyBuf = acquireBuffer()
-
-	switch body := r.Body.(type) {
+	switch r.Body.(type) {
 	case io.Reader:
 		// Resty v3 onwards io.Reader used as-is with the request body.
-		releaseBuffer(r.bodyBuf)
-		r.bodyBuf = nil
-
 		// enable multiple reads if body is *bytes.Buffer
 		if b, ok := r.Body.(*bytes.Buffer); ok {
 			v := b.Bytes()
@@ -575,11 +622,11 @@ func handleRequestBody(c *Client, r *Request) error {
 			}
 		}
 		return nil
-	case []byte:
-		r.bodyBuf.Write(body)
-	case string:
-		r.bodyBuf.WriteString(body)
+	case []byte, string:
+		// Raw inputs are prepared directly by createRawRequest.
+		return nil
 	default:
+		r.bodyBuf = acquireBuffer()
 		encKey := inferContentTypeMapKey(contentType)
 		if jsonKey == encKey {
 			if !r.jsonEscapeHTML {
