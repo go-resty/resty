@@ -95,12 +95,7 @@ func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	_, _ = ioCopy(io.Discard, res.Body)
 	closeq(res.Body)
 
-	chaHdrValue := strings.TrimSpace(res.Header.Get(hdrWwwAuthenticateKey))
-	if chaHdrValue == "" {
-		return nil, ErrDigestBadChallenge
-	}
-
-	cha, err := dt.parseChallenge(chaHdrValue)
+	cha, err := dt.parseChallenges(res.Header.Values(hdrWwwAuthenticateKey))
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +124,34 @@ func (dt *digestTransport) cloneReq(r *http.Request, first bool) *http.Request {
 		r1.GetBody = nil
 	}
 	return r1
+}
+
+// parseChallenges returns the first Digest challenge with a supported algorithm
+// among the WWW-Authenticate fields. A server may send other schemes first (IIS
+// sends Negotiate and NTLM before Digest), and RFC 7616 section 3.7 has it send
+// one Digest challenge per algorithm, in order of preference. A challenge whose
+// algorithm isn't understood "SHOULD be ignored (and a different one used, if
+// there is more than one)" (RFC 7616 section 3.3).
+func (dt *digestTransport) parseChallenges(values []string) (*digestChallenge, error) {
+	var firstErr error
+	for _, v := range values {
+		cha, err := dt.parseChallenge(v)
+		if err == nil {
+			if _, ok := digestHashFuncs[cha.algorithm]; ok {
+				return cha, nil
+			}
+			err = ErrDigestAlgNotSupported
+		}
+		// Report the error of the first Digest challenge rather than the
+		// ErrDigestBadChallenge of another scheme's challenge.
+		if firstErr == nil || errors.Is(firstErr, ErrDigestBadChallenge) {
+			firstErr = err
+		}
+	}
+	if firstErr == nil {
+		firstErr = ErrDigestBadChallenge
+	}
+	return nil, firstErr
 }
 
 func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error) {
