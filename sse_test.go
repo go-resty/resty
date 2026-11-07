@@ -268,6 +268,26 @@ func TestSSESourceRetry(t *testing.T) {
 	assertNotNil(t, err2)
 }
 
+func TestSSEParseRetryRequiresASCIIDigits(t *testing.T) {
+	for _, retry := range []string{"+100", "-100", " 100", "100 ", "1.5", "abc", "١٠٠", ""} {
+		t.Run(retry, func(t *testing.T) {
+			event, err := parseEventFunc([]byte("retry: 250\nretry: " + retry + "\ndata: message"))
+			assertError(t, err)
+			defer putRawEvent(event)
+			assertEqual(t, "250", string(event.Retry), "invalid retry must not replace the previous valid value")
+			assertEqual(t, "message", string(event.Data))
+		})
+	}
+	for _, retry := range []string{"0", "100", "00100"} {
+		t.Run(retry, func(t *testing.T) {
+			event, err := parseEventFunc([]byte("retry: " + retry))
+			assertError(t, err)
+			defer putRawEvent(event)
+			assertEqual(t, retry, string(event.Retry))
+		})
+	}
+}
+
 func TestSSESourceRetryReusesRequestBody(t *testing.T) {
 	const payload = `{"test":"retry-body"}`
 
