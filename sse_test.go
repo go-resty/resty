@@ -972,3 +972,37 @@ func TestSSESourceConnectContextDoneDuringRetryWait(t *testing.T) {
 		"expected the retry wait to be abandoned when the context is done")
 	assertEqual(t, int32(1), attempts.Load(), "expected no further connect attempts")
 }
+
+// A data field with an empty value still fills the data buffer, so the event
+// must be dispatched with empty data; only an event without any data field is
+// dropped.
+// https://html.spec.whatwg.org/multipage/server-sent-events.html#dispatchMessage
+func TestSSESourceDispatchesEventWithEmptyData(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(hdrContentTypeKey, "text/event-stream")
+		_, _ = io.WriteString(w, "data\n\n"+
+			"data:\n\n"+
+			"event: done\ndata: \n\n"+
+			"event: ignored\n\n"+
+			"data:\ndata:\n\n"+
+			"data: last\n\n")
+	})
+	defer ts.Close()
+
+	var messages, done []string
+	es := createSSESource(t, ts.URL, func(e any) {
+		messages = append(messages, e.(*SSE).Data)
+	}, nil).
+		SetRetryCount(0).
+		AddEventListener("done", func(e any) {
+			done = append(done, e.(*SSE).Data)
+		}, nil).
+		AddEventListener("ignored", func(e any) {
+			t.Errorf("event without a data field must not be dispatched: %#v", e)
+		}, nil)
+
+	err := es.Get()
+	assertErrorIs(t, io.EOF, err)
+	assertEqual(t, []string{"", "", "\n", "last"}, messages)
+	assertEqual(t, []string{""}, done)
+}
