@@ -60,6 +60,24 @@ func TestSSESourceSimpleFlow(t *testing.T) {
 	assertEqual(t, counter, messageCounter)
 }
 
+func TestSSESourceLeadingBOM(t *testing.T) {
+	for _, prefix := range []string{"", "\ufeff"} {
+		t.Run(fmt.Sprintf("prefix=%q", prefix), func(t *testing.T) {
+			es := NewSSESource()
+			var messages []string
+			es.OnMessage(func(value any) {
+				messages = append(messages, value.(*SSE).Data)
+			}, nil)
+			res := &http.Response{Body: io.NopCloser(strings.NewReader(
+				prefix + "data: first\n\ndata: \ufeffsecond\n\n\ufeffdata: ignored\n\n",
+			))}
+
+			assertErrorIs(t, io.EOF, es.listenStream(res))
+			assertEqual(t, []string{"first", "\ufeffsecond"}, messages)
+		})
+	}
+}
+
 func TestSSESourceMultipleEventTypes(t *testing.T) {
 	type userEvent struct {
 		UserName string    `json:"username"`

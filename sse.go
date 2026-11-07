@@ -756,7 +756,12 @@ func (sse *SSESource) connect() (*http.Response, error) {
 func (sse *SSESource) listenStream(res *http.Response) error {
 	defer closeq(res.Body)
 
-	scanner := bufio.NewScanner(res.Body)
+	reader := bufio.NewReader(res.Body)
+	// SSE streams may start with one UTF-8 byte order mark.
+	if prefix, _ := reader.Peek(3); bytes.Equal(prefix, []byte{0xef, 0xbb, 0xbf}) {
+		_, _ = reader.Discard(3)
+	}
+	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, min(4096, sse.maxBufSize)), sse.maxBufSize)
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if atEOF && len(data) == 0 {
