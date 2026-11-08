@@ -319,11 +319,17 @@ func Test_parseRequestURL(t *testing.T) {
 				r.SetQueryParamsUnescape(true) // this line takes effect
 				r.SetQueryParams(
 					map[string]string{
+						"filter":   "one&two=three",
+						"fragment": "section#1",
+						"language": "C++",
+						"list":     "one;two",
+						"literal":  "%2F",
+						"progress": "100% complete",
 						"registry": "nacos://test:6801", // GH #797
 					},
 				)
 			},
-			expectedURL: "https://example.com/?initone=cáfe&fromclient=hey+unescape&registry=nacos://test:6801",
+			expectedURL: "https://example.com/?filter=one%26two%3Dthree&fragment=section%231&fromclient=hey+unescape&initone=cáfe&language=C%2B%2B&list=one%3Btwo&literal=%252F&progress=100%25+complete&registry=nacos://test:6801",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1117,6 +1123,72 @@ func TestRequestURL_GH797(t *testing.T) {
 		Get("/unescape-query-params")
 	assertError(t, err)
 	assertEqual(t, "query params looks good", resp.String())
+}
+
+func TestRequestURLUnescapePreservesQueryValues(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		assertEqual(t, "one&two=three", query.Get("filter"))
+		assertEqual(t, "section#1", query.Get("fragment"))
+		assertEqual(t, "C++", query.Get("language"))
+		assertEqual(t, "one;two", query.Get("list"))
+		assertEqual(t, "100% complete", query.Get("progress"))
+		assertEqual(t, "%2F", query.Get("literal"))
+		assertEqual(t, "enabled", query.Get("filter&state"))
+		assertEqual(t, "hello world", query.Get("space"))
+		assertEqual(t, "start\x00\x1f\x7fend", query.Get("control"))
+		assertEqual(t, "nacos://test:6801", query.Get("registry"))
+		assertEqual(t, "cáfe", query.Get("unicode"))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	resp, err := New().SetBaseURL(ts.URL).SetQueryParamsUnescape(true).R().
+		SetQueryParams(map[string]string{
+			"filter":       "one&two=three",
+			"fragment":     "section#1",
+			"language":     "C++",
+			"list":         "one;two",
+			"literal":      "%2F",
+			"progress":     "100% complete",
+			"filter&state": "enabled",
+			"registry":     "nacos://test:6801",
+			"space":        "hello world",
+			"control":      "start\x00\x1f\x7fend",
+			"unicode":      "cáfe",
+		}).Get("/")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	assertEqual(t, http.StatusNoContent, resp.StatusCode())
+}
+
+func Test_unescapeRawQueryParams(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		query    string
+		expected string
+	}{
+		{
+			name:     "query key without value",
+			query:    "flag",
+			expected: "flag",
+		},
+		{
+			name:     "invalid query key escape",
+			query:    "bad%zz=value",
+			expected: "bad%zz=value",
+		},
+		{
+			name:     "invalid query value escape",
+			query:    "key=bad%zz",
+			expected: "key=bad%zz",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assertEqual(t, tt.expected, unescapeRawQueryParams(tt.query))
+		})
+	}
 }
 
 func TestMiddleware_multipartWriteFormData(t *testing.T) {
