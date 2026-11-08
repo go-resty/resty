@@ -741,3 +741,68 @@ func TestClientDigestAuthCaseInsensitiveNames(t *testing.T) {
 		})
 	}
 }
+
+func TestDigestChallengeAmongOtherChallenges(t *testing.T) {
+	tests := []struct {
+		name       string
+		challenges []string
+	}{
+		{
+			name:       "other schemes first",
+			challenges: []string{"Negotiate", "NTLM", `Digest realm="test", nonce="abc", qop="auth"`},
+		},
+		{
+			name:       "basic first",
+			challenges: []string{`Basic realm="test"`, `Digest realm="test", nonce="abc", qop="auth"`},
+		},
+		{
+			name: "unsupported algorithm first",
+			challenges: []string{
+				`Digest realm="test", nonce="abc", qop="auth", algorithm=SHA-1`,
+				`Digest realm="test", nonce="abc", qop="auth", algorithm=MD5`,
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") == "" {
+					for _, c := range tc.challenges {
+						w.Header().Add("WWW-Authenticate", c)
+					}
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				if !strings.HasPrefix(r.Header.Get("Authorization"), "Digest ") {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+			defer ts.Close()
+
+			c := dcnl().SetDigestAuth("user", "pass")
+			defer c.Close()
+
+			res, err := c.R().Get(ts.URL + "/")
+			assertError(t, err)
+			assertEqual(t, http.StatusOK, res.StatusCode())
+		})
+	}
+}
+
+func TestDigestChallengesError(t *testing.T) {
+	dt := &digestTransport{}
+	for _, tc := range []struct {
+		values []string
+		expect error
+	}{
+		{values: nil, expect: ErrDigestBadChallenge},
+		{values: []string{"Negotiate", "NTLM"}, expect: ErrDigestBadChallenge},
+		{values: []string{"Negotiate", `Digest realm="r", nonce="n", algorithm=SHA-1`}, expect: ErrDigestAlgNotSupported},
+		{values: []string{`Digest realm="r", nonce="n", charset=utf-16`, "Negotiate"}, expect: ErrDigestInvalidCharset},
+	} {
+		_, err := dt.parseChallenges(tc.values)
+		assertErrorIs(t, tc.expect, err)
+	}
+}
