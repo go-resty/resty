@@ -753,6 +753,51 @@ func (sse *SSESource) connect() (*http.Response, error) {
 	return nil, fmt.Errorf("resty:sse: unable to connect stream")
 }
 
+func isEventLineBreak(r rune) bool {
+	return r == '\n' || r == '\r'
+}
+
+// splitSSEEvent splits an SSE byte stream on blank lines terminated by any pair
+// of end-of-line sequences (CRLF, LF, or CR) per WHATWG HTML §9.2.5.
+func splitSSEEvent(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	for i := 0; i < len(data); i++ {
+		if !isEventLineBreak(rune(data[i])) {
+			continue
+		}
+		n1 := 1
+		if data[i] == '\r' {
+			if i+1 == len(data) && !atEOF {
+				return 0, nil, nil
+			}
+			if i+1 < len(data) && data[i+1] == '\n' {
+				n1 = 2
+			}
+		}
+		j := i + n1
+		if j == len(data) {
+			if atEOF {
+				break
+			}
+			return 0, nil, nil
+		}
+		if isEventLineBreak(rune(data[j])) {
+			n2 := 1
+			if data[j] == '\r' && j+1 < len(data) && data[j+1] == '\n' {
+				n2 = 2
+			}
+			return j + n2, data[0:i], nil
+		}
+		i = j
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
 func (sse *SSESource) listenStream(res *http.Response) error {
 	defer closeq(res.Body)
 
@@ -763,21 +808,7 @@ func (sse *SSESource) listenStream(res *http.Response) error {
 	}
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, min(4096, sse.maxBufSize)), sse.maxBufSize)
-	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		if atEOF && len(data) == 0 {
-			return 0, nil, nil
-		}
-		if i := bytes.Index(data, []byte{'\n', '\n'}); i >= 0 {
-			// We have a full double newline-terminated line.
-			return i + 1, data[0:i], nil
-		}
-		// If we're at EOF, we have a final, non-terminated line. Return it.
-		if atEOF {
-			return len(data), data, nil
-		}
-		// Request more data.
-		return 0, nil, nil
-	})
+	scanner.Split(splitSSEEvent)
 
 	for {
 		ctx := sse.Context()
@@ -791,6 +822,9 @@ func (sse *SSESource) listenStream(res *http.Response) error {
 		}
 
 		if err := sse.processEvent(scanner); err != nil {
+			if sse.isClosed() {
+				return nil
+			}
 			return err
 		}
 	}
@@ -908,8 +942,8 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 
 	e := newRawEvent()
 
-	// Split the line by "\n"
-	for _, line := range bytes.FieldsFunc(msg, func(r rune) bool { return r == '\n' }) {
+	// Split lines on LF or CR per WHATWG HTML §9.2.5; FieldsFunc collapses CRLF.
+	for _, line := range bytes.FieldsFunc(msg, isEventLineBreak) {
 		switch {
 		case bytes.HasPrefix(line, headerID):
 			e.ID = append([]byte(nil), trimHeader(len(headerID), line)...)
@@ -953,7 +987,7 @@ func trimHeader(size int, data []byte) []byte {
 	if len(data) > 0 && data[0] == ' ' {
 		data = data[1:]
 	}
-	if len(data) > 0 && data[len(data)-1] == '\n' {
+	for len(data) > 0 && isEventLineBreak(rune(data[len(data)-1])) {
 		data = data[:len(data)-1]
 	}
 	return data
