@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -820,9 +821,13 @@ func (sse *SSESource) processEvent(scanner *bufio.Scanner) error {
 	}
 
 	if len(ed.Retry) > 0 {
-		if retry, err := strconv.Atoi(string(ed.Retry)); err == nil {
+		if retry, err := strconv.ParseInt(string(ed.Retry), 10, 64); err == nil {
+			delay := time.Duration(math.MaxInt64)
+			if retry <= int64(math.MaxInt64/time.Millisecond) {
+				delay = time.Millisecond * time.Duration(retry)
+			}
 			sse.lock.Lock()
-			sse.serverSentRetry = time.Millisecond * time.Duration(retry)
+			sse.serverSentRetry = delay
 			sse.lock.Unlock()
 		} else {
 			sse.triggerOnError(err)
