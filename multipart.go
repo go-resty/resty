@@ -152,7 +152,7 @@ func (mf *MultipartField) detectContentType() error {
 	}
 
 	p := make([]byte, 512)
-	size, err := io.ReadFull(mf.Reader, p)
+	size, err := ioReadFull(mf.Reader, p)
 	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 		return err
 	}
