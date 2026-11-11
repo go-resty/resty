@@ -296,6 +296,53 @@ func TestMultipartStreamedReaderFallbackGH1046(t *testing.T) {
 	}
 }
 
+func TestMultipartContentTypeShortReads(t *testing.T) {
+	image, err := os.ReadFile(filepath.Join(getTestDataPath(), "test-img.png"))
+	assertNil(t, err)
+	for _, tc := range []struct {
+		name, contentType string
+		body              []byte
+		split             int
+	}{
+		{"empty", "text/plain; charset=utf-8", nil, 0},
+		{"short text", "text/plain; charset=utf-8", []byte("hello"), 1},
+		{"PNG full read", "image/png", image, 0},
+		{"PNG split after byte 1", "image/png", image, 1},
+		{"PNG split after byte 4", "image/png", image, 4},
+		{"PNG split after byte 7", "image/png", image, 7},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				reader, err := r.MultipartReader()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				part, err := reader.NextPart()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				body, err := io.ReadAll(part)
+				assertNil(t, err)
+				assertTrue(t, bytes.Equal(tc.body, body), "uploaded bytes differ")
+				_, _ = io.WriteString(w, part.Header.Get(hdrContentTypeKey))
+			})
+			defer ts.Close()
+			var reader io.Reader = bytes.NewReader(tc.body)
+			if tc.split > 0 {
+				reader = io.MultiReader(bytes.NewReader(tc.body[:tc.split]), bytes.NewReader(tc.body[tc.split:]))
+			}
+			c := dcnl()
+			defer c.Close()
+			res, err := c.R().SetFileReader("file", "upload", reader).Post(ts.URL)
+			assertNil(t, err)
+			assertEqual(t, http.StatusOK, res.StatusCode())
+			assertEqual(t, tc.contentType, res.String())
+		})
+	}
+}
+
 func TestMultipartIoReaderFiles(t *testing.T) {
 	ts := createFormPostServer(t)
 	defer ts.Close()
