@@ -439,7 +439,19 @@ func TestGH1044TrimHeader(t *testing.T) {
 	t.Run("data has newline", func(t *testing.T) {
 		data := []byte("data: newline message\n")
 		result := trimHeader(5, data)
-		assertTrue(t, result[len(result)-1] != '\n')
+		assertEqual(t, "newline message", string(result))
+	})
+
+	t.Run("data has CRLF", func(t *testing.T) {
+		data := []byte("data: crlf message\r\n")
+		result := trimHeader(5, data)
+		assertEqual(t, "crlf message", string(result))
+	})
+
+	t.Run("data has CR", func(t *testing.T) {
+		data := []byte("data: cr message\r")
+		result := trimHeader(5, data)
+		assertEqual(t, "cr message", string(result))
 	})
 }
 
@@ -1043,4 +1055,219 @@ func TestSSESourceDispatchesEventWithEmptyData(t *testing.T) {
 	assertErrorIs(t, io.EOF, err)
 	assertEqual(t, []string{"", "", "\n", "last"}, messages)
 	assertEqual(t, []string{""}, done)
+}
+
+// WHATWG HTML §9.2.5 defines SSE line endings as CRLF, LF, or CR, with any
+// pair of consecutive line breaks acting as an event delimiter.
+func TestSSESourceLineEndings(t *testing.T) {
+	type expectedEvent struct {
+		ID   string
+		Name string
+		Data string
+	}
+
+	for _, tc := range []struct {
+		name       string
+		stream     string
+		wantMsgs   []expectedEvent
+		wantPings  []expectedEvent
+		wantLastID string
+		wantRetry  time.Duration
+	}{
+		{
+			name: "CRLF stream",
+			stream: "\ufeff: keepalive\r\n\r\n" +
+				"id: 1\r\nretry: 1500\r\ndata: line1\r\ndata\r\ndata: line3\r\n\r\n" +
+				"id: 2\r\nevent: ping\r\ndata: pong\r\n\r\n" +
+				"data:\r\n\r\n",
+			wantMsgs: []expectedEvent{
+				{ID: "1", Data: "line1\n\nline3"},
+				{Data: ""},
+			},
+			wantPings: []expectedEvent{
+				{ID: "2", Name: "ping", Data: "pong"},
+			},
+			wantLastID: "2",
+			wantRetry:  1500 * time.Millisecond,
+		},
+		{
+			name: "CR stream",
+			stream: ": keepalive\r\r" +
+				"id: 10\rretry: 250\rdata: alpha\rdata: beta\r\r" +
+				"event: ping\rdata: cr-ping\r\r" +
+				"data\r\r",
+			wantMsgs: []expectedEvent{
+				{ID: "10", Data: "alpha\nbeta"},
+				{Data: ""},
+			},
+			wantPings: []expectedEvent{
+				{Name: "ping", Data: "cr-ping"},
+			},
+			wantLastID: "10",
+			wantRetry:  250 * time.Millisecond,
+		},
+		{
+			name: "mixed line endings and blank delimiters",
+			stream: "id: a\r\ndata: first\n\r\n" +
+				"id: b\rdata: second\r\n\n" +
+				"event: ping\r\nretry: 300\rdata: third\r\r\n",
+			wantMsgs: []expectedEvent{
+				{ID: "a", Data: "first"},
+				{ID: "b", Data: "second"},
+			},
+			wantPings: []expectedEvent{
+				{Name: "ping", Data: "third"},
+			},
+			wantLastID: "b",
+			wantRetry:  300 * time.Millisecond,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set(hdrContentTypeKey, "text/event-stream")
+				_, _ = io.WriteString(w, tc.stream)
+			})
+			defer ts.Close()
+
+			var msgs, pings []expectedEvent
+			es := createSSESource(t, ts.URL, func(e any) {
+				ev := e.(*SSE)
+				msgs = append(msgs, expectedEvent{ID: ev.ID, Name: ev.Name, Data: ev.Data})
+			}, nil).
+				SetRetryCount(0).
+				OnError(func(err error) {
+					t.Errorf("unexpected SSE error: %v", err)
+				}).
+				AddEventListener("ping", func(e any) {
+					ev := e.(*SSE)
+					pings = append(pings, expectedEvent{ID: ev.ID, Name: ev.Name, Data: ev.Data})
+				}, nil)
+
+			err := es.Get()
+			assertErrorIs(t, io.EOF, err)
+			assertEqual(t, tc.wantMsgs, msgs)
+			assertEqual(t, tc.wantPings, pings)
+			assertEqual(t, tc.wantLastID, es.lastEventID)
+			assertEqual(t, tc.wantRetry, es.serverSentRetry)
+		})
+	}
+}
+
+func TestSSESourceLiveStreamingLineEndings(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		chunks []string
+		want   []string
+	}{
+		{
+			name:   "CRLF flushed per event",
+			chunks: []string{"data: first\r\n\r\n", "data: second\r\n\r\n"},
+			want:   []string{"first", "second"},
+		},
+		{
+			name:   "CR flushed per event",
+			chunks: []string{"data: first\r\r", "data: second\r\r"},
+			want:   []string{"first", "second"},
+		},
+		{
+			name:   "split CRLF within single event",
+			chunks: []string{"data: line1\r", "\ndata: line2\r\n\r\n"},
+			want:   []string{"line1\nline2"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			received := make(chan string, len(tc.want))
+			releaseSecond := make(chan struct{})
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set(hdrContentTypeKey, "text/event-stream")
+				rc := http.NewResponseController(w)
+				for idx, chunk := range tc.chunks {
+					_, _ = io.WriteString(w, chunk)
+					_ = rc.Flush()
+					if idx == 0 && len(tc.want) > 1 {
+						select {
+						case <-releaseSecond:
+						case <-r.Context().Done():
+							return
+						case <-time.After(time.Second):
+							return
+						}
+					}
+				}
+			})
+			defer ts.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			es := NewSSESource().
+				SetContext(ctx).
+				SetURL(ts.URL).
+				SetRetryCount(0).
+				OnMessage(func(e any) {
+					received <- e.(*SSE).Data
+				}, nil)
+
+			errCh := make(chan error, 1)
+			go func() { errCh <- es.Get() }()
+
+			var got []string
+			var getErr error
+			haveErr := false
+			select {
+			case msg := <-received:
+				got = append(got, msg)
+			case getErr = <-errCh:
+				haveErr = true
+			case <-time.After(time.Second):
+				t.Fatalf("first event was not dispatched live before subsequent writes")
+			}
+			close(releaseSecond)
+
+			if !haveErr {
+				getErr = <-errCh
+			}
+			if !errors.Is(getErr, io.EOF) {
+				t.Fatalf("unexpected Get error: %v", getErr)
+			}
+			close(received)
+			for msg := range received {
+				got = append(got, msg)
+			}
+			assertEqual(t, tc.want, got)
+		})
+	}
+}
+
+func TestSplitSSEEvent(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		data        string
+		atEOF       bool
+		wantAdvance int
+		wantToken   string
+		wantNilTok  bool
+	}{
+		{name: "empty at EOF", data: "", atEOF: true, wantNilTok: true},
+		{name: "partial line non-EOF", data: "data: a", atEOF: false, wantNilTok: true},
+		{name: "trailing CR non-EOF", data: "data: a\r", atEOF: false, wantNilTok: true},
+		{name: "trailing CR at EOF", data: "data: a\r", atEOF: true, wantAdvance: 8, wantToken: "data: a\r"},
+		{name: "single LF non-EOF", data: "data: a\n", atEOF: false, wantNilTok: true},
+		{name: "single CRLF non-EOF", data: "data: a\r\n", atEOF: false, wantNilTok: true},
+		{name: "CRLF blank line", data: "data: a\r\n\r\n", atEOF: false, wantAdvance: 11, wantToken: "data: a"},
+		{name: "CR blank line non-EOF", data: "data: a\r\r", atEOF: false, wantAdvance: 9, wantToken: "data: a"},
+		{name: "CR followed by CRLF blank line", data: "data: a\r\r\n", atEOF: false, wantAdvance: 10, wantToken: "data: a"},
+		{name: "CRLF followed by CR at non-EOF", data: "data: a\r\n\r", atEOF: false, wantAdvance: 10, wantToken: "data: a"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			adv, tok, err := splitSSEEvent([]byte(tc.data), tc.atEOF)
+			assertNil(t, err)
+			assertEqual(t, tc.wantAdvance, adv)
+			if tc.wantNilTok {
+				assertNil(t, tok)
+				return
+			}
+			assertEqual(t, tc.wantToken, string(tok))
+		})
+	}
 }
