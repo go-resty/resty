@@ -657,6 +657,41 @@ func Test_extractBaseURL(t *testing.T) {
 	}
 }
 
+// A load-balancer base fragment or empty query must not replace the path
+// requested through the client.
+func TestLoadBalancerDiscardsBaseURLFragment(t *testing.T) {
+	server := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(r.RequestURI))
+	})
+	defer server.Close()
+
+	for _, suffix := range []string{
+		"/ignored?old=value#section",
+		"/ignored#encoded%2Fsection",
+		"/ignored?",
+		"/ignored?old=value",
+	} {
+		t.Run(suffix, func(t *testing.T) {
+			lb, err := NewRoundRobin(server.URL + suffix)
+			assertNil(t, err)
+			if err != nil {
+				return
+			}
+
+			c := dcnl()
+			defer c.Close()
+			c.SetLoadBalancer(lb)
+
+			resp, err := c.R().Get("/requested?new=value")
+			assertNil(t, err)
+			if err != nil {
+				return
+			}
+			assertEqual(t, "/requested?new=value", resp.String())
+		})
+	}
+}
+
 func TestLoadBalancerRequestFailures(t *testing.T) {
 	ts1 := createGetServer(t)
 	ts1.Close()
