@@ -2515,8 +2515,18 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	circuitBreaker := c.circuitBreaker
 	c.lock.RUnlock()
 
+	var probe *circuitBreakerProbe
 	if circuitBreaker != nil {
-		if err := circuitBreaker.Allow(); err != nil {
+		var err error
+		switch cb := circuitBreaker.(type) {
+		case *CircuitBreakerCount:
+			probe, err = cb.allowWithProbe()
+		case *CircuitBreakerRatio:
+			probe, err = cb.allowWithProbe()
+		default:
+			err = circuitBreaker.Allow()
+		}
+		if err != nil {
 			if cbo, ok := circuitBreaker.(CircuitBreakerObserver); ok {
 				cbo.RunOnTriggerHooks(req, err)
 			}
@@ -2556,7 +2566,9 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	response := &Response{Request: req, RawResponse: resp}
 	response.setReceivedAt()
 	if err != nil {
-		c.cbRequestError()
+		if cbt, ok := circuitBreaker.(cbTransportErrorObserver); ok {
+			cbt.onTransportError(err, probe)
+		}
 		if cancel != nil {
 			cancel()
 		}
