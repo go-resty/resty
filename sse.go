@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -796,6 +797,19 @@ func (sse *SSESource) listenStream(res *http.Response) error {
 	}
 }
 
+// retryMillisToDuration converts a server-sent SSE retry delay in milliseconds
+// to a time.Duration, saturating at math.MaxInt64 when the nanosecond
+// conversion would overflow.
+func retryMillisToDuration(retry int64) time.Duration {
+	if retry <= 0 {
+		return 0
+	}
+	if retry > int64(math.MaxInt64/time.Millisecond) {
+		return time.Duration(math.MaxInt64)
+	}
+	return time.Duration(retry) * time.Millisecond
+}
+
 func (sse *SSESource) processEvent(scanner *bufio.Scanner) error {
 	e, err := readEvent(scanner)
 	if err != nil {
@@ -820,9 +834,9 @@ func (sse *SSESource) processEvent(scanner *bufio.Scanner) error {
 	}
 
 	if len(ed.Retry) > 0 {
-		if retry, err := strconv.Atoi(string(ed.Retry)); err == nil {
+		if retry, err := strconv.ParseInt(string(ed.Retry), 10, 64); err == nil {
 			sse.lock.Lock()
-			sse.serverSentRetry = time.Millisecond * time.Duration(retry)
+			sse.serverSentRetry = retryMillisToDuration(retry)
 			sse.lock.Unlock()
 		} else {
 			sse.triggerOnError(err)
