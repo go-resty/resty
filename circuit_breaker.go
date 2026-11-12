@@ -6,6 +6,7 @@
 package resty
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -259,6 +260,59 @@ type cbRequestErrorObserver interface {
 	onRequestError()
 }
 
+// cbTransportErrorObserver is implemented by the concrete breakers so a request
+// that failed without an HTTP response (dial error, timeout, ...) counts as a
+// failure like a response matched by a policy does.
+type cbTransportErrorObserver interface {
+	onTransportError(err error)
+}
+
+// CircuitBreakerErrorPolicy is a function that inspects the error of a request that
+// failed without an HTTP response (dial error, TLS error, timeout, ...) and returns
+// true when it should be counted as a failure and potentially trip the circuit breaker.
+type CircuitBreakerErrorPolicy func(err error) bool
+
+// CircuitBreakerTransportErrorPolicy is the default [CircuitBreakerErrorPolicy]. It
+// classifies every error as a failure except [context.Canceled], since the caller
+// giving up says nothing about the health of the upstream.
+func CircuitBreakerTransportErrorPolicy(err error) bool {
+	return err != nil && !errors.Is(err, context.Canceled)
+}
+
+// SetErrorPolicy overrides the [CircuitBreakerErrorPolicy] used to classify requests
+// that failed without an HTTP response. Passing nil restores the default,
+// [CircuitBreakerTransportErrorPolicy].
+//
+// It is not safe to call concurrently with requests; configure it before
+// registering the breaker via [Client.SetCircuitBreaker].
+func (cb *CircuitBreakerCount) SetErrorPolicy(p CircuitBreakerErrorPolicy) *CircuitBreakerCount {
+	cb.setErrorPolicy(p)
+	return cb
+}
+
+// SetErrorPolicy overrides the [CircuitBreakerErrorPolicy] used to classify requests
+// that failed without an HTTP response. Passing nil restores the default,
+// [CircuitBreakerTransportErrorPolicy].
+//
+// It is not safe to call concurrently with requests; configure it before
+// registering the breaker via [Client.SetCircuitBreaker].
+func (cb *CircuitBreakerRatio) SetErrorPolicy(p CircuitBreakerErrorPolicy) *CircuitBreakerRatio {
+	cb.setErrorPolicy(p)
+	return cb
+}
+
+func (cb *CircuitBreakerCount) onTransportError(err error) {
+	if cb.errorPolicy(err) {
+		cb.recordFailure(cb)
+	}
+}
+
+func (cb *CircuitBreakerRatio) onTransportError(err error) {
+	if cb.errorPolicy(err) {
+		cb.recordFailure(cb)
+	}
+}
+
 var _ cbRequestErrorObserver = (*circuitBreakerBase)(nil)
 
 // circuitBreakerBase holds the common state and logic shared by [CircuitBreakerCount]
@@ -266,6 +320,7 @@ var _ cbRequestErrorObserver = (*circuitBreakerBase)(nil)
 type circuitBreakerBase struct {
 	lock                  sync.RWMutex
 	policies              []CircuitBreakerPolicy
+	errorPolicy           CircuitBreakerErrorPolicy
 	resetTimeout          time.Duration
 	resetTimerMu          sync.Mutex
 	resetTimer            *time.Timer
@@ -315,6 +370,7 @@ func newCircuitBreakerBase(resetTimeout time.Duration, policies ...CircuitBreake
 	cb := &circuitBreakerBase{
 		resetTimeout: resetTimeout,
 		policies:     []CircuitBreakerPolicy{CircuitBreaker5xxPolicy},
+		errorPolicy:  CircuitBreakerTransportErrorPolicy,
 	}
 	cb.state.Store(CircuitBreakerStateClosed)
 	cb.sw.Store(newSlidingWindow[totalAndFailures](resetTimeout, 10))
@@ -350,23 +406,12 @@ func (cb *circuitBreakerBase) applyPolicies(resp *Response, mode circuitBreakerM
 		}
 	}
 
-	sw := cb.sw.Load()
 	if failed {
-		tf := sw.AddAndGet(totalAndFailures{total: 1, failures: 1})
-
-		switch cb.getState() {
-		case CircuitBreakerStateClosed:
-			if mode.shouldOpenOnClosed(tf) {
-				cb.open()
-			}
-		case CircuitBreakerStateHalfOpen:
-			cb.halfOpenProbeInFlight.Store(0)
-			cb.open()
-		}
-
+		cb.recordFailure(mode)
 		return
 	}
 
+	sw := cb.sw.Load()
 	tf := sw.AddAndGet(totalAndFailures{total: 1, failures: 0})
 
 	switch cb.getState() {
@@ -377,6 +422,22 @@ func (cb *circuitBreakerBase) applyPolicies(resp *Response, mode circuitBreakerM
 		if tf.total-tf.failures >= int(mode.halfOpenSuccessThreshold()) {
 			cb.changeState(CircuitBreakerStateClosed)
 		}
+	}
+}
+
+// recordFailure counts one failed request in the sliding window and opens the
+// breaker when the mode's threshold is reached (closed) or the probe failed (half-open).
+func (cb *circuitBreakerBase) recordFailure(mode circuitBreakerMode) {
+	tf := cb.sw.Load().AddAndGet(totalAndFailures{total: 1, failures: 1})
+
+	switch cb.getState() {
+	case CircuitBreakerStateClosed:
+		if mode.shouldOpenOnClosed(tf) {
+			cb.open()
+		}
+	case CircuitBreakerStateHalfOpen:
+		cb.halfOpenProbeInFlight.Store(0)
+		cb.open()
 	}
 }
 
@@ -426,6 +487,13 @@ type CircuitBreakerPolicy func(resp *Response) bool
 // response as a failure when the HTTP status code is greater than or equal to 500.
 func CircuitBreaker5xxPolicy(resp *Response) bool {
 	return resp.StatusCode() > 499
+}
+
+func (cb *circuitBreakerBase) setErrorPolicy(p CircuitBreakerErrorPolicy) {
+	if p == nil {
+		p = CircuitBreakerTransportErrorPolicy
+	}
+	cb.errorPolicy = p
 }
 
 func (cb *circuitBreakerBase) getState() CircuitBreakerState {
