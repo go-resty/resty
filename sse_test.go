@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -302,6 +303,28 @@ func TestSSEParseRetryRequiresASCIIDigits(t *testing.T) {
 			assertError(t, err)
 			defer putRawEvent(event)
 			assertEqual(t, retry, string(event.Retry))
+		})
+	}
+}
+
+func TestRetryMillisToDuration(t *testing.T) {
+	maxMillis := int64(math.MaxInt64 / time.Millisecond)
+	tests := []struct {
+		name  string
+		retry int64
+		want  time.Duration
+	}{
+		{name: "zero", retry: 0, want: 0},
+		{name: "ordinary", retry: 250, want: 250 * time.Millisecond},
+		{name: "32-bit boundary", retry: math.MaxInt32, want: time.Duration(math.MaxInt32) * time.Millisecond},
+		{name: "largest whole millisecond", retry: maxMillis, want: time.Duration(maxMillis) * time.Millisecond},
+		{name: "overflow just above max millis", retry: 9223372036855, want: time.Duration(math.MaxInt64)},
+		{name: "overflow larger value", retry: 18446744073710, want: time.Duration(math.MaxInt64)},
+		{name: "max int64", retry: math.MaxInt64, want: time.Duration(math.MaxInt64)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertEqual(t, tt.want, retryMillisToDuration(tt.retry))
 		})
 	}
 }
