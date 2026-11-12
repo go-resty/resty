@@ -91,6 +91,7 @@ type Request struct {
 	contentLength          int64
 	jsonEscapeHTML         bool
 	ctx                    context.Context
+	baseCtx                context.Context
 	ctxCancelFunc          context.CancelFunc
 	values                 map[string]any
 	client                 *Client
@@ -160,6 +161,7 @@ func (r *Request) SetContext(ctx context.Context) *Request {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.ctx = ctx
+	r.baseCtx = ctx
 	return r
 }
 
@@ -178,6 +180,7 @@ func (r *Request) WithContext(ctx context.Context) *Request {
 	rr := new(Request)
 	*rr = *r
 	rr.ctx = ctx
+	rr.baseCtx = ctx
 	return rr
 }
 
@@ -1358,15 +1361,15 @@ func (r *Request) TraceInfo() TraceInfo {
 		RequestAttempt: r.Attempt,
 	}
 
-	if !ct.dnsStart.IsZero() && !ct.dnsDone.IsZero() {
+	if !ct.dnsStart.IsZero() && !ct.dnsDone.IsZero() && !ct.dnsDone.Before(ct.dnsStart) {
 		ti.DNSLookup = ct.dnsDone.Sub(ct.dnsStart)
 	}
 
-	if !ct.tlsHandshakeDone.IsZero() && !ct.tlsHandshakeStart.IsZero() {
+	if !ct.tlsHandshakeDone.IsZero() && !ct.tlsHandshakeStart.IsZero() && !ct.tlsHandshakeDone.Before(ct.tlsHandshakeStart) {
 		ti.TLSHandshake = ct.tlsHandshakeDone.Sub(ct.tlsHandshakeStart)
 	}
 
-	if !ct.gotFirstResponseByte.IsZero() && !ct.gotConn.IsZero() {
+	if !ct.gotFirstResponseByte.IsZero() && !ct.gotConn.IsZero() && !ct.gotFirstResponseByte.Before(ct.gotConn) {
 		ti.ServerTime = ct.gotFirstResponseByte.Sub(ct.gotConn)
 	}
 
@@ -1379,20 +1382,28 @@ func (r *Request) TraceInfo() TraceInfo {
 	} else if !ct.dnsStart.IsZero() {
 		requestStartTime = ct.dnsStart
 	}
-	ti.TotalTime = ct.endTime.Sub(requestStartTime)
-
-	// Only calculate on successful connections
-	if !ct.connectDone.IsZero() {
-		ti.TCPConnTime = ct.connectDone.Sub(ct.dnsDone)
+	if !ct.endTime.IsZero() && !requestStartTime.IsZero() && !ct.endTime.Before(requestStartTime) {
+		ti.TotalTime = ct.endTime.Sub(requestStartTime)
 	}
 
 	// Only calculate on successful connections
-	if !ct.gotConn.IsZero() {
+	if !ct.connectDone.IsZero() {
+		if !ct.dnsDone.IsZero() && !ct.connectDone.Before(ct.dnsDone) {
+			ti.TCPConnTime = ct.connectDone.Sub(ct.dnsDone)
+		} else if !ct.dnsStart.IsZero() && !ct.connectDone.Before(ct.dnsStart) {
+			ti.TCPConnTime = ct.connectDone.Sub(ct.dnsStart)
+		} else if !requestStartTime.IsZero() && !ct.connectDone.Before(requestStartTime) {
+			ti.TCPConnTime = ct.connectDone.Sub(requestStartTime)
+		}
+	}
+
+	// Only calculate on successful connections
+	if !ct.gotConn.IsZero() && !ct.getConn.IsZero() && !ct.gotConn.Before(ct.getConn) {
 		ti.ConnTime = ct.gotConn.Sub(ct.getConn)
 	}
 
 	// Only calculate on successful connections
-	if !ct.gotFirstResponseByte.IsZero() {
+	if !ct.gotFirstResponseByte.IsZero() && !ct.endTime.IsZero() && !ct.endTime.Before(ct.gotFirstResponseByte) {
 		ti.ResponseTime = ct.endTime.Sub(ct.gotFirstResponseByte)
 	}
 
@@ -1686,6 +1697,7 @@ func (r *Request) Clone(ctx context.Context) *Request {
 
 	// set new context
 	rr.ctx = ctx
+	rr.baseCtx = ctx
 
 	// RawRequest should not copied, since its created on request execution flow.
 	rr.RawRequest = nil
@@ -1849,7 +1861,12 @@ func (r *Request) initValuesMap() {
 func (r *Request) initTraceIfEnabled() {
 	if r.IsTrace {
 		r.trace = new(clientTrace)
-		r.ctx = r.trace.createContext(r.Context())
+		base := r.baseCtx
+		if base == nil {
+			base = r.Context()
+			r.baseCtx = base
+		}
+		r.ctx = r.trace.createContext(base)
 	}
 }
 

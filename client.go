@@ -787,6 +787,7 @@ func (c *Client) R() *Request {
 
 	if c.ctx != nil {
 		r.ctx = context.WithoutCancel(c.ctx) // refer to godoc for more info about this function
+		r.baseCtx = r.ctx
 	}
 
 	return r
@@ -2505,6 +2506,7 @@ func (c *Client) cbRequestError() {
 // Executes method executes the given `Request` object and returns
 // response or error.
 func (c *Client) execute(req *Request) (*Response, error) {
+	req.StartTime = time.Now()
 	if c.RateLimiter() != nil {
 		if err := c.RateLimiter().Allow(req.Context()); err != nil {
 			return nil, err
