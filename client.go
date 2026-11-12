@@ -932,8 +932,7 @@ func (c *Client) responseMiddlewares() []ResponseMiddleware {
 // Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
 // callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
 //
-// NOTE:
-//   - Do not use [Client] setter methods within OnError hooks; deadlock will happen.
+// Hooks run without holding the client's lock.
 func (c *Client) OnError(hooks ...ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -947,8 +946,7 @@ func (c *Client) OnError(hooks ...ErrorHook) *Client {
 // Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
 // callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
 //
-// NOTE:
-//   - Do not use [Client] setter methods within OnSuccess hooks; deadlock will happen.
+// Hooks run without holding the client's lock.
 func (c *Client) OnSuccess(hooks ...SuccessHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -962,8 +960,7 @@ func (c *Client) OnSuccess(hooks ...SuccessHook) *Client {
 // Out of the [Client.OnSuccess], [Client.OnError], [Client.OnInvalid], [Client.OnPanic]
 // callbacks, exactly one set will be invoked for each call to [Request.Execute] that completes.
 //
-// NOTE:
-//   - Do not use [Client] setter methods within OnInvalid hooks; deadlock will happen.
+// Hooks run without holding the client's lock.
 func (c *Client) OnInvalid(hooks ...ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -980,8 +977,7 @@ func (c *Client) OnInvalid(hooks ...ErrorHook) *Client {
 // If an [Client.OnSuccess], [Client.OnError], or [Client.OnInvalid] callback panics,
 // then exactly one rule can be violated.
 //
-// NOTE:
-//   - Do not use [Client] setter methods within OnPanic hooks; deadlock will happen.
+// Hooks run without holding the client's lock.
 func (c *Client) OnPanic(hooks ...ErrorHook) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -2669,17 +2665,21 @@ func (e *ResponseError) Unwrap() error {
 // It wraps the error in a [ResponseError] if the resp is not nil
 // so hooks can access it.
 func (c *Client) onErrorHooks(req *Request, res *Response, err error) {
+	// Hook lists are append-only. Capture their current length before calling
+	// user code so callbacks can reenter the client without holding its lock.
 	c.lock.RLock()
-	defer c.lock.RUnlock()
+	errorHooks := c.errorHooks
+	successHooks := c.successHooks
+	c.lock.RUnlock()
 	if err != nil {
 		if res != nil { // wrap with ResponseError
 			err = &ResponseError{Response: res, Err: err}
 		}
-		for _, h := range c.errorHooks {
+		for _, h := range errorHooks {
 			h(req, err)
 		}
 	} else {
-		for _, h := range c.successHooks {
+		for _, h := range successHooks {
 			h(c, res)
 		}
 	}
@@ -2688,8 +2688,9 @@ func (c *Client) onErrorHooks(req *Request, res *Response, err error) {
 // Helper to run panicHooks hooks.
 func (c *Client) onPanicHooks(req *Request, err error) {
 	c.lock.RLock()
-	defer c.lock.RUnlock()
-	for _, h := range c.panicHooks {
+	panicHooks := c.panicHooks
+	c.lock.RUnlock()
+	for _, h := range panicHooks {
 		h(req, err)
 	}
 }
@@ -2697,8 +2698,9 @@ func (c *Client) onPanicHooks(req *Request, err error) {
 // Helper to run invalidHooks hooks.
 func (c *Client) onInvalidHooks(req *Request, err error) {
 	c.lock.RLock()
-	defer c.lock.RUnlock()
-	for _, h := range c.invalidHooks {
+	invalidHooks := c.invalidHooks
+	c.lock.RUnlock()
+	for _, h := range invalidHooks {
 		h(req, err)
 	}
 }
@@ -2706,8 +2708,9 @@ func (c *Client) onInvalidHooks(req *Request, err error) {
 // Helper to run closeHooks hooks.
 func (c *Client) onCloseHooks() {
 	c.lock.RLock()
-	defer c.lock.RUnlock()
-	for _, h := range c.closeHooks {
+	closeHooks := c.closeHooks
+	c.lock.RUnlock()
+	for _, h := range closeHooks {
 		h()
 	}
 }
