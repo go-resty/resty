@@ -133,11 +133,18 @@ func (mf *MultipartField) detectContentType() error {
 	}
 
 	p := make([]byte, 512)
-	size, err := mf.Reader.Read(p)
-	if err != nil && err != io.EOF {
-		return err
+	var total int
+	for total < len(p) {
+		n, err := mf.Reader.Read(p[total:])
+		total += n
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
 	}
-	mf.tempBuf = p[:size]
+	mf.tempBuf = p[:total]
 	mf.ContentType = http.DetectContentType(mf.tempBuf)
 	return nil
 }

@@ -725,3 +725,32 @@ func TestMultipartCornerCoverage(t *testing.T) {
 	assertNil(t, err)
 	assertEqual(t, 0, n)
 }
+
+// TestMultipartDetectContentTypeShortRead reproduces #1259: a reader whose
+// signature spans a short Read result must not be misclassified as text/plain.
+// A single Read returning fewer than 512 bytes (but with more data buffered
+// behind it) used to leave the sniffed buffer truncated, so the content type
+// fell back to text/plain instead of the real MIME type.
+type oneByteReader struct {
+	r *strings.Reader
+}
+
+func (o *oneByteReader) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	return o.r.Read(p[:1])
+}
+
+func TestMultipartDetectContentTypeShortRead(t *testing.T) {
+	// A minimal PNG starts with the 8-byte signature, well within the first 512
+	// bytes but split across one-byte Reads here.
+	png := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00}
+	mf := &MultipartField{
+		Name:     "file",
+		FileName: "image.png",
+		Reader:   &oneByteReader{r: strings.NewReader(string(png))},
+	}
+	assertNil(t, mf.detectContentType())
+	assertEqual(t, "image/png", mf.ContentType)
+}
