@@ -753,8 +753,8 @@ func (sse *SSESource) connect() (*http.Response, error) {
 	return nil, fmt.Errorf("resty:sse: unable to connect stream")
 }
 
-func isEventLineBreak(r rune) bool {
-	return r == '\n' || r == '\r'
+func isEventLineBreak(b byte) bool {
+	return b == '\n' || b == '\r'
 }
 
 // splitSSEEvent splits an SSE byte stream on blank lines terminated by any pair
@@ -763,35 +763,42 @@ func splitSSEEvent(data []byte, atEOF bool) (advance int, token []byte, err erro
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}
+
 	for i := 0; i < len(data); i++ {
-		if !isEventLineBreak(rune(data[i])) {
+		if !isEventLineBreak(data[i]) {
 			continue
 		}
-		n1 := 1
+
+		firstEnd := i + 1
 		if data[i] == '\r' {
-			if i+1 == len(data) && !atEOF {
+			if firstEnd == len(data) && !atEOF {
 				return 0, nil, nil
 			}
-			if i+1 < len(data) && data[i+1] == '\n' {
-				n1 = 2
+			if firstEnd < len(data) && data[firstEnd] == '\n' {
+				firstEnd++
 			}
 		}
-		j := i + n1
-		if j == len(data) {
+
+		if firstEnd == len(data) {
 			if atEOF {
 				break
 			}
 			return 0, nil, nil
 		}
-		if isEventLineBreak(rune(data[j])) {
-			n2 := 1
-			if data[j] == '\r' && j+1 < len(data) && data[j+1] == '\n' {
-				n2 = 2
-			}
-			return j + n2, data[0:i], nil
+
+		if !isEventLineBreak(data[firstEnd]) {
+			i = firstEnd - 1
+			continue
 		}
-		i = j
+
+		secondEnd := firstEnd + 1
+		if data[firstEnd] == '\r' && secondEnd < len(data) && data[secondEnd] == '\n' {
+			secondEnd++
+		}
+
+		return secondEnd, data[:i], nil
 	}
+
 	if atEOF {
 		return len(data), data, nil
 	}
@@ -943,7 +950,9 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 	e := newRawEvent()
 
 	// Split lines on LF or CR per WHATWG HTML §9.2.5; FieldsFunc collapses CRLF.
-	for _, line := range bytes.FieldsFunc(msg, isEventLineBreak) {
+	for _, line := range bytes.FieldsFunc(msg, func(r rune) bool {
+		return r == '\n' || r == '\r'
+	}) {
 		switch {
 		case bytes.HasPrefix(line, headerID):
 			e.ID = append([]byte(nil), trimHeader(len(headerID), line)...)
@@ -987,7 +996,7 @@ func trimHeader(size int, data []byte) []byte {
 	if len(data) > 0 && data[0] == ' ' {
 		data = data[1:]
 	}
-	for len(data) > 0 && isEventLineBreak(rune(data[len(data)-1])) {
+	for len(data) > 0 && isEventLineBreak(data[len(data)-1]) {
 		data = data[:len(data)-1]
 	}
 	return data
