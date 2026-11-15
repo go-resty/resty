@@ -134,7 +134,7 @@ func (dt *digestTransport) cloneReq(r *http.Request, first bool) *http.Request {
 // there is more than one)" (RFC 7616 section 3.3).
 func (dt *digestTransport) parseChallenges(values []string) (*digestChallenge, error) {
 	var firstErr error
-	for _, v := range values {
+	for _, v := range splitChallenges(values) {
 		cha, err := dt.parseChallenge(v)
 		if err == nil {
 			if _, ok := digestHashFuncs[cha.algorithm]; ok {
@@ -152,6 +152,49 @@ func (dt *digestTransport) parseChallenges(values []string) (*digestChallenge, e
 		firstErr = ErrDigestBadChallenge
 	}
 	return nil, firstErr
+}
+
+// splitChallenges returns the challenges of the WWW-Authenticate fields. RFC 9110
+// section 11.6.1 lets one field list several challenges, for example
+// `Basic realm="a", Digest realm="a", nonce="n"`. A comma outside a quoted string
+// ends a list element, and an element that isn't an auth-param (`name=value`)
+// starts the next challenge.
+func splitChallenges(values []string) []string {
+	var challenges []string
+	for _, v := range values {
+		start := 0
+		quoted := false
+		escaped := false
+		for i := 0; i < len(v); i++ {
+			switch {
+			case escaped:
+				escaped = false
+			case quoted && v[i] == '\\':
+				escaped = true
+			case v[i] == '"':
+				quoted = !quoted
+			case v[i] == ',' && !quoted && isChallengeStart(v[i+1:]):
+				challenges = append(challenges, strings.TrimSpace(v[start:i]))
+				start = i + 1
+			}
+		}
+		challenges = append(challenges, strings.TrimSpace(v[start:]))
+	}
+	return challenges
+}
+
+// isChallengeStart reports whether the list element at the start of s begins
+// with an auth-scheme rather than an auth-param name followed by "=".
+func isChallengeStart(s string) bool {
+	s = strings.TrimLeft(s, " \t")
+	i := strings.IndexAny(s, " \t=,")
+	if i < 0 {
+		return s != ""
+	}
+	if i == 0 {
+		return false
+	}
+	return !strings.HasPrefix(strings.TrimLeft(s[i:], " \t"), "=")
 }
 
 func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error) {

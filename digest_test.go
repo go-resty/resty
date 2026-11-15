@@ -762,6 +762,22 @@ func TestDigestChallengeAmongOtherChallenges(t *testing.T) {
 				`Digest realm="test", nonce="abc", qop="auth", algorithm=MD5`,
 			},
 		},
+		{
+			name:       "basic first in one field",
+			challenges: []string{`Basic realm="test", Digest realm="test", nonce="abc", qop="auth", algorithm=MD5`},
+		},
+		{
+			name:       "digest first in one field",
+			challenges: []string{`Digest realm="test", nonce="abc", qop="auth", Basic realm="test"`},
+		},
+		{
+			name:       "other schemes first in one field",
+			challenges: []string{`Negotiate, NTLM, Digest realm="test", nonce="abc", qop="auth"`},
+		},
+		{
+			name:       "quoted comma in one field",
+			challenges: []string{`Basic realm="a, b", Digest realm="a, b", nonce="abc", qop="auth"`},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -801,8 +817,86 @@ func TestDigestChallengesError(t *testing.T) {
 		{values: []string{"Negotiate", "NTLM"}, expect: ErrDigestBadChallenge},
 		{values: []string{"Negotiate", `Digest realm="r", nonce="n", algorithm=SHA-1`}, expect: ErrDigestAlgNotSupported},
 		{values: []string{`Digest realm="r", nonce="n", charset=utf-16`, "Negotiate"}, expect: ErrDigestInvalidCharset},
+		{values: []string{"Negotiate, NTLM"}, expect: ErrDigestBadChallenge},
+		{values: []string{`Negotiate, Digest realm="r", nonce="n", algorithm=SHA-1`}, expect: ErrDigestAlgNotSupported},
 	} {
 		_, err := dt.parseChallenges(tc.values)
 		assertErrorIs(t, tc.expect, err)
+	}
+}
+
+func TestDigestChallengesInOneField(t *testing.T) {
+	cha, err := (&digestTransport{}).parseChallenges([]string{
+		`Basic realm="a, b", Digest realm="a, b", nonce="n", qop="auth, auth-int", Negotiate`,
+	})
+	assertError(t, err)
+	assertEqual(t, "a, b", cha.realm)
+	assertEqual(t, "n", cha.nonce)
+	assertEqual(t, []string{"auth", "auth-int"}, cha.qop)
+}
+
+func TestDigestSplitChallenges(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		expect []string
+	}{
+		{"no fields", nil, nil},
+		{"empty field", []string{""}, []string{""}},
+		{
+			name:   "one challenge",
+			values: []string{`Digest realm="r", nonce="n"`},
+			expect: []string{`Digest realm="r", nonce="n"`},
+		},
+		{
+			name:   "separate fields",
+			values: []string{`Basic realm="r"`, `Digest realm="r", nonce="n"`},
+			expect: []string{`Basic realm="r"`, `Digest realm="r", nonce="n"`},
+		},
+		{
+			name:   "basic then digest",
+			values: []string{`Basic realm="r", Digest realm="r", nonce="n"`},
+			expect: []string{`Basic realm="r"`, `Digest realm="r", nonce="n"`},
+		},
+		{
+			name:   "digest then basic",
+			values: []string{`Digest realm="r", nonce="n", Basic realm="r"`},
+			expect: []string{`Digest realm="r", nonce="n"`, `Basic realm="r"`},
+		},
+		{
+			name:   "schemes without parameters",
+			values: []string{`Negotiate, NTLM, Digest nonce="n", Bearer`},
+			expect: []string{"Negotiate", "NTLM", `Digest nonce="n"`, "Bearer"},
+		},
+		{
+			name:   "token68",
+			values: []string{`Negotiate a2V5==, Digest nonce="n"`},
+			expect: []string{"Negotiate a2V5==", `Digest nonce="n"`},
+		},
+		{
+			name:   "quoted comma and scheme name",
+			values: []string{`Digest realm="a, Basic b", nonce="n"`},
+			expect: []string{`Digest realm="a, Basic b", nonce="n"`},
+		},
+		{
+			name:   "escaped quote",
+			values: []string{`Digest realm="a\", Basic b", nonce="n", Basic realm="r"`},
+			expect: []string{`Digest realm="a\", Basic b", nonce="n"`, `Basic realm="r"`},
+		},
+		{
+			name:   "spaces around equals",
+			values: []string{`Digest realm = "r" , nonce	=n`},
+			expect: []string{`Digest realm = "r" , nonce	=n`},
+		},
+		{
+			name:   "empty elements",
+			values: []string{`Basic realm="r",, Digest nonce="n",`},
+			expect: []string{`Basic realm="r",`, `Digest nonce="n",`},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertEqual(t, tc.expect, splitChallenges(tc.values))
+		})
 	}
 }
