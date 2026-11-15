@@ -753,26 +753,69 @@ func (sse *SSESource) connect() (*http.Response, error) {
 	return nil, fmt.Errorf("resty:sse: unable to connect stream")
 }
 
+func isEventLineBreak(b byte) bool {
+	return b == '\n' || b == '\r'
+}
+
+// splitSSEEvent splits an SSE byte stream on blank lines terminated by any pair
+// of end-of-line sequences (CRLF, LF, or CR) per WHATWG HTML §9.2.5.
+func splitSSEEvent(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	for i := 0; i < len(data); i++ {
+		if !isEventLineBreak(data[i]) {
+			continue
+		}
+
+		firstEnd := i + 1
+		if data[i] == '\r' {
+			if firstEnd == len(data) && !atEOF {
+				return 0, nil, nil
+			}
+			if firstEnd < len(data) && data[firstEnd] == '\n' {
+				firstEnd++
+			}
+		}
+
+		if firstEnd == len(data) {
+			if atEOF {
+				break
+			}
+			return 0, nil, nil
+		}
+
+		if !isEventLineBreak(data[firstEnd]) {
+			i = firstEnd - 1
+			continue
+		}
+
+		secondEnd := firstEnd + 1
+		if data[firstEnd] == '\r' && secondEnd < len(data) && data[secondEnd] == '\n' {
+			secondEnd++
+		}
+
+		return secondEnd, data[:i], nil
+	}
+
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
 func (sse *SSESource) listenStream(res *http.Response) error {
 	defer closeq(res.Body)
 
-	scanner := bufio.NewScanner(res.Body)
+	reader := bufio.NewReader(res.Body)
+	// SSE streams may start with one UTF-8 byte order mark.
+	if prefix, _ := reader.Peek(3); bytes.Equal(prefix, []byte{0xef, 0xbb, 0xbf}) {
+		_, _ = reader.Discard(3)
+	}
+	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, min(4096, sse.maxBufSize)), sse.maxBufSize)
-	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		if atEOF && len(data) == 0 {
-			return 0, nil, nil
-		}
-		if i := bytes.Index(data, []byte{'\n', '\n'}); i >= 0 {
-			// We have a full double newline-terminated line.
-			return i + 1, data[0:i], nil
-		}
-		// If we're at EOF, we have a final, non-terminated line. Return it.
-		if atEOF {
-			return len(data), data, nil
-		}
-		// Request more data.
-		return 0, nil, nil
-	})
+	scanner.Split(splitSSEEvent)
 
 	for {
 		ctx := sse.Context()
@@ -786,6 +829,9 @@ func (sse *SSESource) listenStream(res *http.Response) error {
 		}
 
 		if err := sse.processEvent(scanner); err != nil {
+			if sse.isClosed() {
+				return nil
+			}
 			return err
 		}
 	}
@@ -824,7 +870,9 @@ func (sse *SSESource) processEvent(scanner *bufio.Scanner) error {
 		}
 	}
 
-	if len(ed.Data) > 0 {
+	// An event is dispatched when it had at least one data field, even if every
+	// data field was empty; only an event without data fields is dropped.
+	if ed.HasData {
 		sse.handleCallback(&SSE{
 			ID:   string(ed.ID),
 			Name: string(ed.Event),
@@ -884,6 +932,10 @@ type rawSSE struct {
 	Data  []byte
 	Event []byte
 	Retry []byte
+
+	// HasData reports whether the event had a data field, which tells an empty
+	// data value apart from no data at all.
+	HasData bool
 }
 
 var parseEvent = parseEventFunc
@@ -897,8 +949,10 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 
 	e := newRawEvent()
 
-	// Split the line by "\n"
-	for _, line := range bytes.FieldsFunc(msg, func(r rune) bool { return r == '\n' }) {
+	// Split lines on LF or CR per WHATWG HTML §9.2.5; FieldsFunc collapses CRLF.
+	for _, line := range bytes.FieldsFunc(msg, func(r rune) bool {
+		return r == '\n' || r == '\r'
+	}) {
 		switch {
 		case bytes.HasPrefix(line, headerID):
 			e.ID = append([]byte(nil), trimHeader(len(headerID), line)...)
@@ -909,13 +963,20 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 			// scanner has not handed out yet.
 			e.Data = append(e.Data, trimHeader(len(headerData), line)...)
 			e.Data = append(e.Data, '\n')
+			e.HasData = true
 		// The spec says that a line that simply contains the string "data" should be treated as a data field with an empty body.
 		case bytes.Equal(line, bytes.TrimSuffix(headerData, []byte(":"))):
 			e.Data = append(e.Data, byte('\n'))
+			e.HasData = true
 		case bytes.HasPrefix(line, headerEvent):
 			e.Event = append([]byte(nil), trimHeader(len(headerEvent), line)...)
 		case bytes.HasPrefix(line, headerRetry):
-			e.Retry = append([]byte(nil), trimHeader(len(headerRetry), line)...)
+			retry := trimHeader(len(headerRetry), line)
+			if len(retry) > 0 && bytes.IndexFunc(retry, func(r rune) bool {
+				return r < '0' || r > '9'
+			}) == -1 {
+				e.Retry = append([]byte(nil), retry...)
+			}
 		default:
 			// Ignore anything that doesn't match the header
 		}
@@ -935,7 +996,7 @@ func trimHeader(size int, data []byte) []byte {
 	if len(data) > 0 && data[0] == ' ' {
 		data = data[1:]
 	}
-	if len(data) > 0 && data[len(data)-1] == '\n' {
+	for len(data) > 0 && isEventLineBreak(data[len(data)-1]) {
 		data = data[:len(data)-1]
 	}
 	return data
@@ -949,6 +1010,7 @@ func newRawEvent() *rawSSE {
 	e.Data = e.Data[:0]
 	e.Event = e.Event[:0]
 	e.Retry = e.Retry[:0]
+	e.HasData = false
 	return e
 }
 

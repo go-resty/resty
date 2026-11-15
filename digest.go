@@ -68,6 +68,10 @@ type digestTransport struct {
 	transport http.RoundTripper
 }
 
+// unwrap implements [transportWrapper] so Resty's TLS, certificate and proxy
+// setters still reach the real transport after [Client.SetDigestAuth].
+func (dt *digestTransport) unwrap() http.RoundTripper { return dt.transport }
+
 func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// first request without body for all HTTP verbs
 	req1 := dt.cloneReq(req, true)
@@ -91,12 +95,7 @@ func (dt *digestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	_, _ = ioCopy(io.Discard, res.Body)
 	closeq(res.Body)
 
-	chaHdrValue := strings.TrimSpace(res.Header.Get(hdrWwwAuthenticateKey))
-	if chaHdrValue == "" {
-		return nil, ErrDigestBadChallenge
-	}
-
-	cha, err := dt.parseChallenge(chaHdrValue)
+	cha, err := dt.parseChallenges(res.Header.Values(hdrWwwAuthenticateKey))
 	if err != nil {
 		return nil, err
 	}
@@ -127,10 +126,81 @@ func (dt *digestTransport) cloneReq(r *http.Request, first bool) *http.Request {
 	return r1
 }
 
+// parseChallenges returns the first Digest challenge with a supported algorithm
+// among the WWW-Authenticate fields. A server may send other schemes first (IIS
+// sends Negotiate and NTLM before Digest), and RFC 7616 section 3.7 has it send
+// one Digest challenge per algorithm, in order of preference. A challenge whose
+// algorithm isn't understood "SHOULD be ignored (and a different one used, if
+// there is more than one)" (RFC 7616 section 3.3).
+func (dt *digestTransport) parseChallenges(values []string) (*digestChallenge, error) {
+	var firstErr error
+	for _, v := range splitChallenges(values) {
+		cha, err := dt.parseChallenge(v)
+		if err == nil {
+			if _, ok := digestHashFuncs[cha.algorithm]; ok {
+				return cha, nil
+			}
+			err = ErrDigestAlgNotSupported
+		}
+		// Report the error of the first Digest challenge rather than the
+		// ErrDigestBadChallenge of another scheme's challenge.
+		if firstErr == nil || errors.Is(firstErr, ErrDigestBadChallenge) {
+			firstErr = err
+		}
+	}
+	if firstErr == nil {
+		firstErr = ErrDigestBadChallenge
+	}
+	return nil, firstErr
+}
+
+// splitChallenges returns the challenges of the WWW-Authenticate fields. RFC 9110
+// section 11.6.1 lets one field list several challenges, for example
+// `Basic realm="a", Digest realm="a", nonce="n"`. A comma outside a quoted string
+// ends a list element, and an element that isn't an auth-param (`name=value`)
+// starts the next challenge.
+func splitChallenges(values []string) []string {
+	var challenges []string
+	for _, v := range values {
+		start := 0
+		quoted := false
+		escaped := false
+		for i := 0; i < len(v); i++ {
+			switch {
+			case escaped:
+				escaped = false
+			case quoted && v[i] == '\\':
+				escaped = true
+			case v[i] == '"':
+				quoted = !quoted
+			case v[i] == ',' && !quoted && isChallengeStart(v[i+1:]):
+				challenges = append(challenges, strings.TrimSpace(v[start:i]))
+				start = i + 1
+			}
+		}
+		challenges = append(challenges, strings.TrimSpace(v[start:]))
+	}
+	return challenges
+}
+
+// isChallengeStart reports whether the list element at the start of s begins
+// with an auth-scheme rather than an auth-param name followed by "=".
+func isChallengeStart(s string) bool {
+	s = strings.TrimLeft(s, " \t")
+	i := strings.IndexAny(s, " \t=,")
+	if i < 0 {
+		return s != ""
+	}
+	if i == 0 {
+		return false
+	}
+	return !strings.HasPrefix(strings.TrimLeft(s[i:], " \t"), "=")
+}
+
 func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error) {
 	const ws = " \n\r\t"
 	s := strings.Trim(input, ws)
-	if !strings.HasPrefix(s, "Digest ") {
+	if len(s) < 7 || !strings.EqualFold(s[:7], "Digest ") {
 		return nil, ErrDigestBadChallenge
 	}
 
@@ -139,7 +209,17 @@ func (dt *digestTransport) parseChallenge(input string) (*digestChallenge, error
 	b := strings.Builder{}
 	key := ""
 	quoted := false
+	escaped := false
 	for _, r := range s {
+		if escaped {
+			b.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if quoted && r == '\\' {
+			escaped = true
+			continue
+		}
 		switch r {
 		case '"':
 			quoted = !quoted
@@ -282,7 +362,7 @@ func (dc *digestChallenge) isQopSupported(qop string) bool {
 }
 
 func (dc *digestChallenge) setValue(k, v string) error {
-	switch k {
+	switch strings.ToLower(k) {
 	case "realm":
 		dc.realm = v
 	case "domain":
@@ -415,19 +495,20 @@ func (dc *digestCredentials) ha2() string {
 
 func (dc *digestCredentials) String() string {
 	sl := make([]string, 0, 10)
+	quoteEscaper := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 	// https://datatracker.ietf.org/doc/html/rfc7616#section-3.4.4
 	if dc.userHash == "true" {
 		dc.username = dc.h(fmt.Sprintf("%s:%s", dc.username, dc.realm))
 	}
-	sl = append(sl, fmt.Sprintf(`username="%s"`, dc.username))
-	sl = append(sl, fmt.Sprintf(`realm="%s"`, dc.realm))
-	sl = append(sl, fmt.Sprintf(`nonce="%s"`, dc.nonce))
-	sl = append(sl, fmt.Sprintf(`uri="%s"`, dc.uri))
+	sl = append(sl, fmt.Sprintf(`username="%s"`, quoteEscaper.Replace(dc.username)))
+	sl = append(sl, fmt.Sprintf(`realm="%s"`, quoteEscaper.Replace(dc.realm)))
+	sl = append(sl, fmt.Sprintf(`nonce="%s"`, quoteEscaper.Replace(dc.nonce)))
+	sl = append(sl, fmt.Sprintf(`uri="%s"`, quoteEscaper.Replace(dc.uri)))
 	if dc.algorithm != "" {
 		sl = append(sl, fmt.Sprintf(`algorithm=%s`, dc.algorithm))
 	}
 	if dc.opaque != "" {
-		sl = append(sl, fmt.Sprintf(`opaque="%s"`, dc.opaque))
+		sl = append(sl, fmt.Sprintf(`opaque="%s"`, quoteEscaper.Replace(dc.opaque)))
 	}
 	if dc.qop != "" {
 		sl = append(sl, fmt.Sprintf("qop=%s", dc.qop))

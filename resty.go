@@ -155,8 +155,13 @@ func createTransport(dialer *net.Dialer, transportSettings *TransportSettings) *
 	return t
 }
 
+var newCookieJar = cookiejar.New
+
 func createCookieJar() *cookiejar.Jar {
-	cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	cookieJar, err := newCookieJar(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		cookieJar, _ = newCookieJar(nil)
+	}
 	return cookieJar
 }
 

@@ -238,8 +238,8 @@ func parseRetryAfterHeader(v string) (time.Duration, bool) {
 	}
 
 	duration := retryTime.Sub(timeNow())
-	if duration < 0 { // overflow wrapped to negative
-		duration = time.Duration(math.MaxInt64)
+	if duration < 0 { // The date passed between the two clock reads.
+		duration = 0
 	}
 	return duration, true
 }

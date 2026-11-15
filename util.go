@@ -358,20 +358,9 @@ func cloneURLValues(v url.Values) url.Values {
 }
 
 func cloneCookie(c *http.Cookie) *http.Cookie {
-	return &http.Cookie{
-		Name:       c.Name,
-		Value:      c.Value,
-		Path:       c.Path,
-		Domain:     c.Domain,
-		Expires:    c.Expires,
-		RawExpires: c.RawExpires,
-		MaxAge:     c.MaxAge,
-		Secure:     c.Secure,
-		HttpOnly:   c.HttpOnly,
-		SameSite:   c.SameSite,
-		Raw:        c.Raw,
-		Unparsed:   c.Unparsed,
-	}
+	cc := *c
+	cc.Unparsed = slices.Clone(c.Unparsed)
+	return &cc
 }
 
 type invalidRequestError struct {

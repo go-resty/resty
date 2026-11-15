@@ -20,6 +20,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -711,6 +712,99 @@ func TestClientSetCookieJar(t *testing.T) {
 
 	client.SetCookieJar(backupJar)
 	assertTrue(t, client.httpClient.Jar == backupJar, "CookieJar should be set back to original jar")
+}
+
+func TestCreateCookieJar(t *testing.T) {
+	jar := createCookieJar()
+	assertNotNil(t, jar)
+
+	testURL, _ := url.Parse("https://example.com")
+	jar.SetCookies(testURL, []*http.Cookie{{Name: "test", Value: "value"}})
+	cookies := jar.Cookies(testURL)
+	assertEqual(t, 1, len(cookies))
+	assertEqual(t, "test", cookies[0].Name)
+	assertEqual(t, "value", cookies[0].Value)
+}
+
+// TestCreateCookieJarPublicSuffix validates that the jar applies its
+// PublicSuffixList to cookies with an explicit Domain attribute.
+func TestCreateCookieJarPublicSuffix(t *testing.T) {
+	jar := createCookieJar()
+	assertNotNil(t, jar)
+
+	// A domain that has a public suffix (co.uk) — the PublicSuffixList should
+	// allow a cookie for the registered domain but reject a cookie for co.uk
+	// set by one of its subdomains.
+	registeredDomain, _ := url.Parse("https://example.co.uk")
+	jar.SetCookies(registeredDomain, []*http.Cookie{{Name: "sid", Value: "abc123", Domain: "example.co.uk"}})
+	cookies := jar.Cookies(registeredDomain)
+	assertEqual(t, 1, len(cookies))
+	assertEqual(t, "sid", cookies[0].Name)
+	assertEqual(t, "abc123", cookies[0].Value)
+
+	// A subdomain must not be allowed to set a cookie for the public suffix.
+	attackerDomain, _ := url.Parse("https://attacker.co.uk")
+	jar.SetCookies(attackerDomain, []*http.Cookie{{Name: "sid", Value: "def456", Domain: "co.uk"}})
+	cookies = jar.Cookies(attackerDomain)
+	assertEqual(t, 0, len(cookies))
+
+	// Subdomains of the registered domain should receive the cookie.
+	subDomain, _ := url.Parse("https://api.example.co.uk")
+	cookies = jar.Cookies(subDomain)
+	assertEqual(t, 1, len(cookies))
+	assertEqual(t, "sid", cookies[0].Name)
+}
+
+// TestCreateCookieJarConcurrentAccess verifies the returned jar supports
+// concurrent SetCookies and Cookies calls.
+func TestCreateCookieJarConcurrentAccess(t *testing.T) {
+	jar := createCookieJar()
+	assertNotNil(t, jar)
+
+	testURL, _ := url.Parse("http://localhost:8080")
+	const cookieCount = 50
+	var wg sync.WaitGroup
+	wg.Add(cookieCount)
+	for i := 0; i < cookieCount; i++ {
+		go func(i int) {
+			defer wg.Done()
+			jar.SetCookies(testURL, []*http.Cookie{
+				{Name: "key" + strconv.Itoa(i), Value: "val" + strconv.Itoa(i)},
+			})
+			_ = jar.Cookies(testURL)
+		}(i)
+	}
+	wg.Wait()
+	assertEqual(t, cookieCount, len(jar.Cookies(testURL)))
+}
+
+func TestCreateCookieJarErrorFallback(t *testing.T) {
+	originalNewCookieJar := newCookieJar
+	var calls int
+	newCookieJar = func(options *cookiejar.Options) (*cookiejar.Jar, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("preferred cookie jar unavailable")
+		}
+		if options != nil {
+			t.Fatal("fallback cookie jar should be created with nil options")
+		}
+		return originalNewCookieJar(options)
+	}
+	t.Cleanup(func() {
+		newCookieJar = originalNewCookieJar
+	})
+
+	jar := createCookieJar()
+	assertNotNil(t, jar)
+	assertEqual(t, 2, calls)
+
+	testURL, _ := url.Parse("https://example.com")
+	jar.SetCookies(testURL, []*http.Cookie{{Name: "fallback", Value: "works"}})
+	cookies := jar.Cookies(testURL)
+	assertEqual(t, 1, len(cookies))
+	assertEqual(t, "fallback", cookies[0].Name)
+	assertEqual(t, "works", cookies[0].Value)
 }
 
 // This test methods exist for test coverage purpose
@@ -1946,4 +2040,59 @@ func TestClientCircuitBreakerConcurrentSet(t *testing.T) {
 
 	close(stop)
 	wg.Wait()
+}
+
+// SetDigestAuth and SetHedging replace the client transport with a wrapper.
+// Every TLS, certificate and proxy setter called afterwards used to log an error
+// and silently do nothing, so an application that believed it had pinned a CA or
+// required TLS 1.3 got neither.
+func TestTransportSettersReachThroughWrappers(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		wrap func(*Client)
+	}{
+		{"no wrapper", func(c *Client) {}},
+		{"digest transport", func(c *Client) { c.SetDigestAuth("u", "p") }},
+		{"hedging transport", func(c *Client) { c.SetHedging(NewHedging()) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := dcnl()
+			defer c.Close()
+			tc.wrap(c)
+
+			c.SetTLSClientConfig(&tls.Config{MinVersion: tls.VersionTLS13})
+			c.SetProxy("http://127.0.0.1:9999")
+
+			transport, err := c.HTTPTransport()
+			assertNil(t, err)
+			assertNotNil(t, transport.TLSClientConfig)
+			assertEqual(t, uint16(tls.VersionTLS13), transport.TLSClientConfig.MinVersion)
+			assertNotNil(t, transport.Proxy)
+			assertEqual(t, "http://127.0.0.1:9999", c.ProxyURL().String())
+
+			cfg, err := c.tlsConfig()
+			assertNil(t, err)
+			assertEqual(t, uint16(tls.VersionTLS13), cfg.MinVersion)
+		})
+	}
+}
+
+type selfWrappingTransport struct{}
+
+func (s *selfWrappingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, nil
+}
+func (s *selfWrappingTransport) unwrap() http.RoundTripper { return s }
+
+func TestHTTPTransportOfBoundsWrapperChain(t *testing.T) {
+	// a wrapper that returns itself must terminate rather than spin
+	_, err := httpTransportOf(&selfWrappingTransport{})
+	assertErrorIs(t, ErrNotHttpTransportType, err)
+
+	// a plain non-wrapper round tripper is also an error
+	_, err = httpTransportOf(http.NewFileTransport(http.Dir(".")))
+	assertErrorIs(t, ErrNotHttpTransportType, err)
+
+	_, err = httpTransportOf(nil)
+	assertErrorIs(t, ErrNotHttpTransportType, err)
 }

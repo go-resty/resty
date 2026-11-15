@@ -12,6 +12,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -336,7 +338,7 @@ func TestCurlMultipleCookies(t *testing.T) {
 	curl := dumpCurlCookies(cookies)
 
 	// Should be semicolon-delimited per RFC 6265
-	expected := "Cookie: id=123; token=abc; pref=lang%3Den"
+	expected := "Cookie: id=123; token=abc; pref=lang=en"
 	assertEqual(t, expected, curl)
 }
 
@@ -495,4 +497,41 @@ type curlTrackingReadCloser struct {
 func (r *curlTrackingReadCloser) Close() error {
 	r.closed++
 	return nil
+}
+
+func TestCurlCookieJarValues(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		value  string
+		quoted bool
+		header string
+	}{
+		{"plain", "abc123", false, "session=abc123"},
+		{"base64", "YWJj+/==", false, "session=YWJj+/=="},
+		{"percent", "a%2Fb", false, "session=a%2Fb"},
+		{"space", "hello world", false, `session="hello world"`},
+		{"comma", "hello,world", false, `session="hello,world"`},
+		{"quoted", "dark", true, `session="dark"`},
+		{"empty", "", false, "session="},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, r.Header.Get("Cookie"))
+			}))
+			defer ts.Close()
+			u, err := url.Parse(ts.URL)
+			assertNil(t, err)
+			jar, err := cookiejar.New(nil)
+			assertNil(t, err)
+			jar.SetCookies(u, []*http.Cookie{{Name: "session", Value: tt.value, Quoted: tt.quoted}})
+			c := dcnl().SetCookieJar(jar)
+			defer c.Close()
+			req := c.R().SetMethod(MethodGet).SetURL(ts.URL).SetCurlCmdGenerate(true)
+			curlCmd := req.CurlCmd()
+			res, err := req.Get(ts.URL)
+			assertNil(t, err)
+			assertEqual(t, tt.header, res.String())
+			assertTrue(t, strings.Contains(curlCmd, "-H "+cmdQuote("Cookie: "+tt.header)), curlCmd)
+		})
+	}
 }

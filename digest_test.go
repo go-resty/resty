@@ -6,10 +6,14 @@
 package resty
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -409,6 +413,97 @@ func TestDigestChallengeParsing(t *testing.T) {
 	})
 }
 
+func TestDigestChallengeQuotedPairs(t *testing.T) {
+	for _, tc := range []struct {
+		name, challenge, realm string
+		invalid                bool
+	}{
+		{"escaped quote", `Digest realm="a\"b", nonce="n"`, `a"b`, false},
+		{"escaped backslash", `Digest realm="a\\b", nonce="n"`, `a\b`, false},
+		{"escaped delimiters", `Digest realm="a\,b\=c", nonce="n"`, `a,b=c`, false},
+		{"trailing escape", `Digest nonce="n\`, "", true},
+		{"escaped closing quote", `Digest nonce="n\"`, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cha, err := (&digestTransport{}).parseChallenge(tc.challenge)
+			if tc.invalid {
+				assertErrorIs(t, ErrDigestBadChallenge, err)
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertEqual(t, tc.realm, cha.realm)
+			assertEqual(t, "n", cha.nonce)
+		})
+	}
+}
+
+func TestClientDigestAuthQuotedPairs(t *testing.T) {
+	for _, tc := range []struct {
+		name, username, challenge, realm, nonce, opaque string
+	}{
+		{
+			"quoted username", `u"ser\name`,
+			`Digest realm="realm", nonce="nonce", opaque="opaque", algorithm=SHA-256, qop="auth"`,
+			"realm", "nonce", "opaque",
+		},
+		{
+			"quoted challenge", "user",
+			`Digest realm="r\"e\\alm,=", nonce="n\"o\\nce", opaque="o\"p\\aque", algorithm=SHA-256, qop="auth"`,
+			`r"e\alm,=`, `n"o\nce`, `o"p\aque`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				auth := r.Header.Get("Authorization")
+				if auth == "" {
+					w.Header().Set("WWW-Authenticate", tc.challenge)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				// Use an independent quoted-string parser with MIME parameter separators.
+				authParams := strings.ReplaceAll(strings.TrimPrefix(auth, "Digest "), ", ", "; ")
+				_, params, err := mime.ParseMediaType("Digest; " + authParams)
+				if err != nil {
+					t.Errorf("invalid Authorization %q: %v", auth, err)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				for key, want := range map[string]string{
+					"username": tc.username, "realm": tc.realm, "nonce": tc.nonce, "opaque": tc.opaque,
+					"uri": "/protected", "algorithm": "SHA-256", "qop": "auth", "nc": "00000001",
+				} {
+					if params[key] != want {
+						t.Errorf("%s = %q, want %q", key, params[key], want)
+						w.WriteHeader(http.StatusUnauthorized)
+						return
+					}
+				}
+				h := func(s string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(s))) }
+				ha1 := h(tc.username + ":" + tc.realm + ":pass")
+				ha2 := h("GET:/protected")
+				want := h(ha1 + ":" + tc.nonce + ":00000001:" + params["cnonce"] + ":auth:" + ha2)
+				if params["response"] != want {
+					t.Errorf("response = %q, want %q", params["response"], want)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+			defer ts.Close()
+
+			c := dcnl().SetDigestAuth(tc.username, "pass")
+			defer c.Close()
+			res, err := c.R().Get(ts.URL + "/protected")
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertEqual(t, http.StatusOK, res.StatusCode())
+		})
+	}
+}
+
 // A server offering an unsupported qop alongside a supported one must still
 // authenticate rather than fail with ErrDigestQopNotSupported.
 func TestClientDigestAuthQopListWithSpaces(t *testing.T) {
@@ -512,4 +607,296 @@ func TestOriginatingURL(t *testing.T) {
 
 	assertEqual(t, "https://origin.example/start", originatingURL(second).String())
 	assertEqual(t, "https://origin.example/start", originatingURL(first).String())
+}
+
+func TestDigestChallengeCaseInsensitiveNames(t *testing.T) {
+	for _, tc := range []struct {
+		name, scheme, params string
+	}{
+		{"lowercase scheme", "digest", `realm="CaseSensitiveRealm", domain="/MixedPath", nonce="AbCd123", opaque="OpAqUe", algorithm=SHA-256, qop="auth", stale=FALSE, nc=0000000A, userhash=false, charset=UTF-8, extension="MiXeD"`},
+		{"mixed scheme", "DiGeSt", `realm="CaseSensitiveRealm", domain="/MixedPath", nonce="AbCd123", opaque="OpAqUe", algorithm=SHA-256, qop="auth", stale=FALSE, nc=0000000A, userhash=false, charset=UTF-8, extension="MiXeD"`},
+		{"algorithm name only", "Digest", `realm="CaseSensitiveRealm", domain="/MixedPath", nonce="AbCd123", opaque="OpAqUe", AlGoRiThM=SHA-256, qop="auth", stale=FALSE, nc=0000000A, userhash=false, charset=UTF-8, extension="MiXeD"`},
+		{"parameter names", "Digest", `ReAlM="CaseSensitiveRealm", DoMaIn="/MixedPath", NoNcE="AbCd123", OpAqUe="OpAqUe", AlGoRiThM=SHA-256, QoP="auth", StAlE=FALSE, Nc=0000000A, UsErHaSh=false, ChArSeT=UTF-8, ExTeNsIoN="MiXeD"`},
+		{"scheme and parameter names", "DiGeSt", `ReAlM="CaseSensitiveRealm", DoMaIn="/MixedPath", NoNcE="AbCd123", OpAqUe="OpAqUe", AlGoRiThM=SHA-256, QoP="auth", StAlE=FALSE, Nc=0000000A, UsErHaSh=false, ChArSeT=UTF-8, ExTeNsIoN="MiXeD"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cha, err := (&digestTransport{}).parseChallenge(tc.scheme + " " + tc.params)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertEqual(t, "CaseSensitiveRealm", cha.realm)
+			assertEqual(t, "/MixedPath", cha.domain)
+			assertEqual(t, "AbCd123", cha.nonce)
+			assertEqual(t, "OpAqUe", cha.opaque)
+			assertEqual(t, "SHA-256", cha.algorithm)
+			assertEqual(t, "FALSE", cha.stale)
+			assertEqual(t, "false", cha.userHash)
+			assertEqual(t, 10, cha.nc)
+			assertEqual(t, 1, len(cha.qop))
+			assertEqual(t, "auth", cha.qop[0])
+		})
+	}
+}
+
+func TestDigestChallengeCaseInsensitiveNamesErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name, challenge string
+		want            error
+	}{
+		{"empty", "", ErrDigestBadChallenge},
+		{"short scheme", "DiGe", ErrDigestBadChallenge},
+		{"scheme only", "DiGeSt", ErrDigestBadChallenge},
+		{"unknown scheme", `Basic nonce="n"`, ErrDigestBadChallenge},
+		{"longer scheme", `DigestX nonce="n"`, ErrDigestBadChallenge},
+		{"no space", `Digestnonce="n"`, ErrDigestBadChallenge},
+		{"missing nonce", `DiGeSt ReAlM="r", ExTeNsIoN="x"`, ErrDigestBadChallenge},
+		{"unclosed quote", `DiGeSt NoNcE="n`, ErrDigestBadChallenge},
+		{"charset", `Digest nonce="n", ChArSeT=UTF-16`, ErrDigestInvalidCharset},
+		{"algorithm value", `Digest nonce="n", AlGoRiThM=sha-256`, ErrDigestAlgNotSupported},
+		{"qop value", `Digest nonce="n", QoP="AUTH"`, ErrDigestQopNotSupported},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := &digestTransport{credentials: &credentials{"user", "pass"}}
+			cha, err := dt.parseChallenge(tc.challenge)
+			if err == nil {
+				_, err = dt.createCredentials(cha, mustReq(t, http.MethodGet, "http://example.com/"))
+			}
+			assertErrorIs(t, tc.want, err)
+		})
+	}
+}
+
+func TestClientDigestAuthCaseInsensitiveNames(t *testing.T) {
+	for _, tc := range []struct{ name, challenge string }{
+		{"lowercase scheme", `digest realm="CaseSensitiveRealm", nonce="AbCd123", opaque="OpAqUe", algorithm=SHA-256, qop="auth"`},
+		{"mixed scheme", `DiGeSt realm="CaseSensitiveRealm", nonce="AbCd123", opaque="OpAqUe", algorithm=SHA-256, qop="auth"`},
+		{"parameter names", `Digest ReAlM="CaseSensitiveRealm", NoNcE="AbCd123", OpAqUe="OpAqUe", AlGoRiThM=SHA-256, QoP="auth"`},
+		{"scheme and parameter names", `DiGeSt ReAlM="CaseSensitiveRealm", NoNcE="AbCd123", OpAqUe="OpAqUe", AlGoRiThM=SHA-256, QoP="auth"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var requests []string
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				auth := r.Header.Get("Authorization")
+				mu.Lock()
+				requests = append(requests, auth)
+				mu.Unlock()
+				if auth == "" {
+					w.Header().Set("WWW-Authenticate", tc.challenge)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				// Verify the response independently using SHA-256 and the original values.
+				params := make(map[string]string)
+				for _, param := range strings.Split(strings.TrimPrefix(auth, "Digest "), ", ") {
+					key, value, ok := strings.Cut(param, "=")
+					if !ok {
+						t.Errorf("malformed Authorization parameter: %q", param)
+						w.WriteHeader(http.StatusUnauthorized)
+						return
+					}
+					params[key] = strings.Trim(value, `"`)
+				}
+				for key, want := range map[string]string{
+					"username": "user", "realm": "CaseSensitiveRealm", "nonce": "AbCd123",
+					"opaque": "OpAqUe", "algorithm": "SHA-256", "qop": "auth", "uri": "/MixedPath", "nc": "00000001",
+				} {
+					if params[key] != want {
+						t.Errorf("%s = %q, want %q", key, params[key], want)
+						w.WriteHeader(http.StatusUnauthorized)
+						return
+					}
+				}
+				if !strings.HasPrefix(auth, "Digest ") || params["cnonce"] == "" {
+					t.Errorf("invalid Authorization: %q", auth)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				h := func(s string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(s))) }
+				ha1 := h("user:CaseSensitiveRealm:pass")
+				ha2 := h("GET:/MixedPath")
+				want := h(ha1 + ":AbCd123:00000001:" + params["cnonce"] + ":auth:" + ha2)
+				if params["response"] != want {
+					t.Errorf("response = %q, want %q", params["response"], want)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+			defer ts.Close()
+			c := dcnl().SetDigestAuth("user", "pass")
+			defer c.Close()
+			res, err := c.R().Get(ts.URL + "/MixedPath")
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertEqual(t, http.StatusOK, res.StatusCode())
+			mu.Lock()
+			defer mu.Unlock()
+			if len(requests) != 2 {
+				t.Fatalf("got %d requests, want 2", len(requests))
+			}
+			assertEqual(t, "", requests[0])
+			assertTrue(t, strings.HasPrefix(requests[1], "Digest "))
+		})
+	}
+}
+
+func TestDigestChallengeAmongOtherChallenges(t *testing.T) {
+	tests := []struct {
+		name       string
+		challenges []string
+	}{
+		{
+			name:       "other schemes first",
+			challenges: []string{"Negotiate", "NTLM", `Digest realm="test", nonce="abc", qop="auth"`},
+		},
+		{
+			name:       "basic first",
+			challenges: []string{`Basic realm="test"`, `Digest realm="test", nonce="abc", qop="auth"`},
+		},
+		{
+			name: "unsupported algorithm first",
+			challenges: []string{
+				`Digest realm="test", nonce="abc", qop="auth", algorithm=SHA-1`,
+				`Digest realm="test", nonce="abc", qop="auth", algorithm=MD5`,
+			},
+		},
+		{
+			name:       "basic first in one field",
+			challenges: []string{`Basic realm="test", Digest realm="test", nonce="abc", qop="auth", algorithm=MD5`},
+		},
+		{
+			name:       "digest first in one field",
+			challenges: []string{`Digest realm="test", nonce="abc", qop="auth", Basic realm="test"`},
+		},
+		{
+			name:       "other schemes first in one field",
+			challenges: []string{`Negotiate, NTLM, Digest realm="test", nonce="abc", qop="auth"`},
+		},
+		{
+			name:       "quoted comma in one field",
+			challenges: []string{`Basic realm="a, b", Digest realm="a, b", nonce="abc", qop="auth"`},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") == "" {
+					for _, c := range tc.challenges {
+						w.Header().Add("WWW-Authenticate", c)
+					}
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				if !strings.HasPrefix(r.Header.Get("Authorization"), "Digest ") {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+			defer ts.Close()
+
+			c := dcnl().SetDigestAuth("user", "pass")
+			defer c.Close()
+
+			res, err := c.R().Get(ts.URL + "/")
+			assertError(t, err)
+			assertEqual(t, http.StatusOK, res.StatusCode())
+		})
+	}
+}
+
+func TestDigestChallengesError(t *testing.T) {
+	dt := &digestTransport{}
+	for _, tc := range []struct {
+		values []string
+		expect error
+	}{
+		{values: nil, expect: ErrDigestBadChallenge},
+		{values: []string{"Negotiate", "NTLM"}, expect: ErrDigestBadChallenge},
+		{values: []string{"Negotiate", `Digest realm="r", nonce="n", algorithm=SHA-1`}, expect: ErrDigestAlgNotSupported},
+		{values: []string{`Digest realm="r", nonce="n", charset=utf-16`, "Negotiate"}, expect: ErrDigestInvalidCharset},
+		{values: []string{"Negotiate, NTLM"}, expect: ErrDigestBadChallenge},
+		{values: []string{`Negotiate, Digest realm="r", nonce="n", algorithm=SHA-1`}, expect: ErrDigestAlgNotSupported},
+	} {
+		_, err := dt.parseChallenges(tc.values)
+		assertErrorIs(t, tc.expect, err)
+	}
+}
+
+func TestDigestChallengesInOneField(t *testing.T) {
+	cha, err := (&digestTransport{}).parseChallenges([]string{
+		`Basic realm="a, b", Digest realm="a, b", nonce="n", qop="auth, auth-int", Negotiate`,
+	})
+	assertError(t, err)
+	assertEqual(t, "a, b", cha.realm)
+	assertEqual(t, "n", cha.nonce)
+	assertEqual(t, []string{"auth", "auth-int"}, cha.qop)
+}
+
+func TestDigestSplitChallenges(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		expect []string
+	}{
+		{"no fields", nil, nil},
+		{"empty field", []string{""}, []string{""}},
+		{
+			name:   "one challenge",
+			values: []string{`Digest realm="r", nonce="n"`},
+			expect: []string{`Digest realm="r", nonce="n"`},
+		},
+		{
+			name:   "separate fields",
+			values: []string{`Basic realm="r"`, `Digest realm="r", nonce="n"`},
+			expect: []string{`Basic realm="r"`, `Digest realm="r", nonce="n"`},
+		},
+		{
+			name:   "basic then digest",
+			values: []string{`Basic realm="r", Digest realm="r", nonce="n"`},
+			expect: []string{`Basic realm="r"`, `Digest realm="r", nonce="n"`},
+		},
+		{
+			name:   "digest then basic",
+			values: []string{`Digest realm="r", nonce="n", Basic realm="r"`},
+			expect: []string{`Digest realm="r", nonce="n"`, `Basic realm="r"`},
+		},
+		{
+			name:   "schemes without parameters",
+			values: []string{`Negotiate, NTLM, Digest nonce="n", Bearer`},
+			expect: []string{"Negotiate", "NTLM", `Digest nonce="n"`, "Bearer"},
+		},
+		{
+			name:   "token68",
+			values: []string{`Negotiate a2V5==, Digest nonce="n"`},
+			expect: []string{"Negotiate a2V5==", `Digest nonce="n"`},
+		},
+		{
+			name:   "quoted comma and scheme name",
+			values: []string{`Digest realm="a, Basic b", nonce="n"`},
+			expect: []string{`Digest realm="a, Basic b", nonce="n"`},
+		},
+		{
+			name:   "escaped quote",
+			values: []string{`Digest realm="a\", Basic b", nonce="n", Basic realm="r"`},
+			expect: []string{`Digest realm="a\", Basic b", nonce="n"`, `Basic realm="r"`},
+		},
+		{
+			name:   "spaces around equals",
+			values: []string{`Digest realm = "r" , nonce	=n`},
+			expect: []string{`Digest realm = "r" , nonce	=n`},
+		},
+		{
+			name:   "empty elements",
+			values: []string{`Basic realm="r",, Digest nonce="n",`},
+			expect: []string{`Basic realm="r",`, `Digest nonce="n",`},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertEqual(t, tc.expect, splitChallenges(tc.values))
+		})
+	}
 }

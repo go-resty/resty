@@ -179,16 +179,57 @@ func parseRequestURL(c *Client, r *Request) error {
 
 	// GH#797 Unescape query parameters (non-standard - not recommended)
 	if r.unescapeQueryParams && len(reqURL.RawQuery) > 0 {
-		// at this point, all errors caught up in the above operations
-		// so ignore the return error on query unescape; I realized
-		// while writing the unit test
-		unescapedQuery, _ := url.QueryUnescape(reqURL.RawQuery)
-		reqURL.RawQuery = strings.ReplaceAll(unescapedQuery, " ", "+") // otherwise request becomes bad request
+		reqURL.RawQuery = unescapeRawQueryParams(reqURL.RawQuery)
 	}
 
 	r.URL = reqURL.String()
 
 	return nil
+}
+
+// unescapeRawQueryParams decodes each query key and value independently so
+// escaped query data cannot turn into new parameters or separators.
+func unescapeRawQueryParams(rawQuery string) string {
+	params := strings.Split(rawQuery, "&")
+	for i, param := range params {
+		key, value, hasValue := strings.Cut(param, "=")
+		unescapedKey, err := url.QueryUnescape(key)
+		if err != nil {
+			return rawQuery
+		}
+		key = escapeUnescapedQueryComponent(unescapedKey)
+		if !hasValue {
+			params[i] = key
+			continue
+		}
+
+		unescapedValue, err := url.QueryUnescape(value)
+		if err != nil {
+			return rawQuery
+		}
+		params[i] = key + "=" + escapeUnescapedQueryComponent(unescapedValue)
+	}
+
+	return strings.Join(params, "&")
+}
+
+func escapeUnescapedQueryComponent(component string) string {
+	const hex = "0123456789ABCDEF"
+	var escaped strings.Builder
+	for i := 0; i < len(component); i++ {
+		char := component[i]
+		switch {
+		case char == ' ':
+			escaped.WriteByte('+')
+		case char == '&' || char == '=' || char == '+' || char == ';' || char == '#' || char == '%' || char < 0x20 || char == 0x7f:
+			escaped.WriteByte('%')
+			escaped.WriteByte(hex[char>>4])
+			escaped.WriteByte(hex[char&0x0f])
+		default:
+			escaped.WriteByte(char)
+		}
+	}
+	return escaped.String()
 }
 
 func parseRequestHeader(c *Client, r *Request) {
@@ -245,7 +286,8 @@ func createRawRequest(c *Client, r *Request) (err error) {
 			r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, nil)
 		}
 	} else {
-		r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, r.bodyBuf)
+		body := bytes.NewReader(bytes.Clone(r.bodyBuf.Bytes()))
+		r.RawRequest, err = http.NewRequestWithContext(r.Context(), r.Method, r.URL, body)
 	}
 
 	if err != nil {
@@ -310,6 +352,9 @@ var multipartWriteField = func(w *multipart.Writer, name, value string) error {
 
 var multipartWriteFormData = func(w *multipart.Writer, r *Request) error {
 	for k, v := range r.FormData {
+		if strings.HasPrefix(k, "@") {
+			continue
+		}
 		for _, iv := range v {
 			if err := multipartWriteField(w, k, iv); err != nil {
 				return err
@@ -332,6 +377,69 @@ var multipartSetBoundary = func(w *multipart.Writer, r *Request) error {
 
 var multipartPipeWriterClose = func(w *io.PipeWriter) error {
 	return w.Close()
+}
+
+type countWriter struct {
+	n int64
+}
+
+func (cw *countWriter) Write(p []byte) (int, error) {
+	cw.n += int64(len(p))
+	return len(p), nil
+}
+
+func calculateMultipartContentLength(boundary string, r *Request) (int64, bool) {
+	cw := &countWriter{}
+	mw := multipart.NewWriter(cw)
+	if err := mw.SetBoundary(boundary); err != nil {
+		return 0, false
+	}
+
+	for k, v := range r.FormData {
+		if strings.HasPrefix(k, "@") {
+			continue
+		}
+		for _, iv := range v {
+			_ = mw.WriteField(k, iv)
+		}
+	}
+
+	var totalPayloadSize int64
+	for _, mf := range r.multipartFields {
+		if mf.isValues() {
+			for _, v := range mf.Values {
+				_ = mw.WriteField(mf.Name, v)
+			}
+			continue
+		}
+
+		seekDetermined := false
+		if mf.FileSize <= 0 && mf.Reader != nil {
+			if seeker, ok := mf.Reader.(io.Seeker); ok {
+				curr, err := seeker.Seek(0, io.SeekCurrent)
+				if err == nil {
+					end, err := seeker.Seek(0, io.SeekEnd)
+					if err == nil {
+						if _, err = seeker.Seek(curr, io.SeekStart); err == nil {
+							mf.FileSize = max(end-curr, 0) + int64(len(mf.tempBuf))
+							seekDetermined = true
+						}
+					}
+				}
+			}
+		}
+
+		if mf.FileSize < 0 || (mf.FileSize <= 0 && mf.FilePath == "" && !seekDetermined) {
+			return 0, false
+		}
+
+		_, _ = mw.CreatePart(mf.createHeader())
+		totalPayloadSize += mf.FileSize
+	}
+
+	_ = mw.Close()
+
+	return cw.n + totalPayloadSize, true
 }
 
 func handleMultipartFormData(r *Request) error {
@@ -371,6 +479,12 @@ func handleMultipart(c *Client, r *Request) error {
 			return err
 		}
 
+		if seeker, ok := mf.Reader.(io.Seeker); ok {
+			if offset, err := seeker.Seek(0, io.SeekCurrent); err == nil {
+				mf.readerOffset = offset
+			}
+		}
+
 		if err := mf.detectContentType(); err != nil {
 			return err
 		}
@@ -389,6 +503,13 @@ func handleMultipart(c *Client, r *Request) error {
 	}
 
 	r.Header.Set(hdrContentTypeKey, mw.FormDataContentType())
+
+	if r.multipartContentLength && !r.isContentLengthSet {
+		if cl, ok := calculateMultipartContentLength(mw.Boundary(), r); ok {
+			r.contentLength = cl
+			r.isContentLengthSet = true
+		}
+	}
 
 	// Create cancel before the writer goroutine so Client.execute can stop
 	// production without racing on multipartCancelFunc publication.

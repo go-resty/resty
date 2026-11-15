@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
-
-	"net/url"
 	"strings"
 )
 
@@ -76,15 +74,11 @@ func buildCurlCmd(req *Request) string {
 
 // dumpCurlCookies returns a Cookie header string formatted for curl.
 func dumpCurlCookies(cookies []*http.Cookie) string {
-	sb := strings.Builder{}
-	sb.WriteString("Cookie: ")
-	for i, cookie := range cookies {
-		if i > 0 {
-			sb.WriteString("; ") // Pairs are delimited by "; " per RFC 6265.
-		}
-		sb.WriteString(cookie.Name + "=" + url.QueryEscape(cookie.Value))
+	req := http.Request{Header: make(http.Header)}
+	for _, cookie := range cookies {
+		req.AddCookie(cookie)
 	}
-	return sb.String()
+	return "Cookie: " + req.Header.Get(hdrCookieKey)
 }
 
 // dumpCurlHeaders returns request headers as sorted key/value pairs for curl generation.
