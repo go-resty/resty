@@ -7,6 +7,7 @@ package resty
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -1871,5 +1872,113 @@ func TestMultipartStreamedReaderContentLengthFallback(t *testing.T) {
 				assertEqual(t, int64(-1), receivedContentLength)
 			}
 		})
+	}
+}
+
+// Cleanup can run after a part header has been written but before the producer
+// reads the field's Reader. The producer must retain this attempt's handle even
+// when cleanup clears the original field so a retry can reopen it.
+func TestMultipartWriterRetainsAttemptReader(t *testing.T) {
+	for _, contentType := range []string{"text/plain", ""} {
+		t.Run(contentType, func(t *testing.T) {
+			partStarted := make(chan struct{})
+			resumePart := make(chan struct{})
+			copiedReader := make(chan io.Reader, 1)
+			oldCreatePart, oldCopy := multipartCreatePart, ioCopy
+			multipartCreatePart = func(*multipart.Writer, textproto.MIMEHeader) (io.Writer, error) {
+				close(partStarted)
+				<-resumePart
+				return io.Discard, nil
+			}
+			ioCopy = func(_ io.Writer, src io.Reader) (int64, error) {
+				copiedReader <- src.(*gracefulStopReader).r
+				return 0, nil
+			}
+			t.Cleanup(func() {
+				multipartCreatePart, ioCopy = oldCreatePart, oldCopy
+			})
+
+			c := dcnl()
+			defer c.Close()
+			field := &MultipartField{
+				Name: "file", ContentType: contentType,
+				FilePath: filepath.Join(getTestDataPath(), "text-file.txt"),
+			}
+			req := c.R().SetMultipartFields(field)
+			assertNil(t, handleMultipart(c, req))
+			<-partStarted
+			originalReader := field.Reader
+			req.stopMultipart()
+			req.stopMultipart() // repeated cleanup must not reopen the file
+			assertNil(t, field.Reader)
+			close(resumePart)
+			for range req.multipartErrChan {
+			}
+			if got := <-copiedReader; got != originalReader {
+				t.Fatalf("producer reader = %v; want attempt reader %v", got, originalReader)
+			}
+			_, err := originalReader.(*os.File).Stat()
+			assertTrue(t, errors.Is(err, os.ErrClosed), "attempt file was not closed")
+		})
+	}
+}
+
+func TestMultipartTransportErrorReturnsWithBlockedReader(t *testing.T) {
+	transportErr := errors.New("transport failed")
+	for _, kind := range []string{"no closer", "close does not unblock"} {
+		for _, outcome := range []string{"transport error", "cancellation"} {
+			t.Run(kind+"/"+outcome, func(t *testing.T) {
+				reader := newBlockingReadCloser()
+				defer reader.Close()
+				// Hide Close from Resty, or expose a Close that does not unblock
+				// Read. Only the test can release this source after Post returns.
+				var source io.Reader = struct{ io.Reader }{reader}
+				if kind == "close does not unblock" {
+					source = io.NopCloser(source)
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				bodyDone := make(chan struct{})
+				c := dcnl().SetTransport(roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					go func() {
+						defer close(bodyDone)
+						defer req.Body.Close()
+						_, _ = io.Copy(io.Discard, req.Body)
+					}()
+					<-reader.started // return an error only once the source is blocked
+					if outcome == "cancellation" {
+						cancel()
+						return nil, ctx.Err()
+					}
+					return nil, transportErr
+				}))
+				defer c.Close()
+				req := c.R().SetContext(ctx).SetMultipartField("file", "", "application/octet-stream", source)
+				done := make(chan error, 1)
+				go func() {
+					_, err := req.Post("http://resty.test/upload")
+					done <- err
+				}()
+				var err error
+				select {
+				case err = <-done:
+				case <-time.After(5 * time.Second):
+					t.Error("transport error waited for the blocked source")
+					_ = reader.Close()
+					err = <-done
+				}
+				if outcome == "cancellation" {
+					assertTrue(t, errors.Is(err, context.Canceled), "cancellation was lost")
+				} else {
+					assertTrue(t, errors.Is(err, transportErr), "transport error was lost")
+				}
+				// Returning an error does not promise that an arbitrary source
+				// has stopped. Release it and drain the producer for test cleanup.
+				_ = reader.Close()
+				for range req.multipartErrChan {
+				}
+				<-bodyDone
+			})
+		}
 	}
 }

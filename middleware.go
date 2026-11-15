@@ -511,6 +511,14 @@ func handleMultipart(c *Client, r *Request) error {
 		}
 	}
 
+	// Keep the producer's field metadata stable while stopMultipart closes the
+	// sources and clears Resty-owned Readers on the original fields for retry.
+	// The snapshot shares the readers; only the request owns their cleanup.
+	fields := make([]MultipartField, len(r.multipartFields))
+	for i, mf := range r.multipartFields {
+		fields[i] = *mf
+	}
+
 	// Create cancel before the writer goroutine so Client.execute can stop
 	// production without racing on multipartCancelFunc publication.
 	ctx, cancel := context.WithCancel(r.Context())
@@ -532,7 +540,7 @@ func handleMultipart(c *Client, r *Request) error {
 			return
 		}
 
-		for _, mf := range r.multipartFields {
+		for _, mf := range fields {
 			if mf.isValues() {
 				for _, v := range mf.Values {
 					if err := multipartWriteField(mw, mf.Name, v); err != nil {
