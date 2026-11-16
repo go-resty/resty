@@ -2502,6 +2502,17 @@ func (c *Client) cbRequestError() {
 	}
 }
 
+// cbTransportError reports a failed round trip (no HTTP response) to the circuit breaker.
+func (c *Client) cbTransportError(err error) {
+	c.lock.RLock()
+	circuitBreaker := c.circuitBreaker
+	c.lock.RUnlock()
+
+	if cbt, ok := circuitBreaker.(cbTransportErrorObserver); ok {
+		cbt.onTransportError(err)
+	}
+}
+
 // Executes method executes the given `Request` object and returns
 // response or error.
 func (c *Client) execute(req *Request) (*Response, error) {
@@ -2556,7 +2567,7 @@ func (c *Client) execute(req *Request) (*Response, error) {
 	response := &Response{Request: req, RawResponse: resp}
 	response.setReceivedAt()
 	if err != nil {
-		c.cbRequestError()
+		c.cbTransportError(err)
 		if cancel != nil {
 			cancel()
 		}
