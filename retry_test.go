@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -1415,4 +1416,188 @@ func testStaticTime(t *testing.T) {
 	t.Cleanup(func() {
 		timeNow = time.Now
 	})
+}
+
+func TestTraceInfoRetryCalculation(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	var attempts []TraceInfo
+	var firstAttemptTrace *clientTrace
+	c := dcnl().
+		SetTrace(true).
+		SetRetryCount(2).
+		SetRetryWaitTime(50 * time.Millisecond).
+		SetRetryMaxWaitTime(50 * time.Millisecond).
+		AddRetryConditions(func(r *Response, err error) bool {
+			return r.StatusCode() == http.StatusTooManyRequests
+		}).
+		AddRetryHooks(func(r *Response, err error) {
+			ti := r.Request.TraceInfo()
+			attempts = append(attempts, ti)
+			if firstAttemptTrace == nil {
+				firstAttemptTrace = r.Request.trace
+			}
+		})
+
+	resp, err := c.R().Get(ts.URL + "/set-retry-error-recover")
+	assertNil(t, err)
+	assertNotNil(t, resp)
+
+	assertEqual(t, 1, len(attempts))
+	assertEqual(t, 1, attempts[0].RequestAttempt)
+	assertTrue(t, attempts[0].TotalTime > 0)
+	assertTrue(t, attempts[0].TotalTime < 50*time.Millisecond)
+
+	finalTrace := resp.Request.TraceInfo()
+	assertEqual(t, 2, finalTrace.RequestAttempt)
+	assertTrue(t, finalTrace.TotalTime > 0)
+	assertTrue(t, finalTrace.TotalTime < 50*time.Millisecond)
+	assertTrue(t, finalTrace.TotalTime == resp.Duration())
+
+	// Ensure attempt 1 trace was not overwritten or mutated by attempt 2
+	firstAttemptTrace.lock.RLock()
+	defer firstAttemptTrace.lock.RUnlock()
+	assertFalse(t, firstAttemptTrace.gotConn.After(firstAttemptTrace.endTime), "attempt 1 gotConn must not be after endTime")
+}
+
+func TestTraceInfoMultiRetryWithBackoff(t *testing.T) {
+	var count int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		att := atomic.AddInt32(&count, 1)
+		if att < 3 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("busy"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer ts.Close()
+
+	retryWaitTime := 50 * time.Millisecond
+	var attempts []TraceInfo
+	var attemptTraces []*clientTrace
+
+	c := dcnl().
+		SetTrace(true).
+		SetRetryCount(3).
+		SetRetryWaitTime(retryWaitTime).
+		SetRetryMaxWaitTime(retryWaitTime).
+		AddRetryConditions(func(r *Response, err error) bool {
+			return r != nil && r.StatusCode() == http.StatusServiceUnavailable
+		}).
+		AddRetryHooks(func(r *Response, err error) {
+			attempts = append(attempts, r.Request.TraceInfo())
+			attemptTraces = append(attemptTraces, r.Request.trace)
+		})
+
+	start := time.Now()
+	resp, err := c.R().Get(ts.URL)
+	elapsed := time.Since(start)
+
+	assertNil(t, err)
+	assertNotNil(t, resp)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+	assertEqual(t, 3, resp.Request.Attempt)
+	assertTrue(t, elapsed >= 2*retryWaitTime)
+
+	assertEqual(t, 2, len(attempts))
+	for i, att := range attempts {
+		assertEqual(t, i+1, att.RequestAttempt)
+		assertTrue(t, att.TotalTime > 0)
+		assertTrue(t, att.TotalTime < retryWaitTime, "per-attempt TotalTime must not include retry backoff wait")
+	}
+
+	finalTrace := resp.Request.TraceInfo()
+	assertEqual(t, 3, finalTrace.RequestAttempt)
+	assertTrue(t, finalTrace.TotalTime > 0)
+	assertTrue(t, finalTrace.TotalTime < retryWaitTime, "final TotalTime must describe final attempt, not retry backoff")
+	assertTrue(t, finalTrace.TotalTime == resp.Duration())
+
+	// Verify earlier attempt traces were not corrupted by later attempts
+	for i, tr := range attemptTraces {
+		tr.lock.RLock()
+		if !tr.gotConn.IsZero() && !tr.endTime.IsZero() {
+			assertFalse(t, tr.gotConn.After(tr.endTime), fmt.Sprintf("attempt %d gotConn occurred after endTime", i+1))
+		}
+		tr.lock.RUnlock()
+	}
+}
+
+func TestTraceInfoRetryOnTransportError(t *testing.T) {
+	var count int32
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	assertNil(t, err)
+	defer ln.Close()
+
+	go func() {
+		for {
+			conn, acceptErr := ln.Accept()
+			if acceptErr != nil {
+				return
+			}
+			att := atomic.AddInt32(&count, 1)
+			if att == 1 {
+				// Close connection immediately to simulate network transport error
+				_ = conn.Close()
+				continue
+			}
+			// HTTP 200 response
+			res := "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"
+			_, _ = conn.Write([]byte(res))
+			_ = conn.Close()
+		}
+	}()
+
+	var attempts []TraceInfo
+	c := dcnl().
+		SetTrace(true).
+		SetRetryCount(2).
+		SetRetryWaitTime(20 * time.Millisecond).
+		SetRetryMaxWaitTime(20 * time.Millisecond).
+		AddRetryConditions(func(r *Response, err error) bool {
+			return err != nil
+		}).
+		AddRetryHooks(func(r *Response, err error) {
+			attempts = append(attempts, r.Request.TraceInfo())
+		})
+
+	resp, err := c.R().Get(fmt.Sprintf("http://%s", ln.Addr().String()))
+	assertNil(t, err)
+	assertNotNil(t, resp)
+	assertEqual(t, 2, resp.Request.Attempt)
+
+	assertEqual(t, 1, len(attempts))
+	assertEqual(t, 1, attempts[0].RequestAttempt)
+
+	finalTrace := resp.Request.TraceInfo()
+	assertEqual(t, 2, finalTrace.RequestAttempt)
+	assertTrue(t, finalTrace.TotalTime > 0)
+	assertTrue(t, finalTrace.TotalTime == resp.Duration())
+}
+
+func TestTraceInfoWithoutEnableTraceOnRetry(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	c := dcnl().
+		SetRetryCount(2).
+		SetRetryWaitTime(20 * time.Millisecond).
+		SetRetryMaxWaitTime(20 * time.Millisecond).
+		AddRetryConditions(func(r *Response, err error) bool {
+			return r.StatusCode() == http.StatusTooManyRequests
+		})
+
+	resp, err := c.R().Get(ts.URL + "/set-retry-error-recover")
+	assertNil(t, err)
+	assertNotNil(t, resp)
+
+	tr := resp.Request.TraceInfo()
+	assertEqual(t, time.Duration(0), tr.TotalTime)
+	assertEqual(t, time.Duration(0), tr.DNSLookup)
+	assertEqual(t, time.Duration(0), tr.ConnTime)
+	assertEqual(t, time.Duration(0), tr.ServerTime)
+	assertEqual(t, time.Duration(0), tr.ResponseTime)
+	assertTrue(t, resp.Duration() > 0)
 }
