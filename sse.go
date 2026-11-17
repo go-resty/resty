@@ -970,6 +970,8 @@ func parseEventFunc(msg []byte) (*rawSSE, error) {
 			e.HasData = true
 		case bytes.HasPrefix(line, headerEvent):
 			e.Event = append([]byte(nil), trimHeader(len(headerEvent), line)...)
+		case bytes.Equal(line, bytes.TrimSuffix(headerEvent, []byte(":"))):
+			e.Event = e.Event[:0]
 		case bytes.HasPrefix(line, headerRetry):
 			retry := trimHeader(len(headerRetry), line)
 			if len(retry) > 0 && bytes.IndexFunc(retry, func(r rune) bool {
