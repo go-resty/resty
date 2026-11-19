@@ -598,25 +598,28 @@ func (sse *SSESource) isClosed() bool {
 
 func (sse *SSESource) triggerOnOpen(hdr http.Header) {
 	sse.lock.RLock()
-	defer sse.lock.RUnlock()
-	if sse.onOpen != nil {
-		sse.onOpen(strings.Clone(sse.url), hdr)
+	onOpen, url := sse.onOpen, strings.Clone(sse.url)
+	sse.lock.RUnlock()
+	if onOpen != nil {
+		onOpen(url, hdr)
 	}
 }
 
 func (sse *SSESource) triggerOnError(err error) {
 	sse.lock.RLock()
-	defer sse.lock.RUnlock()
-	if sse.onError != nil {
-		sse.onError(err)
+	onError := sse.onError
+	sse.lock.RUnlock()
+	if onError != nil {
+		onError(err)
 	}
 }
 
 func (sse *SSESource) triggerOnRequestFailure(err error, res *http.Response) {
 	sse.lock.RLock()
-	defer sse.lock.RUnlock()
-	if sse.onRequestFailure != nil {
-		sse.onRequestFailure(err, res)
+	onRequestFailure := sse.onRequestFailure
+	sse.lock.RUnlock()
+	if onRequestFailure != nil {
+		onRequestFailure(err, res)
 	}
 }
 
