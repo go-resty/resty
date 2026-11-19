@@ -78,6 +78,55 @@ func TestSSESourceLeadingBOM(t *testing.T) {
 	}
 }
 
+func TestSSESourceCallbacksCanUpdateSource(t *testing.T) {
+	for _, name := range []string{"open", "error", "request failure"} {
+		t.Run(name, func(t *testing.T) {
+			source := NewSSESource()
+			done := make(chan struct{})
+			update := func() {
+				source.SetHeader("X-Refreshed", "true")
+				close(done)
+			}
+			switch name {
+			case "open":
+				source.OnOpen(func(string, http.Header) { update() })
+				go source.triggerOnOpen(http.Header{})
+			case "error":
+				source.OnError(func(error) { update() })
+				go source.triggerOnError(errors.New("decode failed"))
+			case "request failure":
+				source.OnRequestFailure(func(error, *http.Response) { update() })
+				go source.triggerOnRequestFailure(errors.New("connect failed"), nil)
+			}
+
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+				t.Fatal("callback could not update the event source")
+			}
+		})
+	}
+}
+
+func TestSSESourceCanCloseOnOpen(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: ready\n\n")
+	}))
+	defer server.Close()
+	source := NewSSESource().SetURL(server.URL).OnMessage(func(any) {}, nil)
+	source.OnOpen(func(string, http.Header) { source.Close() })
+	done := make(chan error, 1)
+	go func() { done <- source.Get() }()
+
+	select {
+	case err := <-done:
+		assertNil(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("Get did not stop after Close in the OnOpen callback")
+	}
+}
+
 func TestSSESourceMultipleEventTypes(t *testing.T) {
 	type userEvent struct {
 		UserName string    `json:"username"`
