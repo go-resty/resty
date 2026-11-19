@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -58,6 +59,79 @@ func TestSSESourceSimpleFlow(t *testing.T) {
 	err := es.Get()
 	assertNil(t, err)
 	assertEqual(t, counter, messageCounter)
+}
+
+type sseReadSignalBody struct {
+	io.ReadCloser
+	onRead func()
+}
+
+func (b *sseReadSignalBody) Read(p []byte) (int, error) {
+	b.onRead()
+	return b.ReadCloser.Read(p)
+}
+
+func TestSSESourceCloseCancelsConnection(t *testing.T) {
+	for _, phase := range []string{"headers", "stream", "retry"} {
+		t.Run(phase, func(t *testing.T) {
+			started := make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch phase {
+				case "headers":
+					close(started)
+				case "stream":
+					w.Header().Set("Content-Type", "text/event-stream")
+					w.(http.Flusher).Flush()
+				case "retry":
+					w.WriteHeader(http.StatusServiceUnavailable)
+					close(started)
+					return
+				}
+				<-r.Context().Done()
+			}))
+			defer server.Close()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			source := NewSSESource().SetURL(server.URL).SetContext(ctx).
+				SetRetryWaitTime(time.Hour).SetRetryMaxWaitTime(time.Hour).
+				OnMessage(func(any) {}, nil)
+			if phase == "stream" {
+				onRead := sync.OnceFunc(func() { close(started) })
+				source.SetTransport(roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					res, err := http.DefaultTransport.RoundTrip(r)
+					if res != nil {
+						res.Body = &sseReadSignalBody{ReadCloser: res.Body, onRead: onRead}
+					}
+					return res, err
+				}))
+			}
+			done := make(chan error, 1)
+			go func() { done <- source.Get() }()
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("connection did not reach the expected phase")
+			}
+			source.Close()
+			select {
+			case err := <-done:
+				assertNil(t, err)
+			case <-time.After(time.Second):
+				cancel()
+				<-done
+				t.Fatal("Close did not stop Get")
+			}
+			assertEqual(t, ctx, source.Context())
+			assertNil(t, ctx.Err())
+
+			reopened := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, "data: reopened\n\n")
+			}))
+			defer reopened.Close()
+			source.SetURL(reopened.URL).OnMessage(func(any) { source.Close() }, nil)
+			assertNil(t, source.Get())
+		})
+	}
 }
 
 func TestSSESourceLeadingBOM(t *testing.T) {
@@ -334,7 +408,7 @@ func TestSSESourceRetryReusesRequestBody(t *testing.T) {
 		SetRetryMaxWaitTime(1 * time.Millisecond)
 	es.SetBody(bytes.NewBufferString(payload))
 
-	resp, err := es.connect()
+	resp, err := es.connect(es.Context())
 	assertNil(t, err)
 	assertNotNil(t, resp)
 	if resp != nil {
