@@ -85,6 +85,7 @@ type (
 		onEvent          map[string]*callback
 		log              Logger
 		ctx              context.Context
+		ctxCancelFunc    context.CancelFunc
 		closed           bool
 		httpClient       *http.Client
 	}
@@ -559,12 +560,21 @@ func (sse *SSESource) Get() error {
 	}
 
 	sse.closed = false
+	ctx := sse.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	sse.ctxCancelFunc = cancel
 	sse.lock.Unlock()
+	defer cancel()
 
 	for {
-		ctx := sse.Context()
 		select {
 		case <-ctx.Done():
+			if sse.isClosed() {
+				return nil
+			}
 			return ctx.Err()
 		default:
 			if sse.isClosed() {
@@ -572,8 +582,11 @@ func (sse *SSESource) Get() error {
 			}
 		}
 
-		res, err := sse.connect()
+		res, err := sse.connect(ctx)
 		if err != nil {
+			if sse.isClosed() {
+				return nil
+			}
 			return err
 		}
 		sse.triggerOnOpen(res.Header.Clone())
@@ -586,8 +599,12 @@ func (sse *SSESource) Get() error {
 // Close method closes the SSE connection explicitly.
 func (sse *SSESource) Close() {
 	sse.lock.Lock()
-	defer sse.lock.Unlock()
 	sse.closed = true
+	cancel := sse.ctxCancelFunc
+	sse.lock.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func (sse *SSESource) isClosed() bool {
@@ -620,11 +637,7 @@ func (sse *SSESource) triggerOnRequestFailure(err error, res *http.Response) {
 	}
 }
 
-func (sse *SSESource) createRequest() (*http.Request, error) {
-	// Resolve the context before taking the read lock; Context also acquires it
-	// and sync.RWMutex read locks are not reentrant.
-	ctx := sse.Context()
-
+func (sse *SSESource) createRequest(ctx context.Context) (*http.Request, error) {
 	sse.lock.RLock()
 	method, url := sse.method, sse.url
 	hdr := sse.header.Clone()
@@ -661,7 +674,7 @@ func sseConnectError(res *Response) error {
 	return fmt.Errorf("resty:sse: %v", res.Status())
 }
 
-func (sse *SSESource) connect() (*http.Response, error) {
+func (sse *SSESource) connect(ctx context.Context) (*http.Response, error) {
 	// Snapshot the settings this attempt needs, then release the lock. Holding
 	// it across httpClient.Do, the retry wait, and the nested read locks taken
 	// by createRequest and triggerOnRequestFailure would deadlock against any
@@ -688,7 +701,7 @@ func (sse *SSESource) connect() (*http.Response, error) {
 	)
 	for i := 0; i <= retryCount; i++ {
 		attempt++
-		req, reqErr := sse.createRequest()
+		req, reqErr := sse.createRequest(ctx)
 		if reqErr != nil {
 			err = reqErr
 			break
@@ -738,9 +751,9 @@ func (sse *SSESource) connect() (*http.Response, error) {
 		waitDuration, _ := backoff.NextWaitDuration(nil, rRes, doErr, attempt)
 		timer := time.NewTimer(waitDuration)
 		select {
-		case <-sse.Context().Done():
+		case <-ctx.Done():
 			timer.Stop()
-			return nil, sse.Context().Err()
+			return nil, ctx.Err()
 		case <-timer.C:
 		}
 		timer.Stop()
