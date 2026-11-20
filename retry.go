@@ -154,6 +154,12 @@ func (b *backoffWithJitter) NextWaitDuration(c *Client, res *Response, err error
 	if res != nil {
 		if res.StatusCode() == http.StatusTooManyRequests || res.StatusCode() == http.StatusServiceUnavailable {
 			if delay, ok := parseRetryAfterHeader(res.Header().Get(hdrRetryAfterKey)); ok {
+				// The server's delay is bounded by the max wait time, so a
+				// large Retry-After cannot hold the request for hours or days.
+				// A negative max sets no bound.
+				if b.max > 0 && delay > b.max {
+					delay = b.max
+				}
 				return delay, nil
 			}
 		}
