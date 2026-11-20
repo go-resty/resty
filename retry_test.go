@@ -929,6 +929,59 @@ func TestRequestRetryAfterDateNowMovesForward(t *testing.T) {
 	}
 }
 
+func TestRequestRetryAfterCappedByMaxWaitTime(t *testing.T) {
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			var attempts atomic.Int32
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if attempts.Add(1) == 1 {
+					w.Header().Set(hdrRetryAfterKey, "3600")
+					w.WriteHeader(status)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer ts.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			resp, err := dcnl().R().SetContext(ctx).SetRetryCount(1).
+				SetRetryWaitTime(10*time.Millisecond).
+				SetRetryMaxWaitTime(50*time.Millisecond).
+				AddRetryConditions(RetryConditionStatusTooManyRequests, RetryConditionStatus5XX).
+				Get(ts.URL)
+			assertNil(t, err)
+			assertEqual(t, http.StatusOK, resp.StatusCode())
+			assertEqual(t, int32(2), attempts.Load())
+		})
+	}
+}
+
+func TestRetryAfterMaxWaitTime(t *testing.T) {
+	retryAfter := func(v string) *Response {
+		header := http.Header{}
+		header.Set(hdrRetryAfterKey, v)
+		return &Response{RawResponse: &http.Response{StatusCode: http.StatusTooManyRequests, Header: header}}
+	}
+	for _, tt := range []struct {
+		name       string
+		max        time.Duration
+		retryAfter string
+		want       time.Duration
+	}{
+		{"below max", 10 * time.Second, "5", 5 * time.Second},
+		{"above max", 10 * time.Second, "3600", 10 * time.Second},
+		{"negative max sets no bound", -1, "3600", time.Hour},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			backoff := newBackoffWithJitter(time.Second, tt.max)
+			got, err := backoff.NextWaitDuration(nil, retryAfter(tt.retryAfter), nil, 1)
+			assertNil(t, err)
+			assertEqual(t, tt.want, got)
+		})
+	}
+}
+
 func TestRequestRetryTooManyRequestsHeaderRetryAfter(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
