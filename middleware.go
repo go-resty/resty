@@ -233,12 +233,7 @@ func escapeUnescapedQueryComponent(component string) string {
 }
 
 func parseRequestHeader(c *Client, r *Request) {
-	for k, v := range c.Header() {
-		if _, ok := r.Header[k]; ok {
-			continue
-		}
-		r.Header[k] = slices.Clone(v)
-	}
+	c.addMissingHeaders(r.Header)
 
 	if !r.isHeaderExists(hdrUserAgentKey) {
 		r.Header.Set(hdrUserAgentKey, hdrUserAgentValue)
@@ -261,7 +256,7 @@ func parseRequestBody(c *Client, r *Request) error {
 			if err := handleMultipart(c, r); err != nil {
 				return &invalidRequestError{Err: err}
 			}
-		case len(c.FormData()) > 0 || len(r.FormData) > 0: // Handling Form Data
+		case len(r.FormData) > 0 || c.formDataLen() > 0: // Handling Form Data
 			handleFormData(c, r)
 		case r.Body != nil: // Handling Request body
 			if err := handleRequestBody(c, r); err != nil {
@@ -304,9 +299,7 @@ func createRawRequest(c *Client, r *Request) (err error) {
 	r.RawRequest.Header = r.Header.Clone()
 
 	// Add cookies from client instance into http request
-	for _, cookie := range c.Cookies() {
-		r.RawRequest.AddCookie(cookie)
-	}
+	c.addCookies(r.RawRequest)
 
 	// Add cookies from request instance into http request
 	for _, cookie := range r.Cookies {
@@ -569,12 +562,7 @@ func handleMultipart(c *Client, r *Request) error {
 }
 
 func handleFormData(c *Client, r *Request) {
-	for k, v := range c.FormData() {
-		if _, ok := r.FormData[k]; ok {
-			continue
-		}
-		r.FormData[k] = slices.Clone(v)
-	}
+	c.addMissingFormData(r.FormData)
 
 	r.bodyBuf = acquireBuffer()
 	r.bodyBuf.WriteString(r.FormData.Encode())

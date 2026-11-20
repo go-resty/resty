@@ -206,6 +206,37 @@ func TestCloneURLValues(t *testing.T) {
 	assertNil(t, nilMap)
 }
 
+func TestAddMissingValues(t *testing.T) {
+	src := map[string][]string{
+		"a":     {"1", "2"},
+		"b":     {"3"},
+		"empty": {},
+		"nil":   nil,
+		"keep":  {"src"},
+	}
+	dst := map[string][]string{"keep": {"dst"}}
+
+	addMissingValues(dst, src)
+	assertEqual(t, []string{"1", "2"}, dst["a"])
+	assertEqual(t, []string{"3"}, dst["b"])
+	assertEqual(t, []string{"dst"}, dst["keep"])
+	assertEqual(t, true, dst["empty"] != nil)
+	assertEqual(t, 0, len(dst["empty"]))
+	_, found := dst["nil"]
+	assertEqual(t, true, found)
+	assertNil(t, dst["nil"])
+
+	// The copies share no memory with src, and an append to one copy
+	// cannot write into another.
+	dst["a"][0] = "x"
+	assertEqual(t, []string{"1", "2"}, src["a"])
+	assertEqual(t, len(dst["a"]), cap(dst["a"]))
+	assertEqual(t, len(dst["b"]), cap(dst["b"]))
+
+	addMissingValues(dst, nil)
+	assertEqual(t, 5, len(dst))
+}
+
 func TestRestyErrorFuncs(t *testing.T) {
 	ne1 := errors.New("new error 1")
 	nie1 := errors.New("inner error 1")
