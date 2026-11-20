@@ -2439,7 +2439,16 @@ func (c *Client) Clone(ctx context.Context) *Client {
 	cc.contentTypeEncoders = maps.Clone(c.contentTypeEncoders)
 	cc.contentTypeDecoders = maps.Clone(c.contentTypeDecoders)
 	cc.contentDecompressers = maps.Clone(c.contentDecompressers)
-	copy(cc.contentDecompresserKeys, c.contentDecompresserKeys)
+	cc.contentDecompresserKeys = slices.Clone(c.contentDecompresserKeys)
+	cc.retryConditions = slices.Clone(c.retryConditions)
+	cc.retryHooks = slices.Clone(c.retryHooks)
+	cc.beforeRequest = slices.Clone(c.beforeRequest)
+	cc.afterResponse = slices.Clone(c.afterResponse)
+	cc.errorHooks = slices.Clone(c.errorHooks)
+	cc.invalidHooks = slices.Clone(c.invalidHooks)
+	cc.panicHooks = slices.Clone(c.panicHooks)
+	cc.successHooks = slices.Clone(c.successHooks)
+	cc.closeHooks = slices.Clone(c.closeHooks)
 
 	if c.proxyURL != nil {
 		cc.proxyURL, _ = url.Parse(c.proxyURL.String())

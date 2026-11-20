@@ -1661,6 +1661,82 @@ func TestClientClone(t *testing.T) {
 	}
 }
 
+func TestClientCloneDecompresserKeysIsolation(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, r.Header.Get("Accept-Encoding"))
+	})
+	defer ts.Close()
+	passthrough := func(r io.ReadCloser) (io.ReadCloser, error) { return r, nil }
+	for _, mutateParent := range []bool{false, true} {
+		t.Run(fmt.Sprintf("mutate parent %v", mutateParent), func(t *testing.T) {
+			parent := New().AddContentDecompresser("identity", passthrough)
+			defer parent.Close()
+			originalKeys := parent.ContentDecompresserKeys()
+			clone := parent.Clone(context.Background())
+			defer clone.Close()
+			changed, unchanged := clone, parent
+			if mutateParent {
+				changed, unchanged = parent, clone
+			}
+			changed.AddContentDecompresser("custom", passthrough)
+
+			response, err := unchanged.R().Get(ts.URL)
+			assertNil(t, err)
+			assertEqual(t, originalKeys, response.String())
+			response, err = changed.R().Get(ts.URL)
+			assertNil(t, err)
+			assertEqual(t, "custom, "+originalKeys, response.String())
+		})
+	}
+}
+
+func TestClientCloneCallbackIsolation(t *testing.T) {
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "ok")
+	})
+	defer ts.Close()
+	for _, kind := range []string{"response", "success", "close"} {
+		t.Run(kind, func(t *testing.T) {
+			var calls []string
+			register := func(client *Client, name string) {
+				record := func() { calls = append(calls, name) }
+				switch kind {
+				case "response":
+					client.AddResponseMiddleware(func(*Client, *Response) error { record(); return nil })
+				case "success":
+					client.OnSuccess(func(*Client, *Response) { record() })
+				case "close":
+					client.OnClose(record)
+				}
+			}
+			parent := New()
+			defer parent.Close()
+			for i := range 3 {
+				register(parent, fmt.Sprint(i))
+			}
+			clone := parent.Clone(context.Background())
+			defer clone.Close()
+			register(clone, "clone")
+			register(parent, "parent")
+
+			for _, client := range []*Client{clone, parent} {
+				calls = nil
+				if kind == "close" {
+					assertNil(t, client.Close())
+				} else {
+					_, err := client.R().Get(ts.URL)
+					assertNil(t, err)
+				}
+				owner := "clone"
+				if client == parent {
+					owner = "parent"
+				}
+				assertEqual(t, []string{"0", "1", "2", owner}, calls)
+			}
+		})
+	}
+}
+
 func TestResponseBodyLimit(t *testing.T) {
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
 		io.CopyN(w, cryprand.Reader, 100*800)
