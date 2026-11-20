@@ -53,6 +53,55 @@ func TestGet(t *testing.T) {
 	logResponse(t, resp)
 }
 
+func TestRequestClientPathDefaultsRefresh(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, r.URL.EscapedPath())
+	}))
+	defer server.Close()
+
+	for _, form := range []string{"reuse", "clone", "fresh"} {
+		for _, tc := range []struct {
+			name     string
+			value    string
+			override string
+			want     string
+		}{
+			{name: "updated", value: "after", want: "/after"},
+			{name: "escaped", value: "after/part", want: "/after%2Fpart"},
+			{name: "empty", value: "", want: "/"},
+			{name: "request override", value: "after", override: "request", want: "/request"},
+		} {
+			t.Run(form+"/"+tc.name, func(t *testing.T) {
+				client := New().SetPathParam("id", "before")
+				t.Cleanup(func() { _ = client.Close() })
+				request := client.R()
+				if tc.override != "" {
+					request.SetPathParam("id", tc.override)
+				}
+				if _, err := request.Get(server.URL + "/{id}"); err != nil {
+					t.Fatal(err)
+				}
+				client.SetPathParam("id", tc.value)
+				if form == "clone" {
+					request = request.Clone(context.Background())
+				} else if form == "fresh" {
+					request = client.R()
+					if tc.override != "" {
+						request.SetPathParam("id", tc.override)
+					}
+				}
+				response, err := request.Get(server.URL + "/{id}")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if response.String() != tc.want {
+					t.Errorf("updated client default: got %q, want %q", response.String(), tc.want)
+				}
+			})
+		}
+	}
+}
+
 func TestGetGH524(t *testing.T) {
 	ts := createGetServer(t)
 	defer ts.Close()
