@@ -61,15 +61,8 @@ func MiddlewareRequestCreate(c *Client, r *Request) (err error) {
 }
 
 func parseRequestURL(c *Client, r *Request) error {
-	if len(c.PathParams())+len(r.PathParams) > 0 {
-		// GitHub #103 Path Params, #663 Raw Path Params
-		for p, v := range c.PathParams() {
-			if _, ok := r.PathParams[p]; ok {
-				continue
-			}
-			r.PathParams[p] = v
-		}
-
+	clientPathParams := c.PathParams()
+	if len(clientPathParams)+len(r.PathParams) > 0 {
 		var prev int
 		buf := acquireBuffer()
 		defer releaseBuffer(buf)
@@ -94,6 +87,9 @@ func parseRequestURL(c *Client, r *Request) error {
 				// check for the replacement
 				key := r.URL[curr+1 : next]
 				value, ok := r.PathParams[key]
+				if !ok {
+					value, ok = clientPathParams[key]
+				}
 				// keep the original string if the replacement not found
 				if !ok {
 					value = r.URL[curr : next+1]
