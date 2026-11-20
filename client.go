@@ -339,6 +339,12 @@ func (c *Client) Header() http.Header {
 	return c.header.Clone()
 }
 
+func (c *Client) addMissingHeaders(dst http.Header) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	addMissingValues(dst, c.header)
+}
+
 // SetHeader method sets a single header and its value in the client instance.
 // These headers will be applied to all requests raised from the client instance.
 // Also, it can be overridden by request-level header options.
@@ -478,6 +484,14 @@ func (c *Client) Cookies() []*http.Cookie {
 	return slices.Clone(c.cookies)
 }
 
+func (c *Client) addCookies(hr *http.Request) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for _, cookie := range c.cookies {
+		hr.AddCookie(cookie)
+	}
+}
+
 // SetCookie method appends a single cookie to the client instance.
 // These cookies will be added to all the requests from this client instance.
 //
@@ -596,6 +610,18 @@ func (c *Client) FormData() url.Values {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return cloneURLValues(c.formData)
+}
+
+func (c *Client) formDataLen() int {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return len(c.formData)
+}
+
+func (c *Client) addMissingFormData(dst url.Values) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	addMissingValues(dst, c.formData)
 }
 
 // SetFormData method sets Form parameters and their values in the client instance.

@@ -357,6 +357,30 @@ func cloneURLValues(v url.Values) url.Values {
 	return url.Values(http.Header(v).Clone())
 }
 
+// addMissingValues copies each key of src that is not in dst into dst.
+// Like http.Header.Clone, it puts all the copied values in one new array.
+func addMissingValues(dst, src map[string][]string) {
+	n := 0
+	for k, v := range src {
+		if _, ok := dst[k]; !ok {
+			n += len(v)
+		}
+	}
+	vals := make([]string, n)
+	for k, v := range src {
+		if _, ok := dst[k]; ok {
+			continue
+		}
+		if v == nil {
+			dst[k] = nil
+			continue
+		}
+		m := copy(vals, v)
+		dst[k] = vals[:m:m]
+		vals = vals[m:]
+	}
+}
+
 func cloneCookie(c *http.Cookie) *http.Cookie {
 	cc := *c
 	cc.Unparsed = slices.Clone(c.Unparsed)
