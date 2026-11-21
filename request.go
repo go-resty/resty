@@ -1695,6 +1695,8 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	rr.FormData = cloneURLValues(r.FormData)
 	rr.QueryParams = cloneURLValues(r.QueryParams)
 	rr.PathParams = maps.Clone(r.PathParams)
+	rr.retryConditions = slices.Clone(r.retryConditions)
+	rr.retryHooks = slices.Clone(r.retryHooks)
 
 	// reset content length if not set by user
 	if !r.isContentLengthSet {
