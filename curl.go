@@ -62,7 +62,9 @@ func buildCurlCmd(req *Request) string {
 		}
 	}
 
-	url := req.RawRequest.URL.String()
+	// Redacted hides the password of the URL's userinfo, a credential like the
+	// sensitive headers redacted above.
+	url := req.RawRequest.URL.Redacted()
 	if isStringEmpty(url) {
 		url = unexecutedRequestURL
 	}
