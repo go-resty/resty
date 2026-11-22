@@ -214,7 +214,11 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 	nonReadOnlyAllowed := ht.isNonReadOnlyAllowed
 	ht.lock.RUnlock()
 
-	if (!nonReadOnlyAllowed && !isReadOnlyMethod(req.Method)) || maxReq <= 1 {
+	// Every attempt after the first sends its own copy of the body. A body
+	// that cannot be copied is sent once, without hedging.
+	hasBody := req.Body != nil && req.Body != http.NoBody
+	if (!nonReadOnlyAllowed && !isReadOnlyMethod(req.Method)) || maxReq <= 1 ||
+		(hasBody && req.GetBody == nil) {
 		return underlying.RoundTrip(req)
 	}
 
@@ -287,17 +291,33 @@ spawn:
 
 		attemptCtx, attemptCancel := context.WithCancel(reqCtx)
 
+		// Clone does not copy the body, so attempts would otherwise share
+		// one reader, and a later attempt would send the body the first one
+		// has already read.
+		attemptReq := req.Clone(attemptCtx)
+		if i > 0 && hasBody {
+			body, err := req.GetBody()
+			if err != nil {
+				attemptCancel()
+				break spawn
+			}
+			attemptReq.Body = body
+		}
+
 		mu.Lock()
 		if decided {
 			mu.Unlock()
 			attemptCancel()
+			if attemptReq.Body != req.Body {
+				closeq(attemptReq.Body)
+			}
 			break spawn
 		}
 		inflight[i] = attemptCancel
 		mu.Unlock()
 
 		go func(i int, attemptCancel context.CancelFunc) {
-			resp, err := underlying.RoundTrip(req.Clone(attemptCtx))
+			resp, err := underlying.RoundTrip(attemptReq)
 
 			if !decide(i) {
 				attemptCancel()
