@@ -804,3 +804,71 @@ func TestHedgingSpawnLoopStopsOnceDecided(t *testing.T) {
 	// every run still has to produce exactly one usable response
 	assertTrue(t, attempts.Load() >= runs, "expected at least one attempt per run")
 }
+
+// Hedged attempts of a request with a body must each send the whole body.
+// Clone does not copy it, so a later attempt used to send the body the first
+// attempt had already read, fail with "ContentLength=N with Body length 0",
+// and win over the first attempt with that error.
+func TestHedgingNonReadOnlyRequestBody(t *testing.T) {
+	const payload = "hedged request body"
+	var (
+		mu     sync.Mutex
+		bodies []string
+	)
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		first := len(bodies) == 0
+		bodies = append(bodies, string(b))
+		mu.Unlock()
+		if first {
+			time.Sleep(300 * time.Millisecond)
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	h := NewHedging().
+		SetDelay(20 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0).
+		SetNonReadOnlyAllowed(true)
+
+	resp, err := dcnl().SetHedging(h).R().SetBody(payload).Post(ts.URL)
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	mu.Lock()
+	defer mu.Unlock()
+	assertTrue(t, len(bodies) >= 2, "expected the request to be hedged")
+	for i, b := range bodies {
+		assertEqual(t, payload, b, fmt.Sprintf("body of attempt %d", i+1))
+	}
+}
+
+// A body that cannot be copied is sent once, without hedging.
+func TestHedgingRequestBodyWithoutGetBody(t *testing.T) {
+	var attempts atomic.Int32
+	h := NewHedging().
+		SetDelay(time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0).
+		SetNonReadOnlyAllowed(true)
+	h.SetTransport(roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		attempts.Add(1)
+		b, err := io.ReadAll(r.Body)
+		assertNil(t, err)
+		assertEqual(t, "body", string(b))
+		time.Sleep(50 * time.Millisecond)
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
+	}))
+
+	req, err := http.NewRequest(http.MethodPost, "http://example.com", io.NopCloser(strings.NewReader("body")))
+	assertNil(t, err)
+	assertNil(t, req.GetBody)
+
+	resp, err := h.RoundTrip(req)
+	assertNil(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode)
+	assertEqual(t, int32(1), attempts.Load())
+}
