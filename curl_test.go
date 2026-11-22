@@ -535,3 +535,18 @@ func TestCurlCookieJarValues(t *testing.T) {
 		})
 	}
 }
+
+// The password of a URL's userinfo is a credential like the Authorization
+// header net/http derives from it, which the curl command redacts.
+func TestCurlRedactsURLPassword(t *testing.T) {
+	ts := createGetServer(t)
+	defer ts.Close()
+
+	url := strings.Replace(ts.URL, "://", "://user:s3cret@", 1) + "/"
+	resp, err := dcnl().R().SetCurlCmdGenerate(true).Get(url)
+	assertNil(t, err)
+
+	curlCmd := resp.Request.CurlCmd()
+	assertFalse(t, strings.Contains(curlCmd, "s3cret"), "curl command leaks the URL password: "+curlCmd)
+	assertTrue(t, strings.Contains(curlCmd, "user:xxxxx@"), "curl command: "+curlCmd)
+}
