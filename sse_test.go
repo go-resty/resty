@@ -480,6 +480,29 @@ func TestGH1041RequestFailureWithResponseBody(t *testing.T) {
 	assertEqual(t, "resty:sse: 400 Bad Request", err.Error())
 }
 
+func TestSSESourceOnRequestFailureWithoutRetries(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, "try again later")
+	}))
+	defer server.Close()
+
+	var called int
+	source := NewSSESource().SetURL(server.URL).SetRetryCount(0)
+	source.OnMessage(func(any) {}, nil)
+	source.OnRequestFailure(func(err error, response *http.Response) {
+		called++
+		assertNotNil(t, err)
+		assertEqual(t, http.StatusServiceUnavailable, response.StatusCode)
+		data, readErr := io.ReadAll(response.Body)
+		assertNil(t, readErr)
+		assertEqual(t, "try again later", string(data))
+		_ = response.Body.Close()
+	})
+	assertNotNil(t, source.Get())
+	assertEqual(t, 1, called)
+}
+
 func TestSSESourceHTTPError(t *testing.T) {
 	es := createSSESource(t, "", func(any) {}, nil)
 	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
