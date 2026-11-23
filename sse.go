@@ -800,7 +800,8 @@ func splitSSEEvent(data []byte, atEOF bool) (advance int, token []byte, err erro
 	}
 
 	if atEOF {
-		return len(data), data, nil
+		// A pending event is discarded if the stream ends before the blank line.
+		return len(data), nil, nil
 	}
 	return 0, nil, nil
 }

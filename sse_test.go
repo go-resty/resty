@@ -60,6 +60,27 @@ func TestSSESourceSimpleFlow(t *testing.T) {
 	assertEqual(t, counter, messageCounter)
 }
 
+func TestSSESourceDiscardsEventWithoutTerminatingBlankLine(t *testing.T) {
+	for _, tail := range []string{"", "\n", "\r", "\r\n"} {
+		t.Run(fmt.Sprintf("ending=%q", tail), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = io.WriteString(w, "data: complete\n\ndata: incomplete"+tail)
+			}))
+			defer server.Close()
+
+			var messages []string
+			source := NewSSESource().SetURL(server.URL)
+			source.OnMessage(func(value any) {
+				messages = append(messages, value.(*SSE).Data)
+			}, nil)
+
+			assertErrorIs(t, io.EOF, source.Get())
+			assertEqual(t, []string{"complete"}, messages)
+		})
+	}
+}
+
 func TestSSESourceLeadingBOM(t *testing.T) {
 	for _, prefix := range []string{"", "\ufeff"} {
 		t.Run(fmt.Sprintf("prefix=%q", prefix), func(t *testing.T) {
@@ -1251,7 +1272,7 @@ func TestSplitSSEEvent(t *testing.T) {
 		{name: "empty at EOF", data: "", atEOF: true, wantNilTok: true},
 		{name: "partial line non-EOF", data: "data: a", atEOF: false, wantNilTok: true},
 		{name: "trailing CR non-EOF", data: "data: a\r", atEOF: false, wantNilTok: true},
-		{name: "trailing CR at EOF", data: "data: a\r", atEOF: true, wantAdvance: 8, wantToken: "data: a\r"},
+		{name: "trailing CR at EOF", data: "data: a\r", atEOF: true, wantAdvance: 8, wantNilTok: true},
 		{name: "single LF non-EOF", data: "data: a\n", atEOF: false, wantNilTok: true},
 		{name: "single CRLF non-EOF", data: "data: a\r\n", atEOF: false, wantNilTok: true},
 		{name: "CRLF blank line", data: "data: a\r\n\r\n", atEOF: false, wantAdvance: 11, wantToken: "data: a"},
