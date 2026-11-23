@@ -310,8 +310,27 @@ func (c *Client) BaseURL() string {
 func (c *Client) SetBaseURL(url string) *Client {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.baseURL = url
+	c.baseURL = sanitizeBaseURL(url)
 	return c
+}
+
+// sanitizeBaseURL strips the fragment and an empty query (a trailing '?')
+// from a base URL. Request URLs are composed by concatenating the base URL
+// with the request path, so a fragment would swallow the path into the
+// fragment and an empty query would turn the path into the query string;
+// neither is ever sent to the server. It mirrors the sanitization applied
+// to load balancer base URLs in extractBaseURL. A base URL that does not
+// parse is returned unchanged, so its error surfaces at request time as
+// before.
+func sanitizeBaseURL(u string) string {
+	baseURL, err := url.Parse(u)
+	if err != nil {
+		return u
+	}
+	baseURL.Fragment = ""
+	baseURL.RawFragment = ""
+	baseURL.ForceQuery = false
+	return baseURL.String()
 }
 
 // LoadBalancer method returns the load balancer set on the client, or nil if none is set.
