@@ -706,7 +706,9 @@ func (sse *SSESource) connect() (*http.Response, error) {
 		// first attempt + retry count = total attempts
 		if attempt-1 == retryCount {
 			err = wrapErrors(sseConnectError(rRes), doErr)
-			// nothing is returned to the caller, so this body is ours to release
+			if err != nil {
+				sse.triggerOnRequestFailure(err, resp)
+			}
 			drainBody(rRes)
 			break
 		}
