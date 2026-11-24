@@ -607,15 +607,24 @@ func handleRequestBody(c *Client, r *Request) error {
 			r.Body = bytes.NewReader(v)
 		}
 
-		// do seek start for retry attempt if io.ReadSeeker
+		if r.Attempt == 1 && r.RetryCount > 0 {
+			if rs, ok := r.Body.(io.ReadSeeker); ok {
+				r.bodyReaderOffset, r.bodyReaderOffsetErr = rs.Seek(0, io.SeekCurrent)
+			}
+		}
+
+		// restore the initial reader position for retry attempts if io.ReadSeeker
 		// interface supported; otherwise fail loudly rather than
 		// silently retrying the request with an empty body.
 		if r.Attempt > 1 {
+			if r.bodyReaderOffsetErr != nil {
+				return r.bodyReaderOffsetErr
+			}
 			rs, ok := r.Body.(io.ReadSeeker)
 			if !ok {
 				return ErrReaderNotSeekable
 			}
-			if _, err := rs.Seek(0, io.SeekStart); err != nil {
+			if _, err := rs.Seek(r.bodyReaderOffset, io.SeekStart); err != nil {
 				return err
 			}
 		}

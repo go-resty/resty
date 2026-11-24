@@ -95,6 +95,8 @@ type Request struct {
 	values                 map[string]any
 	client                 *Client
 	bodyBuf                *bytes.Buffer
+	bodyReaderOffset       int64
+	bodyReaderOffsetErr    error
 	trace                  *clientTrace
 	log                    Logger
 	baseURL                string
@@ -472,6 +474,8 @@ func (r *Request) SetFormDataFromValues(data url.Values) *Request {
 // and so on.
 func (r *Request) SetBody(body any) *Request {
 	r.Body = body
+	r.bodyReaderOffset = 0
+	r.bodyReaderOffsetErr = nil
 	return r
 }
 
