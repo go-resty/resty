@@ -639,7 +639,8 @@ func handleRequestBody(c *Client, r *Request) error {
 		}
 
 		// user registered encoders with resty fallback key
-		encFunc, found := c.inferContentTypeEncoder(contentType, encKey)
+		mediaType, _, _ := mime.ParseMediaType(contentType)
+		encFunc, found := c.inferContentTypeEncoder(contentType, mediaType, encKey)
 		if !found {
 			releaseBuffer(r.bodyBuf)
 			r.bodyBuf = nil
@@ -680,7 +681,8 @@ func MiddlewareResponseAutoParse(c *Client, res *Response) (err error) {
 		res.Request.ResponseExpectContentType,
 	))
 	decKey := inferContentTypeMapKey(rct)
-	decFunc, found := c.inferContentTypeDecoder(rct, decKey)
+	mediaType, _, _ := mime.ParseMediaType(rct)
+	decFunc, found := c.inferContentTypeDecoder(rct, mediaType, decKey)
 	if !found {
 		// the Content-Type decoder is not found; just read all the body bytes
 		err = res.readAll()
