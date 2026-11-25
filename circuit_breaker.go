@@ -392,8 +392,10 @@ func (cb *circuitBreakerBase) OnTrigger(hooks ...CircuitBreakerTriggerHook) Circ
 // RunOnTriggerHooks method executes all registered trigger hooks with the given request and error.
 func (cb *circuitBreakerBase) RunOnTriggerHooks(req *Request, err error) {
 	cb.lock.RLock()
-	defer cb.lock.RUnlock()
-	for _, h := range cb.triggerHooks {
+	// Registration only appends; this dispatch keeps its original hook count.
+	hooks := cb.triggerHooks
+	cb.lock.RUnlock()
+	for _, h := range hooks {
 		h(req, err)
 	}
 }
@@ -410,8 +412,10 @@ func (cb *circuitBreakerBase) OnStateChange(hooks ...CircuitBreakerStateChangeHo
 // RunOnStateChangeHooks method executes all registered state change hooks with the given old and new states.
 func (cb *circuitBreakerBase) RunOnStateChangeHooks(oldState, newState CircuitBreakerState) {
 	cb.lock.RLock()
-	defer cb.lock.RUnlock()
-	for _, h := range cb.stateChangeHooks {
+	// Registration only appends; this dispatch keeps its original hook count.
+	hooks := cb.stateChangeHooks
+	cb.lock.RUnlock()
+	for _, h := range hooks {
 		h(oldState, newState)
 	}
 }
