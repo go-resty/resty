@@ -307,12 +307,37 @@ func (r *Response) wrapCopyReadCloser() {
 }
 
 func (r *Response) wrapContentDecompresser() error {
-	ce := r.Header().Get(hdrContentEncodingKey)
+	const maxContentCodings = 5
+
+	ce := strings.Join(r.Header().Values(hdrContentEncodingKey), ",")
 	if isStringEmpty(ce) {
 		return nil
 	}
 
-	if decFunc, f := r.Request.client.ContentDecompressers()[strings.ToLower(ce)]; f {
+	codings := strings.Split(ce, ",")
+	decompressers := r.Request.client.ContentDecompressers()
+	decoders := make([]ContentDecompresser, 0, maxContentCodings)
+	for i := len(codings) - 1; i >= 0; i-- {
+		coding := strings.TrimSpace(codings[i])
+		if coding == "" {
+			continue
+		}
+		decFunc, found := decompressers[strings.ToLower(coding)]
+		if !found || len(decoders) == maxContentCodings {
+			if r.Request.IsResponseDoNotParse {
+				r.Request.log.Warnf("Response.wrapContentDecompresser: DoNotParse is enabled and the content"+
+					" encoding stack '%s' is unsupported or exceeds the decoding limit, let the caller handle it", ce)
+				return nil
+			}
+			return ErrContentDecompresserNotFound
+		}
+		decoders = append(decoders, decFunc)
+	}
+	if len(decoders) == 0 {
+		return nil
+	}
+
+	for _, decFunc := range decoders {
 		// Accept an absent encoded body, but do not hide truncated streams.
 		br := bufio.NewReader(r.Body)
 		if _, err := br.Peek(1); err != nil {
@@ -327,24 +352,15 @@ func (r *Response) wrapContentDecompresser() error {
 			io.Closer
 		}{br, r.Body})
 		if err != nil {
+			closeq(r.Body)
 			return err
 		}
 
 		r.Body = dec
-		r.Header().Del(hdrContentEncodingKey)
-		r.Header().Del(hdrContentLengthKey)
-		r.RawResponse.ContentLength = -1
-	} else if r.Request.IsResponseDoNotParse {
-		// GH#1168 Don't return an error if DoNotParse is enabled and the content
-		// decompresser is not found. Possibly the user is handling content decompression
-		// in their own way, so instead of returning an error and breaking the response
-		// processing, just log it and let the caller handle it when they try to read the body.
-		r.Request.log.Warnf("Response.wrapContentDecompresser: DoNotParse is enabled and the content"+
-			" decompresser is not found for encoding '%s', just log it and let the caller handle it", ce)
-		return nil
-	} else {
-		return ErrContentDecompresserNotFound
 	}
+	r.Header().Del(hdrContentEncodingKey)
+	r.Header().Del(hdrContentLengthKey)
+	r.RawResponse.ContentLength = -1
 
 	return nil
 }
