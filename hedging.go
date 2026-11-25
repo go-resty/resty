@@ -218,6 +218,20 @@ func (ht *Hedging) RoundTrip(req *http.Request) (*http.Response, error) {
 		return underlying.RoundTrip(req)
 	}
 
+	// Concurrent attempts cannot share one body stream: each transport would
+	// consume part of it, so no attempt would send a complete body (typically
+	// surfacing as a "ContentLength=N with Body length 0" error). Hedge a
+	// request with a body only when the body can be reproduced per attempt.
+	hasBody := req.Body != nil && req.Body != http.NoBody
+	if hasBody {
+		if req.GetBody == nil {
+			return underlying.RoundTrip(req)
+		}
+		if _, err := req.GetBody(); err != nil {
+			return underlying.RoundTrip(req)
+		}
+	}
+
 	reqCtx := req.Context()
 
 	type result struct {
@@ -297,7 +311,15 @@ spawn:
 		mu.Unlock()
 
 		go func(i int, attemptCancel context.CancelFunc) {
-			resp, err := underlying.RoundTrip(req.Clone(attemptCtx))
+			attemptReq := req.Clone(attemptCtx)
+			if hasBody {
+				// Give every attempt its own copy of the body; the clones
+				// otherwise share one stream and split it between them.
+				if body, err := req.GetBody(); err == nil {
+					attemptReq.Body = body
+				}
+			}
+			resp, err := underlying.RoundTrip(attemptReq)
 
 			if !decide(i) {
 				attemptCancel()

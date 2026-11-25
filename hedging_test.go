@@ -804,3 +804,49 @@ func TestHedgingSpawnLoopStopsOnceDecided(t *testing.T) {
 	// every run still has to produce exactly one usable response
 	assertTrue(t, attempts.Load() >= runs, "expected at least one attempt per run")
 }
+
+func TestHedgingBodyReproducedPerAttempt(t *testing.T) {
+	const payload = "0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	var mu sync.Mutex
+	bodies := make(map[int]string)
+	var attemptCount int32
+	ts := createTestServer(func(w http.ResponseWriter, r *http.Request) {
+		attempt := atomic.AddInt32(&attemptCount, 1)
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies[int(attempt)] = string(b)
+		mu.Unlock()
+		// keep the first attempt in flight so the hedged attempts overlap
+		time.Sleep(100 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	})
+	defer ts.Close()
+
+	h := NewHedging().
+		SetDelay(10 * time.Millisecond).
+		SetMaxRequest(3).
+		SetMaxRequestPerSecond(0).
+		SetNonReadOnlyAllowed(true)
+
+	c := dcnl().SetHedging(h)
+
+	resp, err := c.R().
+		SetBody(payload).
+		SetMethod(MethodPost).
+		Execute(MethodPost, ts.URL)
+	assertError(t, err)
+	assertEqual(t, http.StatusOK, resp.StatusCode())
+
+	time.Sleep(300 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) < 2 {
+		t.Fatalf("expected at least 2 hedged attempts, got %d", len(bodies))
+	}
+	for id, body := range bodies {
+		if body != payload {
+			t.Errorf("attempt %d received corrupted body %q, want %q", id, body, payload)
+		}
+	}
+}
