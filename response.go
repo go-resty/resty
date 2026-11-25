@@ -307,6 +307,8 @@ func (r *Response) wrapCopyReadCloser() {
 }
 
 func (r *Response) wrapContentDecompresser() error {
+	const maxContentCodings = 5
+
 	ce := strings.Join(r.Header().Values(hdrContentEncodingKey), ",")
 	if isStringEmpty(ce) {
 		return nil
@@ -314,18 +316,25 @@ func (r *Response) wrapContentDecompresser() error {
 
 	codings := strings.Split(ce, ",")
 	decompressers := r.Request.client.ContentDecompressers()
-	decoders := make([]ContentDecompresser, 0, len(codings))
+	decoders := make([]ContentDecompresser, 0, maxContentCodings)
 	for i := len(codings) - 1; i >= 0; i-- {
-		decFunc, found := decompressers[strings.ToLower(strings.TrimSpace(codings[i]))]
-		if !found {
+		coding := strings.TrimSpace(codings[i])
+		if coding == "" {
+			continue
+		}
+		decFunc, found := decompressers[strings.ToLower(coding)]
+		if !found || len(decoders) == maxContentCodings {
 			if r.Request.IsResponseDoNotParse {
 				r.Request.log.Warnf("Response.wrapContentDecompresser: DoNotParse is enabled and the content"+
-					" decompresser is not found for encoding '%s', just log it and let the caller handle it", ce)
+					" encoding stack '%s' is unsupported or exceeds the decoding limit, let the caller handle it", ce)
 				return nil
 			}
 			return ErrContentDecompresserNotFound
 		}
 		decoders = append(decoders, decFunc)
+	}
+	if len(decoders) == 0 {
+		return nil
 	}
 
 	for _, decFunc := range decoders {
