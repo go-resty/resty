@@ -1727,6 +1727,8 @@ func (r *Request) Clone(ctx context.Context) *Request {
 	}
 
 	// reset values
+	rr.IsDone = false
+	rr.curlCmdString = ""
 	rr.StartTime = time.Time{}
 	rr.Attempt = 0
 	rr.initTraceIfEnabled()
