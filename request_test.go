@@ -2278,6 +2278,29 @@ func TestRequestClone(t *testing.T) {
 	assertNotEqual(t, parent.RawRequest, clone.RawRequest)
 }
 
+func TestRequestCloneAfterExecution(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, r.URL.Query().Get("page"))
+	}))
+	defer ts.Close()
+
+	parent := dcnl().R().SetCurlCmdGenerate(true).SetQueryParam("page", "1")
+	resp, err := parent.Get(ts.URL)
+	assertError(t, err)
+	assertEqual(t, "1", resp.String())
+	parentCmd := parent.CurlCmd()
+	assertTrue(t, strings.Contains(parentCmd, "page=1"))
+
+	clone := parent.Clone(context.Background())
+	assertFalse(t, clone.IsDone)
+	resp, err = clone.SetQueryParam("page", "2").Get(ts.URL)
+	assertError(t, err)
+	assertEqual(t, "2", resp.String())
+	assertTrue(t, clone.IsDone)
+	assertTrue(t, strings.Contains(clone.CurlCmd(), "page=2"))
+	assertEqual(t, parentCmd, parent.CurlCmd())
+}
+
 func TestRequestCloneCookiesAndInternalState(t *testing.T) {
 	c := dcnl()
 	parent := c.R().
